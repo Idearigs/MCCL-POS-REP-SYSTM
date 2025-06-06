@@ -1,0 +1,92 @@
+/* Clean, professional loading animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes wave {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.dot-wave-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  margin: 20px auto;
+  gap: 8px;
+}
+
+.dot-wave {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0A2342, #1A3353);
+  box-shadow: 0 2px 4px rgba(10, 35, 66, 0.3);
+  animation: pulse 1.5s ease-in-out infinite, wave 1.5s ease-in-out infinite;
+}
+
+/* Stagger the wave animation */
+.dot-wave:nth-child(1) { animation-delay: 0s; }
+.dot-wave:nth-child(2) { animation-delay: 0.1s; }
+.dot-wave:nth-child(3) { animation-delay: 0.2s; }
+.dot-wave:nth-child(4) { animation-delay: 0.3s; }
+.dot-wave:nth-child(5) { animation-delay: 0.4s; }
+
+/* Progress bar animation */
+@keyframes progress {
+  0% {
+    width: 0%;
+    opacity: 1;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    width: 100%;
+    opacity: 0.8;
+  }
+}
+
+.loading-progress {
+  height: 2px;
+  width: 100%;
+  background-color: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.loading-progress-bar {
+  height: 100%;
+  background: linear-gradient(to right, #0A2342, #1A3353);
+  border-radius: 999px;
+  animation: progress 2s ease-in-out infinite;
+}
+
+/* Animation delay classes */
+.delay-100 {
+  animation-delay: 0.1s;
+}
+
+.delay-200 {
+  animation-delay: 0.2s;
+}
+
+.delay-300 {
+  animation-delay: 0.3s;
+}
