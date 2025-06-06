@@ -1,20 +1,25 @@
 -- Create customer_documents table
-CREATE TABLE IF NOT EXISTS customer_documents (
-  id INT PRIMARY KEY AUTO_INCREMENT,
-  customer_id INT NOT NULL,
-  file_name VARCHAR(255) NOT NULL,
-  file_type VARCHAR(100) NOT NULL,
-  file_size INT NOT NULL,
-  drive_file_id VARCHAR(100) NOT NULL,
-  drive_view_link VARCHAR(255) NOT NULL,
-  document_type ENUM('contract', 'receipt', 'repair', 'other') NOT NULL DEFAULT 'other',
-  notes TEXT,
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL,
-  FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+CREATE TABLE IF NOT EXISTS `customer_documents` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `customer_id` INT NOT NULL,
+  `document_type` ENUM('contract', 'receipt', 'repair', 'identity', 'address_proof', 'other') NOT NULL DEFAULT 'other',
+  `file_name` VARCHAR(255) NOT NULL,
+  `file_type` VARCHAR(100) NOT NULL,
+  `file_size` INT NOT NULL,
+  `drive_file_id` VARCHAR(100) NOT NULL,
+  `drive_view_link` VARCHAR(255) NOT NULL,
+  `is_verified` BOOLEAN NOT NULL DEFAULT 0,
+  `verified_by` INT NULL,
+  `verified_at` DATETIME NULL,
+  `notes` TEXT NULL,
+  `created_by` INT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_customer_documents_customer_id` (`customer_id`),
+  INDEX `idx_customer_documents_document_type` (`document_type`),
+  INDEX `idx_customer_documents_created_at` (`created_at`),
+  CONSTRAINT `fk_customer_document_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_customer_document_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_customer_document_verified_by` FOREIGN KEY (`verified_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Add indexes for improved query performance
-CREATE INDEX idx_customer_documents_customer_id ON customer_documents(customer_id);
-CREATE INDEX idx_customer_documents_document_type ON customer_documents(document_type);
-CREATE INDEX idx_customer_documents_created_at ON customer_documents(created_at);

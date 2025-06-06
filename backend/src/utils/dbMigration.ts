@@ -25,7 +25,7 @@ export class DbMigration {
 
     // Get all migration files
     const migrationFiles = fs.readdirSync(this.migrationsDir)
-      .filter(file => file.endsWith('.sql'))
+      .filter(file => file.endsWith('.sql') && !file.startsWith('_')) // Skip files starting with underscore like master migration
       .sort(); // Sort to ensure migrations run in order
 
     // Run migrations that haven't been applied
