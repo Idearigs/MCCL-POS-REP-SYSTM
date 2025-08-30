@@ -4,7 +4,10 @@
       "WebSearch",
       "Bash(git checkout:*)",
       "Bash(git pull:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git branch:*)"
     ],
     "deny": [],
     "ask": []

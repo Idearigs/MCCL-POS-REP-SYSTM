@@ -1,0 +1,37 @@
+# Professional Git Workflow for MPS Jewelry SaaS
+
+## Branch Strategy (GitFlow)
+
+### Main Branches:
+- **main**: Production-ready code only
+- **develop**: Integration branch for features
+
+### Supporting Branches:
+- **feature/**: New features (branch from develop)
+- **bugfix/**: Bug fixes (branch from develop)
+- **hotfix/**: Emergency fixes (branch from main)
+- **release/**: Prepare releases (branch from develop)
+
+### Naming Conventions:
+- feature/api-standardization
+- feature/jwt-authentication  
+- feature/pos-transactions
+- bugfix/customer-service-connection
+- hotfix/critical-api-issue
+- release/v1.0.0
+
+### Workflow Rules:
+1. All features branch from develop
+2. All features merge back to develop via PR
+3. Only develop merges to main for releases
+4. Hotfixes can branch from main
+5. No direct commits to main/develop
+
+### Current Active Branches:
+- main (production baseline)
+- develop (current integration)
+
+### Deprecated Branches (Cleaned Up):
+- ❌ feature/customers (consolidated)
+- ❌ feature/inventory (consolidated)
+- ❌ All granular POS sub-branches (consolidated)
