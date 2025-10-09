@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Local Storage</title>
+</head>
+<body>
+    <h1>Clearing Local Storage...</h1>
+    <script>
+        // Clear all localStorage data related to temporary storage
+        localStorage.removeItem('customers');
+        localStorage.removeItem('salesTransactions');
+        localStorage.removeItem('repairTransactions');
+        localStorage.removeItem('inventory');
+        localStorage.removeItem('mccl_pos_auth');
+        localStorage.removeItem('mps_auth_ui_data');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        
+        // Clear everything else too
+        localStorage.clear();
+        
+        alert('All local storage cleared! The app will now use backend data. You can close this page.');
+    </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,16 +10,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Calendar as CalendarIcon, X, Upload, Image as ImageIcon, AlertCircle } from 'lucide-react';
-import { Calendar } from '@/components/ui/calendar';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { Calendar as CalendarIcon, X, Upload, Image as ImageIcon, AlertCircle, Search, UserPlus, Check, ChevronsUpDown } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { customerService } from '@/services/customerService';
+import type { Customer } from '@/types/customer';
 
 interface NewRepairJobFormProps {
   onSubmit: (repairJob: {
@@ -31,11 +40,21 @@ interface NewRepairJobFormProps {
     dueDate: string;
     notes: string;
     images: File[];
+    customerId?: string;
+    selectedCustomer?: Customer;
   }) => void;
   onCancel: () => void;
+  onCreateCustomer?: () => void;
 }
 
-const NewRepairJobForm: React.FC<NewRepairJobFormProps> = ({ onSubmit, onCancel }) => {
+const NewRepairJobForm: React.FC<NewRepairJobFormProps> = ({ onSubmit, onCancel, onCreateCustomer }) => {
+  // Customer selection state
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
+  
+  // Form state
   const [customerName, setCustomerName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
@@ -46,8 +65,68 @@ const NewRepairJobForm: React.FC<NewRepairJobFormProps> = ({ onSubmit, onCancel 
   const [images, setImages] = useState<File[]>([]);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isNewCustomer, setIsNewCustomer] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load customers on component mount
+  useEffect(() => {
+    loadCustomers();
+  }, []);
+
+  // Load customers from backend
+  const loadCustomers = async () => {
+    try {
+      setLoadingCustomers(true);
+      const result = await customerService.getCustomers();
+      const customerList = Array.isArray(result) ? result : result.data || [];
+      setCustomers(customerList);
+    } catch (error) {
+      console.error('Failed to load customers:', error);
+      toast.error('Failed to load customers');
+    } finally {
+      setLoadingCustomers(false);
+    }
+  };
+
+  // Handle customer selection
+  const handleCustomerSelect = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setCustomerName(`${customer.firstName} ${customer.lastName}`);
+    setPhoneNumber(customer.phone || '');
+    setEmail(customer.email || '');
+    setIsNewCustomer(false);
+    setCustomerSearchOpen(false);
+    // Clear customer-related errors
+    const newErrors = { ...errors };
+    delete newErrors.customerName;
+    delete newErrors.contact;
+    setErrors(newErrors);
+  };
+
+  // Handle new customer creation
+  const handleNewCustomer = () => {
+    setSelectedCustomer(null);
+    setIsNewCustomer(true);
+    setCustomerName('');
+    setPhoneNumber('');
+    setEmail('');
+    setCustomerSearchOpen(false);
+    if (onCreateCustomer) {
+      onCreateCustomer();
+    } else {
+      toast.info('Please fill in the customer details below');
+    }
+  };
+
+  // Clear customer selection
+  const clearCustomerSelection = () => {
+    setSelectedCustomer(null);
+    setIsNewCustomer(false);
+    setCustomerName('');
+    setPhoneNumber('');
+    setEmail('');
+  };
 
   // Handle image selection
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -93,8 +172,13 @@ const NewRepairJobForm: React.FC<NewRepairJobFormProps> = ({ onSubmit, onCancel 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     
-    if (!customerName.trim()) {
-      newErrors.customerName = 'Customer name is required';
+    // Customer validation
+    if (!selectedCustomer && !customerName.trim()) {
+      newErrors.customerName = 'Customer selection or name is required';
+    }
+    
+    if (!selectedCustomer && phoneNumber.trim() === '' && email.trim() === '') {
+      newErrors.contact = 'At least one contact method (phone or email) is required for new customers';
     }
     
     if (!itemDescription.trim()) {
@@ -109,10 +193,6 @@ const NewRepairJobForm: React.FC<NewRepairJobFormProps> = ({ onSubmit, onCancel 
       newErrors.estimatedPrice = 'Estimated price is required';
     } else if (isNaN(parseFloat(estimatedPrice))) {
       newErrors.estimatedPrice = 'Price must be a valid number';
-    }
-    
-    if (phoneNumber.trim() === '' && email.trim() === '') {
-      newErrors.contact = 'At least one contact method (phone or email) is required';
     }
     
     if (images.length === 0) {
@@ -136,7 +216,9 @@ const NewRepairJobForm: React.FC<NewRepairJobFormProps> = ({ onSubmit, onCancel 
         estimatedPrice,
         dueDate: dueDate ? format(dueDate, 'yyyy-MM-dd') : '',
         notes,
-        images
+        images,
+        customerId: selectedCustomer?.id,
+        selectedCustomer: selectedCustomer || undefined
       });
     }
   };
@@ -152,44 +234,187 @@ const NewRepairJobForm: React.FC<NewRepairJobFormProps> = ({ onSubmit, onCancel 
       
       <form onSubmit={handleSubmit} className="space-y-4 py-4">
         <div className="space-y-4">
+          {/* Customer Selection */}
+          <div className="space-y-3">
+            <Label>Customer *</Label>
+            
+            {!selectedCustomer && !isNewCustomer ? (
+              // Customer search/selection interface
+              <div className="space-y-3">
+                <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={customerSearchOpen}
+                      className={cn(
+                        "w-full justify-between",
+                        errors.customerName && "border-red-500"
+                      )}
+                    >
+                      <div className="flex items-center">
+                        <Search className="mr-2 h-4 w-4" />
+                        Search existing customer...
+                      </div>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0">
+                    <Command>
+                      <CommandInput placeholder="Search customers by name, phone, or email..." />
+                      <CommandEmpty>
+                        <div className="p-4 text-center">
+                          <p className="text-sm text-muted-foreground mb-2">No customers found.</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleNewCustomer}
+                            className="text-xs"
+                          >
+                            <UserPlus className="mr-1 h-3 w-3" />
+                            Create New Customer
+                          </Button>
+                        </div>
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {loadingCustomers ? (
+                          <div className="p-4 text-center">
+                            <p className="text-sm text-muted-foreground">Loading customers...</p>
+                          </div>
+                        ) : (
+                          customers.map((customer) => (
+                            <CommandItem
+                              key={customer.id}
+                              value={`${customer.firstName} ${customer.lastName} ${customer.phone} ${customer.email}`}
+                              onSelect={() => handleCustomerSelect(customer)}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <div>
+                                  <p className="font-medium">{customer.firstName} {customer.lastName}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {customer.phone && `📞 ${customer.phone}`}
+                                    {customer.phone && customer.email && ' • '}
+                                    {customer.email && `✉️ ${customer.email}`}
+                                  </p>
+                                </div>
+                                <Check className="ml-2 h-4 w-4 opacity-0" />
+                              </div>
+                            </CommandItem>
+                          ))
+                        )}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
+                <div className="flex justify-center">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleNewCustomer}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <UserPlus className="mr-1 h-3 w-3" />
+                    Or create a new customer
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              // Selected customer display or new customer form
+              <div className="space-y-3">
+                {selectedCustomer ? (
+                  // Display selected customer with edit option
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-semibold text-primary">
+                          {selectedCustomer.firstName[0]}{selectedCustomer.lastName[0]}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-medium">{selectedCustomer.firstName} {selectedCustomer.lastName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedCustomer.phone && `📞 ${selectedCustomer.phone}`}
+                          {selectedCustomer.phone && selectedCustomer.email && ' • '}
+                          {selectedCustomer.email && `✉️ ${selectedCustomer.email}`}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearCustomerSelection}
+                    >
+                      Change
+                    </Button>
+                  </div>
+                ) : (
+                  // New customer form
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="customerName">Customer Name *</Label>
+                      <Input
+                        id="customerName"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        className={errors.customerName ? 'border-red-500' : ''}
+                        placeholder="Enter full name"
+                      />
+                      {errors.customerName && (
+                        <p className="text-xs text-red-500">{errors.customerName}</p>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="phoneNumber">Phone Number</Label>
+                      <Input
+                        id="phoneNumber"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        className={errors.contact ? 'border-red-500' : ''}
+                        placeholder="Enter phone number"
+                      />
+                    </div>
+                    
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className={errors.contact ? 'border-red-500' : ''}
+                        placeholder="Enter email address"
+                      />
+                      {errors.contact && (
+                        <p className="text-xs text-red-500">{errors.contact}</p>
+                      )}
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={clearCustomerSelection}
+                      >
+                        <Search className="mr-1 h-3 w-3" />
+                        Search existing customers instead
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {errors.customerName && !selectedCustomer && !isNewCustomer && (
+              <p className="text-xs text-red-500">{errors.customerName}</p>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* Customer Information */}
-            <div className="space-y-2">
-              <Label htmlFor="customerName">Customer Name *</Label>
-              <Input
-                id="customerName"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                className={errors.customerName ? 'border-red-500' : ''}
-              />
-              {errors.customerName && (
-                <p className="text-xs text-red-500">{errors.customerName}</p>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="phoneNumber">Phone Number</Label>
-              <Input
-                id="phoneNumber"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                className={errors.contact ? 'border-red-500' : ''}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={errors.contact ? 'border-red-500' : ''}
-              />
-              {errors.contact && (
-                <p className="text-xs text-red-500">{errors.contact}</p>
-              )}
-            </div>
             
             <div className="space-y-2">
               <Label htmlFor="dueDate">Due Date *</Label>

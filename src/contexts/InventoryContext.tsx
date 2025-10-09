@@ -1,20 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { productService, Product, CreateProductData, UpdateProductData } from '../services/productService';
 
-// Define the InventoryItem interface
-export interface InventoryItem {
-  id: string;
-  name: string;
-  sku: string;
-  description: string;
-  category: string;
-  supplier: string;
-  price: number;
-  cost: number;
-  quantity: number;
-  threshold: number;
-  location: string;
-  dateAdded: string;
-  lastRestocked: string;
+// Extended InventoryItem interface that includes backend fields plus legacy UI fields
+export interface InventoryItem extends Omit<Product, 'stock' | 'minStockLevel'> {
+  quantity: number;  // Maps to Product.stock
+  threshold: number;  // Maps to Product.minStockLevel
+  supplier?: string;
+  location?: string;
+  dateAdded?: string;
+  lastRestocked?: string;
   imageUrl?: string;
   additionalImages?: string[];
   isDamaged?: boolean;
@@ -27,181 +21,55 @@ export interface InventoryItem {
   };
 }
 
-// Mock data for initial inventory
-const initialInventory: InventoryItem[] = [
-  {
-    id: '1',
-    name: 'Diamond Ring Setting',
-    sku: 'DR-001',
-    description: 'Classic solitaire setting for diamond rings',
-    category: 'Settings',
-    supplier: 'GemCraft Supplies',
-    price: 299.99,
-    cost: 150.00,
-    quantity: 25,
-    threshold: 5,
-    location: 'Cabinet A2',
-    dateAdded: '2023-01-15',
-    lastRestocked: '2023-04-20',
-    imageUrl: '/images/diamond-ring-setting.jpg'
-  },
-  {
-    id: '2',
-    name: 'Gold Chain 18K',
-    sku: 'GC-182',
-    description: '18K gold chain, 20 inches',
-    category: 'Chains',
-    supplier: 'Luxury Gold Inc.',
-    price: 450.00,
-    cost: 275.00,
-    quantity: 8,
-    threshold: 5,
-    location: 'Safe B',
-    dateAdded: '2023-02-10',
-    lastRestocked: '2023-05-05',
-    imageUrl: '/images/gold-chain.jpg'
-  },
-  {
-    id: '3',
-    name: 'Silver Polishing Cloth',
-    sku: 'SP-001',
-    description: 'Professional grade polishing cloth for silver jewelry',
-    category: 'Supplies',
-    supplier: 'JewelCare Products',
-    price: 12.99,
-    cost: 4.50,
-    quantity: 45,
-    threshold: 10,
-    location: 'Drawer C4',
-    dateAdded: '2023-01-05',
-    lastRestocked: '2023-03-15',
-    imageUrl: '/images/polishing-cloth.jpg'
-  },
-  {
-    id: '4',
-    name: 'Watch Battery CR2032',
-    sku: 'WB-2032',
-    description: 'Standard CR2032 battery for watches',
-    category: 'Watch Parts',
-    supplier: 'TimeParts Co.',
-    price: 5.99,
-    cost: 1.20,
-    quantity: 100,
-    threshold: 20,
-    location: 'Drawer D1',
-    dateAdded: '2023-01-20',
-    lastRestocked: '2023-04-10',
-    imageUrl: '/images/watch-battery.jpg'
-  },
-  {
-    id: '5',
-    name: 'Sapphire Gemstone 1ct',
-    sku: 'SG-100',
-    description: 'Round cut sapphire, 1 carat',
-    category: 'Gemstones',
-    supplier: 'Precious Gems Ltd.',
-    price: 350.00,
-    cost: 200.00,
-    quantity: 3,
-    threshold: 2,
-    location: 'Safe A',
-    dateAdded: '2023-03-01',
-    lastRestocked: '2023-03-01',
-    imageUrl: '/images/sapphire.jpg'
-  },
-  {
-    id: '6',
-    name: 'Sterling Silver Wire',
-    sku: 'SSW-22',
-    description: '22 gauge sterling silver wire, 10 feet',
-    category: 'Materials',
-    supplier: 'SilverCraft',
-    price: 22.50,
-    cost: 9.75,
-    quantity: 15,
-    threshold: 5,
-    location: 'Cabinet B3',
-    dateAdded: '2023-02-15',
-    lastRestocked: '2023-05-10',
-    imageUrl: '/images/silver-wire.jpg'
-  },
-  {
-    id: '7',
-    name: 'Gold Solder',
-    sku: 'GS-18K',
-    description: '18K gold solder for jewelry repairs',
-    category: 'Materials',
-    supplier: 'GemCraft Supplies',
-    price: 35.00,
-    cost: 18.00,
-    quantity: 12,
-    threshold: 4,
-    location: 'Cabinet A1',
-    dateAdded: '2023-01-25',
-    lastRestocked: '2023-04-05',
-    imageUrl: '/images/gold-solder.jpg'
-  },
-  {
-    id: '8',
-    name: 'Diamond Tester',
-    sku: 'DT-PRO',
-    description: 'Professional diamond authenticity tester',
-    category: 'Tools',
-    supplier: 'JewelTest Technologies',
-    price: 189.99,
-    cost: 95.00,
-    quantity: 2,
-    threshold: 1,
-    location: 'Office Cabinet',
-    dateAdded: '2022-12-10',
-    lastRestocked: '2023-02-20',
-    imageUrl: '/images/diamond-tester.jpg'
-  },
-  {
-    id: '9',
-    name: 'Ruby Gemstone 0.5ct',
-    sku: 'RG-050',
-    description: 'Oval cut ruby, 0.5 carat',
-    category: 'Gemstones',
-    supplier: 'Precious Gems Ltd.',
-    price: 275.00,
-    cost: 145.00,
-    quantity: 0,
-    threshold: 2,
-    location: 'Safe A',
-    dateAdded: '2023-02-05',
-    lastRestocked: '2023-02-05'
-  },
-  {
-    id: '10',
-    name: 'Watch Spring Bars',
-    sku: 'WSB-20',
-    description: '20mm spring bars for watch straps, pack of 10',
-    category: 'Watch Parts',
-    supplier: 'TimeParts Co.',
-    price: 8.99,
-    cost: 2.50,
-    quantity: 7,
-    threshold: 10,
-    location: 'Drawer D2',
-    dateAdded: '2023-01-10',
-    lastRestocked: '2023-03-20'
-  }
-];
+// Convert backend Product to UI InventoryItem
+const convertProductToInventoryItem = (product: Product): InventoryItem => ({
+  ...product,
+  quantity: product.stock,
+  threshold: product.minStockLevel,
+  supplier: undefined,
+  location: undefined,
+  dateAdded: product.createdAt,
+  lastRestocked: product.updatedAt,
+  imageUrl: product.images?.[0],
+  additionalImages: product.images?.slice(1),
+  isDamaged: false
+});
+
+// Convert UI InventoryItem to backend CreateProductData
+const convertToCreateProductData = (item: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt' | 'tenantId' | 'isActive'>): CreateProductData => ({
+  name: item.name,
+  description: item.description,
+  sku: item.sku,
+  barcode: item.barcode,
+  category: item.category,
+  material: item.material,
+  weight: item.weight,
+  dimensions: item.dimensions,
+  price: item.price,
+  cost: item.cost,
+  stock: item.quantity,
+  minStockLevel: item.threshold,
+  images: [item.imageUrl, ...(item.additionalImages || [])].filter(Boolean) as string[],
+  tags: item.tags
+});
+
 
 // Define the context interface
 interface InventoryContextType {
   inventory: InventoryItem[];
+  loading: boolean;
+  error: string | null;
   getItemById: (id: string) => InventoryItem | undefined;
   getItemBySku: (sku: string) => InventoryItem | undefined;
-  addItem: (item: Omit<InventoryItem, 'id'>) => InventoryItem;
-  updateItem: (id: string, updates: Partial<InventoryItem>) => void;
-  deleteItem: (id: string) => void;
-  updateQuantity: (id: string, change: number) => boolean;
-  updateQuantityBySku: (sku: string, change: number) => boolean;
-  restockItem: (id: string, quantity: number) => void;
-  markItemAsDamaged: (sku: string, quantity: number, condition: 'damaged' | 'defective', reason: string, images?: string[]) => boolean;
+  addItem: (item: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt' | 'tenantId' | 'isActive'>) => Promise<InventoryItem>;
+  updateItem: (id: string, updates: Partial<InventoryItem>) => Promise<void>;
+  deleteItem: (id: string) => Promise<void>;
+  updateQuantity: (id: string, change: number) => Promise<boolean>;
+  updateQuantityBySku: (sku: string, change: number) => Promise<boolean>;
+  restockItem: (id: string, quantity: number) => Promise<void>;
+  markItemAsDamaged: (sku: string, quantity: number, condition: 'damaged' | 'defective', reason: string, images?: string[]) => Promise<boolean>;
   getDamagedItems: () => InventoryItem[];
+  refreshInventory: () => Promise<void>;
 }
 
 // Create the context
@@ -209,20 +77,31 @@ const InventoryContext = createContext<InventoryContextType | undefined>(undefin
 
 // Create a provider component
 export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load inventory from localStorage on initial render
-  useEffect(() => {
-    const savedInventory = localStorage.getItem('inventory');
-    if (savedInventory) {
-      setInventory(JSON.parse(savedInventory));
+  // Load inventory from backend on initial render
+  const loadInventory = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await productService.getProducts(1, 1000);
+      const uiInventory = result.data.map(convertProductToInventoryItem);
+      setInventory(uiInventory);
+    } catch (err: any) {
+      console.error('Failed to load inventory:', err);
+      setError(err.message || 'Failed to load inventory');
+      // Fall back to empty array instead of localStorage
+      setInventory([]);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  };
 
-  // Save inventory to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem('inventory', JSON.stringify(inventory));
-  }, [inventory]);
+    loadInventory();
+  }, []);
 
   // Get an item by ID
   const getItemById = (id: string) => {
@@ -235,41 +114,84 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   // Add a new item
-  const addItem = (itemData: Omit<InventoryItem, 'id'>) => {
-    // Generate a new item ID
-    const newItemId = `INV${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
-    
-    // Create the new item object
-    const newItem: InventoryItem = {
-      id: newItemId,
-      ...itemData
-    };
-    
-    // Add the new item to the state
-    setInventory(prevInventory => [...prevInventory, newItem]);
-    
-    return newItem;
+  const addItem = async (itemData: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt' | 'tenantId' | 'isActive'>): Promise<InventoryItem> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const productData = convertToCreateProductData(itemData);
+      const newProduct = await productService.createProduct(productData);
+      const newItem = convertProductToInventoryItem(newProduct);
+      
+      setInventory(prevInventory => [...prevInventory, newItem]);
+      return newItem;
+    } catch (err: any) {
+      console.error('Failed to create item:', err);
+      setError(err.message || 'Failed to create item');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Update an existing item
-  const updateItem = (id: string, updates: Partial<InventoryItem>) => {
-    setInventory(prevInventory => 
-      prevInventory.map(item => 
-        item.id === id ? { ...item, ...updates } : item
-      )
-    );
+  const updateItem = async (id: string, updates: Partial<InventoryItem>): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Convert UI updates to backend format
+      const productUpdates: UpdateProductData = {};
+      if (updates.name) productUpdates.name = updates.name;
+      if (updates.description !== undefined) productUpdates.description = updates.description;
+      if (updates.sku) productUpdates.sku = updates.sku;
+      if (updates.barcode !== undefined) productUpdates.barcode = updates.barcode;
+      if (updates.category) productUpdates.category = updates.category;
+      if (updates.material) productUpdates.material = updates.material;
+      if (updates.weight !== undefined) productUpdates.weight = updates.weight;
+      if (updates.dimensions !== undefined) productUpdates.dimensions = updates.dimensions;
+      if (updates.price !== undefined) productUpdates.price = updates.price;
+      if (updates.cost !== undefined) productUpdates.cost = updates.cost;
+      if (updates.quantity !== undefined) productUpdates.stock = updates.quantity;
+      if (updates.threshold !== undefined) productUpdates.minStockLevel = updates.threshold;
+      if (updates.isActive !== undefined) productUpdates.isActive = updates.isActive;
+      
+      const updatedProduct = await productService.updateProduct(id, productUpdates);
+      const updatedItem = convertProductToInventoryItem(updatedProduct);
+      
+      setInventory(prevInventory => 
+        prevInventory.map(item => 
+          item.id === id ? { ...updatedItem, ...updates } : item
+        )
+      );
+    } catch (err: any) {
+      console.error('Failed to update item:', err);
+      setError(err.message || 'Failed to update item');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Delete an item
-  const deleteItem = (id: string) => {
-    setInventory(prevInventory => 
-      prevInventory.filter(item => item.id !== id)
-    );
+  const deleteItem = async (id: string): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    try {
+      await productService.deleteProduct(id);
+      setInventory(prevInventory => 
+        prevInventory.filter(item => item.id !== id)
+      );
+    } catch (err: any) {
+      console.error('Failed to delete item:', err);
+      setError(err.message || 'Failed to delete item');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Update quantity of an item by ID
   // Returns true if successful, false if not enough stock
-  const updateQuantity = (id: string, change: number): boolean => {
+  const updateQuantity = async (id: string, change: number): Promise<boolean> => {
     const item = getItemById(id);
     if (!item) return false;
     
@@ -278,52 +200,51 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
       return false;
     }
     
-    // Update the quantity
-    const newQuantity = item.quantity + change;
-    const lastRestocked = change > 0 ? new Date().toISOString().split('T')[0] : item.lastRestocked;
-    
-    updateItem(id, { 
-      quantity: newQuantity,
-      lastRestocked: change > 0 ? lastRestocked : item.lastRestocked
-    });
-    
-    return true;
+    setLoading(true);
+    setError(null);
+    try {
+      await productService.adjustStock(id, {
+        quantity: change,
+        reason: change > 0 ? 'Stock increase' : 'Stock decrease',
+        notes: `Manual adjustment: ${change > 0 ? '+' : ''}${change}`
+      });
+      
+      // Update local state
+      await updateItem(id, { 
+        quantity: item.quantity + change,
+        lastRestocked: change > 0 ? new Date().toISOString() : item.lastRestocked
+      });
+      
+      return true;
+    } catch (err: any) {
+      console.error('Failed to update quantity:', err);
+      setError(err.message || 'Failed to update quantity');
+      return false;
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Update an item's quantity by SKU
-  const updateQuantityBySku = (sku: string, change: number): boolean => {
-    const itemIndex = inventory.findIndex(item => item.sku === sku);
+  const updateQuantityBySku = async (sku: string, change: number): Promise<boolean> => {
+    const item = inventory.find(item => item.sku === sku);
     
-    if (itemIndex === -1) return false;
-    
-    const item = inventory[itemIndex];
-    const newQuantity = item.quantity + change;
+    if (!item) return false;
     
     // Prevent negative quantities
-    if (newQuantity < 0) return false;
+    if (item.quantity + change < 0) return false;
     
-    const updatedItem = { ...item, quantity: newQuantity };
-    
-    setInventory(prev => {
-      const newInventory = [...prev];
-      newInventory[itemIndex] = updatedItem;
-      return newInventory;
-    });
-    
-    return true;
+    return await updateQuantity(item.id, change);
   };
 
   // Restock an item
-  const restockItem = (id: string, quantity: number) => {
+  const restockItem = async (id: string, quantity: number): Promise<void> => {
     if (quantity <= 0) return;
     
     const item = getItemById(id);
     if (!item) return;
     
-    updateItem(id, {
-      quantity: item.quantity + quantity,
-      lastRestocked: new Date().toISOString().split('T')[0]
-    });
+    await updateQuantity(id, quantity);
   };
 
   // Get all damaged items
@@ -332,40 +253,51 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   // Mark an item as damaged
-  const markItemAsDamaged = (sku: string, quantity: number, condition: 'damaged' | 'defective', reason: string, images: string[] = []): boolean => {
-    const itemIndex = inventory.findIndex(item => item.sku === sku);
+  const markItemAsDamaged = async (sku: string, quantity: number, condition: 'damaged' | 'defective', reason: string, images: string[] = []): Promise<boolean> => {
+    const item = inventory.find(item => item.sku === sku);
     
-    if (itemIndex === -1) return false;
-    
-    const item = inventory[itemIndex];
+    if (!item) return false;
     
     // Ensure we don't mark more items as damaged than we have in inventory
     if (quantity <= 0 || quantity > item.quantity) return false;
     
-    const updatedItem = { 
-      ...item, 
-      isDamaged: true,
-      damageDetails: {
-        condition,
-        reason,
-        quantity,
-        images,
-        date: new Date().toISOString().split('T')[0]
-      }
-    };
-    
-    setInventory(prev => {
-      const newInventory = [...prev];
-      newInventory[itemIndex] = updatedItem;
-      return newInventory;
-    });
-    
-    return true;
+    try {
+      // Update local state only (this would need a backend endpoint for damage tracking)
+      const updatedItem = { 
+        ...item, 
+        isDamaged: true,
+        damageDetails: {
+          condition,
+          reason,
+          quantity,
+          images,
+          date: new Date().toISOString().split('T')[0]
+        }
+      };
+      
+      setInventory(prev => 
+        prev.map(invItem => 
+          invItem.sku === sku ? updatedItem : invItem
+        )
+      );
+      
+      return true;
+    } catch (err: any) {
+      console.error('Failed to mark item as damaged:', err);
+      return false;
+    }
+  };
+
+  // Refresh inventory from backend
+  const refreshInventory = async () => {
+    await loadInventory();
   };
 
   // Context value
   const value = {
     inventory,
+    loading,
+    error,
     getItemById,
     getItemBySku,
     addItem,
@@ -375,7 +307,8 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
     updateQuantityBySku,
     restockItem,
     markItemAsDamaged,
-    getDamagedItems
+    getDamagedItems,
+    refreshInventory
   };
 
   return (

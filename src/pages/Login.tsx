@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -25,7 +25,7 @@ import { Separator } from "@/components/ui/separator";
 
 // Define the form schema with Zod
 const formSchema = z.object({
-  username: z.string().min(1, { message: "Username is required" }),
+  email: z.string().email({ message: "Please enter a valid email address" }),
   password: z.string().min(1, { message: "Password is required" }),
 });
 
@@ -34,8 +34,9 @@ type FormValues = z.infer<typeof formSchema>;
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
-  const { login } = useAuth();
+  const { auth, login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showLoginForm, setShowLoginForm] = useState(false);
@@ -48,11 +49,20 @@ const Login = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!auth.loading && auth.isAuthenticated) {
+      const urlParams = new URLSearchParams(location.search);
+      const redirectTo = urlParams.get('redirect') || location.state?.from?.pathname || '/dashboard';
+      navigate(redirectTo, { replace: true });
+    }
+  }, [auth.loading, auth.isAuthenticated, navigate, location.state, location.search]);
+
   // Initialize the form
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      username: "",
+      email: "",
       password: "",
     },
   });
@@ -65,11 +75,8 @@ const Login = () => {
     try {
       console.log("Login attempt with:", data);
       
-      // Simulating a network request
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
       // Use the login function from auth context
-      const success = login(data.username, data.password);
+      const success = await login(data.email, data.password);
       
       if (success) {
         // Login successful
@@ -78,18 +85,19 @@ const Login = () => {
           description: "Welcome to MCCL POS System",
         });
         
-        // Show intro animation instead of navigating immediately
+        // Show intro animation, navigation will happen after completion
         setShowIntroAnimation(true);
-        // Navigation will happen after the intro animation completes
       } else {
         // Login failed
-        setLoginError("Invalid username or password");
+        setLoginError("Invalid email or password");
         throw new Error("Invalid credentials");
       }
-    } catch (error) {
+    } catch (error: any) {
+      const errorMessage = error.message || "Invalid email or password";
+      setLoginError(errorMessage);
       toast({
         title: "Login failed",
-        description: "Invalid username or password",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -97,9 +105,16 @@ const Login = () => {
     }
   };
 
+  // Handle intro animation completion
+  const handleIntroComplete = () => {
+    const urlParams = new URLSearchParams(location.search);
+    const redirectTo = urlParams.get('redirect') || location.state?.from?.pathname || '/dashboard';
+    navigate(redirectTo, { replace: true });
+  };
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
-      {showIntroAnimation && <IntroAnimation targetRoute="/" />}
+      {showIntroAnimation && <IntroAnimation targetRoute={location.state?.from?.pathname || '/dashboard'} onComplete={handleIntroComplete} />}
       {/* Simple background with subtle pattern */}
       <div className="absolute inset-0 bg-gradient-to-b from-gray-50 to-gray-100 opacity-80"></div>
 
@@ -154,17 +169,18 @@ const Login = () => {
                   >
                     <FormField
                       control={form.control}
-                      name="username"
+                      name="email"
                       render={({ field }) => (
                         <FormItem className="space-y-2">
-                          <FormLabel className="text-sm font-medium text-gray-700">Username</FormLabel>
+                          <FormLabel className="text-sm font-medium text-gray-700">Email</FormLabel>
                           <div className="relative group">
                             <div className="absolute left-3 top-3 text-gray-400 group-focus-within:text-primary transition-colors duration-200">
                               <User className="h-5 w-5" />
                             </div>
                             <FormControl>
                               <Input 
-                                placeholder="admin" 
+                                type="email"
+                                placeholder="admin@example.com" 
                                 className="pl-10 h-11 bg-white focus:bg-white transition-all duration-200 rounded-md border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/20" 
                                 {...field} 
                                 disabled={isLoading}

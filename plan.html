@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>POS & Repair System Architecture</title>
+  <style>
+    :root{
+      --bg:#0f1115;          /* dark background */
+      --panel:#2a2f3a;       /* platform shell */
+      --card:#ffffff;        /* module tile */
+      --accent:#d6d6d6;      /* ui pages */
+      --external:#f7b6b6;    /* external services */
+      --text:#e9eef6;
+      --muted:#9aa3b2;
+      --line:#bfc7d5;
+      --shadow:0 6px 18px rgba(0,0,0,.35);
+      --radius:18px;
+    }
+
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background:var(--bg); color:var(--text);
+      display:flex; align-items:center; justify-content:center; min-height:100vh; padding:32px;
+    }
+
+    .canvas{width:min(1200px, 96vw);}
+
+    /* LAYOUT */
+    .grid{
+      display:grid;
+      grid-template-rows:auto 32px auto 32px auto;
+      row-gap:24px;
+      align-items:start;
+    }
+
+    /* EXTERNAL SERVICES (top row) */
+    .externals{
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+      gap:18px;
+    }
+    .external{
+      position:relative;
+      background:var(--external);
+      color:#151515;
+      border-radius:14px;
+      padding:22px 10px; text-align:center; font-weight:700;
+      box-shadow:var(--shadow);
+      min-height:86px;
+    }
+    /* draw down-connector from each external box to the platform */
+    .external::after{
+      content:""; position:absolute; left:50%; bottom:-32px; transform:translateX(-50%);
+      width:2px; height:32px; background:var(--line);
+    }
+
+    /* PLATFORM */
+    .platform{
+      position:relative;
+      background:var(--panel);
+      border-radius:var(--radius);
+      padding:22px 22px 18px;
+      box-shadow:var(--shadow);
+    }
+    .platform__title{font-size:14px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin:0 0 10px}
+
+    .modules{display:grid; grid-template-columns:repeat(4, 1fr); gap:14px}
+    .module{
+      background:var(--card); color:#1c1f25; border-radius:12px; padding:14px; text-align:center; font-weight:700; font-size:14px;
+      min-height:70px; display:flex; align-items:center; justify-content:center;
+    }
+
+    .security{
+      margin-top:16px; background:#d9dde6; color:#101317; border-radius:14px; padding:16px; text-align:center; font-weight:800;
+    }
+
+    /* connector to UI */
+    .down-connector{height:32px; display:flex; align-items:center; justify-content:center}
+    .down-connector .line{width:2px; height:100%; background:var(--line)}
+
+    /* UI PAGES */
+    .ui{
+      background:var(--accent); color:#0c0e12; border-radius:16px; padding:42px 16px; text-align:center; font-weight:900; font-size:42px; letter-spacing:.02em;
+      box-shadow:var(--shadow);
+    }
+
+    /* LEGEND */
+    .legend{display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end; margin-top:12px}
+    .chip{display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--muted)}
+    .dot{width:14px; height:14px; border-radius:4px}
+    .dot.ext{background:var(--external)}
+    .dot.mod{background:var(--card)}
+    .dot.shell{background:var(--panel)}
+    .dot.ui{background:var(--accent)}
+
+    /* Responsive tweaks */
+    @media (max-width:920px){
+      .modules{grid-template-columns:repeat(3, 1fr)}
+      .ui{font-size:34px}
+    }
+    @media (max-width:680px){
+      .modules{grid-template-columns:repeat(2, 1fr)}
+      .external::after{display:none} /* hide lines on tight screens */
+      .ui{font-size:28px}
+    }
+  </style>
+</head>
+<body>
+  <main class="canvas">
+    <section class="grid">
+      <!-- External Services Row -->
+      <div class="externals">
+        <div class="external">SMS Gateway</div>
+        <div class="external">Primary DB</div>
+        <div class="external">Google Drive / Storage</div>
+        <div class="external">Email / WhatsApp</div>
+        <div class="external">Payment Gateway</div>
+        <div class="external">Accounting (Xero / QB)</div>
+        <div class="external">Cloud Backup & Logs</div>
+        <div class="external">Analytics Service</div>
+      </div>
+
+      <!-- Spacing for the top connector tails -->
+      <div></div>
+
+      <!-- Platform Core -->
+      <section class="platform" aria-label="Core Platform">
+        <h2 class="platform__title">Core Platform</h2>
+        <div class="modules" role="list" aria-label="Core Modules">
+          <div class="module" role="listitem">Dashboard Core</div>
+          <div class="module" role="listitem">Point of Sale Core</div>
+          <div class="module" role="listitem">Repair Jobs Core</div>
+          <div class="module" role="listitem">Calendar Core</div>
+
+          <div class="module" role="listitem">Customers Core</div>
+          <div class="module" role="listitem">Inventory Core</div>
+          <div class="module" role="listitem">Search Core</div>
+          <div class="module" role="listitem">Settings & Subscription</div>
+
+          <div class="module" role="listitem">History / Audit Core</div>
+          <div class="module" role="listitem">Notifications Core</div>
+          <div class="module" role="listitem">Integrations Core</div>
+          <div class="module" role="listitem">Reports & Exports</div>
+        </div>
+        <div class="security">Security Layer — AuthN/AuthZ • RBAC • Encryption • GDPR Logs</div>
+        <div class="legend">
+          <span class="chip"><span class="dot ext"></span>External Service</span>
+          <span class="chip"><span class="dot mod"></span>Module</span>
+          <span class="chip"><span class="dot shell"></span>Platform Shell</span>
+          <span class="chip"><span class="dot ui"></span>UI Layer</span>
+        </div>
+      </section>
+
+      <!-- Vertical connector to UI -->
+      <div class="down-connector"><div class="line" aria-hidden="true"></div></div>
+
+      <!-- UI Pages -->
+      <div class="ui" aria-label="User Interface">UI PAGES</div>
+    </section>
+  </main>
+</body>
+</html>

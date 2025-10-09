@@ -1,16 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch",
-      "Bash(git checkout:*)",
-      "Bash(git pull:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git push:*)",
-      "Bash(git branch:*)",
-      "Bash(git remote:*)",
-      "Bash(npm install)",
-      "Bash(npm run build:*)"
+      "Bash(npx prisma:*)",
+      "Bash(PORT=3008 npm run start:prod)",
+      "Bash(sed:*)",
+      "Bash(npm run build:*)",
+      "WebFetch(domain:help.voodoosms.com)",
+      "Bash(PORT=3008 npm run start:dev)",
+      "Bash(node fix-all-imports.js)",
+      "Bash(node:*)",
+      "Bash(tree:*)",
+      "Bash(find:*)",
+      "Bash(taskkill:*)",
+      "Bash(npm start)",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "ask": []

@@ -9,6 +9,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { TransactionProvider } from "./contexts/TransactionContext";
 import { CustomerProvider } from "./contexts/CustomerContext";
 import { InventoryProvider } from "./contexts/InventoryContext";
+import PrivateRoute from "./components/auth/PrivateRoute";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import MainLayout from "./components/layout/MainLayout";
@@ -24,6 +25,8 @@ import Login from "./pages/Login";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import ProfilePage from "./pages/ProfilePage";
 import NotificationsPage from "./pages/NotificationsPage";
+import ApiTestPage from "./components/ApiTestPage";
+import AdminManagement from "./pages/AdminManagement";
 
 // Create a client for React Query
 const queryClient = new QueryClient();
@@ -52,21 +55,27 @@ const App = () => (
               <Sonner />
               <PageTransition>
                 <Routes>
-                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  {/* Public routes */}
                   <Route path="/login" element={<Login />} />
-                  <Route path="/dashboard" element={<Index />} />
-                  <Route path="/pos" element={<PointOfSale />} />
-                  <Route path="/repairs" element={<RepairsPage />} />
-                  <Route path="/customers" element={<CustomersPage />} />
-                  <Route path="/inventory" element={<InventoryPage />} />
-                  <Route path="/calendar" element={<CalendarPage />} />
-                  <Route path="/history" element={<HistoryPage />} />
-                  <Route path="/search" element={<SearchPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                  <Route path="/subscription" element={<SubscriptionPage />} />
-                  <Route path="/profile" element={<ProfilePage />} />
-                  <Route path="/notifications" element={<NotificationsPage />} />
-                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  
+                  {/* Protected routes - require authentication */}
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/dashboard" element={<PrivateRoute><Index /></PrivateRoute>} />
+                  <Route path="/pos" element={<PrivateRoute><PointOfSale /></PrivateRoute>} />
+                  <Route path="/repairs" element={<PrivateRoute><RepairsPage /></PrivateRoute>} />
+                  <Route path="/customers" element={<PrivateRoute><CustomersPage /></PrivateRoute>} />
+                  <Route path="/inventory" element={<PrivateRoute><InventoryPage /></PrivateRoute>} />
+                  <Route path="/calendar" element={<PrivateRoute><CalendarPage /></PrivateRoute>} />
+                  <Route path="/history" element={<PrivateRoute><HistoryPage /></PrivateRoute>} />
+                  <Route path="/search" element={<PrivateRoute><SearchPage /></PrivateRoute>} />
+                  <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
+                  <Route path="/subscription" element={<PrivateRoute><SubscriptionPage /></PrivateRoute>} />
+                  <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
+                  <Route path="/notifications" element={<PrivateRoute><NotificationsPage /></PrivateRoute>} />
+                  <Route path="/api-test" element={<PrivateRoute><ApiTestPage /></PrivateRoute>} />
+                  <Route path="/admin" element={<PrivateRoute><AdminManagement /></PrivateRoute>} />
+                  
+                  {/* Catch-all route */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </PageTransition>

@@ -38,72 +38,100 @@ const AddCustomerForm: React.FC<AddCustomerFormProps> = ({
   });
 
   // Handle creating a new customer
-  const handleCreateCustomer = () => {
-    // Validate required fields
-    if (!newCustomer.name || !newCustomer.phone) {
+  const handleCreateCustomer = async () => {
+    try {
+      // Validate required fields
+      if (!newCustomer.name || !newCustomer.phone) {
+        toast({
+          title: "Missing information",
+          description: "Please provide at least a name and phone number.",
+          variant: "destructive",
+          duration: 3000,
+        });
+        return;
+      }
+
+      // Validate data processing consent
+      if (!newCustomer.dataProcessingConsent) {
+        toast({
+          title: "Data processing consent required",
+          description: "You must consent to data processing to create an account.",
+          variant: "destructive",
+          duration: 3000,
+        });
+        return;
+      }
+
+      // Create a new customer in the context (this will call the backend)
+      const currentDate = new Date();
+      const formattedDate = `${currentDate.toLocaleString('default', { month: 'short' })} ${currentDate.getFullYear()}`;
+      
+      const createdCustomer = await addCustomer({
+        name: newCustomer.name,
+        phone: newCustomer.phone,
+        email: newCustomer.email,
+        notes: newCustomer.notes,
+        redFlag: false,
+        since: formattedDate,
+        marketingConsent: newCustomer.marketingConsent,
+        dataProcessingConsent: newCustomer.dataProcessingConsent,
+        totalSpent: 0,
+        purchaseHistory: [],
+        repairHistory: []
+      });
+
+      // Reset the form only on success
+      setNewCustomer({
+        name: '',
+        phone: '',
+        email: '',
+        notes: '',
+        marketingConsent: {
+          email: false,
+          sms: false,
+          phone: false
+        },
+        dataProcessingConsent: false
+      });
+
       toast({
-        title: "Missing information",
-        description: "Please provide at least a name and phone number.",
-        variant: "destructive",
+        title: "Customer created",
+        description: `${newCustomer.name} has been added successfully.`,
         duration: 3000,
       });
-      return;
-    }
 
-    // Validate data processing consent
-    if (!newCustomer.dataProcessingConsent) {
+      // Close the dialog
+      onClose();
+      
+      // Call success callback if provided
+      if (onSuccess) {
+        onSuccess(createdCustomer);
+      }
+
+    } catch (error: any) {
+      console.error('Error creating customer:', error);
+      
+      // Handle specific error types
+      let errorMessage = "Failed to create customer. Please try again.";
+      
+      if (error.message) {
+        if (error.message.includes('phone') && error.message.includes('already exists')) {
+          errorMessage = "A customer with this phone number already exists.";
+        } else if (error.message.includes('email') && error.message.includes('already exists')) {
+          errorMessage = "A customer with this email address already exists.";
+        } else if (error.message.includes('duplicate') || error.message.includes('unique constraint')) {
+          errorMessage = "A customer with this phone number or email already exists.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
-        title: "Data processing consent required",
-        description: "You must consent to data processing to create an account.",
+        title: "Error creating customer",
+        description: errorMessage,
         variant: "destructive",
-        duration: 3000,
+        duration: 5000,
       });
-      return;
-    }
-
-    // Create a new customer in the context
-    const currentDate = new Date();
-    const formattedDate = `${currentDate.toLocaleString('default', { month: 'short' })} ${currentDate.getFullYear()}`;
-    
-    const createdCustomer = addCustomer({
-      name: newCustomer.name,
-      phone: newCustomer.phone,
-      email: newCustomer.email,
-      notes: newCustomer.notes,
-      redFlag: false,
-      since: formattedDate,
-      marketingConsent: newCustomer.marketingConsent,
-      totalSpent: 0,
-      purchaseHistory: [],
-      repairHistory: []
-    });
-
-    // Reset the form
-    setNewCustomer({
-      name: '',
-      phone: '',
-      email: '',
-      notes: '',
-      marketingConsent: {
-        email: false,
-        sms: false,
-        phone: false
-      },
-      dataProcessingConsent: false
-    });
-
-    toast({
-      title: "Customer created",
-      description: `${newCustomer.name} has been added successfully.`,
-      duration: 3000,
-    });
-
-    // Close the dialog
-    onClose();
-    
-    // Call success callback if provided
-    if (onSuccess) {
-      onSuccess(createdCustomer);
     }
   };
 

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
   DialogContent, 
@@ -11,10 +11,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, Mail, MapPin, Phone, ShoppingBag, User } from 'lucide-react';
+import { Calendar, Mail, MapPin, Phone, ShoppingBag, User, ExternalLink, Eye, Wrench } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import ConsentForm from '@/components/gdpr/ConsentForm';
 import { Customer } from '@/contexts/CustomerContext';
+import { repairService } from '@/services/repairService';
+import { toast } from 'sonner';
 
 interface CustomerDetailProps {
   customer: Customer;
@@ -30,9 +32,40 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
   onUpdate
 }) => {
   const [activeTab, setActiveTab] = useState('overview');
+  const [customerRepairs, setCustomerRepairs] = useState<any[]>([]);
+  const [loadingRepairs, setLoadingRepairs] = useState(false);
+  const [repairError, setRepairError] = useState<string | null>(null);
 
-  const formatDate = (dateString: string) => {
+  // Load customer repairs when dialog opens
+  useEffect(() => {
+    if (isOpen && customer.id) {
+      loadCustomerRepairs();
+    }
+  }, [isOpen, customer.id]);
+
+  const loadCustomerRepairs = async () => {
+    try {
+      setLoadingRepairs(true);
+      setRepairError(null);
+      
+      // Get all repairs and filter by customer ID
+      const allRepairs = await repairService.getRepairs();
+      const customerRepairsList = allRepairs.data?.filter(repair => repair.customerId === customer.id) || [];
+      
+      setCustomerRepairs(customerRepairsList);
+      console.log(`✅ Loaded ${customerRepairsList.length} repairs for customer ${customer.name}`, customerRepairsList);
+    } catch (error: any) {
+      console.error('Failed to load customer repairs:', error);
+      setRepairError(error.message || 'Failed to load repairs');
+    } finally {
+      setLoadingRepairs(false);
+    }
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'Unknown date';
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Invalid date';
     return date.toLocaleDateString('en-GB', { 
       day: 'numeric', 
       month: 'short', 
@@ -41,34 +74,60 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
   };
 
   const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'completed':
+    switch (status?.toUpperCase()) {
+      case 'COMPLETED':
         return 'bg-green-500 text-white';
-      case 'in-progress':
+      case 'READY_FOR_COLLECTION':
+        return 'bg-green-400 text-white';
+      case 'COLLECTED':
+        return 'bg-green-600 text-white';
+      case 'IN_PROGRESS':
         return 'bg-blue-500 text-white';
-      case 'waiting':
+      case 'APPROVED':
+        return 'bg-blue-400 text-white';
+      case 'QUOTED':
+        return 'bg-purple-500 text-white';
+      case 'RECEIVED':
         return 'bg-amber-500 text-white';
-      case 'cancelled':
+      case 'CANCELLED':
         return 'bg-red-500 text-white';
       default:
         return 'bg-gray-500 text-white';
     }
   };
 
-  const handleConsentUpdate = (consents: {
+  const getStatusText = (status: string) => {
+    switch (status?.toUpperCase()) {
+      case 'READY_FOR_COLLECTION':
+        return 'Ready for Collection';
+      case 'IN_PROGRESS':
+        return 'In Progress';
+      default:
+        return status?.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown';
+    }
+  };
+
+  const handleConsentUpdate = async (consents: {
     email: boolean;
     sms: boolean;
     phone: boolean;
     dataProcessing: boolean;
   }) => {
-    // Update the customer's marketing consent preferences
-    onUpdate(customer.id, {
-      marketingConsent: {
-        email: consents.email,
-        sms: consents.sms,
-        phone: consents.phone
-      }
-    });
+    try {
+      console.log('Updating customer preferences:', { customerId: customer.id, consents });
+      // Update the customer's marketing consent preferences
+      await onUpdate(customer.id, {
+        marketingConsent: {
+          email: consents.email,
+          sms: consents.sms,
+          phone: consents.phone
+        }
+      });
+      console.log('Customer preferences updated successfully');
+    } catch (error) {
+      console.error('Failed to update customer preferences:', error);
+      throw error; // Re-throw to let the parent component handle the error display
+    }
   };
 
   return (
@@ -98,19 +157,19 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Mail size={16} className="text-gray-400" />
-                  <span className="text-gray-700">{customer.email}</span>
+                  <span className="text-gray-700">{customer.email || 'No email provided'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Phone size={16} className="text-gray-400" />
-                  <span className="text-gray-700">{customer.phone}</span>
+                  <span className="text-gray-700">{customer.phone || 'No phone provided'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <MapPin size={16} className="text-gray-400" />
-                  <span className="text-gray-700">{customer.address}</span>
+                  <span className="text-gray-700">{customer.address || 'No address provided'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar size={16} className="text-gray-400" />
-                  <span className="text-gray-700">Customer since: {customer.since}</span>
+                  <span className="text-gray-700">Customer since: {customer.since || 'Unknown'}</span>
                 </div>
               </CardContent>
             </Card>
@@ -121,14 +180,14 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
               </CardHeader>
               <CardContent className="space-y-2">
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant={customer.marketingConsent.email ? "default" : "outline"}>
-                    Email {customer.marketingConsent.email ? '✓' : '✗'}
+                  <Badge variant={customer.marketingConsent?.email ? "default" : "outline"}>
+                    Email {customer.marketingConsent?.email ? '✓' : '✗'}
                   </Badge>
-                  <Badge variant={customer.marketingConsent.sms ? "default" : "outline"}>
-                    SMS {customer.marketingConsent.sms ? '✓' : '✗'}
+                  <Badge variant={customer.marketingConsent?.sms ? "default" : "outline"}>
+                    SMS {customer.marketingConsent?.sms ? '✓' : '✗'}
                   </Badge>
-                  <Badge variant={customer.marketingConsent.phone ? "default" : "outline"}>
-                    Phone {customer.marketingConsent.phone ? '✓' : '✗'}
+                  <Badge variant={customer.marketingConsent?.phone ? "default" : "outline"}>
+                    Phone {customer.marketingConsent?.phone ? '✓' : '✗'}
                   </Badge>
                 </div>
               </CardContent>
@@ -141,15 +200,15 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center p-2 bg-blue-50/50 rounded-lg">
                   <span className="text-gray-700">Total spent:</span>
-                  <span className="font-semibold text-gray-800 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-100">£{customer.totalSpent.toFixed(2)}</span>
+                  <span className="font-semibold text-gray-800 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-100">£{(customer.totalSpent || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center p-2 bg-green-50/50 rounded-lg">
                   <span className="text-gray-700">Purchase count:</span>
-                  <span className="font-semibold text-gray-800 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-100">{customer.purchaseHistory.length}</span>
+                  <span className="font-semibold text-gray-800 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-100">{customer.purchaseHistory?.length || 0}</span>
                 </div>
                 <div className="flex justify-between items-center p-2 bg-purple-50/50 rounded-lg">
                   <span className="text-gray-700">Repair jobs:</span>
-                  <span className="font-semibold text-gray-800 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-100">{customer.repairHistory.length}</span>
+                  <span className="font-semibold text-gray-800 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-100">{customerRepairs.length}</span>
                 </div>
               </CardContent>
             </Card>
@@ -163,7 +222,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
                 </div>
                 Purchase History
               </h3>
-              {customer.purchaseHistory.length > 0 ? (
+              {(customer.purchaseHistory?.length || 0) > 0 ? (
                 <div className="rounded-xl overflow-hidden border border-gray-100 shadow-sm">
                   <Table>
                     <TableHeader className="bg-gray-50">
@@ -174,11 +233,11 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {customer.purchaseHistory.map((purchase) => (
+                      {(customer.purchaseHistory || []).map((purchase) => (
                         <TableRow key={purchase.id} className="border-b border-gray-100 hover:bg-gray-50/50">
                           <TableCell className="text-gray-700">{formatDate(purchase.date)}</TableCell>
-                          <TableCell className="text-gray-700">{purchase.items.join(', ')}</TableCell>
-                          <TableCell className="text-right font-medium text-gray-800">£{purchase.amount.toFixed(2)}</TableCell>
+                          <TableCell className="text-gray-700">{(purchase.items || []).join(', ')}</TableCell>
+                          <TableCell className="text-right font-medium text-gray-800">£{(purchase.amount || 0).toFixed(2)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -197,56 +256,113 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
             <div>
               <h3 className="text-lg font-medium mb-4 flex items-center gap-2 text-gray-800">
                 <div className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-500"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                  <Wrench size={16} className="text-purple-500" />
                 </div>
                 Repair History
+                {loadingRepairs && (
+                  <div className="animate-spin ml-2">
+                    <svg className="h-4 w-4 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </div>
+                )}
               </h3>
-              {customer.repairHistory.length > 0 ? (
+              
+              {repairError ? (
+                <div className="flex items-center justify-center h-24 border border-red-100 rounded-xl bg-red-50/50 backdrop-blur-sm">
+                  <p className="text-red-400 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-300">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="15" y1="9" x2="9" y2="15"></line>
+                      <line x1="9" y1="9" x2="15" y2="15"></line>
+                    </svg>
+                    Failed to load repair history: {repairError}
+                  </p>
+                </div>
+              ) : customerRepairs.length > 0 ? (
                 <div className="rounded-xl overflow-hidden border border-gray-100 shadow-sm">
                   <Table>
                     <TableHeader className="bg-gray-50">
                       <TableRow>
+                        <TableHead className="text-gray-700">Repair #</TableHead>
                         <TableHead className="text-gray-700">Item</TableHead>
-                        <TableHead className="text-gray-700">Description</TableHead>
                         <TableHead className="text-gray-700">Status</TableHead>
-                        <TableHead className="text-gray-700">Date</TableHead>
+                        <TableHead className="text-gray-700">Cost</TableHead>
+                        <TableHead className="text-gray-700">Created</TableHead>
+                        <TableHead className="text-gray-700">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {customer.repairHistory.map((repair) => (
+                      {customerRepairs.map((repair) => (
                         <TableRow key={repair.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                          <TableCell className="text-gray-700 font-medium">{repair.item}</TableCell>
-                          <TableCell className="text-gray-700">{repair.description}</TableCell>
+                          <TableCell className="text-gray-700 font-medium text-sm font-mono">
+                            {repair.repairNumber}
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="text-gray-700 font-medium">{repair.itemDescription}</p>
+                              {repair.problemDescription && (
+                                <p className="text-gray-500 text-xs mt-1">{repair.problemDescription}</p>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <Badge className={`${getStatusColor(repair.status)} rounded-full px-2 py-0.5 text-xs font-medium`}>
-                              {repair.status}
+                              {getStatusText(repair.status)}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-gray-700">
-                            {repair.completedDate 
-                              ? `Completed ${formatDate(repair.completedDate)}`
-                              : repair.startDate
-                                ? `Started ${formatDate(repair.startDate)}`
-                                : 'Not started'}
+                            <div className="text-sm">
+                              {repair.totalCost > 0 ? (
+                                <span className="font-medium">£{repair.totalCost.toFixed(2)}</span>
+                              ) : repair.estimatedCost > 0 ? (
+                                <span className="text-gray-500">Est: £{repair.estimatedCost.toFixed(2)}</span>
+                              ) : (
+                                <span className="text-gray-400">TBC</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-gray-700 text-sm">
+                            {formatDate(repair.createdAt)}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                // TODO: Open repair detail view
+                                toast.info(`Opening repair ${repair.repairNumber}`);
+                              }}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Eye size={14} />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </div>
-              ) : (
+              ) : !loadingRepairs ? (
                 <div className="flex items-center justify-center h-24 border border-gray-100 rounded-xl bg-white/50 backdrop-blur-sm">
                   <p className="text-gray-400 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-300"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                    <Wrench size={16} className="text-gray-300" />
                     No repair history available
                   </p>
                 </div>
-              )}
+              ) : null}
             </div>
           </TabsContent>
 
           <TabsContent value="preferences">
             <ConsentForm 
+              initialConsents={{
+                email: customer.marketingConsent?.email || false,
+                sms: customer.marketingConsent?.sms || false,
+                phone: customer.marketingConsent?.phone || false,
+                dataProcessing: true, // Assume true for existing customers
+              }}
               onSubmit={handleConsentUpdate}
             />
           </TabsContent>
@@ -254,17 +370,10 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
 
         <DialogFooter className="mt-6">
           <Button 
-            variant="outline" 
             onClick={onClose}
-            className="rounded-full bg-white/80 border border-gray-200 text-gray-800 hover:bg-gray-100 shadow-sm"
-          >
-            Close
-          </Button>
-          <Button 
-            onClick={() => onUpdate(customer.id, {})}
             className="rounded-full bg-blue-500 hover:bg-blue-600 text-white shadow-sm"
           >
-            Update Customer
+            Close
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -4,20 +4,26 @@ import { API_CONFIG, PaginatedResponse } from '../config/api';
 
 export interface Customer {
   id: string;
-  name: string;
+  firstName?: string;
+  lastName?: string;
+  name?: string; // For backward compatibility
   email?: string;
   phone?: string;
   address?: string;
   city?: string;
-  state?: string;
-  zipCode?: string;
+  postalCode?: string; // Backend uses postalCode, not zipCode
   country?: string;
-  dateOfBirth?: string;
+  birthDate?: string; // Backend uses birthDate, not dateOfBirth
   notes?: string;
   isActive: boolean;
   tenantId: string;
   createdAt: string;
   updatedAt: string;
+  // Marketing consent fields
+  marketingEmail?: boolean;
+  marketingSms?: boolean;
+  marketingPhone?: boolean;
+  dataProcessingConsent?: boolean;
   // Legacy fields for backward compatibility
   first_name?: string;
   last_name?: string;
@@ -119,29 +125,72 @@ class CustomerService {
 
   async createCustomer(customerData: CreateCustomerData | Omit<Customer, 'id'>): Promise<Customer> {
     try {
-      // Handle legacy format
-      if ('first_name' in customerData && 'last_name' in customerData) {
-        const legacyData = customerData as any;
-        const modernData: CreateCustomerData = {
-          name: `${legacyData.first_name} ${legacyData.last_name}`,
-          email: legacyData.email,
-          phone: legacyData.phone,
-          address: legacyData.address,
-          city: legacyData.city,
-          state: legacyData.state,
-          zipCode: legacyData.zip_code,
-          country: legacyData.country,
-          dateOfBirth: legacyData.date_of_birth,
-          notes: legacyData.notes,
-        };
-        return await apiClient.post<Customer>(API_CONFIG.ENDPOINTS.CUSTOMERS, modernData);
-      }
-      
-      return await apiClient.post<Customer>(API_CONFIG.ENDPOINTS.CUSTOMERS, customerData);
+      // Transform frontend data to match backend DTO
+      const transformedData = this.transformToBackendFormat(customerData);
+      return await apiClient.post<Customer>(API_CONFIG.ENDPOINTS.CUSTOMERS, transformedData);
     } catch (error) {
       console.error('Failed to create customer:', error);
       throw error;
     }
+  }
+
+  private transformToBackendFormat(customerData: any): any {
+    const transformed: any = { ...customerData };
+
+    // Handle name splitting - split 'name' into firstName and lastName
+    if (transformed.name && !transformed.firstName && !transformed.lastName) {
+      const nameParts = transformed.name.trim().split(' ');
+      transformed.firstName = nameParts[0] || '';
+      transformed.lastName = nameParts.slice(1).join(' ') || nameParts[0] || '';
+      delete transformed.name; // Remove 'name' field as it's not allowed
+    }
+
+    // Handle legacy format
+    if (transformed.first_name && transformed.last_name) {
+      transformed.firstName = transformed.first_name;
+      transformed.lastName = transformed.last_name;
+      delete transformed.first_name;
+      delete transformed.last_name;
+    }
+
+    // Map marketingConsent to individual boolean fields
+    if (transformed.marketingConsent) {
+      transformed.marketingEmail = !!transformed.marketingConsent.email;
+      transformed.marketingSms = !!transformed.marketingConsent.sms;
+      transformed.marketingPhone = !!transformed.marketingConsent.phone;
+      delete transformed.marketingConsent;
+    }
+
+    // Ensure boolean fields are properly set
+    transformed.dataProcessingConsent = !!transformed.dataProcessingConsent;
+    transformed.marketingEmail = transformed.marketingEmail || false;
+    transformed.marketingSms = transformed.marketingSms || false;
+    transformed.marketingPhone = transformed.marketingPhone || false;
+
+    // Map other fields
+    if (transformed.zipCode) {
+      transformed.postalCode = transformed.zipCode;
+      delete transformed.zipCode;
+    }
+
+    if (transformed.state) {
+      // State can be mapped to address or handled separately
+      delete transformed.state;
+    }
+
+    if (transformed.dateOfBirth) {
+      transformed.birthDate = transformed.dateOfBirth;
+      delete transformed.dateOfBirth;
+    }
+
+    // Remove any undefined or null values
+    Object.keys(transformed).forEach(key => {
+      if (transformed[key] === undefined || transformed[key] === null) {
+        delete transformed[key];
+      }
+    });
+
+    return transformed;
   }
 
   async updateCustomer(id: string | number, customerData: UpdateCustomerData | Partial<Customer>): Promise<Customer> {

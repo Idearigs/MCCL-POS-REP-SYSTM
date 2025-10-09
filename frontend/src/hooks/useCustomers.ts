@@ -19,7 +19,8 @@ export const useCustomers = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await customerService.getCustomers(search);
+      const result = await customerService.getCustomers(search);
+      const data = Array.isArray(result) ? result : result.data;
       setCustomers(data);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch customers');
@@ -52,14 +53,14 @@ export const useCustomers = () => {
   /**
    * Update an existing customer
    */
-  const updateCustomer = useCallback(async (id: number, customerData: Partial<Customer>) => {
+  const updateCustomer = useCallback(async (id: string | number, customerData: Partial<Customer>) => {
     setLoading(true);
     setError(null);
     try {
       const updatedCustomer = await customerService.updateCustomer(id, customerData);
       setCustomers(prev => 
         prev.map(customer => 
-          customer.id === id ? updatedCustomer : customer
+          customer.id === id.toString() ? updatedCustomer : customer
         )
       );
       toast.success('Success', 'Customer updated successfully!');
@@ -76,13 +77,13 @@ export const useCustomers = () => {
   /**
    * Delete a customer
    */
-  const deleteCustomer = useCallback(async (id: number) => {
+  const deleteCustomer = useCallback(async (id: string | number) => {
     setLoading(true);
     setError(null);
     try {
       const success = await customerService.deleteCustomer(id);
       if (success) {
-        setCustomers(prev => prev.filter(customer => customer.id !== id));
+        setCustomers(prev => prev.filter(customer => customer.id !== id.toString()));
         toast.success('Success', 'Customer deleted successfully!');
       }
       return success;

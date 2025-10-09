@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { useCustomers, Customer } from '@/contexts/CustomerContext';
 
 
 const CustomersPage = () => {
-  const { customers, updateCustomer } = useCustomers();
+  const { customers, loading, error, updateCustomer, refreshCustomers } = useCustomers();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -23,9 +23,9 @@ const CustomersPage = () => {
 
   // Filter customers based on search query
   const filteredCustomers = customers.filter(customer => 
-    customer.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    customer.phone.includes(searchQuery)
+    (customer.name?.toLowerCase().includes(searchQuery.toLowerCase())) || 
+    (customer.email?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (customer.phone?.includes(searchQuery))
   );
 
   const handleCustomerClick = (id: string) => {
@@ -39,6 +39,13 @@ const CustomersPage = () => {
   const handleAddCustomer = () => {
     setIsAddingCustomer(true);
   };
+
+  // Refresh customers when page loads
+  useEffect(() => {
+    if (customers.length === 0 && !loading) {
+      refreshCustomers();
+    }
+  }, [customers.length, loading, refreshCustomers]);
 
   return (
     <MainLayout pageTitle="Customers">
@@ -72,7 +79,28 @@ const CustomersPage = () => {
           </div>
         </div>
 
-        {filteredCustomers.length > 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center h-40 border border-gray-100 rounded-xl bg-white/50 backdrop-blur-sm">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+              <p className="text-gray-600">Loading customers...</p>
+            </div>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-40 border border-red-100 rounded-xl bg-red-50/50 backdrop-blur-sm">
+            <div className="text-center">
+              <p className="text-red-600 mb-2">Error loading customers</p>
+              <Button 
+                onClick={refreshCustomers}
+                variant="outline" 
+                size="sm"
+                className="text-red-600 border-red-300 hover:bg-red-50"
+              >
+                Try Again
+              </Button>
+            </div>
+          </div>
+        ) : filteredCustomers.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredCustomers.map((customer) => (
               <CustomerCard 
@@ -89,10 +117,19 @@ const CustomersPage = () => {
           </div>
         ) : (
           <div className="flex items-center justify-center h-40 border border-gray-100 rounded-xl bg-white/50 backdrop-blur-sm">
-            <p className="text-gray-400 flex flex-col items-center">
+            <div className="text-center">
               <Search size={24} className="mb-2 text-gray-300" />
-              No customers found matching your search.
-            </p>
+              <p className="text-gray-400 mb-2">No customers found {searchQuery ? 'matching your search' : 'yet'}.</p>
+              {!searchQuery && (
+                <Button 
+                  onClick={handleAddCustomer}
+                  className="mt-2"
+                  size="sm"
+                >
+                  Add Your First Customer
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -101,13 +138,22 @@ const CustomersPage = () => {
             customer={selectedCustomer}
             isOpen={isDetailOpen}
             onClose={() => setIsDetailOpen(false)}
-            onUpdate={(id, updates) => {
-              updateCustomer(id, updates);
-              toast({
-                title: "Customer Updated",
-                description: `Customer ${id} has been updated successfully.`
-              });
-              setIsDetailOpen(false);
+            onUpdate={async (id, updates) => {
+              try {
+                await updateCustomer(id, updates);
+                toast({
+                  title: "Customer Updated",
+                  description: `Customer preferences have been updated successfully.`
+                });
+                // Keep the dialog open so user can see the changes were applied
+              } catch (error: any) {
+                console.error('Failed to update customer:', error);
+                toast({
+                  title: "Update Failed",
+                  description: error.message || "Failed to update customer. Please try again.",
+                  variant: "destructive"
+                });
+              }
             }}
           />
         )}
@@ -117,9 +163,6 @@ const CustomersPage = () => {
             <AddCustomerForm 
               onClose={() => setIsAddingCustomer(false)}
               onSuccess={(customer) => {
-                // Select the newly created customer
-                setSelectedCustomer(customer);
-                setIsDetailOpen(true);
                 setSearchQuery('');
                 toast({
                   title: "Customer created",

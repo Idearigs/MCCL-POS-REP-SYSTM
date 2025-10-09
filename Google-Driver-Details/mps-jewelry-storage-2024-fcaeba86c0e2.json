@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "mps-jewelry-storage-2024",
+  "private_key_id": "fcaeba86c0e26f2d74d81d1a4fb5833c188dc382",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7rtyJKPthwQRO\nGnqmpnTshIx4rgWcqwCT6/MK1YFLor/6VcUwI0AMTODzW2dACP1b3MpZWLD2FmQ9\nlPVZtgZ2wRSiv4sc9raoe4x1wTDXbY6oP3EMB2dhOyX+ojMG4PS8gDnKHD3LvpUi\nEeyFILhv3uqqlh9BIooy/+BMkkL6ab1Fzr1kllqWM5duECnGTJK/OBjeNCxgIFmA\n+Ar6QpQEGlqxFyUaY+GTR9sjZ+OE8Q/EFWkCL3NxA29N7xD+VY0UYS9lXxCJF2QI\n8GQJ9RK7AWjlSNiAlcddTQmJ34Esg5WySsKmQCMwt5npKnVEGXl5bnCVff/r+5Yn\nM/FOyvAXAgMBAAECggEADvmDtRnk/Ma2vjiUoqlTWO+2eYaBAiAOur6vtKSWXV+N\n675eLloRqSmVJTWcxloxRNwX9QsDi477zoINFWxVlbIQIHAh/Fye9FBvQ5H3gKjI\nIhp1vZz1nadnf6qXYawfOs8MTVj1gUUihwZhFbonnR1vIc86jSrhVfJehh2BZJNa\nMwfJT7cPNpggN9TLCSUhPv3yfLQQs0yq1TlDX3kSQgDozqiPGtq+o4YQYsTPUxpD\nhtQIE7wa1ZBtWuBbvYpPbd5CkucASOppM/DrLKMXqxfubElAlIsCdH8MpUDrw9J0\n5myb79A4vC6f0L2LxgGg50N87DfvMi+CMDiUex5EMQKBgQDn4DY6shac2+fIP3vG\nCsi9sgR5zNM6LoLCOwSTGVOWq9lTiCGEycG8FjV0hqBZRkMfiKorZDAONajQhPdZ\ngknNZUyxcxEUTkJD3UsU+aS5CjOV78vB7+uZdoXkFPDgzYVhxp0/P5qQQ4CXkeoH\nXlD56Jz17GOozDhtW9Gg91r1CQKBgQDPNZ4sQyakPNmNF1L9EjYE7R/3QgQBKDKc\nnW8Orm+2c0U/YneFzwAri9KdAz0ItPtCxTUlo6r25bbPxuBh9dmqn5NeaOas35cX\nJSDfXSoZcvDmxrNwEeJiBEZU4clR2v34vI42LIa0Ji8gh6c3IsPNgv43ptua7LbB\nNpBZREIkHwKBgBLav24cZwxQMVOuHdFntRT/sa95wT884vMKO3/+kjZxONW6/wa+\nJRu3LpeQDt/Tf8fDpBqtJd8x680w0rAbkQa7kvXm5l+hUXAVQXKuLf/B3Zn2irn1\nWVH8OjzmmwOckpj1vnmTIW1Tn9QzUDVTLQB1MrYoh54FJR13Vt9g3auJAoGACxQi\n0NsGReG7AAAvP7ipirni66Vr8WPk0NraBT7uWiLvoOPy4AShTbK8IAj8SmrixD8n\nCEwn5+uASrunY5Vxfd3qUzHoo3WQ7nvdthOVHKc4mh4lmeha4kK4P/GSgf3jdlke\ngWcADMG9409dcWU6ctJ+JRuWwkHFw67XKO6tWqECgYEAitCGZotJdRaZPtrSlyiF\nmE5f440DbrnmRT/p52nT3BfAfVncDuNSgD+t+TUI/XyXuHCf/OSJCBhj0uIT++Xh\nwV8tzSiMvls6gOZS1mS0/Cj9iVU38nGN6eQMIWngpYeMbau4xwtCwc/LdZwyO4KC\n8vSMqknuo+l72/r0FM5M0Y4=\n-----END PRIVATE KEY-----\n",
+  "client_email": "mps-drive-storage@mps-jewelry-storage-2024.iam.gserviceaccount.com",
+  "client_id": "115607752732697614361",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/mps-drive-storage%40mps-jewelry-storage-2024.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
