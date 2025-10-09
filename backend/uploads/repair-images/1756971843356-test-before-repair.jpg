@@ -1,0 +1,24 @@
+SAMPLE REPAIR IMAGE - BEFORE
+=============================
+Repair ID: REP-202509-0009
+Customer: Jane Doe
+Item: Gold Necklace Chain
+Date: 2025-09-04T07:43:59.302Z
+Status: BEFORE REPAIR
+Description: Shows broken chain link before soldering work begins
+
+This simulates a "before" photo that would normally be taken
+when the customer drops off their jewelry for repair.
+
+--- Image Metadata ---
+Type: before
+Quality: High resolution
+Camera: Professional macro lens
+Lighting: Studio lighting setup
+Background: White jewelry photography backdrop
+
+--- File Information ---
+Original filename: gold-necklace-before.jpg
+Simulated mime type: image/jpeg
+Upload timestamp: 1756971839302
+File size: 27 bytes

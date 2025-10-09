@@ -1,0 +1,558 @@
+// ===================================
+// MPS JEWELRY SAAS - PRISMA SCHEMA
+// Secure Multi-Tenant Jewelry POS System
+// ===================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===================================
+// TENANT & USER MANAGEMENT
+// ===================================
+
+model Tenant {
+  id               String        @id @default(cuid())
+  name             String
+  domain           String        @unique
+  subdomain        String        @unique
+  settings         Json?         // Store tenant-specific settings
+  subscriptionPlan String        @default("basic")
+  status           TenantStatus  @default(ACTIVE)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  // Relations
+  users         User[]
+  customers     Customer[]
+  products      Product[]
+  categories    Category[]
+  suppliers     Supplier[]
+  sales         Sale[]
+  repairs       Repair[]
+  documents     Document[]
+  inventoryLogs InventoryLog[]
+
+  @@map("tenants")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  tenantId     String
+  email        String    @unique
+  password     String
+  firstName    String
+  lastName     String
+  role         UserRole  @default(STAFF)
+  permissions  Json?     // Granular permissions
+  isActive     Boolean   @default(true)
+  lastLogin    DateTime?
+  refreshToken String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  tenant            Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  salesCreated      Sale[]     @relation("SaleCreatedBy")
+  repairsCreated    Repair[]   @relation("RepairCreatedBy")
+  documentsUploaded Document[]
+  auditLogs         AuditLog[]
+
+  @@map("users")
+}
+
+// ===================================
+// CUSTOMER MANAGEMENT
+// ===================================
+
+model Customer {
+  id                    String      @id @default(cuid())
+  tenantId              String
+  firstName             String
+  lastName              String
+  email                 String?
+  phone                 String
+  address               String?
+  city                  String?
+  postalCode            String?
+  country               String?
+  birthDate             DateTime?
+  anniversaryDate       DateTime?
+  notes                 String?
+  totalSpent            Decimal     @default(0)
+  visitCount            Int         @default(0)
+  loyaltyPoints         Int         @default(0)
+  preferredContact      ContactType @default(EMAIL)
+  
+  // GDPR Compliance
+  marketingEmail        Boolean     @default(false)
+  marketingSms          Boolean     @default(false)
+  marketingPhone        Boolean     @default(false)
+  dataProcessingConsent Boolean     @default(false)
+  consentDate           DateTime?
+  
+  // System fields
+  isActive              Boolean     @default(true)
+  redFlag               Boolean     @default(false)
+  redFlagReason         String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  // Relations
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sales     Sale[]
+  repairs   Repair[]
+  documents Document[]
+
+  @@map("customers")
+}
+
+// ===================================
+// INVENTORY MANAGEMENT
+// ===================================
+
+model Category {
+  id          String    @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  parentId    String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  tenant   Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+  products Product[]
+
+  @@map("categories")
+}
+
+model Supplier {
+  id            String   @id @default(cuid())
+  tenantId      String
+  name          String
+  contactPerson String?
+  email         String?
+  phone         String?
+  address       String?
+  website       String?
+  notes         String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@map("suppliers")
+}
+
+model Product {
+  id            String           @id @default(cuid())
+  tenantId      String
+  name          String
+  description   String?
+  sku           String           @unique
+  barcode       String?          @unique
+  categoryId    String?
+  supplierId    String?
+  
+  // Pricing
+  costPrice     Decimal?
+  sellingPrice  Decimal
+  discountPrice Decimal?
+  
+  // Inventory
+  stockQuantity Int              @default(0)
+  minStockLevel Int              @default(1)
+  maxStockLevel Int?
+  
+  // Jewelry specific fields
+  material      JewelryMaterial?
+  weight        Decimal?         // in grams
+  purity        String?          // 14K, 18K, 925, etc.
+  gemstone      String?
+  certification String?
+  
+  // Physical attributes
+  color         String?
+  size          String?
+  location      String?          // Store location
+  
+  // System fields
+  isActive      Boolean          @default(true)
+  isDamaged     Boolean          @default(false)
+  damageNotes   String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  // Relations
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category      Category?      @relation(fields: [categoryId], references: [id])
+  supplier      Supplier?      @relation(fields: [supplierId], references: [id])
+  images        ProductImage[]
+  saleItems     SaleItem[]
+  inventoryLogs InventoryLog[]
+
+  @@map("products")
+}
+
+model ProductImage {
+  id            String   @id @default(cuid())
+  productId     String
+  fileName      String
+  filePath      String
+  driveFileId   String?  // Google Drive file ID
+  driveViewLink String?  // Google Drive view link
+  fileSize      Int
+  mimeType      String
+  isMain        Boolean  @default(false)
+  alt           String?
+  createdAt     DateTime @default(now())
+
+  // Relations
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_images")
+}
+
+model InventoryLog {
+  id          String           @id @default(cuid())
+  tenantId    String
+  productId   String
+  type        InventoryLogType
+  quantity    Int
+  previousQty Int
+  newQty      Int
+  reason      String?
+  reference   String?          // Sale ID, Purchase ID, etc.
+  createdAt   DateTime         @default(now())
+
+  // Relations
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("inventory_logs")
+}
+
+// ===================================
+// POINT OF SALE SYSTEM
+// ===================================
+
+model Sale {
+  id             String        @id @default(cuid())
+  tenantId       String
+  customerId     String?
+  createdBy      String
+  saleNumber     String        @unique
+  
+  // Transaction details
+  subtotal       Decimal
+  taxAmount      Decimal       @default(0)
+  discountAmount Decimal       @default(0)
+  totalAmount    Decimal
+  
+  // Payment
+  paymentMethod  PaymentMethod
+  paymentStatus  PaymentStatus @default(PENDING)
+  paidAmount     Decimal       @default(0)
+  changeAmount   Decimal       @default(0)
+  refundedAmount Decimal       @default(0)
+  
+  // Additional fields
+  notes          String?
+  receiptNumber  String?       @unique
+  status         SaleStatus    @default(COMPLETED)
+  
+  // System fields
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer     Customer?  @relation(fields: [customerId], references: [id])
+  createdByUser User      @relation("SaleCreatedBy", fields: [createdBy], references: [id])
+  items        SaleItem[]
+  payments     Payment[]
+
+  @@map("sales")
+}
+
+model SaleItem {
+  id         String  @id @default(cuid())
+  saleId     String
+  productId  String
+  quantity   Int
+  unitPrice  Decimal
+  discount   Decimal @default(0)
+  totalPrice Decimal
+
+  // Relations
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("sale_items")
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  saleId        String
+  amount        Decimal
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  reference     String?       // Payment reference/description
+  transactionId String?       // External payment processor ID
+  processorData Json?         // Payment processor response data
+  createdAt     DateTime      @default(now())
+
+  // Relations
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+// ===================================
+// REPAIR MANAGEMENT SYSTEM
+// ===================================
+
+model Repair {
+  id               String         @id @default(cuid())
+  tenantId         String
+  customerId       String
+  createdBy        String
+  repairNumber     String         @unique
+  
+  // Item details
+  itemDescription  String
+  issueDescription String
+  
+  // Pricing
+  estimatedCost    Decimal?
+  finalCost        Decimal?
+  
+  // Timeline
+  receivedDate     DateTime       @default(now())
+  estimatedDueDate DateTime?
+  completedDate    DateTime?
+  collectedDate    DateTime?
+  
+  // Status
+  status           RepairStatus   @default(RECEIVED)
+  priority         RepairPriority @default(NORMAL)
+  
+  // Additional fields
+  customerNotes    String?
+  internalNotes    String?
+  isInsuranceClaim Boolean        @default(false)
+  insuranceNumber  String?
+  
+  // System fields
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  // Relations
+  tenant        Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer      Customer              @relation(fields: [customerId], references: [id])
+  createdByUser User                  @relation("RepairCreatedBy", fields: [createdBy], references: [id])
+  statusHistory RepairStatusHistory[]
+  photos        RepairPhoto[]
+
+  @@map("repairs")
+}
+
+model RepairStatusHistory {
+  id        String       @id @default(cuid())
+  repairId  String
+  oldStatus RepairStatus?
+  newStatus RepairStatus
+  notes     String?
+  changedBy String
+  changedAt DateTime     @default(now())
+
+  // Relations
+  repair Repair @relation(fields: [repairId], references: [id], onDelete: Cascade)
+
+  @@map("repair_status_history")
+}
+
+model RepairPhoto {
+  id            String   @id @default(cuid())
+  repairId      String
+  fileName      String
+  filePath      String
+  driveFileId   String?  // Google Drive file ID
+  driveViewLink String?  // Google Drive view link
+  fileSize      Int
+  mimeType      String
+  description   String?
+  stage         String?  // before, during, after
+  createdAt     DateTime @default(now())
+
+  // Relations
+  repair Repair @relation(fields: [repairId], references: [id], onDelete: Cascade)
+
+  @@map("repair_photos")
+}
+
+// ===================================
+// DOCUMENT MANAGEMENT SYSTEM
+// ===================================
+
+model Document {
+  id            String       @id @default(cuid())
+  tenantId      String
+  customerId    String?
+  uploadedBy    String
+  fileName      String
+  originalName  String
+  filePath      String
+  fileSize      Int
+  mimeType      String
+  documentType  DocumentType
+  driveFileId   String?      // Google Drive file ID
+  driveViewLink String?      // Google Drive view link
+  notes         String?
+  isPublic      Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // Relations
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  uploadedByUser User     @relation(fields: [uploadedBy], references: [id])
+
+  @@map("documents")
+}
+
+// ===================================
+// AUDIT & LOGGING SYSTEM
+// ===================================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  oldData   Json?
+  newData   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// ===================================
+// ENUMS
+// ===================================
+
+enum TenantStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+  STAFF
+  READONLY
+}
+
+enum ContactType {
+  EMAIL
+  PHONE
+  SMS
+}
+
+enum JewelryMaterial {
+  GOLD
+  SILVER
+  PLATINUM
+  DIAMOND
+  PEARL
+  GEMSTONE
+  STAINLESS_STEEL
+  OTHER
+}
+
+enum InventoryLogType {
+  SALE
+  PURCHASE
+  ADJUSTMENT
+  DAMAGE
+  RETURN
+  TRANSFER
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  CHEQUE
+  DIGITAL_WALLET
+  INSTALLMENT
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum SaleStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+  REFUNDED
+  PARTIAL_REFUND
+  PENDING
+}
+
+enum RepairStatus {
+  RECEIVED
+  QUOTED
+  APPROVED
+  IN_PROGRESS
+  WAITING_PARTS
+  DELAYED
+  COMPLETED
+  READY_FOR_COLLECTION
+  COLLECTED
+  CANCELLED
+}
+
+enum RepairPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum DocumentType {
+  CONTRACT
+  RECEIPT
+  INVOICE
+  REPAIR_DOCUMENT
+  APPRAISAL
+  CERTIFICATE
+  WARRANTY
+  INSURANCE
+  OTHER
+}

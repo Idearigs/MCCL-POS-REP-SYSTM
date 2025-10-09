@@ -1,0 +1,23 @@
+SAMPLE REPAIR IMAGE FILE
+========================
+Repair ID: REP-202509-0008
+Customer: John Smith  
+Item: Gold Necklace Chain Repair
+Date: 2025-09-03T19:16:35.243Z
+Description: Chain link broken, needs soldering
+Estimated Cost: £45.00
+Status: Before Repair
+
+This would normally be an actual image file (JPG/PNG)
+showing the damaged jewelry item before repair work begins.
+
+--- Technical Details ---
+Upload Method: New File Storage System
+Fallback Strategy: Google Drive -> Local Storage
+File Storage Location: /uploads/repair-images/
+Access URL: http://localhost:3002/uploads/repair-images/
+
+--- Test Metadata ---
+Original filename: sample-repair-before.jpg
+Mime type: image/jpeg (simulated)
+Upload timestamp: 1756926995243
