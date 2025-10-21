@@ -36,7 +36,6 @@ import {
   Package
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { googleDriveService } from '@/services/googleDriveService';
 import { repairService } from '@/services/repairService';
 import { customerService, Customer } from '@/services/customerService';
 
@@ -70,6 +69,19 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
 
   const beforeFileInputRef = useRef<HTMLInputElement>(null);
   const afterFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Log repair images when the repair prop changes
+  useEffect(() => {
+    if (repair && isOpen) {
+      console.log('🔍 RepairDetailModal - Repair prop updated:', {
+        repairId: repair.id,
+        beforeImagesCount: repair.beforeImages?.length || 0,
+        afterImagesCount: repair.afterImages?.length || 0,
+        beforeImages: repair.beforeImages,
+        afterImages: repair.afterImages
+      });
+    }
+  }, [repair, isOpen]);
 
   // Fetch customer details when repair data is available
   useEffect(() => {
@@ -236,7 +248,7 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
     URL.revokeObjectURL(urlToRemove);
   };
 
-  // Upload images to Google Drive
+  // Upload images to database
   const uploadImages = async () => {
     if (beforeImages.length === 0 && afterImages.length === 0) {
       toast.error('No images to upload');
@@ -245,24 +257,29 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
 
     try {
       setUploadingImages(true);
+      let totalUploaded = 0;
 
-      // Upload before images
+      console.log('📤 Uploading images:', {
+        beforeCount: beforeImages.length,
+        afterCount: afterImages.length,
+        repairId: repair.id
+      });
+
+      // Upload before images with 'before' metadata
       if (beforeImages.length > 0) {
-        await googleDriveService.uploadRepairImages(beforeImages, {
-          description: `Before images for repair ${repair.repairNumber}`,
-          repairId: repair.id
-        });
-        toast.success(`Uploaded ${beforeImages.length} before image(s)`);
+        const result = await repairService.uploadRepairImages(repair.id, beforeImages, 'before');
+        console.log('✅ Before images uploaded:', result);
+        totalUploaded += beforeImages.length;
       }
 
-      // Upload after images
+      // Upload after images with 'after' metadata
       if (afterImages.length > 0) {
-        await googleDriveService.uploadRepairImages(afterImages, {
-          description: `After images for repair ${repair.repairNumber}`,
-          repairId: repair.id
-        });
-        toast.success(`Uploaded ${afterImages.length} after image(s)`);
+        const result = await repairService.uploadRepairImages(repair.id, afterImages, 'after');
+        console.log('✅ After images uploaded:', result);
+        totalUploaded += afterImages.length;
       }
+
+      toast.success(`Uploaded ${totalUploaded} image(s) successfully`);
 
       // Clear local images
       setBeforeImages([]);
@@ -270,7 +287,11 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
       setBeforeImageUrls([]);
       setAfterImageUrls([]);
 
-      toast.success('All images uploaded successfully!');
+      console.log('🔄 Triggering repair refresh via onUpdate callback');
+      // Refresh repair data if onUpdate callback exists
+      if (onUpdate) {
+        onUpdate(repair.id, null);
+      }
     } catch (error: any) {
       console.error('Failed to upload images:', error);
       toast.error(`Failed to upload images: ${error.message}`);
@@ -352,11 +373,13 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
             </div>
             Repair {repair.repairNumber}
           </DialogTitle>
-          <DialogDescription className="flex items-center gap-4">
-            <span>Created {formatDate(repair.createdAt)}</span>
-            <Badge className={`${getStatusColor(repair.status)} rounded-full px-3 py-1`}>
-              {getStatusText(repair.status)}
-            </Badge>
+          <DialogDescription asChild>
+            <div className="flex items-center gap-4">
+              <span>Created {formatDate(repair.createdAt)}</span>
+              <Badge className={`${getStatusColor(repair.status)} rounded-full px-3 py-1`}>
+                {getStatusText(repair.status)}
+              </Badge>
+            </div>
           </DialogDescription>
         </DialogHeader>
 
@@ -469,9 +492,9 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Existing Before Images */}
-                {repair.images && repair.images.length > 0 && (
+                {repair.beforeImages && repair.beforeImages.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {repair.images.map((imageUrl: string, index: number) => (
+                    {repair.beforeImages.map((imageUrl: string, index: number) => (
                       <div key={index} className="aspect-square bg-gray-100 rounded-lg overflow-hidden border cursor-pointer hover:shadow-md transition-shadow">
                         <img
                           src={imageUrl}
@@ -482,6 +505,11 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                       </div>
                     ))}
                   </div>
+                )}
+
+                {/* No existing images message */}
+                {(!repair.beforeImages || repair.beforeImages.length === 0) && beforeImageUrls.length === 0 && (
+                  <p className="text-sm text-gray-500 italic">No before images yet. Upload images of the item's initial condition.</p>
                 )}
 
                 {/* Upload New Before Images */}
@@ -540,7 +568,28 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Upload After Images */}
+                {/* Existing After Images */}
+                {repair.afterImages && repair.afterImages.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {repair.afterImages.map((imageUrl: string, index: number) => (
+                      <div key={index} className="aspect-square bg-gray-100 rounded-lg overflow-hidden border cursor-pointer hover:shadow-md transition-shadow">
+                        <img
+                          src={imageUrl}
+                          alt={`After image ${index + 1}`}
+                          className="w-full h-full object-cover"
+                          onClick={() => window.open(imageUrl, '_blank')}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* No existing images message */}
+                {(!repair.afterImages || repair.afterImages.length === 0) && afterImageUrls.length === 0 && (
+                  <p className="text-sm text-gray-500 italic">No after images yet. Upload images of the completed work.</p>
+                )}
+
+                {/* Upload New After Images */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <input
@@ -567,7 +616,7 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                         <div key={index} className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden border">
                           <img
                             src={url}
-                            alt={`After image ${index + 1}`}
+                            alt={`New after image ${index + 1}`}
                             className="w-full h-full object-cover"
                           />
                           <button

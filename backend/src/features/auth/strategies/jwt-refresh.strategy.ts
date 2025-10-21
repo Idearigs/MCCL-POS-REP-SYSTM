@@ -24,14 +24,14 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
       const refreshToken = req.body.refreshToken;
       
       // Find user with matching refresh token
-      const user = await this.prismaService.user.findFirst({
+      const user = await this.prismaService.users.findFirst({
         where: {
           id: payload.sub,
           refreshToken: refreshToken,
           isActive: true,
         },
         include: {
-          tenant: {
+          tenants: {
             select: {
               id: true,
               name: true,
@@ -48,7 +48,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      if (user.tenant.status !== 'ACTIVE') {
+      if (user.tenants.status !== 'ACTIVE') {
         throw new UnauthorizedException('Tenant account is not active');
       }
 
@@ -60,7 +60,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
         role: user.role,
         tenantId: user.tenantId,
         permissions: user.permissions,
-        tenant: user.tenant,
+        tenant: user.tenants,
       };
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token');

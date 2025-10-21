@@ -25,12 +25,13 @@ async function bootstrap() {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         scriptSrc: ["'self'"],
-        imgSrc: ["'self'", 'data:', 'https:'],
+        imgSrc: ["'self'", 'data:', 'https:', 'http://localhost:3002', 'http://localhost:3000'],
         fontSrc: ["'self'", 'data:'],
         connectSrc: ["'self'"],
       },
     },
     crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },  // Allow cross-origin resource loading
     hsts: {
       maxAge: 31536000, // 1 year
       includeSubDomains: true,
@@ -52,7 +53,16 @@ async function bootstrap() {
   // ===================================
   // STATIC FILE SERVING
   // ===================================
-  
+
+  // Add CORS headers for static files
+  app.use('/uploads', (req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  });
+
   // Serve static files from uploads directory
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads/',

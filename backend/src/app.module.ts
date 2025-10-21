@@ -8,14 +8,15 @@ import { AppService } from './app.service';
 // Core infrastructure
 import { PrismaModule, CacheService } from './core';
 
-// Business features  
-import { 
-  AuthModule, 
-  CustomersModule, 
-  ProductsModule, 
-  SalesModule, 
-  RepairsModule 
+// Business features
+import {
+  AuthModule,
+  CustomersModule,
+  ProductsModule,
+  SalesModule,
+  RepairsModule
 } from './features';
+import { CalendarEventsModule } from './features/calendar-events/calendar-events.module';
 
 // External integrations
 import { 
@@ -83,6 +84,7 @@ import {
     ProductsModule,
     SalesModule,
     RepairsModule,
+    CalendarEventsModule,
   ],
   controllers: [AppController],
   providers: [

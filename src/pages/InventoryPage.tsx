@@ -3,18 +3,19 @@ import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { 
-  Search, 
-  Plus, 
-  Package, 
-  ArrowDownUp, 
-  AlertTriangle, 
+import {
+  Search,
+  Plus,
+  Package,
+  ArrowDownUp,
+  AlertTriangle,
   Printer,
   Upload,
-  Download 
+  Download
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useInventory, InventoryItem } from '@/contexts/InventoryContext';
+import { productService } from '@/services/productService';
 import { 
   Select,
   SelectContent,
@@ -39,7 +40,7 @@ import InventoryDetail from '@/components/inventory/InventoryDetail';
 import InventoryFilter from '@/components/inventory/InventoryFilter';
 
 const InventoryPage = () => {
-  const { inventory, updateItem, addItem, deleteItem } = useInventory();
+  const { inventory, updateItem, addItem, deleteItem, refreshInventory } = useInventory();
   const availableCategories = Array.from(new Set(inventory.map(item => item.category)));
 
   const [filteredInventory, setFilteredInventory] = useState<InventoryItem[]>(inventory);
@@ -386,34 +387,74 @@ const InventoryPage = () => {
   };
   
   // Save new or updated item
-  const handleSaveItem = (item: InventoryItem) => {
+  const handleSaveItem = async (item: InventoryItem, imageFiles?: File[]) => {
+    console.log('📥 handleSaveItem called with imageFiles:', imageFiles);
+
     // Ensure the item has the additionalImages property
     const updatedItem = {
       ...item,
       additionalImages: item.additionalImages || []
     };
-    
-    if (isNewItem) {
-      // Add new item to inventory
-      addItem(updatedItem);
-      
+
+    try {
+      let productId: string;
+
+      if (isNewItem) {
+        // Add new item to inventory
+        const newItem = await addItem(updatedItem);
+        productId = newItem.id;
+
+        console.log('✅ Product created with ID:', productId);
+      } else {
+        // Update existing item
+        await updateItem(updatedItem.id, updatedItem);
+        productId = updatedItem.id;
+
+        console.log('✅ Product updated with ID:', productId);
+      }
+
+      // Upload images if provided
+      if (imageFiles && imageFiles.length > 0) {
+        console.log(`📤 Uploading ${imageFiles.length} images for product ${productId}`);
+
+        const uploadPromises = imageFiles.map((file, index) => {
+          console.log(`  - Uploading image ${index + 1}/${imageFiles.length}: ${file.name}`);
+          return productService.uploadProductImage(productId, file);
+        });
+
+        const uploadResults = await Promise.all(uploadPromises);
+        console.log('✅ All images uploaded successfully:', uploadResults);
+      }
+
+      // Refresh inventory to get updated product data with images from database
+      console.log('🔄 Refreshing inventory from database...');
+      await refreshInventory();
+      console.log('✅ Inventory refreshed with latest data including images');
+
+      // Show success message
+      if (isNewItem) {
+        toast({
+          title: "Item Added",
+          description: `${updatedItem.name} has been added to inventory${imageFiles && imageFiles.length > 0 ? ` with ${imageFiles.length} image(s)` : ''}.`,
+        });
+      } else {
+        toast({
+          title: "Item Updated",
+          description: `${updatedItem.name} has been updated${imageFiles && imageFiles.length > 0 ? ` with ${imageFiles.length} new image(s)` : ''}.`,
+        });
+      }
+
+      setIsDetailOpen(false);
+      setSelectedItem(null);
+      setIsNewItem(false);
+    } catch (error) {
+      console.error('❌ Failed to save item:', error);
       toast({
-        title: "Item Added",
-        description: `${updatedItem.name} has been added to inventory.`,
-      });
-    } else {
-      // Update existing item
-      updateItem(updatedItem.id, updatedItem);
-      
-      toast({
-        title: "Item Updated",
-        description: `${updatedItem.name} has been updated.`,
+        title: "Error",
+        description: `Failed to ${isNewItem ? 'add' : 'update'} item: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
       });
     }
-    
-    setIsDetailOpen(false);
-    setSelectedItem(null);
-    setIsNewItem(false);
   };
 
   // Calculate inventory stats

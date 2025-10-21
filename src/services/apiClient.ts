@@ -12,6 +12,8 @@ class ApiClient {
   private client: AxiosInstance;
   private token: string | null = null;
   private refreshToken: string | null = null;
+  private isRefreshing: boolean = false;
+  private refreshSubscribers: Array<(token: string) => void> = [];
 
   constructor(config: ApiClientConfig = {}) {
     this.client = axios.create({
@@ -74,17 +76,42 @@ class ApiClient {
 
         // Handle 401 Unauthorized - attempt token refresh
         if (error.response?.status === 401 && !originalRequest._retry && this.refreshToken) {
+          if (this.isRefreshing) {
+            // If already refreshing, queue this request
+            return new Promise((resolve) => {
+              this.refreshSubscribers.push((token: string) => {
+                if (originalRequest.headers) {
+                  originalRequest.headers.Authorization = `Bearer ${token}`;
+                }
+                resolve(this.client(originalRequest));
+              });
+            });
+          }
+
           originalRequest._retry = true;
+          this.isRefreshing = true;
 
           try {
             const newTokens = await this.refreshAccessToken();
-            if (newTokens && originalRequest.headers) {
-              originalRequest.headers.Authorization = `Bearer ${newTokens.accessToken}`;
+            if (newTokens) {
+              // Retry all queued requests with new token
+              this.refreshSubscribers.forEach(callback => callback(newTokens.accessToken));
+              this.refreshSubscribers = [];
+
+              if (originalRequest.headers) {
+                originalRequest.headers.Authorization = `Bearer ${newTokens.accessToken}`;
+              }
               return this.client(originalRequest);
+            } else {
+              throw new Error('Token refresh failed');
             }
           } catch (refreshError) {
             console.error('❌ Token refresh failed:', refreshError);
+            this.refreshSubscribers = [];
             this.handleAuthenticationFailure();
+            return Promise.reject(refreshError);
+          } finally {
+            this.isRefreshing = false;
           }
         }
 
@@ -114,17 +141,32 @@ class ApiClient {
   }
 
   private async refreshAccessToken(): Promise<{ accessToken: string; refreshToken: string } | null> {
-    if (!this.refreshToken) return null;
+    if (!this.refreshToken) {
+      console.warn('⚠️ No refresh token available');
+      return null;
+    }
 
     try {
-      const response = await axios.post(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.REFRESH}`, {
-        refreshToken: this.refreshToken,
-      });
+      console.log('🔄 Attempting to refresh access token...');
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.REFRESH}`,
+        {
+          refreshToken: this.refreshToken,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'x-tenant-id': API_CONFIG.TENANT_ID,
+          },
+        }
+      );
 
       const { accessToken, refreshToken } = response.data;
       this.setTokens(accessToken, refreshToken);
+      console.log('✅ Access token refreshed successfully');
       return { accessToken, refreshToken };
-    } catch (error) {
+    } catch (error: any) {
+      console.error('❌ Failed to refresh token:', error.response?.data || error.message);
       return null;
     }
   }
@@ -140,6 +182,33 @@ class ApiClient {
     this.refreshToken = refreshToken;
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('refreshToken', refreshToken);
+
+    // Schedule token refresh before expiration (optional - for proactive refresh)
+    this.scheduleTokenRefresh(accessToken);
+  }
+
+  private scheduleTokenRefresh(token: string) {
+    try {
+      // Decode JWT to get expiration time
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const expirationTime = payload.exp * 1000; // Convert to milliseconds
+      const currentTime = Date.now();
+      const timeUntilExpiry = expirationTime - currentTime;
+
+      // Refresh 1 minute before expiration
+      const refreshTime = timeUntilExpiry - 60000;
+
+      if (refreshTime > 0) {
+        console.log(`🕐 Token will be refreshed in ${Math.floor(refreshTime / 1000)} seconds`);
+        setTimeout(async () => {
+          console.log('🔄 Proactively refreshing token before expiration...');
+          await this.refreshAccessToken();
+        }, refreshTime);
+      }
+    } catch (error) {
+      // Ignore errors in token decoding
+      console.warn('⚠️ Could not schedule token refresh:', error);
+    }
   }
 
   public removeTokens() {
@@ -180,9 +249,9 @@ class ApiClient {
   }
 
   // File upload method
-  async uploadFile<T = any>(endpoint: string, file: File, additionalData?: any): Promise<T> {
+  async uploadFile<T = any>(endpoint: string, file: File, fieldName: string = 'file', additionalData?: any): Promise<T> {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append(fieldName, file);
 
     if (additionalData) {
       Object.keys(additionalData).forEach(key => {

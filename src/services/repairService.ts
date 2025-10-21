@@ -19,6 +19,9 @@ export interface Repair {
   dateCompleted?: string;
   notes?: string;
   images?: string[];
+  beforeImages?: string[];
+  afterImages?: string[];
+  progressImages?: string[];
   assignedTo?: string;
   technicianName?: string;
   tenantId: string;
@@ -181,9 +184,17 @@ class RepairService {
 
   async createRepair(repairData: CreateRepairData): Promise<Repair> {
     try {
+      console.log('Creating repair with data:', repairData);
       return await apiClient.post<Repair>(API_CONFIG.ENDPOINTS.REPAIRS, repairData);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create repair:', error);
+      console.error('Full error details:', {
+        message: error.message,
+        statusCode: error.statusCode,
+        error: error.error,
+        response: error.response,
+        data: error.response?.data
+      });
       throw error;
     }
   }
@@ -226,6 +237,15 @@ class RepairService {
       return await apiClient.post<Repair>(endpoint, { reason });
     } catch (error) {
       console.error(`Failed to cancel repair ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async deleteRepair(id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      return await apiClient.delete<{ success: boolean; message: string }>(`${API_CONFIG.ENDPOINTS.REPAIRS}/${id}`);
+    } catch (error) {
+      console.error(`Failed to delete repair ${id}:`, error);
       throw error;
     }
   }
@@ -284,20 +304,48 @@ class RepairService {
     }
   }
 
-  async uploadRepairImages(repairId: string, files: File[]): Promise<{ imageUrls: string[] }> {
+  async uploadRepairImages(repairId: string, files: File[], uploadType: 'before' | 'after' | 'progress' = 'progress'): Promise<{ imageUrls: string[] }> {
     try {
+      // Validate files
+      if (!files || files.length === 0) {
+        throw new Error('No files provided for upload');
+      }
+
       const formData = new FormData();
+
+      // Append all files with field name 'images' (backend expects this)
       files.forEach((file, index) => {
-        formData.append(`images`, file);
+        console.log(`Appending ${uploadType} file ${index + 1}:`, file.name, file.type, file.size);
+        formData.append('images', file);
       });
 
-      return await apiClient.uploadFile<{ imageUrls: string[] }>(
-        `${API_CONFIG.ENDPOINTS.REPAIRS}/${repairId}/images`,
-        files[0], // Use first file as main file, others as additional data
-        files.length > 1 ? { additionalFiles: files.slice(1) } : undefined
+      // Append metadata with uploadType to categorize images
+      formData.append('uploadType', uploadType);
+
+      // Use axios directly to preserve FormData and let it set Content-Type automatically
+      const axios = (await import('axios')).default;
+      const token = localStorage.getItem('accessToken');
+
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.REPAIRS}/${repairId}/images`,
+        formData,
+        {
+          headers: {
+            'x-tenant-id': API_CONFIG.TENANT_ID,
+            ...(token && { 'Authorization': `Bearer ${token}` }),
+            // Don't set Content-Type - let axios set it automatically with boundary
+          },
+        }
       );
-    } catch (error) {
-      console.error(`Failed to upload images for repair ${repairId}:`, error);
+
+      // The backend returns { results: [...], summary: {...} }
+      console.log(`Upload response for ${uploadType} images:`, response.data);
+      return {
+        imageUrls: response.data.results?.map((result: any) => result.fileUrl).filter(Boolean) || []
+      };
+    } catch (error: any) {
+      console.error(`Failed to upload ${uploadType} images for repair ${repairId}:`, error);
+      console.error('Error details:', error.response?.data);
       throw error;
     }
   }

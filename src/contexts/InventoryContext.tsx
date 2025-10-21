@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { productService, Product, CreateProductData, UpdateProductData } from '../services/productService';
+import { useAuth } from './AuthContext';
 
 // Extended InventoryItem interface that includes backend fields plus legacy UI fields
 export interface InventoryItem extends Omit<Product, 'stock' | 'minStockLevel'> {
@@ -22,18 +23,50 @@ export interface InventoryItem extends Omit<Product, 'stock' | 'minStockLevel'> 
 }
 
 // Convert backend Product to UI InventoryItem
-const convertProductToInventoryItem = (product: Product): InventoryItem => ({
-  ...product,
-  quantity: product.stock,
-  threshold: product.minStockLevel,
-  supplier: undefined,
-  location: undefined,
-  dateAdded: product.createdAt,
-  lastRestocked: product.updatedAt,
-  imageUrl: product.images?.[0],
-  additionalImages: product.images?.slice(1),
-  isDamaged: false
-});
+const convertProductToInventoryItem = (product: Product): InventoryItem => {
+  console.log('🔄 Converting backend product to InventoryItem:', product);
+  console.log('📸 Backend images array:', product.images);
+  console.log('👤 Backend supplier:', product.supplier);
+
+  // Extract image URLs from backend image objects
+  const imageUrls: string[] = [];
+  if (product.images && Array.isArray(product.images)) {
+    product.images.forEach((img: any) => {
+      // Use filePath for local storage, fallback to driveViewLink for Google Drive
+      const imagePath = img.filePath || img.driveViewLink;
+      if (imagePath) {
+        // Convert backend path to full URL
+        // If it's a relative path like '/uploads/...', prepend the API base URL
+        const fullUrl = imagePath.startsWith('/uploads')
+          ? `http://localhost:3002${imagePath}`
+          : imagePath;
+        imageUrls.push(fullUrl);
+      }
+    });
+  }
+
+  console.log('🖼️  Extracted image URLs:', imageUrls);
+
+  const inventoryItem = {
+    ...product,
+    quantity: product.stock,
+    threshold: product.minStockLevel,
+    // Use supplierName directly (it's already a string from productService)
+    supplier: product.supplier || '',
+    location: product.location || '',
+    dateAdded: product.createdAt,
+    lastRestocked: product.updatedAt,
+    imageUrl: imageUrls[0],
+    additionalImages: imageUrls.slice(1),
+    isDamaged: false
+  };
+
+  console.log('✅ Converted InventoryItem:', inventoryItem);
+  console.log('🖼️  imageUrl:', inventoryItem.imageUrl, 'additionalImages:', inventoryItem.additionalImages);
+  console.log('👤 Supplier name:', inventoryItem.supplier);
+
+  return inventoryItem;
+};
 
 // Convert UI InventoryItem to backend CreateProductData
 const convertToCreateProductData = (item: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt' | 'tenantId' | 'isActive'>): CreateProductData => ({
@@ -41,7 +74,9 @@ const convertToCreateProductData = (item: Omit<InventoryItem, 'id' | 'createdAt'
   description: item.description,
   sku: item.sku,
   barcode: item.barcode,
-  category: item.category,
+  // category is now categoryId (UUID) instead of category name
+  category: item.category, // Pass as category (productService will map to categoryId)
+  supplier: item.supplier, // Pass supplier name (productService will map to supplierName)
   material: item.material,
   weight: item.weight,
   dimensions: item.dimensions,
@@ -77,18 +112,42 @@ const InventoryContext = createContext<InventoryContextType | undefined>(undefin
 
 // Create a provider component
 export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { auth } = useAuth();
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Load inventory from backend on initial render
   const loadInventory = async () => {
+    // Only load if user is authenticated
+    if (!auth.isAuthenticated) {
+      console.log('⚠️ User not authenticated, skipping inventory load');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const result = await productService.getProducts(1, 1000);
-      const uiInventory = result.data.map(convertProductToInventoryItem);
+      console.log('📦 Loading inventory for authenticated user...');
+      // Backend limits to max 100 per page, so fetch all pages
+      let allProducts: any[] = [];
+      let page = 1;
+      let hasMore = true;
+
+      while (hasMore) {
+        // Only fetch active products (not soft-deleted)
+        console.log(`📄 Fetching page ${page} with filter: isActive=true`);
+        const result = await productService.getProducts(page, 100, { isActive: true });
+        console.log(`📊 Page ${page} returned ${result.data.length} products (total: ${result.meta.total})`);
+        console.log(`🔍 Sample product isActive values:`, result.data.slice(0, 3).map(p => ({ id: p.id, name: p.name, isActive: p.isActive })));
+        allProducts = [...allProducts, ...result.data];
+        hasMore = result.meta.hasNextPage;
+        page++;
+      }
+
+      const uiInventory = allProducts.map(convertProductToInventoryItem);
       setInventory(uiInventory);
+      console.log(`✅ Loaded ${uiInventory.length} products from database`);
     } catch (err: any) {
       console.error('Failed to load inventory:', err);
       setError(err.message || 'Failed to load inventory');
@@ -99,9 +158,15 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  // Load inventory when user logs in
   useEffect(() => {
-    loadInventory();
-  }, []);
+    if (auth.isAuthenticated && !auth.loading) {
+      loadInventory();
+    } else if (!auth.isAuthenticated) {
+      // Clear inventory when user logs out
+      setInventory([]);
+    }
+  }, [auth.isAuthenticated, auth.loading]);
 
   // Get an item by ID
   const getItemById = (id: string) => {
@@ -176,12 +241,17 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
     setLoading(true);
     setError(null);
     try {
+      console.log(`🗑️  Deleting product with ID: ${id}`);
       await productService.deleteProduct(id);
-      setInventory(prevInventory => 
-        prevInventory.filter(item => item.id !== id)
-      );
+      console.log(`✅ Product ${id} deleted successfully from database`);
+
+      setInventory(prevInventory => {
+        const filtered = prevInventory.filter(item => item.id !== id);
+        console.log(`📦 Inventory updated: ${prevInventory.length} -> ${filtered.length} items`);
+        return filtered;
+      });
     } catch (err: any) {
-      console.error('Failed to delete item:', err);
+      console.error('❌ Failed to delete item:', err);
       setError(err.message || 'Failed to delete item');
       throw err;
     } finally {

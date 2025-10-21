@@ -157,6 +157,35 @@ export class ProductsController {
     return this.productsService.getMaterials(tenantId);
   }
 
+  @Get('generate-sku')
+  @ApiOperation({
+    summary: 'Generate unique SKU',
+    description: 'Generate a unique SKU for a new product',
+  })
+  @ApiQuery({
+    name: 'prefix',
+    required: false,
+    type: String,
+    example: 'JWL',
+    description: 'Optional prefix for the SKU (default: JWL)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Unique SKU generated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        sku: { type: 'string', example: 'JWL-20251013-001' },
+      },
+    },
+  })
+  async generateSku(
+    @Query('prefix') prefix: string = 'JWL',
+    @TenantId() tenantId: string,
+  ) {
+    return this.productsService.generateUniqueSku(tenantId, prefix);
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get product by ID',

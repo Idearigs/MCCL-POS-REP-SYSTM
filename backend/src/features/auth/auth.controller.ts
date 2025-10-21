@@ -159,7 +159,7 @@ export class AuthController {
       lastName: user.lastName,
       role: user.role,
       tenantId: user.tenantId,
-      tenant: user.tenant,
+      tenant: user.tenants,
       lastLogin: user.lastLogin,
     };
   }

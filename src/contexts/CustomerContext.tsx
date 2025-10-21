@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { customerService, Customer as ServiceCustomer, CreateCustomerData } from '../services/customerService';
+import { useAuth } from './AuthContext';
 
 // Extended Customer interface that includes backend fields plus legacy UI fields
 export interface Customer extends Omit<ServiceCustomer, 'phone' | 'email' | 'notes'> {
@@ -89,32 +90,47 @@ const CustomerContext = createContext<CustomerContextType | undefined>(undefined
 
 // Create a provider component
 export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { auth } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Load customers from backend on initial render
-  const loadCustomers = async () => {
+  const loadCustomers = useCallback(async () => {
+    // Only load if user is authenticated
+    if (!auth.isAuthenticated) {
+      console.log('⚠️ User not authenticated, skipping customers load');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
+      console.log('📦 Loading customers for authenticated user...');
       const result = await customerService.getCustomers();
       const backendCustomers = Array.isArray(result) ? result : result.data;
       const uiCustomers = backendCustomers.map(convertBackendCustomer);
       setCustomers(uiCustomers);
+      console.log(`✅ Loaded ${uiCustomers.length} customers from database`);
     } catch (err: any) {
-      console.error('Failed to load customers:', err);
+      console.error('❌ Failed to load customers:', err);
       setError(err.message || 'Failed to load customers');
       // Fall back to empty array instead of localStorage
       setCustomers([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [auth.isAuthenticated]); // Depend on auth status
 
+  // Load customers when user logs in
   useEffect(() => {
-    loadCustomers();
-  }, []);
+    if (auth.isAuthenticated && !auth.loading) {
+      loadCustomers();
+    } else if (!auth.isAuthenticated) {
+      // Clear customers when user logs out
+      setCustomers([]);
+    }
+  }, [auth.isAuthenticated, auth.loading, loadCustomers]);
 
   // Get a customer by ID
   const getCustomerById = (id: string) => {
@@ -207,10 +223,10 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   };
 
-  // Refresh customers from backend
-  const refreshCustomers = async () => {
+  // Refresh customers from backend - memoized to prevent infinite loops
+  const refreshCustomers = useCallback(async () => {
     await loadCustomers();
-  };
+  }, [loadCustomers]);
 
   // Context value
   const value = {

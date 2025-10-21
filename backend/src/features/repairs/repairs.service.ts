@@ -9,6 +9,7 @@ import { PrismaService } from '../../core/prisma/prisma.service';
 import { CacheService } from '../../core/cache/cache.service';
 import { FileStorageService, FileUploadResult } from '../../integrations/file-storage/file-storage.service';
 import { SmsService, RepairStatusSMSData } from '../../integrations/sms/sms.service';
+import { generateId } from '../../shared/utils/id-generator';
 import {
   CreateRepairDto,
   UpdateRepairDto,
@@ -39,7 +40,7 @@ export class RepairsService {
       const repairNumber = await this.generateRepairNumber(tenantId);
 
       // Validate customer exists
-      const customer = await this.prismaService.customer.findFirst({
+      const customer = await this.prismaService.customers.findFirst({
         where: { id: createRepairDto.customerId, tenantId },
       });
 
@@ -62,8 +63,9 @@ export class RepairsService {
         combinedNotes = combinedNotes ? `${combinedNotes}\n\nItems:\n${repairTypes.join('\n')}` : `Items:\n${repairTypes.join('\n')}`;
       }
 
-      const repair = await this.prismaService.repair.create({
+      const repair = await this.prismaService.repairs.create({
         data: {
+          id: generateId(),
           repairNumber,
           tenantId,
           customerId: createRepairDto.customerId,
@@ -73,17 +75,18 @@ export class RepairsService {
           itemDescription: itemDescription,
           issueDescription: createRepairDto.problemDescription,
           estimatedCost: totalEstimatedCost || createRepairDto.estimatedCost || 0,
-          estimatedDueDate: createRepairDto.expectedCompletionDate 
-            ? new Date(createRepairDto.expectedCompletionDate) 
+          estimatedDueDate: createRepairDto.expectedCompletionDate
+            ? new Date(createRepairDto.expectedCompletionDate)
             : null,
           customerNotes: createRepairDto.customerInstructions,
           internalNotes: combinedNotes,
           isInsuranceClaim: Boolean(createRepairDto.insuranceValue),
           insuranceNumber: createRepairDto.insuranceNumber,
-        },
+          updatedAt: new Date(),
+        } as any,
         include: {
-          customer: true,
-          createdByUser: true,
+          customers: true,
+          users: true,
         },
       });
 
@@ -122,17 +125,17 @@ export class RepairsService {
     }
 
     const [data, total] = await Promise.all([
-      this.prismaService.repair.findMany({
+      this.prismaService.repairs.findMany({
         where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          customer: true,
-          createdByUser: true,
+          customers: true,
+          users: true,
         },
       }),
-      this.prismaService.repair.count({ where }),
+      this.prismaService.repairs.count({ where }),
     ]);
 
     return {
@@ -149,13 +152,13 @@ export class RepairsService {
   }
 
   async findOne(id: string, tenantId: string): Promise<RepairResponseDto> {
-    const repair = await this.prismaService.repair.findFirst({
+    const repair = await this.prismaService.repairs.findFirst({
       where: { id, tenantId },
       include: {
-        customer: true,
-        createdByUser: true,
-        statusHistory: true,
-        photos: true,
+        customers: true,
+        users: true,
+        repair_status_history: true,
+        repair_photos: true,
       },
     });
 
@@ -172,7 +175,7 @@ export class RepairsService {
     tenantId: string,
     userId: string,
   ): Promise<RepairResponseDto> {
-    const existingRepair = await this.prismaService.repair.findFirst({
+    const existingRepair = await this.prismaService.repairs.findFirst({
       where: { id, tenantId },
     });
 
@@ -180,7 +183,7 @@ export class RepairsService {
       throw new NotFoundException('Repair not found');
     }
 
-    const repair = await this.prismaService.repair.update({
+    const repair = await this.prismaService.repairs.update({
       where: { id },
       data: {
         status: updateRepairDto.status || existingRepair.status,
@@ -198,21 +201,22 @@ export class RepairsService {
         internalNotes: updateRepairDto.internalNotes || existingRepair.internalNotes,
       },
       include: {
-        customer: true,
-        createdByUser: true,
+        customers: true,
+        users: true,
       },
     });
 
     // Add status history entry
     if (updateRepairDto.status && updateRepairDto.status !== existingRepair.status) {
-      await this.prismaService.repairStatusHistory.create({
+      await this.prismaService.repair_status_history.create({
         data: {
+          id: generateId(),
           repairId: id,
           oldStatus: existingRepair.status,
           newStatus: updateRepairDto.status as any,
           changedBy: userId,
           notes: updateRepairDto.statusNotes || `Status changed to ${updateRepairDto.status}`,
-        },
+        } as any,
       });
     }
 
@@ -226,20 +230,20 @@ export class RepairsService {
       completedRepairs,
       overdueRepairs,
     ] = await Promise.all([
-      this.prismaService.repair.count({ where: { tenantId } }),
-      this.prismaService.repair.count({
+      this.prismaService.repairs.count({ where: { tenantId } }),
+      this.prismaService.repairs.count({
         where: {
           tenantId,
           status: { notIn: ['COMPLETED', 'COLLECTED', 'CANCELLED'] },
         },
       }),
-      this.prismaService.repair.count({
+      this.prismaService.repairs.count({
         where: {
           tenantId,
           status: { in: ['COMPLETED', 'COLLECTED'] },
         },
       }),
-      this.prismaService.repair.count({
+      this.prismaService.repairs.count({
         where: {
           tenantId,
           status: { notIn: ['COMPLETED', 'COLLECTED', 'CANCELLED'] },
@@ -266,31 +270,44 @@ export class RepairsService {
   private async generateRepairNumber(tenantId: string): Promise<string> {
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    
-    const repairsThisMonth = await this.prismaService.repair.count({
+
+    // Find the highest repair number for this month to avoid duplicates
+    const lastRepair = await this.prismaService.repairs.findFirst({
       where: {
         tenantId,
-        createdAt: {
-          gte: new Date(year, new Date().getMonth(), 1),
-          lt: new Date(year, new Date().getMonth() + 1, 1),
+        repairNumber: {
+          startsWith: `REP-${year}${month}-`,
         },
+      },
+      orderBy: {
+        repairNumber: 'desc',
+      },
+      select: {
+        repairNumber: true,
       },
     });
 
-    const sequence = String(repairsThisMonth + 1).padStart(4, '0');
-    return `REP-${year}${month}-${sequence}`;
+    let sequence = 1;
+    if (lastRepair) {
+      // Extract sequence number from last repair (format: REP-202510-0001)
+      const lastSequence = parseInt(lastRepair.repairNumber.split('-')[2]);
+      sequence = lastSequence + 1;
+    }
+
+    const sequenceStr = String(sequence).padStart(4, '0');
+    return `REP-${year}${month}-${sequenceStr}`;
   }
 
   async getOverdueRepairs(tenantId: string): Promise<RepairResponseDto[]> {
-    const repairs = await this.prismaService.repair.findMany({
+    const repairs = await this.prismaService.repairs.findMany({
       where: {
         tenantId,
         status: { notIn: ['COMPLETED', 'COLLECTED', 'CANCELLED'] },
         estimatedDueDate: { lt: new Date() },
       },
       include: {
-        customer: true,
-        createdByUser: true,
+        customers: true,
+        users: true,
       },
     });
 
@@ -304,14 +321,15 @@ export class RepairsService {
     userId: string,
   ): Promise<any> {
     // Add to status history instead of notes
-    return await this.prismaService.repairStatusHistory.create({
+    return await this.prismaService.repair_status_history.create({
       data: {
+        id: generateId(),
         repairId: id,
         oldStatus: null,
         newStatus: 'RECEIVED', // Default status
         changedBy: userId,
         notes: createNoteDto.note,
-      },
+      } as any,
     });
   }
 
@@ -321,26 +339,27 @@ export class RepairsService {
     tenantId: string,
     userId: string,
   ): Promise<RepairResponseDto> {
-    const repair = await this.prismaService.repair.update({
+    const repair = await this.prismaService.repairs.update({
       where: { id },
       data: {
         status: 'CANCELLED',
       },
       include: {
-        customer: true,
-        createdByUser: true,
+        customers: true,
+        users: true,
       },
     });
 
     // Add status history entry
-    await this.prismaService.repairStatusHistory.create({
+    await this.prismaService.repair_status_history.create({
       data: {
+        id: generateId(),
         repairId: id,
         oldStatus: repair.status,
         newStatus: 'CANCELLED',
         changedBy: userId,
         notes: reason,
-      },
+      } as any,
     });
 
     return this.mapToResponseDto(repair);
@@ -354,11 +373,11 @@ export class RepairsService {
     userId: string,
     sendSMS: boolean = true,
   ): Promise<RepairResponseDto> {
-    const existingRepair = await this.prismaService.repair.findFirst({
+    const existingRepair = await this.prismaService.repairs.findFirst({
       where: { id, tenantId },
       include: {
-        customer: true,
-        createdByUser: true,
+        customers: true,
+        users: true,
       }
     });
 
@@ -369,7 +388,7 @@ export class RepairsService {
     const oldStatus = existingRepair.status;
 
     // Update repair status
-    const updatedRepair = await this.prismaService.repair.update({
+    const updatedRepair = await this.prismaService.repairs.update({
       where: { id },
       data: {
         status: newStatus,
@@ -377,28 +396,29 @@ export class RepairsService {
         collectedDate: newStatus === 'COLLECTED' ? new Date() : existingRepair.collectedDate,
       },
       include: {
-        customer: true,
-        createdByUser: true,
+        customers: true,
+        users: true,
       },
     });
 
     // Add status history entry
-    await this.prismaService.repairStatusHistory.create({
+    await this.prismaService.repair_status_history.create({
       data: {
+        id: generateId(),
         repairId: id,
         oldStatus: oldStatus,
         newStatus: newStatus,
         changedBy: userId,
         notes: notes || `Status changed from ${oldStatus} to ${newStatus}`,
-      },
+      } as any,
     });
 
     // Send SMS notification to customer if enabled and customer has phone
-    if (sendSMS && existingRepair.customer?.phone) {
+    if (sendSMS && existingRepair.customers?.phone) {
       try {
         const smsData: RepairStatusSMSData = {
-          customerName: `${existingRepair.customer.firstName} ${existingRepair.customer.lastName}`,
-          customerPhone: existingRepair.customer.phone,
+          customerName: `${existingRepair.customers.firstName} ${existingRepair.customers.lastName}`,
+          customerPhone: existingRepair.customers.phone,
           repairNumber: existingRepair.repairNumber,
           oldStatus: oldStatus,
           newStatus: newStatus,
@@ -415,14 +435,15 @@ export class RepairsService {
           this.logger.log(`✅ SMS notification sent to customer for repair ${existingRepair.repairNumber}`);
           
           // Log SMS in status history
-          await this.prismaService.repairStatusHistory.create({
+          await this.prismaService.repair_status_history.create({
             data: {
+              id: generateId(),
               repairId: id,
               oldStatus: null,
               newStatus: newStatus,
               changedBy: userId,
-              notes: `SMS notification sent to ${existingRepair.customer.phone} - Message ID: ${smsResult.messageId}`,
-            },
+              notes: `SMS notification sent to ${existingRepair.customers.phone} - Message ID: ${smsResult.messageId}`,
+            } as any,
           });
         } else {
           this.logger.warn(`⚠️ Failed to send SMS for repair ${existingRepair.repairNumber}: ${smsResult.error}`);
@@ -443,16 +464,25 @@ export class RepairsService {
     tenantId: string,
     userId: string,
   ): Promise<{ results: FileUploadResult[]; summary: any }> {
-    // Verify repair exists and user has access
-    const repair = await this.prismaService.repair.findFirst({
-      where: { id: repairId, tenantId },
-    });
+    try {
+      this.logger.log(`Starting image upload for repair ${repairId}, ${files?.length || 0} files`);
 
-    if (!repair) {
-      throw new NotFoundException('Repair not found');
-    }
+      // Verify repair exists and user has access
+      const repair = await this.prismaService.repairs.findFirst({
+        where: { id: repairId, tenantId },
+      });
 
-    const results: FileUploadResult[] = [];
+      if (!repair) {
+        this.logger.error(`Repair not found: ${repairId}`);
+        throw new NotFoundException('Repair not found');
+      }
+
+      if (!files || files.length === 0) {
+        this.logger.warn('No files provided for upload');
+        return { results: [], summary: { totalFiles: 0, successful: 0, failed: 0, uploadMethods: {} } };
+      }
+
+      const results: FileUploadResult[] = [];
     
     for (const file of files) {
       try {
@@ -472,22 +502,21 @@ export class RepairsService {
         });
 
         if (uploadResult.success) {
-          // Store image reference in database
-          // TODO: Uncomment when repairImage model is added to Prisma schema
-          /*
-          await this.prismaService.repairImage.create({
+          // Store image reference in database (repair_photos table)
+          await this.prismaService.repair_photos.create({
             data: {
+              id: generateId(),
               repairId: repairId,
-              imageUrl: uploadResult.fileUrl,
               fileName: uploadResult.fileName,
+              filePath: uploadResult.fileUrl,
+              driveFileId: uploadResult.uploadMethod === 'google-drive' ? uploadResult.fileName : null,
+              driveViewLink: uploadResult.uploadMethod === 'google-drive' ? uploadResult.fileUrl : null,
               fileSize: uploadResult.size,
-              uploadMethod: uploadResult.uploadMethod,
+              mimeType: file.mimetype,
               description: metadata.description || `${repair.itemDescription} - repair image`,
-              uploadedBy: userId,
-              imageType: metadata.uploadType || 'progress',
-            },
+              stage: metadata.uploadType || 'progress',
+            } as any,
           });
-          */
         }
 
         results.push(uploadResult);
@@ -514,14 +543,18 @@ export class RepairsService {
       }, {} as Record<string, number>)
     };
 
-    this.logger.log(`Uploaded ${summary.successful}/${summary.totalFiles} images for repair ${repair.repairNumber}`);
+      this.logger.log(`Uploaded ${summary.successful}/${summary.totalFiles} images for repair ${repair.repairNumber}`);
 
-    return { results, summary };
+      return { results, summary };
+    } catch (error) {
+      this.logger.error(`Error in uploadImages for repair ${repairId}:`, error.message, error.stack);
+      throw new BadRequestException(`Failed to upload images: ${error.message}`);
+    }
   }
 
   async getRepairImages(repairId: string, tenantId: string): Promise<any[]> {
     // Verify repair exists and user has access
-    const repair = await this.prismaService.repair.findFirst({
+    const repair = await this.prismaService.repairs.findFirst({
       where: { id: repairId, tenantId },
     });
 
@@ -529,39 +562,85 @@ export class RepairsService {
       throw new NotFoundException('Repair not found');
     }
 
-    // TODO: Uncomment when repairImage model is added to Prisma schema
-    /*
-    const images = await this.prismaService.repairImage.findMany({
+    // Get images from repair_photos table
+    const images = await this.prismaService.repair_photos.findMany({
       where: { repairId },
       orderBy: { createdAt: 'desc' },
-      include: {
-        uploadedByUser: {
-          select: { firstName: true, lastName: true }
-        }
-      }
     });
-    */
-    const images = []; // Temporary empty array
 
-    return []; // Return empty array until repairImage model is implemented
-    
-    // TODO: Restore this when repairImage model is available
-    /*
     return images.map(image => ({
       id: image.id,
-      imageUrl: image.imageUrl,
+      imageUrl: image.filePath || image.driveViewLink,
       fileName: image.fileName,
       fileSize: image.fileSize,
       description: image.description,
-      imageType: image.imageType,
-      uploadMethod: image.uploadMethod,
-      uploadedBy: image.uploadedBy,
-      uploadedByName: image.uploadedByUser 
-        ? `${image.uploadedByUser.firstName} ${image.uploadedByUser.lastName}`
-        : 'Unknown',
+      imageType: image.stage,
+      uploadMethod: image.driveFileId ? 'google-drive' : 'local',
       createdAt: image.createdAt.toISOString(),
     }));
-    */
+  }
+
+  async delete(
+    id: string,
+    tenantId: string,
+    userId: string,
+  ): Promise<{ success: boolean; message: string }> {
+    // Verify repair exists and user has access
+    const repair = await this.prismaService.repairs.findFirst({
+      where: { id, tenantId },
+      include: {
+        repair_photos: true,
+        repair_status_history: true,
+      },
+    });
+
+    if (!repair) {
+      throw new NotFoundException('Repair not found');
+    }
+
+    try {
+      // Delete related records first (foreign key constraints)
+      // Delete repair photos
+      if (repair.repair_photos && repair.repair_photos.length > 0) {
+        for (const photo of repair.repair_photos) {
+          try {
+            // Delete from storage
+            if (photo.driveFileId) {
+              await this.fileStorageService.deleteFile(photo.driveFileId, 'google-drive');
+            } else if (photo.filePath) {
+              await this.fileStorageService.deleteFile(photo.filePath, 'local');
+            }
+          } catch (fileError) {
+            this.logger.warn(`Failed to delete file for photo ${photo.id}: ${fileError.message}`);
+          }
+        }
+
+        // Delete photo records
+        await this.prismaService.repair_photos.deleteMany({
+          where: { repairId: id },
+        });
+      }
+
+      // Delete status history
+      await this.prismaService.repair_status_history.deleteMany({
+        where: { repairId: id },
+      });
+
+      // Finally, delete the repair itself
+      await this.prismaService.repairs.delete({
+        where: { id },
+      });
+
+      this.logger.log(`✅ Deleted repair ${repair.repairNumber} and all related records`);
+
+      return {
+        success: true,
+        message: `Repair ${repair.repairNumber} deleted successfully`,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to delete repair ${id}:`, error.message);
+      throw new BadRequestException(`Failed to delete repair: ${error.message}`);
+    }
   }
 
   async deleteRepairImage(
@@ -571,7 +650,7 @@ export class RepairsService {
     userId: string,
   ): Promise<boolean> {
     // Verify repair exists and user has access
-    const repair = await this.prismaService.repair.findFirst({
+    const repair = await this.prismaService.repairs.findFirst({
       where: { id: repairId, tenantId },
     });
 
@@ -579,30 +658,27 @@ export class RepairsService {
       throw new NotFoundException('Repair not found');
     }
 
-    // TODO: Uncomment when repairImage model is added to Prisma schema
-    /*
-    const image = await this.prismaService.repairImage.findFirst({
+    // Get image from repair_photos table
+    const image = await this.prismaService.repair_photos.findFirst({
       where: { id: imageId, repairId },
     });
 
     if (!image) {
       throw new NotFoundException('Image not found');
     }
-    */
-    // Temporary: Always throw not found until model is implemented
-    throw new NotFoundException('Image model not implemented yet');
 
-    // TODO: Uncomment when repairImage model is available
-    /*
     try {
       // Delete from storage system
-      await this.fileStorageService.deleteFile(
-        image.uploadMethod === 'google-drive' ? image.fileName : image.imageUrl,
-        image.uploadMethod as any
-      );
+      if (image.driveFileId) {
+        // It's a Google Drive file
+        await this.fileStorageService.deleteFile(image.driveFileId, 'google-drive');
+      } else if (image.filePath) {
+        // It's a local file
+        await this.fileStorageService.deleteFile(image.filePath, 'local');
+      }
 
       // Delete from database
-      await this.prismaService.repairImage.delete({
+      await this.prismaService.repair_photos.delete({
         where: { id: imageId }
       });
 
@@ -612,7 +688,6 @@ export class RepairsService {
       this.logger.error(`Failed to delete image ${imageId}:`, error.message);
       return false;
     }
-    */
   }
 
   private mapToResponseDto(repair: any, items?: any[]): any {
@@ -620,7 +695,7 @@ export class RepairsService {
       id: repair.id,
       repairNumber: repair.repairNumber,
       customerId: repair.customerId,
-      customerName: repair.customer ? `${repair.customer.firstName} ${repair.customer.lastName}` : 'Unknown',
+      customerName: repair.customers ? `${repair.customers.firstName} ${repair.customers.lastName}` : 'Unknown',
       status: repair.status,
       priority: repair.priority,
       itemDescription: repair.itemDescription,
@@ -638,11 +713,11 @@ export class RepairsService {
       assignedTechnicianName: repair.assignedTechnician ? `${repair.assignedTechnician.firstName} ${repair.assignedTechnician.lastName}` : null,
       isOverdue: repair.estimatedDueDate && repair.status !== 'COMPLETED' && repair.status !== 'COLLECTED' ? new Date() > repair.estimatedDueDate : false,
       createdBy: repair.createdBy,
-      createdByName: repair.createdByUser ? `${repair.createdByUser.firstName} ${repair.createdByUser.lastName}` : 'Unknown',
+      createdByName: repair.users ? `${repair.users.firstName} ${repair.users.lastName}` : 'Unknown',
       createdAt: repair.createdAt.toISOString(),
       updatedAt: repair.updatedAt.toISOString(),
       items: items || this.parseItemsFromNotes(repair.internalNotes),
-      notes: repair.statusHistory ? repair.statusHistory.map((history: any) => ({
+      notes: repair.repair_status_history ? repair.repair_status_history.map((history: any) => ({
         id: history.id,
         note: history.notes,
         isCustomerVisible: true,
@@ -651,8 +726,18 @@ export class RepairsService {
         createdAt: history.changedAt.toISOString(),
         updatedAt: history.changedAt.toISOString(),
       })) : [],
+      images: repair.repair_photos ? repair.repair_photos.map((photo: any) => photo.filePath || photo.driveViewLink) : [],
+      beforeImages: repair.repair_photos ? repair.repair_photos
+        .filter((photo: any) => photo.stage === 'before')
+        .map((photo: any) => photo.filePath || photo.driveViewLink) : [],
+      afterImages: repair.repair_photos ? repair.repair_photos
+        .filter((photo: any) => photo.stage === 'after')
+        .map((photo: any) => photo.filePath || photo.driveViewLink) : [],
+      progressImages: repair.repair_photos ? repair.repair_photos
+        .filter((photo: any) => photo.stage === 'progress')
+        .map((photo: any) => photo.filePath || photo.driveViewLink) : [],
     };
-    
+
     return response;
   }
 

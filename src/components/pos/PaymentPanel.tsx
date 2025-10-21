@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CreditCard, Coins, Wallet, RefreshCw, AlertTriangle } from 'lucide-react';
+import { CreditCard, Coins, Wallet, RefreshCw, AlertTriangle, FileText, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,6 +32,7 @@ import { Customer } from '@/contexts/CustomerContext';
 import { useTransactions, SaleTransaction } from '@/contexts/TransactionContext';
 import { useCustomers } from '@/contexts/CustomerContext';
 import { useInventory } from '@/contexts/InventoryContext';
+import { downloadInvoice, previewInvoice } from '@/utils/invoiceGenerator';
 
 interface PaymentPanelProps {
   cartItems: {
@@ -180,21 +181,55 @@ const PaymentPanel: React.FC<PaymentPanelProps> = ({
     }
     
     // Add to transaction history
-    addSaleTransaction(saleTransaction);
+    const savedTransaction = addSaleTransaction(saleTransaction);
 
     // Payment description for toast
-    const paymentDescription = paymentMethod === 'cash' 
+    const paymentDescription = paymentMethod === 'cash'
       ? `Cash payment of ${formatCurrency(total)}`
       : paymentMethod === 'card'
         ? `Card payment of ${formatCurrency(total)}`
         : `Split payment: ${formatCurrency(parseFloat(splitCardAmount) || 0)} by card and ${formatCurrency(parseFloat(splitCashAmount) || 0)} in cash`;
 
-    toast({
-      title: "Payment successful",
-      description: paymentDescription,
-      duration: 3000,
-    });
-    
+    // Generate invoice PDF
+    try {
+      const invoiceData = {
+        invoiceNumber: savedTransaction.id,
+        date: new Date().toLocaleDateString('en-GB', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        }),
+        customerName: customer ? customer.name : 'Guest Customer',
+        customerPhone: customer?.phone || undefined,
+        customerEmail: customer?.email || undefined,
+        customerAddress: customer?.address || undefined,
+        items: cartItems,
+        subtotal: subtotal,
+        tax: taxAmount,
+        total: total,
+        paymentMethod: paymentMethodDesc,
+        cashReceived: paymentMethod === 'cash' ? parseFloat(cashAmount) : undefined,
+        change: paymentMethod === 'cash' ? calculateChange() : undefined
+      };
+
+      // Automatically download invoice
+      downloadInvoice(invoiceData);
+
+      toast({
+        title: "Payment successful",
+        description: `${paymentDescription}. Invoice has been generated.`,
+        duration: 4000,
+      });
+    } catch (error) {
+      console.error('Error generating invoice:', error);
+      toast({
+        title: "Payment successful",
+        description: `${paymentDescription}. Warning: Invoice generation failed.`,
+        variant: "default",
+        duration: 4000,
+      });
+    }
+
     setIsPaymentDialogOpen(false);
     onPaymentComplete();
   };

@@ -40,12 +40,8 @@ const CustomersPage = () => {
     setIsAddingCustomer(true);
   };
 
-  // Refresh customers when page loads
-  useEffect(() => {
-    if (customers.length === 0 && !loading) {
-      refreshCustomers();
-    }
-  }, [customers.length, loading, refreshCustomers]);
+  // Note: Customers are automatically loaded by CustomerContext on mount
+  // No need to manually call refreshCustomers here
 
   return (
     <MainLayout pageTitle="Customers">

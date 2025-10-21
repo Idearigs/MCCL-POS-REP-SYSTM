@@ -10,14 +10,19 @@ export interface BackendProduct {
   sku: string;
   barcode?: string;
   categoryId?: string;
+  supplierId?: string;
+  supplierName?: string;
   material?: string;
   weight?: number;
+  location?: string;
   sellingPrice: number;
   costPrice?: number;
   stockQuantity: number;
   minStockLevel: number;
   isActive: boolean;
-  images?: Array<{ driveViewLink: string; isMain: boolean }>;
+  images?: Array<{ filePath?: string; driveViewLink?: string; isMain: boolean }>;
+  supplier?: { id: string; name: string };
+  category?: { id: string; name: string };
   tenantId?: string;
   createdAt: string;
   updatedAt: string;
@@ -31,15 +36,17 @@ export interface Product {
   sku: string;
   barcode?: string;
   category: string;
+  supplier?: string | { id: string; name: string };  // Can be string or object from backend
   material: string;
   weight?: number;
   dimensions?: string;
+  location?: string;
   price: number;
   cost: number;
   stock: number;
   minStockLevel: number;
   isActive: boolean;
-  images?: string[];
+  images?: any[];  // Array of image objects with filePath/driveViewLink
   tags?: string[];
   tenantId: string;
   createdAt: string;
@@ -53,6 +60,7 @@ export interface BackendCreateProductData {
   sku: string;
   barcode?: string;
   categoryId?: string;
+  supplierName?: string;
   material?: string;
   weight?: number;
   sellingPrice: number;
@@ -111,16 +119,21 @@ const transformBackendToFrontend = (backendProduct: BackendProduct): Product => 
   description: backendProduct.description,
   sku: backendProduct.sku,
   barcode: backendProduct.barcode,
-  category: backendProduct.categoryId || '',
+  // Extract category ID from category object (backend returns {id, name})
+  category: backendProduct.category?.id || backendProduct.categoryId || '',
+  // Use supplierName free-text field instead of supplier object
+  supplier: backendProduct.supplierName || '',
   material: backendProduct.material || '',
   weight: backendProduct.weight,
   dimensions: undefined, // Not available in backend
+  location: backendProduct.location || '',
   price: backendProduct.sellingPrice,
   cost: backendProduct.costPrice || 0,
   stock: backendProduct.stockQuantity,
   minStockLevel: backendProduct.minStockLevel,
   isActive: backendProduct.isActive,
-  images: backendProduct.images?.map(img => img.driveViewLink).filter(Boolean) || [],
+  // Keep images as objects for InventoryContext to process
+  images: backendProduct.images as any || [],
   tags: [], // Not available in current backend
   tenantId: backendProduct.tenantId || '',
   createdAt: backendProduct.createdAt,
@@ -133,6 +146,7 @@ const transformFrontendToBackend = (frontendProduct: CreateProductData): Backend
   sku: frontendProduct.sku,
   barcode: frontendProduct.barcode,
   categoryId: frontendProduct.category || undefined,
+  supplierName: (frontendProduct as any).supplier || undefined,  // Map supplier to supplierName
   material: frontendProduct.material as any, // Backend expects enum
   weight: frontendProduct.weight,
   sellingPrice: frontendProduct.price,
@@ -244,6 +258,7 @@ class ProductService {
       if (productData.sku !== undefined) backendData.sku = productData.sku;
       if (productData.barcode !== undefined) backendData.barcode = productData.barcode;
       if (productData.category !== undefined) backendData.categoryId = productData.category;
+      if ((productData as any).supplier !== undefined) backendData.supplierName = (productData as any).supplier;
       if (productData.material !== undefined) backendData.material = productData.material;
       if (productData.weight !== undefined) backendData.weight = productData.weight;
       if (productData.price !== undefined) backendData.sellingPrice = productData.price;
@@ -252,7 +267,7 @@ class ProductService {
       if (productData.minStockLevel !== undefined) backendData.minStockLevel = productData.minStockLevel;
       if (productData.isActive !== undefined) backendData.isActive = productData.isActive;
 
-      const backendProduct = await apiClient.put<BackendProduct>(`${API_CONFIG.ENDPOINTS.PRODUCTS}/${id}`, backendData);
+      const backendProduct = await apiClient.patch<BackendProduct>(`${API_CONFIG.ENDPOINTS.PRODUCTS}/${id}`, backendData);
       return transformBackendToFrontend(backendProduct);
     } catch (error) {
       console.error(`Failed to update product ${id}:`, error);
@@ -305,6 +320,16 @@ class ProductService {
     }
   }
 
+  async generateSku(prefix: string = 'JWL'): Promise<string> {
+    try {
+      const response = await apiClient.get<{ sku: string }>(API_CONFIG.ENDPOINTS.GENERATE_SKU, { prefix });
+      return response.sku;
+    } catch (error) {
+      console.error('Failed to generate SKU:', error);
+      throw error;
+    }
+  }
+
   async adjustStock(productId: string, adjustment: StockAdjustment): Promise<Product> {
     try {
       const endpoint = apiClient.replaceUrlParams(API_CONFIG.ENDPOINTS.ADJUST_STOCK, {
@@ -330,8 +355,9 @@ class ProductService {
   async uploadProductImage(productId: string, file: File): Promise<{ imageUrl: string }> {
     try {
       return await apiClient.uploadFile<{ imageUrl: string }>(
-        `${API_CONFIG.ENDPOINTS.PRODUCTS}/${productId}/image`,
-        file
+        `${API_CONFIG.ENDPOINTS.PRODUCTS}/${productId}/upload-image`,
+        file,
+        'image' // Field name expected by backend
       );
     } catch (error) {
       console.error(`Failed to upload image for product ${productId}:`, error);

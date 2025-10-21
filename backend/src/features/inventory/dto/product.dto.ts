@@ -97,13 +97,23 @@ export class CreateProductDto {
   supplierId?: string;
 
   @ApiPropertyOptional({
+    description: 'Supplier name (free text)',
+    example: 'ABC Gems Ltd',
+    maxLength: 100,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100, { message: 'Supplier name must not exceed 100 characters' })
+  supplierName?: string;
+
+  @ApiPropertyOptional({
     description: 'Cost price',
     example: 1500.00,
     minimum: 0,
   })
   @IsOptional()
-  @IsDecimal({ decimal_digits: '2' })
-  @Transform(({ value }) => parseFloat(value))
+  @Transform(({ value }) => (value !== null && value !== undefined ? parseFloat(value) : value))
+  @Type(() => Number)
   @Min(0, { message: 'Cost price must be positive' })
   costPrice?: number;
 
@@ -112,8 +122,8 @@ export class CreateProductDto {
     example: 2500.00,
     minimum: 0,
   })
-  @IsDecimal({ decimal_digits: '2' })
   @Transform(({ value }) => parseFloat(value))
+  @Type(() => Number)
   @Min(0, { message: 'Selling price must be positive' })
   sellingPrice: number;
 
@@ -123,8 +133,8 @@ export class CreateProductDto {
     minimum: 0,
   })
   @IsOptional()
-  @IsDecimal({ decimal_digits: '2' })
-  @Transform(({ value }) => parseFloat(value))
+  @Transform(({ value }) => (value !== null && value !== undefined ? parseFloat(value) : value))
+  @Type(() => Number)
   @Min(0, { message: 'Discount price must be positive' })
   discountPrice?: number;
 
@@ -175,8 +185,8 @@ export class CreateProductDto {
     minimum: 0,
   })
   @IsOptional()
-  @IsDecimal({ decimal_digits: '3' })
-  @Transform(({ value }) => parseFloat(value))
+  @Transform(({ value }) => (value !== null && value !== undefined ? parseFloat(value) : value))
+  @Type(() => Number)
   @Min(0, { message: 'Weight must be positive' })
   weight?: number;
 
@@ -311,7 +321,12 @@ export class ProductQueryDto extends PaginationDto {
   })
   @IsOptional()
   @IsBoolean()
-  @Transform(({ value }) => value === 'true')
+  @Transform(({ value }) => {
+    // Handle string 'true'/'false' from query params and boolean true/false from objects
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return undefined;
+  })
   isActive?: boolean;
 
   @ApiPropertyOptional({
@@ -320,7 +335,12 @@ export class ProductQueryDto extends PaginationDto {
   })
   @IsOptional()
   @IsBoolean()
-  @Transform(({ value }) => value === 'true')
+  @Transform(({ value }) => {
+    // Handle string 'true'/'false' from query params and boolean true/false from objects
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return undefined;
+  })
   isDamaged?: boolean;
 
   @ApiPropertyOptional({
@@ -329,7 +349,12 @@ export class ProductQueryDto extends PaginationDto {
   })
   @IsOptional()
   @IsBoolean()
-  @Transform(({ value }) => value === 'true')
+  @Transform(({ value }) => {
+    // Handle string 'true'/'false' from query params and boolean true/false from objects
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return undefined;
+  })
   lowStock?: boolean;
 
   @ApiPropertyOptional({
@@ -516,6 +541,9 @@ export class ProductResponseDto {
 
   @ApiPropertyOptional({ example: 'clv123abc456' })
   supplierId?: string;
+
+  @ApiPropertyOptional({ example: 'ABC Gems Ltd' })
+  supplierName?: string;
 
   @ApiPropertyOptional({ example: 1500.00 })
   costPrice?: number;

@@ -50,7 +50,6 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { repairService, Repair } from '@/services/repairService';
 import { customerService } from '@/services/customerService';
-import { googleDriveService } from '@/services/googleDriveService';
 
 // Type mappings between UI and backend
 type UIRepairStatus = 'received' | 'in-progress' | 'completed' | 'collected';
@@ -87,6 +86,9 @@ interface UIRepairJob {
   notes?: string;
   createdAt: string;
   images?: string[];
+  beforeImages?: string[];
+  afterImages?: string[];
+  progressImages?: string[];
 }
 
 // Convert backend repair to UI format
@@ -102,7 +104,15 @@ const convertRepairToUI = (repair: Repair): UIRepairJob => ({
   email: '',
   notes: repair.notes || repair.internalNotes || repair.customerInstructions || '',
   createdAt: repair.createdAt,
-  images: repair.images || []
+  images: [
+    ...(repair.beforeImages || []),
+    ...(repair.afterImages || []),
+    ...(repair.progressImages || []),
+    ...(repair.images || [])
+  ],
+  beforeImages: repair.beforeImages || [],
+  afterImages: repair.afterImages || [],
+  progressImages: repair.progressImages || []
 });
 
 const RepairsPage: React.FC = () => {
@@ -167,11 +177,22 @@ const RepairsPage: React.FC = () => {
     setFilteredJobs(result);
   }, [searchTerm, selectedStatus, repairJobs]);
 
-  const handleJobClick = (id: string) => {
+  const handleJobClick = async (id: string) => {
     const job = repairJobs.find(job => job.id === id);
     if (job) {
+      // Set the job immediately to open the modal with basic data
       setSelectedJob(job);
       setIsDetailOpen(true);
+
+      // Then fetch the full repair details including images in the background
+      try {
+        const fullRepair = await repairService.getRepairById(id);
+        const fullUIJob = convertRepairToUI(fullRepair);
+        setSelectedJob(fullUIJob);
+      } catch (error: any) {
+        console.error('Failed to fetch full repair details:', error);
+        // Keep the modal open with basic data even if fetch fails
+      }
     }
   };
 
@@ -197,25 +218,25 @@ const RepairsPage: React.FC = () => {
 
   const handleDeleteRepair = async () => {
     if (!repairToDelete) return;
-    
+
     try {
       setLoading(true);
-      console.log(`🗑️ Deleting repair: ${repairToDelete}`);
-      
+      console.log(`🗑️ Permanently deleting repair: ${repairToDelete}`);
+
       // Find the repair to get its details for logging
       const repairJob = repairJobs.find(job => job.id === repairToDelete);
       if (repairJob) {
         console.log(`Deleting repair for ${repairJob.customerName}: ${repairJob.itemDescription}`);
       }
-      
-      await repairService.cancelRepair(repairToDelete, 'Deleted by user');
-      
-      // Remove from local state
-      const updatedJobs = repairJobs.filter(job => job.id !== repairToDelete);
-      setRepairJobs(updatedJobs);
-      setFilteredJobs(updatedJobs);
-      
-      toast.success('Repair job deleted successfully');
+
+      // Call the DELETE endpoint to permanently remove the repair
+      const result = await repairService.deleteRepair(repairToDelete);
+      console.log('Delete result:', result);
+
+      // Reload repairs from database to ensure consistency
+      await loadRepairs();
+
+      toast.success(result.message || 'Repair job deleted successfully');
     } catch (error: any) {
       console.error('Failed to delete repair:', error);
       toast.error(`Failed to delete repair: ${error.message}`);
@@ -292,35 +313,30 @@ const RepairsPage: React.FC = () => {
       };
 
       const newRepair = await repairService.createRepair(repairData);
-      
-      let imageUrls: string[] = [];
-      if (formData.images.length > 0) {
-        try {
-          const uploadResult = await googleDriveService.uploadRepairImages(
-            formData.images, 
-            { 
-              repairId: newRepair.id, 
-              description: 'Images for repair ' + newRepair.id + ' - ' + formData.itemDescription
-            }
-          );
-          imageUrls = uploadResult.imageUrls;
-          toast.success(formData.images.length + ' image(s) uploaded to Google Drive');
-        } catch (uploadError) {
-          console.error('Failed to upload images:', uploadError);
-          // Create placeholder URLs for now so repair creation still works
-          imageUrls = formData.images.map((_, index) => `pending-upload-${newRepair.id}-${index + 1}`);
-          toast.warning('Repair created successfully. Image upload temporarily disabled - will be fixed shortly');
-        }
-      }
 
-      if (imageUrls.length > 0) {
+      // Upload images if provided (skip if no images to avoid errors)
+      if (formData.images && formData.images.length > 0) {
         try {
-          await repairService.updateRepair(newRepair.id, { 
-            internalNotes: (newRepair.internalNotes || '') + '\n\nImages: ' + imageUrls.join(', ')
+          console.log(`Uploading ${formData.images.length} images for repair ${newRepair.id}`);
+          // Upload images as 'before' images since they're taken during repair creation
+          const uploadResult = await repairService.uploadRepairImages(
+            newRepair.id,
+            formData.images,
+            'before'
+          );
+          console.log('Images uploaded successfully:', uploadResult);
+          toast.success(`${formData.images.length} image(s) uploaded successfully`);
+        } catch (uploadError: any) {
+          console.error('Failed to upload images:', uploadError);
+          console.error('Upload error details:', {
+            message: uploadError.message,
+            statusCode: uploadError.statusCode,
+            error: uploadError.error
           });
-        } catch (updateError) {
-          console.warn('Failed to update repair with image URLs:', updateError);
+          toast.warning('Repair created but image upload failed. You can add images later from the repair details.');
         }
+      } else {
+        console.log('No images to upload for this repair');
       }
 
       await loadRepairs();
@@ -329,7 +345,14 @@ const RepairsPage: React.FC = () => {
       
     } catch (error: any) {
       console.error('Failed to create repair job:', error);
-      toast.error(error.message || 'Failed to create repair job');
+      console.error('Error details:', {
+        message: error.message,
+        statusCode: error.statusCode,
+        error: error.error,
+        stack: error.stack,
+        fullError: JSON.stringify(error, null, 2)
+      });
+      toast.error(error.message || error.error || 'Failed to create repair job');
     } finally {
       setLoading(false);
     }
@@ -480,6 +503,11 @@ const RepairsPage: React.FC = () => {
               }
               // Always refresh the repair list
               await loadRepairs();
+
+              // Update the selected job with fresh data from database
+              const refreshedRepair = await repairService.getRepairById(repairId);
+              const refreshedUIJob = convertRepairToUI(refreshedRepair);
+              setSelectedJob(refreshedUIJob);
             } catch (error: any) {
               toast.error('Failed to update repair: ' + error.message);
             }

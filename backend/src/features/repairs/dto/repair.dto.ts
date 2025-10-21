@@ -629,6 +629,30 @@ export class RepairResponseDto {
 
   @ApiProperty()
   updatedAt: string;
+
+  @ApiProperty({
+    description: 'All repair images (deprecated - use beforeImages, afterImages, progressImages)',
+    type: [String],
+  })
+  images: string[];
+
+  @ApiProperty({
+    description: 'Images taken before repair work started',
+    type: [String],
+  })
+  beforeImages: string[];
+
+  @ApiProperty({
+    description: 'Images taken after repair work completed',
+    type: [String],
+  })
+  afterImages: string[];
+
+  @ApiProperty({
+    description: 'Images taken during repair work progress',
+    type: [String],
+  })
+  progressImages: string[];
 }
 
 export class RepairStatsDto {

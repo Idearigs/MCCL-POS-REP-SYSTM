@@ -26,6 +26,7 @@ export const API_CONFIG = {
     LOW_STOCK_REPORT: '/products/low-stock',
     PRODUCT_CATEGORIES: '/products/categories',
     PRODUCT_MATERIALS: '/products/materials',
+    GENERATE_SKU: '/products/generate-sku',
     ADJUST_STOCK: '/products/{id}/adjust-stock',
     BULK_UPDATE_STOCK: '/products/bulk-update-stock',
     PRODUCT_BY_BARCODE: '/products/barcode/{barcode}',

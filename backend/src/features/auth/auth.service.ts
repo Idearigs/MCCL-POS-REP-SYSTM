@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CacheService } from '../../core/cache/cache.service';
+import { generateId } from '../../shared/utils/id-generator';
 import {
   LoginDto,
   RegisterDto,
@@ -37,14 +38,14 @@ export class AuthService {
 
     try {
       // Find user by email and tenant
-      const user = await this.prismaService.user.findFirst({
+      const user = await this.prismaService.users.findFirst({
         where: {
           email,
           tenantId,
           isActive: true,
         },
         include: {
-          tenant: true,
+          tenants: true,
         },
       });
 
@@ -59,7 +60,7 @@ export class AuthService {
       }
 
       // Check tenant status
-      if (user.tenant.status !== 'ACTIVE') {
+      if (user.tenants.status !== 'ACTIVE') {
         throw new UnauthorizedException('Account is not active');
       }
 
@@ -67,7 +68,7 @@ export class AuthService {
       const tokens = await this.generateTokens(user);
 
       // Update user with refresh token and last login
-      await this.prismaService.user.update({
+      await this.prismaService.users.update({
         where: { id: user.id },
         data: {
           refreshToken: tokens.refreshToken,
@@ -117,7 +118,7 @@ export class AuthService {
 
     try {
       // Check if user already exists
-      const existingUser = await this.prismaService.user.findFirst({
+      const existingUser = await this.prismaService.users.findFirst({
         where: {
           email,
           tenantId,
@@ -129,7 +130,7 @@ export class AuthService {
       }
 
       // Verify tenant exists and is active
-      const tenant = await this.prismaService.tenant.findUnique({
+      const tenant = await this.prismaService.tenants.findUnique({
         where: { id: tenantId, status: 'ACTIVE' },
       });
 
@@ -142,17 +143,18 @@ export class AuthService {
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
       // Create user
-      const user = await this.prismaService.user.create({
+      const user = await this.prismaService.users.create({
         data: {
+          id: generateId(),
           email,
           password: hashedPassword,
           firstName,
           lastName,
           role: role as any,
           tenantId,
-        },
+        } as any,
         include: {
-          tenant: true,
+          tenants: true,
         },
       });
 
@@ -160,7 +162,7 @@ export class AuthService {
       const tokens = await this.generateTokens(user);
 
       // Update user with refresh token
-      await this.prismaService.user.update({
+      await this.prismaService.users.update({
         where: { id: user.id },
         data: {
           refreshToken: tokens.refreshToken,
@@ -202,18 +204,18 @@ export class AuthService {
       });
 
       // Find user with matching refresh token
-      const user = await this.prismaService.user.findFirst({
+      const user = await this.prismaService.users.findFirst({
         where: {
           id: payload.sub,
           refreshToken,
           isActive: true,
         },
         include: {
-          tenant: true,
+          tenants: true,
         },
       });
 
-      if (!user || user.tenant.status !== 'ACTIVE') {
+      if (!user || user.tenants.status !== 'ACTIVE') {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
@@ -221,7 +223,7 @@ export class AuthService {
       const tokens = await this.generateTokens(user);
 
       // Update user with new refresh token
-      await this.prismaService.user.update({
+      await this.prismaService.users.update({
         where: { id: user.id },
         data: {
           refreshToken: tokens.refreshToken,
@@ -255,7 +257,7 @@ export class AuthService {
   async logout(userId: string): Promise<void> {
     try {
       // Remove refresh token from database
-      await this.prismaService.user.update({
+      await this.prismaService.users.update({
         where: { id: userId },
         data: { refreshToken: null },
       });
@@ -280,7 +282,7 @@ export class AuthService {
     const { currentPassword, newPassword } = changePasswordDto;
 
     try {
-      const user = await this.prismaService.user.findUnique({
+      const user = await this.prismaService.users.findUnique({
         where: { id: userId },
       });
 
@@ -303,7 +305,7 @@ export class AuthService {
       const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
 
       // Update password
-      await this.prismaService.user.update({
+      await this.prismaService.users.update({
         where: { id: userId },
         data: { password: hashedNewPassword },
       });

@@ -8,6 +8,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CacheService } from '../../core/cache/cache.service';
+import { generateId } from '../../shared/utils/id-generator';
 import {
   CreateCustomerDto,
   UpdateCustomerDto,
@@ -36,7 +37,7 @@ export class CustomersService {
     try {
       // Check if customer already exists with same email in tenant
       if (createCustomerDto.email) {
-        const existingCustomer = await this.prismaService.customer.findFirst({
+        const existingCustomer = await this.prismaService.customers.findFirst({
           where: {
             email: createCustomerDto.email,
             tenantId,
@@ -49,7 +50,7 @@ export class CustomersService {
       }
 
       // Check if customer already exists with same phone in tenant
-      const existingPhoneCustomer = await this.prismaService.customer.findFirst({
+      const existingPhoneCustomer = await this.prismaService.customers.findFirst({
         where: {
           phone: createCustomerDto.phone,
           tenantId,
@@ -67,16 +68,18 @@ export class CustomersService {
         );
       }
 
-      const customer = await this.prismaService.customer.create({
+      const customer = await this.prismaService.customers.create({
         data: {
+          id: generateId(),
           ...createCustomerDto,
           tenantId,
+          updatedAt: new Date(),
           consentDate: createCustomerDto.dataProcessingConsent ? new Date() : null,
           birthDate: createCustomerDto.birthDate ? new Date(createCustomerDto.birthDate) : null,
-          anniversaryDate: createCustomerDto.anniversaryDate 
-            ? new Date(createCustomerDto.anniversaryDate) 
+          anniversaryDate: createCustomerDto.anniversaryDate
+            ? new Date(createCustomerDto.anniversaryDate)
             : null,
-        },
+        } as any,
       });
 
       // Clear cache for customer list
@@ -88,6 +91,8 @@ export class CustomersService {
       return this.mapToResponseDto(customer);
     } catch (error) {
       this.logger.error('Failed to create customer:', error.message);
+      this.logger.error('Error stack:', error.stack);
+      this.logger.error('Customer data that failed:', JSON.stringify(createCustomerDto, null, 2));
       throw error;
     }
   }
@@ -114,7 +119,7 @@ export class CustomersService {
       const skip = (page - 1) * limit;
 
       // Build where clause
-      const where: Prisma.CustomerWhereInput = {
+      const where: Prisma.customersWhereInput = {
         tenantId,
         ...(isActive !== undefined && { isActive }),
         ...(redFlag !== undefined && { redFlag }),
@@ -142,13 +147,13 @@ export class CustomersService {
 
       // Get customers and total count
       const [customers, total] = await Promise.all([
-        this.prismaService.customer.findMany({
+        this.prismaService.customers.findMany({
           where,
           skip,
           take: limit,
           orderBy: { [sortBy]: sortOrder },
         }),
-        this.prismaService.customer.count({ where }),
+        this.prismaService.customers.count({ where }),
       ]);
 
       const result = new PaginatedResponseDto(
@@ -184,7 +189,7 @@ export class CustomersService {
         return cachedCustomer;
       }
 
-      const customer = await this.prismaService.customer.findFirst({
+      const customer = await this.prismaService.customers.findFirst({
         where: { id, tenantId },
         include: {
           sales: {
@@ -219,7 +224,7 @@ export class CustomersService {
   ): Promise<CustomerResponseDto> {
     try {
       // Check if customer exists
-      const existingCustomer = await this.prismaService.customer.findFirst({
+      const existingCustomer = await this.prismaService.customers.findFirst({
         where: { id, tenantId },
       });
 
@@ -229,7 +234,7 @@ export class CustomersService {
 
       // If email is being updated, check for conflicts
       if (updateCustomerDto.email && updateCustomerDto.email !== existingCustomer.email) {
-        const emailConflict = await this.prismaService.customer.findFirst({
+        const emailConflict = await this.prismaService.customers.findFirst({
           where: {
             email: updateCustomerDto.email,
             tenantId,
@@ -244,7 +249,7 @@ export class CustomersService {
 
       // If phone is being updated, check for conflicts
       if (updateCustomerDto.phone && updateCustomerDto.phone !== existingCustomer.phone) {
-        const phoneConflict = await this.prismaService.customer.findFirst({
+        const phoneConflict = await this.prismaService.customers.findFirst({
           where: {
             phone: updateCustomerDto.phone,
             tenantId,
@@ -257,7 +262,7 @@ export class CustomersService {
         }
       }
 
-      const customer = await this.prismaService.customer.update({
+      const customer = await this.prismaService.customers.update({
         where: { id },
         data: {
           ...updateCustomerDto,
@@ -289,7 +294,7 @@ export class CustomersService {
    */
   async remove(id: string, tenantId: string): Promise<void> {
     try {
-      const customer = await this.prismaService.customer.findFirst({
+      const customer = await this.prismaService.customers.findFirst({
         where: { id, tenantId },
       });
 
@@ -298,7 +303,7 @@ export class CustomersService {
       }
 
       // Soft delete by setting isActive to false
-      await this.prismaService.customer.update({
+      await this.prismaService.customers.update({
         where: { id },
         data: { isActive: false },
       });
@@ -340,21 +345,21 @@ export class CustomersService {
         emailConsentCount,
         smsConsentCount,
       ] = await Promise.all([
-        this.prismaService.customer.count({ where: { tenantId } }),
-        this.prismaService.customer.count({ where: { tenantId, isActive: true } }),
-        this.prismaService.customer.count({ where: { tenantId, redFlag: true } }),
-        this.prismaService.customer.count({
+        this.prismaService.customers.count({ where: { tenantId } }),
+        this.prismaService.customers.count({ where: { tenantId, isActive: true } }),
+        this.prismaService.customers.count({ where: { tenantId, redFlag: true } }),
+        this.prismaService.customers.count({
           where: {
             tenantId,
             createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
           },
         }),
-        this.prismaService.customer.aggregate({
+        this.prismaService.customers.aggregate({
           where: { tenantId },
           _sum: { totalSpent: true },
         }),
-        this.prismaService.customer.count({ where: { tenantId, marketingEmail: true } }),
-        this.prismaService.customer.count({ where: { tenantId, marketingSms: true } }),
+        this.prismaService.customers.count({ where: { tenantId, marketingEmail: true } }),
+        this.prismaService.customers.count({ where: { tenantId, marketingSms: true } }),
       ]);
 
       const stats: CustomerStatsDto = {
@@ -386,14 +391,14 @@ export class CustomersService {
    */
   async exportCustomerData(customerId: string, tenantId: string): Promise<any> {
     try {
-      const customer = await this.prismaService.customer.findFirst({
+      const customer = await this.prismaService.customers.findFirst({
         where: { id: customerId, tenantId },
         include: {
           sales: {
             include: {
-              items: {
+              sale_items: {
                 include: {
-                  product: true,
+                  products: true,
                 },
               },
             },
@@ -465,7 +470,7 @@ export class CustomersService {
    */
   async deleteCustomerDataPermanently(customerId: string, tenantId: string): Promise<void> {
     try {
-      const customer = await this.prismaService.customer.findFirst({
+      const customer = await this.prismaService.customers.findFirst({
         where: { id: customerId, tenantId },
       });
 
@@ -477,17 +482,17 @@ export class CustomersService {
       // In practice, you might want to anonymize instead of delete
       await this.prismaService.$transaction(async (prisma) => {
         // Delete related records first
-        await prisma.document.deleteMany({ where: { customerId } });
-        await prisma.repair.deleteMany({ where: { customerId } });
+        await prisma.documents.deleteMany({ where: { customerId } });
+        await prisma.repairs.deleteMany({ where: { customerId } });
         
         // Update sales to remove customer reference
-        await prisma.sale.updateMany({
+        await prisma.sales.updateMany({
           where: { customerId },
           data: { customerId: null },
         });
         
         // Finally delete customer
-        await prisma.customer.delete({ where: { id: customerId } });
+        await prisma.customers.delete({ where: { id: customerId } });
       });
 
       // Clear cache

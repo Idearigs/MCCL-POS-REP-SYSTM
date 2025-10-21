@@ -12,6 +12,8 @@ import {
   HttpStatus,
   UploadedFiles,
   UseInterceptors,
+  BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -240,6 +242,39 @@ export class RepairsController {
     @CurrentUser('id') userId: string,
   ): Promise<RepairResponseDto> {
     return this.repairsService.update(id, updateRepairDto, tenantId, userId);
+  }
+
+  @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete repair',
+    description: 'Permanently delete a repair and all associated data (photos, history). This action cannot be undone.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Repair ID',
+    example: 'clv123abc456',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Repair deleted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Repair REP-202401-0001 deleted successfully' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Repair not found',
+  })
+  async delete(
+    @Param('id') id: string,
+    @TenantId() tenantId: string,
+    @CurrentUser('id') userId: string,
+  ): Promise<{ success: boolean; message: string }> {
+    return this.repairsService.delete(id, tenantId, userId);
   }
 
   @Post(':id/notes')
@@ -553,7 +588,12 @@ export class RepairsController {
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.repairsService.uploadImages(id, files, metadata, tenantId, userId);
+    // Check if files were provided
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files provided for upload');
+    }
+
+    return this.repairsService.uploadImages(id, files, metadata || {}, tenantId, userId);
   }
 
   @Get(':id/images')
