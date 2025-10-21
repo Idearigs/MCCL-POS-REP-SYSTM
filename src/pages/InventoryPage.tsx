@@ -39,8 +39,15 @@ import {
   InventoryReportData,
   InventoryReportItem
 } from '@/utils/inventoryReportGenerator';
+import {
+  parseCSV,
+  ParsedCSVData,
+  ValidatedInventoryItem,
+  generateCSVTemplate
+} from '@/utils/intelligentCSVParser';
+import CSVImportDialog from '@/components/inventory/CSVImportDialog';
 
-import InventoryItemComponent, { InventoryItemProps } from '@/components/inventory/InventoryItem';
+import InventoryItemComponent, { InventoryItemProps} from '@/components/inventory/InventoryItem';
 import InventoryDetail from '@/components/inventory/InventoryDetail';
 import InventoryFilter from '@/components/inventory/InventoryFilter';
 
@@ -58,6 +65,8 @@ const InventoryPage = () => {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null);
+  const [parsedCSVData, setParsedCSVData] = useState<ParsedCSVData | null>(null);
+  const [isCSVImportDialogOpen, setIsCSVImportDialogOpen] = useState(false);
   const { toast } = useToast();
   
   // Set isLoaded to true after component mounts to prevent initial render issues
@@ -249,140 +258,176 @@ const InventoryPage = () => {
     }
   };
   
-  // Download inventory as CSV
+  // Download inventory as comprehensive CSV
   const handleDownload = () => {
-    // Create CSV content
-    const headers = ['Name', 'SKU', 'Category', 'Price', 'Cost', 'Quantity', 'Threshold'];
-    const csvRows = [
-      headers.join(','),
-      ...filteredInventory.map(item => [
-        `"${item.name.replace(/"/g, '""')}"`, // Escape quotes in name
-        item.sku,
-        item.category,
-        item.price.toFixed(2),
-        item.cost.toFixed(2),
-        item.quantity,
-        item.threshold
-      ].join(','))
-    ];
-    
-    const csvContent = csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-    saveAs(blob, `inventory_${new Date().toISOString().slice(0, 10)}.csv`);
-    
-    toast({
-      title: "Download complete",
-      description: "Inventory data has been downloaded as CSV.",
-    });
+    try {
+      // Create comprehensive CSV with all fields
+      const headers = [
+        'name',
+        'sku',
+        'category',
+        'supplier',
+        'material',
+        'purity',
+        'weight',
+        'price',
+        'cost',
+        'quantity',
+        'threshold',
+        'description',
+        'location',
+        'barcode'
+      ];
+
+      const csvRows = [
+        headers.join(','),
+        ...filteredInventory.map(item => [
+          `"${(item.name || '').replace(/"/g, '""')}"`, // Escape quotes
+          item.sku || '',
+          (item as any).categoryName || item.category || '',
+          (item as any).supplierName || item.supplier || '',
+          (item as any).material || '',
+          (item as any).purity || '',
+          (item as any).weight || '',
+          item.price?.toFixed(2) || '0.00',
+          item.cost?.toFixed(2) || '0.00',
+          item.quantity || 0,
+          item.threshold || 5,
+          `"${(item.description || '').replace(/"/g, '""')}"`,
+          item.location || '',
+          (item as any).barcode || ''
+        ].join(','))
+      ];
+
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+      saveAs(blob, `inventory_export_${new Date().toISOString().slice(0, 10)}.csv`);
+
+      toast({
+        title: "Export complete",
+        description: `${filteredInventory.length} items exported to CSV with all fields.`,
+      });
+    } catch (error) {
+      console.error('CSV export error:', error);
+      toast({
+        title: "Export failed",
+        description: "Failed to export inventory data.",
+        variant: "destructive",
+      });
+    }
   };
   
-  // Handle file upload
+  // Handle intelligent CSV upload
   const handleUpload = () => {
-    // Create a file input element if it doesn't exist
-    if (!fileInput) {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.csv';
-      input.style.display = 'none';
-      input.onchange = (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            try {
-              const csvData = event.target?.result as string;
-              const rows = csvData.split('\n');
-              
-              // Skip header row
-              const header = rows[0].split(',');
-              const nameIndex = header.findIndex(h => h.trim().toLowerCase() === 'name');
-              const skuIndex = header.findIndex(h => h.trim().toLowerCase() === 'sku');
-              const categoryIndex = header.findIndex(h => h.trim().toLowerCase() === 'category');
-              const priceIndex = header.findIndex(h => h.trim().toLowerCase() === 'price');
-              const costIndex = header.findIndex(h => h.trim().toLowerCase() === 'cost');
-              const quantityIndex = header.findIndex(h => h.trim().toLowerCase() === 'quantity');
-              const thresholdIndex = header.findIndex(h => h.trim().toLowerCase() === 'threshold');
-              
-              if (nameIndex === -1 || skuIndex === -1 || priceIndex === -1) {
-                throw new Error('CSV file must contain at least Name, SKU, and Price columns');
-              }
-              
-              // Process data rows
-              const newItems: Omit<InventoryItem, 'id'>[] = [];
-              for (let i = 1; i < rows.length; i++) {
-                if (!rows[i].trim()) continue; // Skip empty rows
-                
-                // Handle quoted fields (simple approach)
-                let inQuote = false;
-                let currentField = '';
-                const fields: string[] = [];
-                
-                for (let j = 0; j < rows[i].length; j++) {
-                  const char = rows[i][j];
-                  if (char === '"') {
-                    inQuote = !inQuote;
-                  } else if (char === ',' && !inQuote) {
-                    fields.push(currentField);
-                    currentField = '';
-                  } else {
-                    currentField += char;
-                  }
-                }
-                fields.push(currentField); // Add the last field
-                
-                const newItem: Omit<InventoryItem, 'id'> = {
-                  name: fields[nameIndex]?.replace(/^"|"$/g, '') || 'Unknown',
-                  sku: fields[skuIndex] || `SKU-${Date.now()}`,
-                  category: fields[categoryIndex] || 'Uncategorized',
-                  price: parseFloat(fields[priceIndex]) || 0,
-                  cost: costIndex > -1 ? parseFloat(fields[costIndex]) || 0 : 0,
-                  quantity: quantityIndex > -1 ? parseInt(fields[quantityIndex]) || 0 : 0,
-                  threshold: thresholdIndex > -1 ? parseInt(fields[thresholdIndex]) || 5 : 5,
-                  description: '',
-                  supplier: '',
-                  location: '',
-                  dateAdded: new Date().toISOString(),
-                  lastRestocked: new Date().toISOString(),
-                  imageUrl: '',
-                  additionalImages: []
-                };
-                
-                newItems.push(newItem);
-              }
-              
-              // Add items to inventory
-              if (newItems.length > 0) {
-                newItems.forEach(item => addItem(item));
-                
-                toast({
-                  title: "Upload successful",
-                  description: `${newItems.length} items have been added to inventory.`,
-                });
-              } else {
-                toast({
-                  title: "No items found",
-                  description: "The CSV file did not contain any valid inventory items.",
-                  variant: "destructive",
-                });
-              }
-              
-            } catch (error) {
-              toast({
-                title: "Upload failed",
-                description: error instanceof Error ? error.message : "Failed to process CSV file.",
-                variant: "destructive",
-              });
-            }
-          };
-          reader.readAsText(file);
+    // Create file input for CSV upload
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv';
+    input.style.display = 'none';
+
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const csvContent = event.target?.result as string;
+
+          // Parse CSV intelligently
+          const parsed = parseCSV(csvContent);
+
+          // Set parsed data and open preview dialog
+          setParsedCSVData(parsed);
+          setIsCSVImportDialogOpen(true);
+
+        } catch (error) {
+          console.error('CSV parsing error:', error);
+          toast({
+            title: "Failed to read CSV",
+            description: error instanceof Error ? error.message : "Invalid CSV file format.",
+            variant: "destructive",
+          });
         }
       };
-      document.body.appendChild(input);
-      setFileInput(input);
+
+      reader.onerror = () => {
+        toast({
+          title: "File read error",
+          description: "Failed to read the CSV file. Please try again.",
+          variant: "destructive",
+        });
+      };
+
+      reader.readAsText(file);
+    };
+
+    document.body.appendChild(input);
+    input.click();
+    document.body.removeChild(input);
+  };
+
+  // Handle confirmed CSV import
+  const handleConfirmCSVImport = async (items: ValidatedInventoryItem[]) => {
+    try {
+      let successCount = 0;
+      let failureCount = 0;
+
+      // Import items one by one
+      for (const item of items) {
+        try {
+          await addItem({
+            name: item.name,
+            sku: item.sku,
+            category: item.category || 'Uncategorized',
+            supplier: item.supplier || '',
+            price: item.price,
+            cost: item.cost || 0,
+            quantity: item.quantity,
+            threshold: item.threshold || 5,
+            description: item.description || '',
+            location: item.location || '',
+            dateAdded: new Date().toISOString(),
+            lastRestocked: new Date().toISOString(),
+            imageUrl: '',
+            additionalImages: []
+          });
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to import item ${item.sku}:`, error);
+          failureCount++;
+        }
+      }
+
+      // Show results
+      if (successCount > 0) {
+        toast({
+          title: "Import successful",
+          description: `Successfully imported ${successCount} of ${items.length} items.${failureCount > 0 ? ` ${failureCount} items failed.` : ''}`,
+        });
+      } else {
+        toast({
+          title: "Import failed",
+          description: "No items were imported. Please check the CSV format.",
+          variant: "destructive",
+        });
+      }
+
+      // Refresh inventory
+      await refreshInventory();
+
+      // Close dialog
+      setIsCSVImportDialogOpen(false);
+      setParsedCSVData(null);
+
+    } catch (error) {
+      console.error('CSV import error:', error);
+      toast({
+        title: "Import error",
+        description: "An error occurred while importing items.",
+        variant: "destructive",
+      });
     }
-    
-    // Trigger file selection
-    fileInput?.click();
   };
   
   // Save new or updated item
@@ -662,6 +707,17 @@ const InventoryPage = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* CSV Import Preview Dialog */}
+        <CSVImportDialog
+          isOpen={isCSVImportDialogOpen}
+          onClose={() => {
+            setIsCSVImportDialogOpen(false);
+            setParsedCSVData(null);
+          }}
+          parsedData={parsedCSVData}
+          onConfirmImport={handleConfirmCSVImport}
+        />
       </div>
     </MainLayout>
   );
