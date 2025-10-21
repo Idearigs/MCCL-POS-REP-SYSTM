@@ -34,6 +34,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  downloadInventoryReport,
+  InventoryReportData,
+  InventoryReportItem
+} from '@/utils/inventoryReportGenerator';
 
 import InventoryItemComponent, { InventoryItemProps } from '@/components/inventory/InventoryItem';
 import InventoryDetail from '@/components/inventory/InventoryDetail';
@@ -179,73 +184,67 @@ const InventoryPage = () => {
     setIsDetailOpen(true);
   };
   
-  // Print inventory list
+  // Print inventory list as professional PDF
   const handlePrint = () => {
-    // Create a printable version of the inventory
-    const printContent = document.createElement('div');
-    printContent.innerHTML = `
-      <h1 style="text-align: center; margin-bottom: 20px;">Inventory Report</h1>
-      <p style="text-align: center; margin-bottom: 30px;">Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
-      <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-          <tr style="background-color: #f3f4f6;">
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: left;">Name</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: left;">SKU</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: left;">Category</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">Price</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">Cost</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">Quantity</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${filteredInventory.map(item => `
-            <tr>
-              <td style="padding: 10px; border: 1px solid #e5e7eb;">${item.name}</td>
-              <td style="padding: 10px; border: 1px solid #e5e7eb;">${item.sku}</td>
-              <td style="padding: 10px; border: 1px solid #e5e7eb;">${item.category}</td>
-              <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">£${item.price.toFixed(2)}</td>
-              <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">£${item.cost.toFixed(2)}</td>
-              <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">${item.quantity}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-      <div style="margin-top: 30px; text-align: right;">
-        <p><strong>Total Items:</strong> ${filteredInventory.length}</p>
-        <p><strong>Total Value:</strong> £${filteredInventory.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}</p>
-      </div>
-    `;
-    
-    // Create a new window for printing
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Inventory Report</title>
-            <style>
-              body { font-family: Arial, sans-serif; padding: 20px; }
-              @media print {
-                body { padding: 0; }
-              }
-            </style>
-          </head>
-          <body>
-            ${printContent.innerHTML}
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      
-      // Wait for content to load before printing
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
-      
+    try {
+      // Convert inventory items to report format
+      const reportItems: InventoryReportItem[] = filteredInventory.map(item => ({
+        id: item.id,
+        name: item.name,
+        sku: item.sku,
+        category: item.category,
+        categoryName: (item as any).categoryName || item.category,
+        supplier: item.supplier || '',
+        supplierName: (item as any).supplierName || item.supplier || '',
+        material: (item as any).material || '',
+        purity: (item as any).purity || '',
+        weight: (item as any).weight,
+        price: item.price,
+        cost: item.cost,
+        quantity: item.quantity,
+        threshold: item.threshold,
+        description: item.description || '',
+        location: item.location || '',
+        dateAdded: item.dateAdded,
+        lastRestocked: item.lastRestocked
+      }));
+
+      // Calculate statistics
+      const totalValue = filteredInventory.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const lowStockItems = filteredInventory.filter(item =>
+        item.quantity > 0 && item.quantity <= item.threshold
+      ).length;
+      const outOfStockItems = filteredInventory.filter(item => item.quantity <= 0).length;
+
+      // Prepare report data
+      const reportData: InventoryReportData = {
+        items: reportItems,
+        generatedDate: new Date().toLocaleString('en-GB', {
+          day: '2-digit',
+          month: 'long',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+        totalItems: filteredInventory.length,
+        totalValue: totalValue,
+        lowStockItems: lowStockItems,
+        outOfStockItems: outOfStockItems
+      };
+
+      // Generate and download professional PDF
+      downloadInventoryReport(reportData);
+
       toast({
-        title: "Print prepared",
-        description: "Inventory report has been sent to your printer.",
+        title: "Report Generated",
+        description: "Professional inventory report has been downloaded as PDF.",
+      });
+    } catch (error) {
+      console.error('Error generating inventory report:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate inventory report. Please try again.",
+        variant: "destructive",
       });
     }
   };

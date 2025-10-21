@@ -35,9 +35,12 @@ export interface Product {
   description?: string;
   sku: string;
   barcode?: string;
-  category: string;
+  category: string;  // Category ID
+  categoryName?: string;  // Category display name
   supplier?: string | { id: string; name: string };  // Can be string or object from backend
+  supplierName?: string;  // Supplier display name
   material: string;
+  purity?: string;  // For jewelry purity/karat
   weight?: number;
   dimensions?: string;
   location?: string;
@@ -119,11 +122,15 @@ const transformBackendToFrontend = (backendProduct: BackendProduct): Product => 
   description: backendProduct.description,
   sku: backendProduct.sku,
   barcode: backendProduct.barcode,
-  // Extract category ID from category object (backend returns {id, name})
+  // Store category ID for backend operations
   category: backendProduct.category?.id || backendProduct.categoryId || '',
-  // Use supplierName free-text field instead of supplier object
+  // Store category NAME for display
+  categoryName: backendProduct.category?.name || '',
+  // Store supplier info
   supplier: backendProduct.supplierName || '',
+  supplierName: backendProduct.supplierName || backendProduct.supplier?.name || '',
   material: backendProduct.material || '',
+  purity: (backendProduct as any).purity || undefined,
   weight: backendProduct.weight,
   dimensions: undefined, // Not available in backend
   location: backendProduct.location || '',
