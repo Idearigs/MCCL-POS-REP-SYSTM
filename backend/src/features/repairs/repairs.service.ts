@@ -40,7 +40,7 @@ export class RepairsService {
       const repairNumber = await this.generateRepairNumber(tenantId);
 
       // Validate customer exists
-      const customer = await this.prismaService.customer.findFirst({
+      const customer = await this.prismaService.customers.findFirst({
         where: { id: createRepairDto.customerId, tenantId },
       });
 
@@ -63,7 +63,7 @@ export class RepairsService {
         combinedNotes = combinedNotes ? `${combinedNotes}\n\nItems:\n${repairTypes.join('\n')}` : `Items:\n${repairTypes.join('\n')}`;
       }
 
-      const repair = await this.prismaService.repair.create({
+      const repair = await this.prismaService.repairs.create({
         data: {
           id: generateId(),
           repairNumber,
@@ -125,7 +125,7 @@ export class RepairsService {
     }
 
     const [data, total] = await Promise.all([
-      this.prismaService.repair.findMany({
+      this.prismaService.repairs.findMany({
         where,
         skip,
         take: limit,
@@ -135,7 +135,7 @@ export class RepairsService {
           users: true,
         },
       }),
-      this.prismaService.repair.count({ where }),
+      this.prismaService.repairs.count({ where }),
     ]);
 
     return {
@@ -152,7 +152,7 @@ export class RepairsService {
   }
 
   async findOne(id: string, tenantId: string): Promise<RepairResponseDto> {
-    const repair = await this.prismaService.repair.findFirst({
+    const repair = await this.prismaService.repairs.findFirst({
       where: { id, tenantId },
       include: {
         customers: true,
@@ -175,7 +175,7 @@ export class RepairsService {
     tenantId: string,
     userId: string,
   ): Promise<RepairResponseDto> {
-    const existingRepair = await this.prismaService.repair.findFirst({
+    const existingRepair = await this.prismaService.repairs.findFirst({
       where: { id, tenantId },
     });
 
@@ -183,7 +183,7 @@ export class RepairsService {
       throw new NotFoundException('Repair not found');
     }
 
-    const repair = await this.prismaService.repair.update({
+    const repair = await this.prismaService.repairs.update({
       where: { id },
       data: {
         status: updateRepairDto.status || existingRepair.status,
@@ -208,7 +208,7 @@ export class RepairsService {
 
     // Add status history entry
     if (updateRepairDto.status && updateRepairDto.status !== existingRepair.status) {
-      await this.prismaService.repairStatusHistory.create({
+      await this.prismaService.repair_status_history.create({
         data: {
           id: generateId(),
           repairId: id,
@@ -230,20 +230,20 @@ export class RepairsService {
       completedRepairs,
       overdueRepairs,
     ] = await Promise.all([
-      this.prismaService.repair.count({ where: { tenantId } }),
-      this.prismaService.repair.count({
+      this.prismaService.repairs.count({ where: { tenantId } }),
+      this.prismaService.repairs.count({
         where: {
           tenantId,
           status: { notIn: ['COMPLETED', 'COLLECTED', 'CANCELLED'] },
         },
       }),
-      this.prismaService.repair.count({
+      this.prismaService.repairs.count({
         where: {
           tenantId,
           status: { in: ['COMPLETED', 'COLLECTED'] },
         },
       }),
-      this.prismaService.repair.count({
+      this.prismaService.repairs.count({
         where: {
           tenantId,
           status: { notIn: ['COMPLETED', 'COLLECTED', 'CANCELLED'] },
@@ -272,7 +272,7 @@ export class RepairsService {
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
 
     // Find the highest repair number for this month to avoid duplicates
-    const lastRepair = await this.prismaService.repair.findFirst({
+    const lastRepair = await this.prismaService.repairs.findFirst({
       where: {
         tenantId,
         repairNumber: {
@@ -299,7 +299,7 @@ export class RepairsService {
   }
 
   async getOverdueRepairs(tenantId: string): Promise<RepairResponseDto[]> {
-    const repairs = await this.prismaService.repair.findMany({
+    const repairs = await this.prismaService.repairs.findMany({
       where: {
         tenantId,
         status: { notIn: ['COMPLETED', 'COLLECTED', 'CANCELLED'] },
@@ -321,7 +321,7 @@ export class RepairsService {
     userId: string,
   ): Promise<any> {
     // Add to status history instead of notes
-    return await this.prismaService.repairStatusHistory.create({
+    return await this.prismaService.repair_status_history.create({
       data: {
         id: generateId(),
         repairId: id,
@@ -339,7 +339,7 @@ export class RepairsService {
     tenantId: string,
     userId: string,
   ): Promise<RepairResponseDto> {
-    const repair = await this.prismaService.repair.update({
+    const repair = await this.prismaService.repairs.update({
       where: { id },
       data: {
         status: 'CANCELLED',
@@ -351,7 +351,7 @@ export class RepairsService {
     });
 
     // Add status history entry
-    await this.prismaService.repairStatusHistory.create({
+    await this.prismaService.repair_status_history.create({
       data: {
         id: generateId(),
         repairId: id,
@@ -373,7 +373,7 @@ export class RepairsService {
     userId: string,
     sendSMS: boolean = true,
   ): Promise<RepairResponseDto> {
-    const existingRepair = await this.prismaService.repair.findFirst({
+    const existingRepair = await this.prismaService.repairs.findFirst({
       where: { id, tenantId },
       include: {
         customers: true,
@@ -388,7 +388,7 @@ export class RepairsService {
     const oldStatus = existingRepair.status;
 
     // Update repair status
-    const updatedRepair = await this.prismaService.repair.update({
+    const updatedRepair = await this.prismaService.repairs.update({
       where: { id },
       data: {
         status: newStatus,
@@ -402,7 +402,7 @@ export class RepairsService {
     });
 
     // Add status history entry
-    await this.prismaService.repairStatusHistory.create({
+    await this.prismaService.repair_status_history.create({
       data: {
         id: generateId(),
         repairId: id,
@@ -435,7 +435,7 @@ export class RepairsService {
           this.logger.log(`✅ SMS notification sent to customer for repair ${existingRepair.repairNumber}`);
           
           // Log SMS in status history
-          await this.prismaService.repairStatusHistory.create({
+          await this.prismaService.repair_status_history.create({
             data: {
               id: generateId(),
               repairId: id,
@@ -468,7 +468,7 @@ export class RepairsService {
       this.logger.log(`Starting image upload for repair ${repairId}, ${files?.length || 0} files`);
 
       // Verify repair exists and user has access
-      const repair = await this.prismaService.repair.findFirst({
+      const repair = await this.prismaService.repairs.findFirst({
         where: { id: repairId, tenantId },
       });
 
@@ -503,7 +503,7 @@ export class RepairsService {
 
         if (uploadResult.success) {
           // Store image reference in database (repair_photos table)
-          await this.prismaService.repairPhoto.create({
+          await this.prismaService.repair_photos.create({
             data: {
               id: generateId(),
               repairId: repairId,
@@ -554,7 +554,7 @@ export class RepairsService {
 
   async getRepairImages(repairId: string, tenantId: string): Promise<any[]> {
     // Verify repair exists and user has access
-    const repair = await this.prismaService.repair.findFirst({
+    const repair = await this.prismaService.repairs.findFirst({
       where: { id: repairId, tenantId },
     });
 
@@ -563,7 +563,7 @@ export class RepairsService {
     }
 
     // Get images from repair_photos table
-    const images = await this.prismaService.repairPhoto.findMany({
+    const images = await this.prismaService.repair_photos.findMany({
       where: { repairId },
       orderBy: { createdAt: 'desc' },
     });
@@ -586,7 +586,7 @@ export class RepairsService {
     userId: string,
   ): Promise<{ success: boolean; message: string }> {
     // Verify repair exists and user has access
-    const repair = await this.prismaService.repair.findFirst({
+    const repair = await this.prismaService.repairs.findFirst({
       where: { id, tenantId },
       include: {
         repair_photos: true,
@@ -616,18 +616,18 @@ export class RepairsService {
         }
 
         // Delete photo records
-        await this.prismaService.repairPhoto.deleteMany({
+        await this.prismaService.repair_photos.deleteMany({
           where: { repairId: id },
         });
       }
 
       // Delete status history
-      await this.prismaService.repairStatusHistory.deleteMany({
+      await this.prismaService.repair_status_history.deleteMany({
         where: { repairId: id },
       });
 
       // Finally, delete the repair itself
-      await this.prismaService.repair.delete({
+      await this.prismaService.repairs.delete({
         where: { id },
       });
 
@@ -650,7 +650,7 @@ export class RepairsService {
     userId: string,
   ): Promise<boolean> {
     // Verify repair exists and user has access
-    const repair = await this.prismaService.repair.findFirst({
+    const repair = await this.prismaService.repairs.findFirst({
       where: { id: repairId, tenantId },
     });
 
@@ -659,7 +659,7 @@ export class RepairsService {
     }
 
     // Get image from repair_photos table
-    const image = await this.prismaService.repairPhoto.findFirst({
+    const image = await this.prismaService.repair_photos.findFirst({
       where: { id: imageId, repairId },
     });
 
@@ -678,7 +678,7 @@ export class RepairsService {
       }
 
       // Delete from database
-      await this.prismaService.repairPhoto.delete({
+      await this.prismaService.repair_photos.delete({
         where: { id: imageId }
       });
 

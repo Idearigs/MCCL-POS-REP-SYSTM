@@ -46,7 +46,7 @@ export class ProductsService {
   ): Promise<ProductResponseDto> {
     try {
       // Check if product with same SKU already exists in tenant (only check active products)
-      const existingProduct = await this.prismaService.product.findFirst({
+      const existingProduct = await this.prismaService.products.findFirst({
         where: {
           sku: createProductDto.sku,
           tenantId,
@@ -60,7 +60,7 @@ export class ProductsService {
 
       // Check if barcode already exists (if provided) - only check active products
       if (createProductDto.barcode) {
-        const existingBarcode = await this.prismaService.product.findFirst({
+        const existingBarcode = await this.prismaService.products.findFirst({
           where: {
             barcode: createProductDto.barcode,
             tenantId,
@@ -75,7 +75,7 @@ export class ProductsService {
 
       // Validate category exists (if provided)
       if (createProductDto.categoryId) {
-        const category = await this.prismaService.category.findFirst({
+        const category = await this.prismaService.categories.findFirst({
           where: { id: createProductDto.categoryId, tenantId },
         });
         if (!category) {
@@ -86,7 +86,7 @@ export class ProductsService {
 
       // Validate supplier exists (if provided)
       if (createProductDto.supplierId) {
-        const supplier = await this.prismaService.supplier.findFirst({
+        const supplier = await this.prismaService.suppliers.findFirst({
           where: { id: createProductDto.supplierId, tenantId },
         });
         if (!supplier) {
@@ -95,7 +95,7 @@ export class ProductsService {
       }
 
       // Create product
-      const product = await this.prismaService.product.create({
+      const product = await this.prismaService.products.create({
         data: {
           id: generateId(),
           ...createProductDto,
@@ -173,7 +173,7 @@ export class ProductsService {
       const skip = (page - 1) * limit;
 
       // Build where clause
-      const where: Prisma.ProductWhereInput = {
+      const where: Prisma.productsWhereInput = {
         tenantId,
         ...(isActive !== undefined && { isActive }),
         ...(isDamaged !== undefined && { isDamaged }),
@@ -211,7 +211,7 @@ export class ProductsService {
 
       // Get products and total count
       const [products, total] = await Promise.all([
-        this.prismaService.product.findMany({
+        this.prismaService.products.findMany({
           where,
           skip,
           take: limit,
@@ -234,7 +234,7 @@ export class ProductsService {
             },
           },
         }),
-        this.prismaService.product.count({ where }),
+        this.prismaService.products.count({ where }),
       ]);
 
       const result = new PaginatedResponseDto(
@@ -270,7 +270,7 @@ export class ProductsService {
         return cachedProduct;
       }
 
-      const product = await this.prismaService.product.findFirst({
+      const product = await this.prismaService.products.findFirst({
         where: { id, tenantId },
         include: {
           categories: { select: { id: true, name: true } },
@@ -318,7 +318,7 @@ export class ProductsService {
   ): Promise<ProductResponseDto> {
     try {
       // Check if product exists
-      const existingProduct = await this.prismaService.product.findFirst({
+      const existingProduct = await this.prismaService.products.findFirst({
         where: { id, tenantId },
       });
 
@@ -328,7 +328,7 @@ export class ProductsService {
 
       // Check SKU conflicts (if SKU is being updated) - only check active products
       if (updateProductDto.sku && updateProductDto.sku !== existingProduct.sku) {
-        const skuConflict = await this.prismaService.product.findFirst({
+        const skuConflict = await this.prismaService.products.findFirst({
           where: {
             sku: updateProductDto.sku,
             tenantId,
@@ -344,7 +344,7 @@ export class ProductsService {
 
       // Check barcode conflicts (if barcode is being updated) - only check active products
       if (updateProductDto.barcode && updateProductDto.barcode !== existingProduct.barcode) {
-        const barcodeConflict = await this.prismaService.product.findFirst({
+        const barcodeConflict = await this.prismaService.products.findFirst({
           where: {
             barcode: updateProductDto.barcode,
             tenantId,
@@ -365,7 +365,7 @@ export class ProductsService {
         stockChanged = true;
       }
 
-      const product = await this.prismaService.product.update({
+      const product = await this.prismaService.products.update({
         where: { id },
         data: {
           ...updateProductDto,
@@ -421,7 +421,7 @@ export class ProductsService {
    */
   async remove(id: string, tenantId: string, userId?: string): Promise<void> {
     try {
-      const product = await this.prismaService.product.findFirst({
+      const product = await this.prismaService.products.findFirst({
         where: { id, tenantId },
       });
 
@@ -431,7 +431,7 @@ export class ProductsService {
 
       // Soft delete by setting isActive to false and modifying SKU to avoid unique constraint violation
       // The unique constraint is on (tenantId, sku, isActive)
-      await this.prismaService.product.update({
+      await this.prismaService.products.update({
         where: { id },
         data: {
           isActive: false,
@@ -461,7 +461,7 @@ export class ProductsService {
     userId: string,
   ): Promise<ProductResponseDto> {
     try {
-      const product = await this.prismaService.product.findFirst({
+      const product = await this.prismaService.products.findFirst({
         where: { id, tenantId },
       });
 
@@ -477,7 +477,7 @@ export class ProductsService {
       }
 
       // Update product stock
-      const updatedProduct = await this.prismaService.product.update({
+      const updatedProduct = await this.prismaService.products.update({
         where: { id },
         data: { stockQuantity: newQuantity },
         include: {
@@ -540,7 +540,7 @@ export class ProductsService {
    */
   async getCategories(tenantId: string): Promise<string[]> {
     try {
-      const categories = await this.prismaService.category.findMany({
+      const categories = await this.prismaService.categories.findMany({
         where: { tenantId, isActive: true },
         select: { name: true },
         orderBy: { name: 'asc' }
@@ -557,7 +557,7 @@ export class ProductsService {
    */
   async getMaterials(tenantId: string): Promise<string[]> {
     try {
-      const materials = await this.prismaService.product.findMany({
+      const materials = await this.prismaService.products.findMany({
         where: { tenantId, isActive: true, material: { not: null } },
         select: { material: true },
         distinct: ['material'],
@@ -580,7 +580,7 @@ export class ProductsService {
       const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
 
       // Find the highest sequence number for today
-      const existingProducts = await this.prismaService.product.findMany({
+      const existingProducts = await this.prismaService.products.findMany({
         where: {
           tenantId,
           isActive: true,
@@ -640,7 +640,7 @@ export class ProductsService {
 
       for (const update of bulkUpdateDto.updates) {
         try {
-          await this.prismaService.product.update({
+          await this.prismaService.products.update({
             where: { id: update.productId, tenantId },
             data: { stockQuantity: update.newStock }
           });
@@ -689,7 +689,7 @@ export class ProductsService {
         return cachedResult;
       }
 
-      const products = await this.prismaService.product.findMany({
+      const products = await this.prismaService.products.findMany({
         where: {
           tenantId,
           isActive: true,
@@ -751,15 +751,15 @@ export class ProductsService {
         materialStats,
         categoryStats,
       ] = await Promise.all([
-        this.prismaService.product.count({ where: { tenantId } }),
-        this.prismaService.product.count({ where: { tenantId, isActive: true } }),
-        this.prismaService.product.count({ where: { tenantId, isDamaged: true } }),
+        this.prismaService.products.count({ where: { tenantId } }),
+        this.prismaService.products.count({ where: { tenantId, isActive: true } }),
+        this.prismaService.products.count({ where: { tenantId, isDamaged: true } }),
         // Low stock count - we'll calculate this differently
         0,
-        this.prismaService.product.count({
+        this.prismaService.products.count({
           where: { tenantId, isActive: true, stockQuantity: 0 },
         }),
-        this.prismaService.product.aggregate({
+        this.prismaService.products.aggregate({
           where: { tenantId, isActive: true },
           _sum: {
             sellingPrice: true,
@@ -770,7 +770,7 @@ export class ProductsService {
       ]);
 
       // Calculate low stock products properly
-      const allActiveProducts = await this.prismaService.product.findMany({
+      const allActiveProducts = await this.prismaService.products.findMany({
         where: { tenantId, isActive: true },
         select: { stockQuantity: true, minStockLevel: true }
       });
@@ -809,7 +809,7 @@ export class ProductsService {
     tenantId: string,
   ): Promise<any> {
     try {
-      const category = await this.prismaService.category.create({
+      const category = await this.prismaService.categories.create({
         data: {
           id: generateId(),
           ...createCategoryDto,
@@ -837,7 +837,7 @@ export class ProductsService {
     tenantId: string,
   ): Promise<any> {
     try {
-      const supplier = await this.prismaService.supplier.create({
+      const supplier = await this.prismaService.suppliers.create({
         data: {
           id: generateId(),
           ...createSupplierDto,
@@ -861,7 +861,7 @@ export class ProductsService {
    * Find product by barcode
    */
   async findByBarcode(barcode: string, tenantId: string): Promise<ProductResponseDto> {
-    const product = await this.prismaService.product.findFirst({
+    const product = await this.prismaService.products.findFirst({
       where: { barcode, tenantId, isActive: true },
       include: {
         categories: { select: { id: true, name: true } },
@@ -881,7 +881,7 @@ export class ProductsService {
    * Find product by SKU
    */
   async findBySku(sku: string, tenantId: string): Promise<ProductResponseDto> {
-    const product = await this.prismaService.product.findFirst({
+    const product = await this.prismaService.products.findFirst({
       where: { sku, tenantId, isActive: true },
       include: {
         categories: { select: { id: true, name: true } },
@@ -903,7 +903,7 @@ export class ProductsService {
   async uploadImage(id: string, file: any, tenantId: string, userId?: string): Promise<{ imageUrl: string; imageId: string }> {
     try {
       // 1. Verify product exists
-      const product = await this.prismaService.product.findFirst({
+      const product = await this.prismaService.products.findFirst({
         where: { id, tenantId },
       });
 
@@ -938,7 +938,7 @@ export class ProductsService {
       }
 
       // 4. Save image record to database
-      const productImage = await this.prismaService.productImage.create({
+      const productImage = await this.prismaService.product_images.create({
         data: {
           id: generateId(),
           productId: id,
@@ -973,7 +973,7 @@ export class ProductsService {
    * Restore product (undelete)
    */
   async restore(id: string, tenantId: string, userId?: string): Promise<ProductResponseDto> {
-    const product = await this.prismaService.product.update({
+    const product = await this.prismaService.products.update({
       where: { id, tenantId },
       data: { isActive: true },
       include: {
@@ -991,7 +991,7 @@ export class ProductsService {
    */
   async getInventoryLogs(productId: string, tenantId: string): Promise<any[]> {
     try {
-      const logs = await this.prismaService.inventoryLog.findMany({
+      const logs = await this.prismaService.inventory_logs.findMany({
         where: {
           productId,
           tenantId,
@@ -1020,7 +1020,7 @@ export class ProductsService {
     reason?: string,
     reference?: string,
   ): Promise<void> {
-    await this.prismaService.inventoryLog.create({
+    await this.prismaService.inventory_logs.create({
       data: {
         id: generateId(),
         tenantId,
@@ -1039,7 +1039,7 @@ export class ProductsService {
    * Private: Get products by material
    */
   private async getProductsByMaterial(tenantId: string): Promise<Record<string, number>> {
-    const results = await this.prismaService.product.groupBy({
+    const results = await this.prismaService.products.groupBy({
       by: ['material'],
       where: { tenantId, isActive: true },
       _count: { material: true },
@@ -1059,7 +1059,7 @@ export class ProductsService {
    * Private: Get products by category
    */
   private async getProductsByCategory(tenantId: string): Promise<Record<string, number>> {
-    const results = await this.prismaService.product.findMany({
+    const results = await this.prismaService.products.findMany({
       where: { tenantId, isActive: true },
       include: {
         categories: { select: { name: true } },
