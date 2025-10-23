@@ -11,7 +11,12 @@ import {
   AlertTriangle,
   Printer,
   Upload,
-  Download
+  Download,
+  LayoutGrid,
+  List,
+  Eye,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useInventory, InventoryItem } from '@/contexts/InventoryContext';
@@ -35,6 +40,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
   downloadInventoryReport,
   InventoryReportData,
   InventoryReportItem
@@ -53,7 +66,7 @@ import InventoryFilter from '@/components/inventory/InventoryFilter';
 
 const InventoryPage = () => {
   const { inventory, updateItem, addItem, deleteItem, refreshInventory } = useInventory();
-  const availableCategories = Array.from(new Set(inventory.map(item => item.category)));
+  const availableCategories = Array.from(new Set(inventory.map(item => (item as any).categoryName || item.category).filter(Boolean)));
 
   const [filteredInventory, setFilteredInventory] = useState<InventoryItem[]>(inventory);
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,6 +80,7 @@ const InventoryPage = () => {
   const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null);
   const [parsedCSVData, setParsedCSVData] = useState<ParsedCSVData | null>(null);
   const [isCSVImportDialogOpen, setIsCSVImportDialogOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const { toast } = useToast();
   
   // Set isLoaded to true after component mounts to prevent initial render issues
@@ -82,10 +96,10 @@ const InventoryPage = () => {
     // Apply search
     if (searchTerm) {
       const lowercaseQuery = searchTerm.toLowerCase();
-      result = result.filter(item => 
-        item.name.toLowerCase().includes(lowercaseQuery) || 
-        item.sku.toLowerCase().includes(lowercaseQuery) || 
-        item.category.toLowerCase().includes(lowercaseQuery) ||
+      result = result.filter(item =>
+        item.name.toLowerCase().includes(lowercaseQuery) ||
+        item.sku.toLowerCase().includes(lowercaseQuery) ||
+        ((item as any).categoryName || item.category).toLowerCase().includes(lowercaseQuery) ||
         (item.description && item.description.toLowerCase().includes(lowercaseQuery))
       );
     }
@@ -94,7 +108,7 @@ const InventoryPage = () => {
     if (filters) {
       // Filter by categories
       if (filters.categories.length > 0) {
-        result = result.filter(item => filters.categories.includes(item.category));
+        result = result.filter(item => filters.categories.includes((item as any).categoryName || item.category));
       }
       
       // Filter by price range
@@ -584,6 +598,27 @@ const InventoryPage = () => {
             />
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center bg-white/90 rounded-full border border-navy/10 shadow-sm">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+                className={`rounded-l-full ${viewMode === 'grid' ? 'bg-navy text-white hover:bg-navy-dark' : 'text-navy hover:bg-navy/5'}`}
+              >
+                <LayoutGrid size={16} className="mr-2" />
+                Grid
+              </Button>
+              <Button
+                variant={viewMode === 'table' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('table')}
+                className={`rounded-r-full ${viewMode === 'table' ? 'bg-navy text-white hover:bg-navy-dark' : 'text-navy hover:bg-navy/5'}`}
+              >
+                <List size={16} className="mr-2" />
+                Table
+              </Button>
+            </div>
+
             <div className="flex items-center gap-2">
               <Select value={sortBy} onValueChange={handleSortChange}>
                 <SelectTrigger className="w-[130px] h-8 bg-white/90 backdrop-blur-sm border border-navy/10 rounded-xl shadow-sm hover:border-navy/20 text-navy">
@@ -653,27 +688,122 @@ const InventoryPage = () => {
           </div>
         </div>
 
-        {/* Inventory grid */}
+        {/* Inventory grid/table */}
         {filteredInventory.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredInventory.map((item) => (
-              <InventoryItemComponent
-                key={item.id}
-                id={item.id}
-                name={item.name}
-                sku={item.sku}
-                category={item.category}
-                price={item.price}
-                cost={item.cost}
-                quantity={item.quantity}
-                threshold={item.threshold}
-                imageUrl={item.imageUrl}
-                onEdit={handleEditItem}
-                onDelete={handleDeleteItem}
-                className="bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-all duration-200"
-              />
-            ))}
-          </div>
+          viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredInventory.map((item) => (
+                <InventoryItemComponent
+                  key={item.id}
+                  id={item.id}
+                  name={item.name}
+                  sku={item.sku}
+                  category={(item as any).categoryName || item.category}
+                  price={item.price}
+                  cost={item.cost}
+                  quantity={item.quantity}
+                  threshold={item.threshold}
+                  imageUrl={item.imageUrl}
+                  onEdit={handleEditItem}
+                  onDelete={handleDeleteItem}
+                  className="bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-all duration-200"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-sm border border-navy/10 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-navy/5">
+                    <TableHead className="font-semibold text-navy">Name</TableHead>
+                    <TableHead className="font-semibold text-navy">SKU</TableHead>
+                    <TableHead className="font-semibold text-navy">Category</TableHead>
+                    <TableHead className="font-semibold text-navy">Price</TableHead>
+                    <TableHead className="font-semibold text-navy">Cost</TableHead>
+                    <TableHead className="font-semibold text-navy">Quantity</TableHead>
+                    <TableHead className="font-semibold text-navy">Status</TableHead>
+                    <TableHead className="font-semibold text-navy text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredInventory.map((item) => {
+                    const stockStatus = item.quantity <= 0
+                      ? 'Out of Stock'
+                      : item.quantity <= item.threshold
+                      ? 'Low Stock'
+                      : 'In Stock';
+                    const statusColor = item.quantity <= 0
+                      ? 'text-red-600'
+                      : item.quantity <= item.threshold
+                      ? 'text-amber-600'
+                      : 'text-green-600';
+
+                    return (
+                      <TableRow
+                        key={item.id}
+                        className="cursor-pointer hover:bg-navy/5 transition-colors"
+                        onClick={() => handleEditItem(item.id)}
+                      >
+                        <TableCell className="font-medium text-navy">{item.name}</TableCell>
+                        <TableCell className="text-sm text-gray-600">{item.sku}</TableCell>
+                        <TableCell className="text-sm text-gray-600">{(item as any).categoryName || item.category}</TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          £{item.price.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          £{item.cost?.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600">{item.quantity}</TableCell>
+                        <TableCell className={`text-sm font-medium ${statusColor}`}>
+                          {stockStatus}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditItem(item.id);
+                              }}
+                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              title="View Details"
+                            >
+                              <Eye size={16} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditItem(item.id);
+                              }}
+                              className="text-navy hover:text-navy-dark hover:bg-navy/10"
+                              title="Edit Product"
+                            >
+                              <Edit size={16} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteItem(item.id);
+                              }}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              title="Delete Product"
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )
         ) : (
           <div className="text-center py-10 bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg border border-navy/10 rounded-xl shadow-sm p-8">
             <Package size={32} className="mx-auto text-navy/30 mb-2" />

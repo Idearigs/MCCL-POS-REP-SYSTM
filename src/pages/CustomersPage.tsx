@@ -3,22 +3,43 @@ import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Plus, Filter } from 'lucide-react';
+import { Search, Plus, Filter, LayoutGrid, List, Trash2, Mail, Phone, MapPin, Eye, Edit } from 'lucide-react';
 import CustomerCard from '@/components/customers/CustomerCard';
 import CustomerDetail from '@/components/customers/CustomerDetail';
 import AddCustomerForm from '@/components/customers/AddCustomerForm';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { useCustomers, Customer } from '@/contexts/CustomerContext';
 
 
 
 const CustomersPage = () => {
-  const { customers, loading, error, updateCustomer, refreshCustomers } = useCustomers();
+  const { customers, loading, error, updateCustomer, deleteCustomer, refreshCustomers } = useCustomers();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
   // Filter customers based on search query
@@ -40,6 +61,29 @@ const CustomersPage = () => {
     setIsAddingCustomer(true);
   };
 
+  const handleDeleteCustomer = async () => {
+    if (!customerToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteCustomer(customerToDelete.id);
+      toast({
+        title: "Customer Deleted",
+        description: `${customerToDelete.name} has been removed successfully.`
+      });
+      setCustomerToDelete(null);
+    } catch (error: any) {
+      console.error('Failed to delete customer:', error);
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Failed to delete customer. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Note: Customers are automatically loaded by CustomerContext on mount
   // No need to manually call refreshCustomers here
 
@@ -57,15 +101,35 @@ const CustomersPage = () => {
             />
           </div>
           <div className="flex items-center gap-3">
-            <Button 
-              variant="outline" 
+            <div className="flex items-center bg-white/90 rounded-full border border-navy/10 shadow-sm">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+                className={`rounded-l-full ${viewMode === 'grid' ? 'bg-navy text-white hover:bg-navy-dark' : 'text-navy hover:bg-navy/5'}`}
+              >
+                <LayoutGrid size={16} className="mr-2" />
+                Grid
+              </Button>
+              <Button
+                variant={viewMode === 'table' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('table')}
+                className={`rounded-r-full ${viewMode === 'table' ? 'bg-navy text-white hover:bg-navy-dark' : 'text-navy hover:bg-navy/5'}`}
+              >
+                <List size={16} className="mr-2" />
+                Table
+              </Button>
+            </div>
+            <Button
+              variant="outline"
               size="sm"
               className="rounded-full bg-white/90 border-navy/10 hover:bg-navy/5 text-navy hover:text-navy shadow-sm"
             >
               <Filter size={16} className="mr-2" />
               Filter
             </Button>
-            <Button 
+            <Button
               onClick={handleAddCustomer}
               className="rounded-full bg-navy hover:bg-navy-dark text-white shadow-sm"
             >
@@ -97,20 +161,128 @@ const CustomersPage = () => {
             </div>
           </div>
         ) : filteredCustomers.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredCustomers.map((customer) => (
-              <CustomerCard 
-                key={customer.id}
-                id={customer.id}
-                name={customer.name}
-                email={customer.email}
-                phone={customer.phone}
-                since={customer.since}
-                marketingConsent={customer.marketingConsent}
-                onClick={handleCustomerClick}
-              />
-            ))}
-          </div>
+          viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredCustomers.map((customer) => (
+                <CustomerCard
+                  key={customer.id}
+                  id={customer.id}
+                  name={customer.name}
+                  email={customer.email}
+                  phone={customer.phone}
+                  since={customer.since}
+                  marketingConsent={customer.marketingConsent}
+                  onClick={handleCustomerClick}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-sm border border-navy/10 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-navy/5">
+                    <TableHead className="font-semibold text-navy">Name</TableHead>
+                    <TableHead className="font-semibold text-navy">Email</TableHead>
+                    <TableHead className="font-semibold text-navy">Phone</TableHead>
+                    <TableHead className="font-semibold text-navy">Location</TableHead>
+                    <TableHead className="font-semibold text-navy">Since</TableHead>
+                    <TableHead className="font-semibold text-navy text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCustomers.map((customer) => (
+                    <TableRow
+                      key={customer.id}
+                      className="cursor-pointer hover:bg-navy/5 transition-colors"
+                      onClick={() => handleCustomerClick(customer.id)}
+                    >
+                      <TableCell className="font-medium text-navy">
+                        {customer.name || `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        {customer.email ? (
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Mail size={14} className="text-navy/50" />
+                            <span className="text-sm">{customer.email}</span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-sm">No email</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {customer.phone ? (
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Phone size={14} className="text-navy/50" />
+                            <span className="text-sm">{customer.phone}</span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-sm">No phone</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {customer.city || customer.country ? (
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <MapPin size={14} className="text-navy/50" />
+                            <span className="text-sm">
+                              {[customer.city, customer.country].filter(Boolean).join(', ')}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-sm">N/A</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600">
+                        {customer.createdAt
+                          ? new Date(customer.createdAt).toLocaleDateString()
+                          : 'N/A'
+                        }
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCustomerClick(customer.id);
+                            }}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            title="View Details"
+                          >
+                            <Eye size={16} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCustomerClick(customer.id);
+                            }}
+                            className="text-navy hover:text-navy-dark hover:bg-navy/10"
+                            title="Edit Customer"
+                          >
+                            <Edit size={16} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCustomerToDelete(customer);
+                            }}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            title="Delete Customer"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )
         ) : (
           <div className="flex items-center justify-center h-40 border border-gray-100 rounded-xl bg-white/50 backdrop-blur-sm">
             <div className="text-center">
@@ -156,7 +328,7 @@ const CustomersPage = () => {
 
         <Dialog open={isAddingCustomer} onOpenChange={setIsAddingCustomer}>
           {isAddingCustomer && (
-            <AddCustomerForm 
+            <AddCustomerForm
               onClose={() => setIsAddingCustomer(false)}
               onSuccess={(customer) => {
                 setSearchQuery('');
@@ -168,6 +340,28 @@ const CustomersPage = () => {
             />
           )}
         </Dialog>
+
+        <AlertDialog open={!!customerToDelete} onOpenChange={(open) => !open && setCustomerToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Customer</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <span className="font-semibold">{customerToDelete?.name}</span>?
+                This action cannot be undone and will permanently remove this customer and all associated data.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteCustomer}
+                disabled={isDeleting}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </MainLayout>
   );
