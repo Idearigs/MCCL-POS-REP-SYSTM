@@ -274,9 +274,9 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
     setError(null);
     try {
       await productService.adjustStock(id, {
+        type: 'ADJUSTMENT',
         quantity: change,
-        reason: change > 0 ? 'Stock increase' : 'Stock decrease',
-        notes: `Manual adjustment: ${change > 0 ? '+' : ''}${change}`
+        reason: `Manual adjustment: ${change > 0 ? '+' : ''}${change}`
       });
       
       // Update local state

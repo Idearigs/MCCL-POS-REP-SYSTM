@@ -27,6 +27,11 @@ import ProfilePage from "./pages/ProfilePage";
 import NotificationsPage from "./pages/NotificationsPage";
 import ApiTestPage from "./components/ApiTestPage";
 import AdminManagement from "./pages/AdminManagement";
+import SalesPage from "./pages/SalesPage";
+import CashiersPage from "./pages/CashiersPage";
+import PWAInstallPrompt from "./components/pwa/PWAInstallPrompt";
+import OfflineIndicator from "./components/pwa/OfflineIndicator";
+import PWAUpdateNotifier from "./components/pwa/PWAUpdateNotifier";
 
 // Create a client for React Query
 const queryClient = new QueryClient();
@@ -53,11 +58,15 @@ const App = () => (
             <TooltipProvider>
               <Toaster />
               <Sonner />
+              {/* PWA Components */}
+              <PWAInstallPrompt />
+              <OfflineIndicator />
+              <PWAUpdateNotifier />
               <PageTransition>
                 <Routes>
                   {/* Public routes */}
                   <Route path="/login" element={<Login />} />
-                  
+
                   {/* Protected routes - require authentication */}
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/dashboard" element={<PrivateRoute><Index /></PrivateRoute>} />
@@ -65,6 +74,8 @@ const App = () => (
                   <Route path="/repairs" element={<PrivateRoute><RepairsPage /></PrivateRoute>} />
                   <Route path="/customers" element={<PrivateRoute><CustomersPage /></PrivateRoute>} />
                   <Route path="/inventory" element={<PrivateRoute><InventoryPage /></PrivateRoute>} />
+                  <Route path="/sales" element={<PrivateRoute><SalesPage /></PrivateRoute>} />
+                  <Route path="/cashiers" element={<PrivateRoute><CashiersPage /></PrivateRoute>} />
                   <Route path="/calendar" element={<PrivateRoute><CalendarPage /></PrivateRoute>} />
                   <Route path="/history" element={<PrivateRoute><HistoryPage /></PrivateRoute>} />
                   <Route path="/search" element={<PrivateRoute><SearchPage /></PrivateRoute>} />
@@ -74,7 +85,7 @@ const App = () => (
                   <Route path="/notifications" element={<PrivateRoute><NotificationsPage /></PrivateRoute>} />
                   <Route path="/api-test" element={<PrivateRoute><ApiTestPage /></PrivateRoute>} />
                   <Route path="/admin" element={<PrivateRoute><AdminManagement /></PrivateRoute>} />
-                  
+
                   {/* Catch-all route */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>

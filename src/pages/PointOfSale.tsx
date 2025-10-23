@@ -259,7 +259,7 @@ const PointOfSale = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   // Filter products based on search query, search type, category, subcategory, and advanced filters
-  const filteredProducts = products.filter(product => {
+  const allFilteredProducts = products.filter(product => {
     // Match search query based on search type
     let matchesSearch = true;
     if (searchQuery) {
@@ -276,24 +276,24 @@ const PointOfSale = () => {
           break;
       }
     }
-    
+
     // Match category and subcategory from tabs
     const matchesCategory = activeCategory ? product.category === activeCategory : true;
     const matchesSubcategory = activeSubcategory ? product.subcategory === activeSubcategory : true;
-    
+
     // Match advanced filters
     let matchesAdvancedFilters = true;
-    
+
     // Filter by categories
     if (filters.categories.length > 0) {
       matchesAdvancedFilters = matchesAdvancedFilters && filters.categories.includes(product.category);
     }
-    
+
     // Filter by materials
     if (filters.materials.length > 0) {
       matchesAdvancedFilters = matchesAdvancedFilters && filters.materials.includes(product.subcategory);
     }
-    
+
     // Filter by price range
     if (filters.minPrice !== null) {
       matchesAdvancedFilters = matchesAdvancedFilters && product.price >= filters.minPrice;
@@ -301,18 +301,23 @@ const PointOfSale = () => {
     if (filters.maxPrice !== null) {
       matchesAdvancedFilters = matchesAdvancedFilters && product.price <= filters.maxPrice;
     }
-    
+
     // Filter by stock status
     const isOutOfStock = product.stock <= 0;
     const isLowStock = product.stock > 0 && product.stock <= 5; // Assuming 5 is the threshold
     const isInStock = product.stock > 5;
-    
+
     if (isOutOfStock && !filters.stockStatus.outOfStock) matchesAdvancedFilters = false;
     if (isLowStock && !filters.stockStatus.lowStock) matchesAdvancedFilters = false;
     if (isInStock && !filters.stockStatus.inStock) matchesAdvancedFilters = false;
-    
+
     return matchesSearch && matchesCategory && matchesSubcategory && matchesAdvancedFilters;
   });
+
+  // Limit to 4 products when no search query
+  const hasSearch = searchQuery.trim().length > 0;
+  const filteredProducts = hasSearch ? allFilteredProducts : allFilteredProducts.slice(0, 4);
+  const totalProducts = allFilteredProducts.length;
 
   // Get unique categories and subcategories for filter buttons
   const categories = Array.from(new Set(products.map(product => product.category)));
@@ -469,96 +474,116 @@ const PointOfSale = () => {
 
   return (
     <MainLayout pageTitle="Point of Sale">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
-        {/* Left Column: Product Search & Catalog (40% width) */}
-        <div className="lg:col-span-5 flex flex-col h-full bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-lg font-semibold mb-4 flex items-center text-gray-800">
-            <Package size={18} className="mr-2 text-gray-600" />
-            Products
-          </h2>
-          
-          {/* Advanced Search */}
-          <div className="mb-4">
-            <div className="flex gap-2 mb-2">
-              <Select value={searchType} onValueChange={(value) => setSearchType(value as any)}>
-                <SelectTrigger className="w-[110px] bg-white/80 border border-gray-200 rounded-lg shadow-sm">
-                  <SelectValue placeholder="Search by" />
-                </SelectTrigger>
-                <SelectContent className="bg-white/90 backdrop-blur-lg border border-gray-200 rounded-lg shadow-md">
-                  <SelectItem value="name">Name</SelectItem>
-                  <SelectItem value="sku">SKU</SelectItem>
-                  <SelectItem value="barcode">Barcode</SelectItem>
-                </SelectContent>
-              </Select>
-              
-              <div className="relative flex-1">
-                {searchType === 'barcode' ? (
-                  <Barcode className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                ) : (
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                )}
-                <Input 
-                  placeholder={`Search by ${searchType}...`} 
-                  className="pl-10 bg-white/80 border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-gray-200 focus:border-transparent" 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+      <div className="fixed left-[240px] right-0 top-[72px] bottom-0 overflow-hidden px-6 py-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
+          {/* Left Column: Product Search & Catalog (40% width) */}
+          <div className="lg:col-span-5 flex flex-col bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg rounded-xl border border-gray-100 shadow-sm p-5 h-full overflow-hidden">
+            <h2 className="text-lg font-semibold mb-4 flex items-center text-gray-800 flex-shrink-0">
+              <Package size={18} className="mr-2 text-gray-600" />
+              Products
+            </h2>
+
+            {/* Advanced Search */}
+            <div className="mb-4 flex-shrink-0">
+              <div className="flex gap-2 mb-2">
+                <Select value={searchType} onValueChange={(value) => setSearchType(value as any)}>
+                  <SelectTrigger className="w-[110px] bg-white/80 border border-gray-200 rounded-lg shadow-sm">
+                    <SelectValue placeholder="Search by" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white/90 backdrop-blur-lg border border-gray-200 rounded-lg shadow-md">
+                    <SelectItem value="name">Name</SelectItem>
+                    <SelectItem value="sku">SKU</SelectItem>
+                    <SelectItem value="barcode">Barcode</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <div className="relative flex-1">
+                  {searchType === 'barcode' ? (
+                    <Barcode className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                  ) : (
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                  )}
+                  <Input
+                    placeholder={`Search by ${searchType}...`}
+                    className="pl-10 bg-white/80 border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-gray-200 focus:border-transparent"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setIsFilterDialogOpen(true)}
+                  className="bg-white/80 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-100/80"
+                >
+                  <Filter size={16} className="text-gray-600" />
+                </Button>
               </div>
-              
-              <Button 
-                variant="outline" 
-                size="icon" 
-                onClick={() => setIsFilterDialogOpen(true)}
-                className="bg-white/80 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-100/80"
-              >
-                <Filter size={16} className="text-gray-600" />
-              </Button>
             </div>
-          </div>
           
           {/* Removed Category and Subcategory Filters */}
-          
-          {/* Products Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-y-auto flex-1 pb-4 pr-1">
+
+          {/* Product Count Information */}
+          {!hasSearch && totalProducts > 4 && (
+            <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex-shrink-0">
+              <p className="text-sm text-blue-700">
+                <span className="font-medium">Showing 4 of {totalProducts} products.</span>
+                {" "}Use the search bar above to find specific products.
+              </p>
+            </div>
+          )}
+
+          {hasSearch && totalProducts > 0 && (
+            <div className="mb-3 p-2 bg-gray-50 border border-gray-200 rounded-lg flex-shrink-0">
+              <p className="text-sm text-gray-600">
+                Found {totalProducts} product{totalProducts !== 1 ? 's' : ''}
+              </p>
+            </div>
+          )}
+
+          {/* Products Grid - Scrollable */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-y-auto flex-1 pb-4 pr-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100" style={{ minHeight: '200px' }}>
             {filteredProducts.length > 0 ? (
               filteredProducts.map(product => (
-                <ProductCard 
-                  key={product.id}
-                  id={product.id}
-                  name={product.name}
-                  price={product.price}
-                  category={product.category}
-                  image={product.image}
-                  stock={product.stock}
-                  sku={product.sku}
-                  barcode={product.barcode}
-                  karat={product.karat}
-                  weight={product.weight}
-                  onAddToCart={handleAddToCart}
-                  onEdit={handleEditProduct}
-                  onDelete={handleDeleteProduct}
-                />
+                <div key={product.id} className="h-fit">
+                  <ProductCard
+                    id={product.id}
+                    name={product.name}
+                    price={product.price}
+                    category={product.category}
+                    image={product.image}
+                    stock={product.stock}
+                    sku={product.sku}
+                    barcode={product.barcode}
+                    karat={product.karat}
+                    weight={product.weight}
+                    onAddToCart={handleAddToCart}
+                  />
+                </div>
               ))
             ) : (
               <div className="col-span-full flex items-center justify-center h-32 bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg rounded-xl border border-gray-100 shadow-sm">
-                <p className="text-gray-400">No products found</p>
+                <p className="text-gray-400">
+                  {hasSearch ? 'No products match your search' : 'No products available'}
+                </p>
               </div>
             )}
           </div>
         </div>
         
         {/* Middle Column: Selected Items & Cart (35% width) */}
-        <div className="lg:col-span-4 flex flex-col h-full bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg rounded-xl border border-gray-100 shadow-[0_2px_4px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.1),inset_0_1px_2px_rgba(255,255,255,0.9)] transition-all duration-200 p-5">
-          <h2 className="text-lg font-semibold mb-4 flex items-center text-gray-800">
+        <div className="lg:col-span-4 flex flex-col bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg rounded-xl border border-gray-100 shadow-[0_2px_4px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.8)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.1),inset_0_1px_2px_rgba(255,255,255,0.9)] transition-all duration-200 p-5 h-full overflow-hidden">
+          <h2 className="text-lg font-semibold mb-4 flex items-center text-gray-800 flex-shrink-0">
             <Tag size={18} className="mr-2 text-gray-600" />
             Current Sale
           </h2>
-          
-          {/* Cart Items List */}
-          <div className="flex-1 overflow-y-auto mb-4 pr-1">
+
+          {/* Cart Items List - Scrollable with fixed height */}
+          <div className="flex-1 overflow-y-auto mb-4 pr-2 min-h-0 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
             {cart.length > 0 ? (
               cart.map(item => (
-                <CartItem 
+                <CartItem
                   key={item.id}
                   id={item.id}
                   name={item.name}
@@ -579,25 +604,25 @@ const PointOfSale = () => {
               </div>
             )}
           </div>
-          
-          {/* Cart Summary */}
-          <div className="border-t border-gray-100 pt-4">
-            <div className="flex justify-between mb-2 text-gray-600">
-              <span>Subtotal:</span>
-              <span>£{cartTotal.toFixed(2)}</span>
+
+          {/* Cart Summary - Fixed at bottom, taller */}
+          <div className="border-t-2 border-gray-200 pt-5 pb-2 flex-shrink-0 bg-white/50 backdrop-blur-sm rounded-lg -mx-5 px-5 mt-auto">
+            <div className="flex justify-between mb-3 text-base text-gray-700">
+              <span className="font-medium">Subtotal:</span>
+              <span className="font-semibold">£{cartTotal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between mb-4 text-gray-600">
-              <span>VAT (20%):</span>
-              <span>£{(cartTotal * 0.2).toFixed(2)}</span>
+            <div className="flex justify-between mb-4 text-base text-gray-700">
+              <span className="font-medium">VAT (20%):</span>
+              <span className="font-semibold">£{(cartTotal * 0.2).toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-lg font-semibold mb-6 text-gray-800">
+            <div className="flex justify-between text-xl font-bold mb-6 text-gray-900 py-3 border-t-2 border-gray-300">
               <span>Total:</span>
-              <span>£{(cartTotal * 1.2).toFixed(2)}</span>
+              <span className="text-blue-600">£{(cartTotal * 1.2).toFixed(2)}</span>
             </div>
-            
-            <Button 
-              variant="outline" 
-              className="w-full mb-2 bg-white/80 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-100/80 text-gray-700"
+
+            <Button
+              variant="outline"
+              className="w-full mb-2 bg-white/80 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-100/80 text-gray-700 h-10"
               onClick={() => setCart([])}
               disabled={cart.length === 0}
             >
@@ -607,16 +632,16 @@ const PointOfSale = () => {
         </div>
         
         {/* Right Column: Customer Info & Transaction (25% width) */}
-        <div className="lg:col-span-3 flex flex-col h-full gap-4">
-          {/* Customer Information Section */}
-          <div className="flex-1">
+        <div className="lg:col-span-3 flex flex-col gap-4 h-full overflow-hidden">
+          {/* Customer Information Section - Fixed height with scrollbar */}
+          <div className="flex-shrink-0 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-1" style={{ height: '45%', minHeight: '300px' }}>
             <CustomerInfo onSelectCustomer={handleSelectCustomer} />
           </div>
-          
-          {/* Payment Panel */}
-          <div className="flex-1">
-            <PaymentPanel 
-              cartItems={cart} 
+
+          {/* Payment Panel - Fixed height with scrollbar */}
+          <div className="flex-shrink-0 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-1" style={{ height: '55%', minHeight: '350px' }}>
+            <PaymentPanel
+              cartItems={cart}
               customer={selectedCustomer}
               onPaymentComplete={handlePaymentComplete}
               onAdminAction={handleAdminAction}
@@ -624,7 +649,8 @@ const PointOfSale = () => {
           </div>
         </div>
       </div>
-      
+      </div>
+
       {/* Product Filter Dialog */}
       <ProductFilter
         isOpen={isFilterDialogOpen}

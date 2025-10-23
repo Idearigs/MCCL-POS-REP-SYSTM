@@ -88,21 +88,38 @@ export interface RepairStats {
   activeRepairs: number;
   completedRepairs: number;
   overdueRepairs: number;
-  averageCompletionTime: number;
+  dueToday?: number;
+  waitingForParts?: number;
+  averageRepairTime: number;
   totalRevenue: number;
-  repairsByStatus: Array<{
+  averageRepairCost: number;
+  repairsThisMonth: number;
+  revenueThisMonth: number;
+  statusBreakdown: Record<string, number>;
+  priorityBreakdown: Record<string, number>;
+  repairTypeBreakdown: Record<string, number>;
+  topTechnicians?: Array<{
+    technicianId: string;
+    technicianName: string;
+    completedRepairs: number;
+  }>;
+  // Legacy fields for backward compatibility
+  repairsByStatus?: Array<{
     status: string;
     count: number;
   }>;
-  repairsByPriority: Array<{
+  repairsByPriority?: Array<{
     priority: string;
     count: number;
   }>;
-  repairsByType: Array<{
+  repairsByType?: Array<{
     type: string;
     count: number;
     revenue: number;
   }>;
+  // For dashboard compatibility
+  byStatus?: Record<string, number>;
+  byPriority?: Record<string, number>;
 }
 
 export interface RepairNote {

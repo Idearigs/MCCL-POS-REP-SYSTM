@@ -163,9 +163,9 @@ const transformFrontendToBackend = (frontendProduct: CreateProductData): Backend
 });
 
 export interface StockAdjustment {
+  type: 'SALE' | 'PURCHASE' | 'ADJUSTMENT' | 'DAMAGE' | 'RETURN' | 'TRANSFER';
   quantity: number;
-  reason: string;
-  notes?: string;
+  reason?: string;
 }
 
 export interface BulkStockUpdate {

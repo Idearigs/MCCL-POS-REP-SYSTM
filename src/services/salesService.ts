@@ -39,11 +39,26 @@ export interface CreateSaleData {
     productId: string;
     quantity: number;
     unitPrice: number;
-    discount?: number;
+    discountAmount?: number;
+    discountPercentage?: number;
+    taxRate?: number;
+    notes?: string;
   }>;
-  paymentMethod: string;
+  payments: Array<{
+    method: 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'CHEQUE' | 'DIGITAL_WALLET' | 'INSTALLMENT';
+    amount: number;
+    reference?: string;
+    cardLast4?: string;
+    processorResponse?: string;
+    notes?: string;
+  }>;
   discountAmount?: number;
+  discountPercentage?: number;
+  taxRate?: number;
   notes?: string;
+  expectedDeliveryDate?: string;
+  walkInCustomerName?: string;
+  walkInCustomerPhone?: string;
 }
 
 export interface SaleFilters {
@@ -61,23 +76,39 @@ export interface SaleFilters {
 
 export interface SalesStats {
   totalSales: number;
-  totalRevenue: number;
-  averageOrderValue: number;
+  completedSales: number;
+  pendingSales: number;
+  cancelledSales: number;
+  totalSalesAmount: number; // Fixed: Match backend property name
+  totalRevenue?: number; // Deprecated: for backwards compatibility
+  averageSaleAmount: number;
+  averageOrderValue?: number; // Deprecated: for backwards compatibility
+  totalRefundedAmount: number;
   salesToday: number;
-  revenueToday: number;
   salesThisMonth: number;
+  salesThisYear: number;
+  revenueToday: number;
   revenueThisMonth: number;
-  topProducts: Array<{
+  revenueThisYear: number;
+  paymentMethodBreakdown: Record<string, number>;
+  topSellingProducts: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    revenue: number;
+  }>;
+  topProducts?: Array<{
     productId: string;
     productName: string;
     quantitySold: number;
     revenue: number;
-  }>;
-  salesByPaymentMethod: Array<{
+  }>; // Deprecated: for backwards compatibility
+  salesByHour: Record<string, number>;
+  salesByPaymentMethod?: Array<{
     method: string;
     count: number;
     amount: number;
-  }>;
+  }>; // Deprecated: for backwards compatibility
 }
 
 export interface DailyReport {

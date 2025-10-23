@@ -379,7 +379,7 @@ const InventoryPage = () => {
           await addItem({
             name: item.name,
             sku: item.sku,
-            category: item.category || 'Uncategorized',
+            category: item.category || '', // Leave empty if no category provided
             supplier: item.supplier || '',
             price: item.price,
             cost: item.cost || 0,
