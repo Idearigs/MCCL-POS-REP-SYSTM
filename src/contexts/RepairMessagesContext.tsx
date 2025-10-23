@@ -38,7 +38,9 @@ interface RepairMessagesContextType {
   templates: MessageTemplate[];
   getTemplate: (id: string) => MessageTemplate | undefined;
   getTemplateByStatus: (status: string) => MessageTemplate | undefined;
-  updateTemplate: (id: string, content: string) => void;
+  addTemplate: (template: Omit<MessageTemplate, 'id'>) => void;
+  updateTemplate: (id: string, updates: Partial<MessageTemplate>) => void;
+  deleteTemplate: (id: string) => void;
   resetTemplates: () => void;
 }
 
@@ -72,10 +74,22 @@ export const RepairMessagesProvider: React.FC<{ children: ReactNode }> = ({ chil
     return templates.find(t => t.status === status);
   };
 
-  const updateTemplate = (id: string, content: string) => {
+  const addTemplate = (template: Omit<MessageTemplate, 'id'>) => {
+    const newTemplate: MessageTemplate = {
+      ...template,
+      id: `custom_${Date.now()}`
+    };
+    setTemplates(prev => [...prev, newTemplate]);
+  };
+
+  const updateTemplate = (id: string, updates: Partial<MessageTemplate>) => {
     setTemplates(prev =>
-      prev.map(t => t.id === id ? { ...t, content } : t)
+      prev.map(t => t.id === id ? { ...t, ...updates } : t)
     );
+  };
+
+  const deleteTemplate = (id: string) => {
+    setTemplates(prev => prev.filter(t => t.id !== id));
   };
 
   const resetTemplates = () => {
@@ -87,7 +101,9 @@ export const RepairMessagesProvider: React.FC<{ children: ReactNode }> = ({ chil
       templates,
       getTemplate,
       getTemplateByStatus,
+      addTemplate,
       updateTemplate,
+      deleteTemplate,
       resetTemplates
     }}>
       {children}
