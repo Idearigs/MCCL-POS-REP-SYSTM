@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Filter, Plus, Calendar, Trash2 } from 'lucide-react';
+import { Search, Filter, Plus, Calendar, Trash2, LayoutGrid, List, Eye, Edit } from 'lucide-react';
 import RepairJobCard from '@/components/repair/RepairJobCard';
 import RepairStatusBadge from '@/components/repair/RepairStatusBadge';
 import NewRepairJobForm from '@/components/repair/NewRepairJobForm';
@@ -128,6 +128,7 @@ const RepairsPage: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [repairToDelete, setRepairToDelete] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   useEffect(() => {
     localStorage.removeItem('repairJobs');
@@ -373,14 +374,35 @@ const RepairsPage: React.FC = () => {
           </div>
           
           <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
-            <Button 
-              variant="outline" 
+            <div className="flex items-center bg-white/90 rounded-full border border-navy/10 shadow-sm">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+                className={`rounded-l-full ${viewMode === 'grid' ? 'bg-navy text-white hover:bg-navy-dark' : 'text-navy hover:bg-navy/5'}`}
+              >
+                <LayoutGrid size={16} className="mr-2" />
+                Grid
+              </Button>
+              <Button
+                variant={viewMode === 'table' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('table')}
+                className={`rounded-r-full ${viewMode === 'table' ? 'bg-navy text-white hover:bg-navy-dark' : 'text-navy hover:bg-navy/5'}`}
+              >
+                <List size={16} className="mr-2" />
+                Table
+              </Button>
+            </div>
+
+            <Button
+              variant="outline"
               className="rounded-full px-4 border border-gray-200 shadow-sm bg-navy text-white"
               onClick={() => setSelectedStatus('all')}
             >
               All <Badge className="ml-1 rounded-full bg-white text-navy">{repairJobs.length}</Badge>
             </Button>
-            
+
             <DropdownMenu open={isFilterOpen} onOpenChange={setIsFilterOpen}>
               <DropdownMenuTrigger asChild>
                 <Button 
@@ -444,51 +466,137 @@ const RepairsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {loading ? (
-            <div className="col-span-full flex items-center justify-center h-40 border border-gray-100 rounded-xl bg-white/50 backdrop-blur-sm">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
-                <p className="text-gray-600">Loading repair jobs...</p>
-              </div>
+        {loading ? (
+          <div className="flex items-center justify-center h-40 border border-gray-100 rounded-xl bg-white/50 backdrop-blur-sm">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+              <p className="text-gray-600">Loading repair jobs...</p>
             </div>
-          ) : error ? (
-            <div className="col-span-full flex items-center justify-center h-40 border border-red-100 rounded-xl bg-red-50/50 backdrop-blur-sm">
-              <div className="text-center">
-                <p className="text-red-600 mb-2">Error loading repair jobs</p>
-                <Button 
-                  onClick={loadRepairs}
-                  variant="outline" 
-                  size="sm"
-                  className="text-red-600 border-red-300 hover:bg-red-50"
-                >
-                  Try Again
-                </Button>
-              </div>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-40 border border-red-100 rounded-xl bg-red-50/50 backdrop-blur-sm">
+            <div className="text-center">
+              <p className="text-red-600 mb-2">Error loading repair jobs</p>
+              <Button
+                onClick={loadRepairs}
+                variant="outline"
+                size="sm"
+                className="text-red-600 border-red-300 hover:bg-red-50"
+              >
+                Try Again
+              </Button>
             </div>
-          ) : filteredJobs.length > 0 ? (
-            filteredJobs.map(job => (
-              <RepairJobCard 
-                key={job.id}
-                id={job.id}
-                customerName={job.customerName}
-                itemDescription={job.itemDescription}
-                status={job.status}
-                dueDate={job.dueDate}
-                estimatedPrice={job.estimatedPrice}
-                onClick={handleJobClick}
-                onDelete={handleDeleteClick}
-              />
-            ))
+          </div>
+        ) : filteredJobs.length > 0 ? (
+          viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredJobs.map(job => (
+                <RepairJobCard
+                  key={job.id}
+                  id={job.id}
+                  customerName={job.customerName}
+                  itemDescription={job.itemDescription}
+                  status={job.status}
+                  dueDate={job.dueDate}
+                  estimatedPrice={job.estimatedPrice}
+                  onClick={handleJobClick}
+                  onDelete={handleDeleteClick}
+                />
+              ))}
+            </div>
           ) : (
-            <div className="col-span-full flex items-center justify-center h-40 border border-gray-100 rounded-xl bg-white/50 backdrop-blur-sm">
-              <p className="text-gray-400 flex flex-col items-center">
-                <Search size={24} className="mb-2 text-gray-300" />
-                No repair jobs found
-              </p>
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-sm border border-navy/10 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-navy/5">
+                    <TableHead className="font-semibold text-navy">Date Created</TableHead>
+                    <TableHead className="font-semibold text-navy">Repair ID</TableHead>
+                    <TableHead className="font-semibold text-navy">Customer</TableHead>
+                    <TableHead className="font-semibold text-navy">Item Description</TableHead>
+                    <TableHead className="font-semibold text-navy">Status</TableHead>
+                    <TableHead className="font-semibold text-navy">Due Date</TableHead>
+                    <TableHead className="font-semibold text-navy">Est. Price</TableHead>
+                    <TableHead className="font-semibold text-navy text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredJobs.map((job) => (
+                    <TableRow
+                      key={job.id}
+                      className="cursor-pointer hover:bg-navy/5 transition-colors"
+                      onClick={() => handleJobClick(job.id)}
+                    >
+                      <TableCell className="text-sm text-gray-600">
+                        {new Date(job.createdAt).toLocaleDateString('en-GB')}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600 font-mono">
+                        {job.id.substring(0, 8)}...
+                      </TableCell>
+                      <TableCell className="font-medium text-navy">{job.customerName}</TableCell>
+                      <TableCell className="text-sm text-gray-600">{job.itemDescription}</TableCell>
+                      <TableCell>
+                        <RepairStatusBadge status={job.status} />
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600">
+                        {new Date(job.dueDate).toLocaleDateString('en-GB')}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600 font-medium">
+                        £{parseFloat(job.estimatedPrice || '0').toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleJobClick(job.id);
+                            }}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            title="View Details"
+                          >
+                            <Eye size={16} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleJobClick(job.id);
+                            }}
+                            className="text-navy hover:text-navy-dark hover:bg-navy/10"
+                            title="Edit Repair"
+                          >
+                            <Edit size={16} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteClick(job.id);
+                            }}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            title="Delete Repair"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-          )}
-        </div>
+          )
+        ) : (
+          <div className="flex items-center justify-center h-40 border border-gray-100 rounded-xl bg-white/50 backdrop-blur-sm">
+            <p className="text-gray-400 flex flex-col items-center">
+              <Search size={24} className="mb-2 text-gray-300" />
+              No repair jobs found
+            </p>
+          </div>
+        )}
 
         <RepairDetailModal
           repair={selectedJob}
