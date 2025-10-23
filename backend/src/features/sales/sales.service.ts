@@ -21,6 +21,7 @@ import {
   PaymentStatus,
 } from './dto/sale.dto';
 import { PaginatedResponseDto } from '../../shared/dto/pagination.dto';
+import { generateId } from '../../shared/utils/id-generator';
 
 @Injectable()
 export class SalesService {
@@ -88,15 +89,12 @@ export class SalesService {
           subtotal += lineSubtotal;
           
           return {
+            id: generateId(),
             productId: item.productId,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
-            discountPercentage: item.discountPercentage || 0,
-            discountAmount: itemDiscountAmount,
-            taxRate: item.taxRate || 0,
-            taxAmount,
+            discount: itemDiscountAmount,
             totalPrice,
-            notes: item.notes,
           };
         });
 
@@ -117,9 +115,15 @@ export class SalesService {
           );
         }
 
+        // Determine primary payment method (use first payment or the one with largest amount)
+        const primaryPayment = createSaleDto.payments.length === 1
+          ? createSaleDto.payments[0]
+          : createSaleDto.payments.reduce((max, payment) => payment.amount > max.amount ? payment : max);
+
         // Create sale
         const sale = await (prisma.sales as any).create({
           data: {
+            id: generateId(),
             saleNumber,
             tenantId,
             customerId: createSaleDto.customerId,
@@ -131,26 +135,32 @@ export class SalesService {
             // taxRate: createSaleDto.taxRate || 0, // Field doesn't exist
             taxAmount,
             totalAmount,
+            paymentMethod: primaryPayment.method as PrismaPaymentMethod,
+            paymentStatus: PrismaPaymentStatus.COMPLETED,
             paidAmount: totalPayments,
             refundedAmount: 0,
             // balanceDue: 0, // Field doesn't exist
             notes: createSaleDto.notes,
             // expectedDeliveryDate: createSaleDto.expectedDeliveryDate ? new Date(createSaleDto.expectedDeliveryDate) : null,
             createdBy: userId,
+            updatedAt: new Date(),
             sale_items: {
               create: saleItems,
             },
             payments: {
               create: createSaleDto.payments.map(payment => ({
+                id: generateId(),
                 method: payment.method as PrismaPaymentMethod,
                 amount: payment.amount,
                 status: PrismaPaymentStatus.COMPLETED,
-                reference: payment.reference,
-                cardLast4: payment.cardLast4,
-                processorResponse: payment.processorResponse,
-                processedAt: new Date(),
-                notes: payment.notes,
-                createdBy: userId,
+                transactionId: payment.reference,
+                processorData: payment.cardLast4 || payment.processorResponse || payment.notes
+                  ? {
+                      cardLast4: payment.cardLast4,
+                      processorResponse: payment.processorResponse,
+                      notes: payment.notes
+                    }
+                  : undefined,
               })),
             },
           },
@@ -254,6 +264,7 @@ export class SalesService {
         status,
         paymentMethod,
         customerId,
+        cashierId,
         startDate,
         endDate,
         minAmount,
@@ -269,6 +280,7 @@ export class SalesService {
         tenantId,
         ...(status && { status: status as PrismaSaleStatus }),
         ...(customerId && { customerId }),
+        ...(cashierId && { createdBy: cashierId }),
         ...(startDate && endDate && {
           createdAt: {
             gte: new Date(startDate),
@@ -668,7 +680,7 @@ export class SalesService {
         (this.prismaService.payments.groupBy as any)({
           by: ['method'],
           where: {
-            sale: { tenantId },
+            sales: { tenantId },
             status: PaymentStatus.COMPLETED,
             amount: { gt: 0 }, // Exclude refunds
           },
@@ -677,7 +689,7 @@ export class SalesService {
         // Top selling products
         (this.prismaService.sale_items.groupBy as any)({
           by: ['productId'],
-          where: { sale: { tenantId, status: SaleStatus.COMPLETED } },
+          where: { sales: { tenantId, status: SaleStatus.COMPLETED } },
           _sum: { quantity: true, totalPrice: true },
           orderBy: { _sum: { totalPrice: 'desc' } },
           take: 10,
@@ -778,6 +790,8 @@ export class SalesService {
       walkInCustomerName: '', // Not in current schema
       walkInCustomerPhone: '', // Not in current schema
       status: sale.status,
+      paymentMethod: sale.paymentMethod,
+      paymentStatus: sale.paymentStatus,
       subtotal: Number(sale.subtotal),
       discountPercentage: Number(sale.discountPercentage),
       discountAmount: Number(sale.discountAmount),
@@ -786,43 +800,47 @@ export class SalesService {
       totalAmount: Number(sale.totalAmount),
       paidAmount: Number(sale.paidAmount),
       refundedAmount: Number(sale.refundedAmount),
-      balanceDue: Number(sale.balanceDue),
+      balanceDue: Number(sale.balanceDue || 0),
       notes: sale.notes,
-      expectedDeliveryDate: sale.expectedDeliveryDate?.toISOString().split('T')[0],
-      actualDeliveryDate: sale.actualDeliveryDate?.toISOString().split('T')[0],
+      expectedDeliveryDate: null,
+      actualDeliveryDate: null,
       items: sale.sale_items?.map((item: any) => ({
         id: item.id,
         productId: item.productId,
-        productName: item.product?.name || 'Unknown Product',
-        productSku: item.product?.sku || '',
+        productName: item.products?.name || 'Unknown Product',
+        productSku: item.products?.sku || '',
         quantity: item.quantity,
         unitPrice: Number(item.unitPrice),
-        discountPercentage: Number(item.discountPercentage || 0),
+        discountPercentage: 0,
         discountAmount: Number(item.discount || 0),
-        taxRate: Number(item.taxRate || 0),
-        taxAmount: Number(item.taxAmount || 0),
+        taxRate: 0,
+        taxAmount: 0,
         totalPrice: Number(item.totalPrice),
-        notes: item.notes || '',
-        createdAt: item.createdAt.toISOString(),
-        updatedAt: item.updatedAt.toISOString(),
+        notes: '',
+        createdAt: sale.createdAt.toISOString(),
+        updatedAt: sale.updatedAt.toISOString(),
       })) || [],
       payments: sale.payments?.map((payment: any) => ({
         id: payment.id,
         method: payment.method,
         amount: Number(payment.amount),
         status: payment.status,
-        reference: payment.reference,
-        cardLast4: payment.cardLast4,
-        processorResponse: payment.processorResponse,
-        processedAt: payment.processedAt?.toISOString(),
-        notes: payment.notes,
+        reference: payment.transactionId,
+        cardLast4: payment.processorData?.cardLast4,
+        processorResponse: payment.processorData?.processorResponse,
+        processedAt: null,
+        notes: payment.processorData?.notes,
         createdAt: payment.createdAt.toISOString(),
-        updatedAt: payment.updatedAt.toISOString(),
+        updatedAt: payment.createdAt.toISOString(),
       })) || [],
       createdBy: sale.createdBy,
-      createdByName: sale.users 
+      createdByName: sale.users
         ? `${sale.users.firstName} ${sale.users.lastName}`.trim()
         : 'Unknown User',
+      cashierId: sale.createdBy,
+      cashierName: sale.users
+        ? `${sale.users.firstName} ${sale.users.lastName}`.trim()
+        : 'Unknown',
       createdAt: sale.createdAt.toISOString(),
       updatedAt: sale.updatedAt.toISOString(),
     };

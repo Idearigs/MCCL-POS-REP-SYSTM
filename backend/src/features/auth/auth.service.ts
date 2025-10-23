@@ -139,7 +139,7 @@ export class AuthService {
       }
 
       // Hash password
-      const saltRounds = this.configService.get<number>('HASH_SALT_ROUNDS', 12);
+      const saltRounds = parseInt(this.configService.get('HASH_SALT_ROUNDS', '12'), 10);
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
       // Create user
@@ -152,6 +152,7 @@ export class AuthService {
           lastName,
           role: role as any,
           tenantId,
+          updatedAt: new Date(),
         } as any,
         include: {
           tenants: true,
@@ -301,7 +302,7 @@ export class AuthService {
       }
 
       // Hash new password
-      const saltRounds = this.configService.get<number>('HASH_SALT_ROUNDS', 12);
+      const saltRounds = parseInt(this.configService.get('HASH_SALT_ROUNDS', '12'), 10);
       const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
 
       // Update password
@@ -347,11 +348,11 @@ export class AuthService {
    */
   private getExpirationTime(): number {
     const expiration = this.configService.get<string>('JWT_EXPIRATION', '15m');
-    
+
     // Convert time string to seconds (e.g., '15m' -> 900)
     const timeValue = parseInt(expiration.slice(0, -1));
     const timeUnit = expiration.slice(-1);
-    
+
     switch (timeUnit) {
       case 's':
         return timeValue;
@@ -363,6 +364,151 @@ export class AuthService {
         return timeValue * 86400;
       default:
         return 900; // default 15 minutes
+    }
+  }
+
+  /**
+   * Get all users
+   */
+  async getUsers(
+    tenantId: string,
+    role?: string,
+    isActive?: boolean,
+    page: number = 1,
+    limit: number = 100
+  ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
+    try {
+      const where: any = { tenantId };
+
+      if (role) {
+        where.role = role;
+      }
+
+      if (isActive !== undefined) {
+        where.isActive = isActive;
+      }
+
+      const [users, total] = await Promise.all([
+        this.prismaService.users.findMany({
+          where,
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+            isActive: true,
+            lastLogin: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        this.prismaService.users.count({ where }),
+      ]);
+
+      return {
+        data: users,
+        total,
+        page,
+        limit,
+      };
+    } catch (error) {
+      this.logger.error('Failed to fetch users:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user by ID
+   */
+  async getUserById(tenantId: string, userId: string): Promise<any> {
+    try {
+      const user = await this.prismaService.users.findFirst({
+        where: { id: userId, tenantId },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          isActive: true,
+          lastLogin: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      if (!user) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      return user;
+    } catch (error) {
+      this.logger.error(`Failed to fetch user ${userId}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Update user
+   */
+  async updateUser(tenantId: string, userId: string, updateData: any): Promise<any> {
+    try {
+      // Don't allow email updates for now
+      const { email, ...allowedUpdates } = updateData;
+
+      // Hash password if provided
+      if (allowedUpdates.password) {
+        const saltRounds = parseInt(this.configService.get('HASH_SALT_ROUNDS', '12'), 10);
+        allowedUpdates.password = await bcrypt.hash(allowedUpdates.password, saltRounds);
+      }
+
+      const updatedUser = await this.prismaService.users.update({
+        where: { id: userId, tenantId },
+        data: allowedUpdates,
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          isActive: true,
+          lastLogin: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      this.logger.log(`User updated: ${userId}`);
+      return updatedUser;
+    } catch (error) {
+      this.logger.error(`Failed to update user ${userId}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Reset user password (admin only)
+   */
+  async resetUserPassword(tenantId: string, userId: string, newPassword: string): Promise<void> {
+    try {
+      // Hash new password
+      const saltRounds = parseInt(this.configService.get('HASH_SALT_ROUNDS', '12'), 10);
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+      // Update password
+      await this.prismaService.users.update({
+        where: { id: userId, tenantId },
+        data: { password: hashedPassword },
+      });
+
+      this.logger.log(`Password reset for user: ${userId}`);
+    } catch (error) {
+      this.logger.error(`Failed to reset password for user ${userId}:`, error.message);
+      throw error;
     }
   }
 }

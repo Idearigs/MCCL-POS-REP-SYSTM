@@ -60,6 +60,7 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
   const [uploadingImages, setUploadingImages] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
+  const [currentRepair, setCurrentRepair] = useState(repair);
   const [selectedStatus, setSelectedStatus] = useState(repair?.status || '');
   const [statusNotes, setStatusNotes] = useState('');
   const [sendSMS, setSendSMS] = useState(true);
@@ -70,11 +71,13 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
   const beforeFileInputRef = useRef<HTMLInputElement>(null);
   const afterFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Log repair images when the repair prop changes
+  // Sync currentRepair state when repair prop changes
   useEffect(() => {
     if (repair && isOpen) {
+      setCurrentRepair(repair);
       console.log('🔍 RepairDetailModal - Repair prop updated:', {
         repairId: repair.id,
+        status: repair.status,
         beforeImagesCount: repair.beforeImages?.length || 0,
         afterImagesCount: repair.afterImages?.length || 0,
         beforeImages: repair.beforeImages,
@@ -135,7 +138,7 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
     fetchCustomerData();
   }, [repair?.customerId, isOpen]);
 
-  if (!repair) return null;
+  if (!currentRepair) return null;
 
   // Available repair statuses with their display information (matching backend RepairStatus enum)
   const repairStatuses = [
@@ -143,8 +146,6 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
     { value: 'QUOTED', label: 'Quoted', icon: DollarSign, color: 'bg-purple-500', description: 'Quote ready for customer approval' },
     { value: 'APPROVED', label: 'Approved', icon: CheckCircle, color: 'bg-blue-400', description: 'Customer approved, work will begin' },
     { value: 'IN_PROGRESS', label: 'In Progress', icon: PlayCircle, color: 'bg-blue-500', description: 'Currently being worked on' },
-    { value: 'WAITING_PARTS', label: 'Waiting for Parts', icon: PauseCircle, color: 'bg-orange-500', description: 'Waiting for replacement parts' },
-    { value: 'DELAYED', label: 'Delayed', icon: AlertCircle, color: 'bg-yellow-500', description: 'Experiencing delays' },
     { value: 'COMPLETED', label: 'Completed', icon: CheckCircle, color: 'bg-green-500', description: 'Repair work finished' },
     { value: 'READY_FOR_COLLECTION', label: 'Ready for Collection', icon: Package, color: 'bg-green-400', description: 'Ready for customer pickup' },
     { value: 'COLLECTED', label: 'Collected', icon: CheckCircle, color: 'bg-green-600', description: 'Customer has collected item' },
@@ -153,43 +154,51 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
 
   // Update repair status
   const updateRepairStatus = async () => {
-    if (!selectedStatus || selectedStatus === repair.status) {
+    if (!selectedStatus || selectedStatus === currentRepair.status) {
       toast.error('Please select a different status');
       return;
     }
 
     try {
       setUpdatingStatus(true);
-      
+
       // Use repairService to update repair status with SMS notification
       const updatedRepair = await repairService.updateRepairStatus(
-        repair.id,
+        currentRepair.id,
         selectedStatus,
         statusNotes || `Status changed to ${getStatusText(selectedStatus)}`,
         sendSMS
       );
-      
+
+      // Update local repair state with the new status
+      setCurrentRepair({
+        ...currentRepair,
+        status: selectedStatus,
+        updatedAt: new Date().toISOString()
+      });
+
       // Debug customer data and phone information
       console.log('🔧 Status update success - Customer data check:', {
         sendSMS,
         customerDataExists: !!customerData,
         customerPhone: customerData?.phone,
         customerName: customerData?.name || customerData?.firstName + ' ' + customerData?.lastName,
-        repairCustomerName: repair.customerName
+        repairCustomerName: currentRepair.customerName,
+        newStatus: selectedStatus
       });
-      
+
       const smsMessage = sendSMS && customerData?.phone ? ' - SMS notification attempted' : '';
       toast.success(`Status updated to ${getStatusText(selectedStatus)}${smsMessage}`);
-      
+
       // Call onUpdate callback to refresh the repair list (pass null to avoid PATCH call)
       if (onUpdate) {
-        onUpdate(repair.id, null);
+        onUpdate(currentRepair.id, null);
       }
-      
+
       // Reset form
       setStatusNotes('');
       setSelectedStatus('');
-      
+
     } catch (error: any) {
       console.error('Failed to update repair status:', error);
       toast.error(`Failed to update status: ${error.message}`);
@@ -375,9 +384,9 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
           </DialogTitle>
           <DialogDescription asChild>
             <div className="flex items-center gap-4">
-              <span>Created {formatDate(repair.createdAt)}</span>
-              <Badge className={`${getStatusColor(repair.status)} rounded-full px-3 py-1`}>
-                {getStatusText(repair.status)}
+              <span>Created {formatDate(currentRepair.createdAt)}</span>
+              <Badge className={`${getStatusColor(currentRepair.status)} rounded-full px-3 py-1`}>
+                {getStatusText(currentRepair.status)}
               </Badge>
             </div>
           </DialogDescription>
@@ -676,8 +685,8 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                     <div>
                       <Label className="text-xs text-gray-500">Current Status</Label>
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge className={`${getStatusColor(repair.status)} rounded-full px-3 py-1`}>
-                          {getStatusText(repair.status)}
+                        <Badge className={`${getStatusColor(currentRepair.status)} rounded-full px-3 py-1`}>
+                          {getStatusText(currentRepair.status)}
                         </Badge>
                         {customerData?.phone && (
                           <div className="text-xs text-gray-500 flex items-center gap-1">
@@ -701,10 +710,10 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                       <SelectContent>
                         {repairStatuses.map((status) => {
                           const IconComponent = status.icon;
-                          const isCurrentStatus = status.value === repair.status;
+                          const isCurrentStatus = status.value === currentRepair.status;
                           return (
-                            <SelectItem 
-                              key={status.value} 
+                            <SelectItem
+                              key={status.value}
                               value={status.value}
                               disabled={isCurrentStatus}
                               className={isCurrentStatus ? 'opacity-50' : ''}
@@ -780,7 +789,7 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                   {/* Update Button */}
                   <Button
                     onClick={updateRepairStatus}
-                    disabled={!selectedStatus || selectedStatus === repair.status || updatingStatus}
+                    disabled={!selectedStatus || selectedStatus === currentRepair.status || updatingStatus}
                     className="w-full flex items-center gap-2"
                     size="lg"
                   >

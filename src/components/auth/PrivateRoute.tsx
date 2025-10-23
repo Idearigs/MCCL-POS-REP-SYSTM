@@ -27,7 +27,18 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // User is authenticated, render the protected component
+  // Role-based access control for STAFF users
+  if (auth.user?.role === 'STAFF') {
+    const allowedPaths = ['/pos', '/sales'];
+    const currentPath = location.pathname;
+
+    // If STAFF user tries to access a restricted page, redirect to POS
+    if (!allowedPaths.includes(currentPath)) {
+      return <Navigate to="/pos" replace />;
+    }
+  }
+
+  // User is authenticated and authorized, render the protected component
   return <>{children}</>;
 };
 

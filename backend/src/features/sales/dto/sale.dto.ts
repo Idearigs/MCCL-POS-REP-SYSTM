@@ -18,31 +18,27 @@ import { Type, Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum SaleStatus {
-  PENDING = 'PENDING',
-  PROCESSING = 'PROCESSING',
+  DRAFT = 'DRAFT',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
   REFUNDED = 'REFUNDED',
-  PARTIAL_REFUND = 'PARTIAL_REFUND',
 }
 
 export enum PaymentMethod {
   CASH = 'CASH',
-  CREDIT_CARD = 'CREDIT_CARD',
-  DEBIT_CARD = 'DEBIT_CARD',
+  CARD = 'CARD',
   BANK_TRANSFER = 'BANK_TRANSFER',
+  CHEQUE = 'CHEQUE',
   DIGITAL_WALLET = 'DIGITAL_WALLET',
   INSTALLMENT = 'INSTALLMENT',
-  LAYAWAY = 'LAYAWAY',
 }
 
 export enum PaymentStatus {
   PENDING = 'PENDING',
-  PROCESSING = 'PROCESSING',
   COMPLETED = 'COMPLETED',
   FAILED = 'FAILED',
   REFUNDED = 'REFUNDED',
-  PARTIAL_REFUND = 'PARTIAL_REFUND',
+  PARTIALLY_REFUNDED = 'PARTIALLY_REFUNDED',
 }
 
 export class CreateSaleItemDto {
@@ -51,7 +47,6 @@ export class CreateSaleItemDto {
     example: 'clv123abc456',
   })
   @IsString()
-  @IsUUID()
   productId: string;
 
   @ApiProperty({
@@ -119,7 +114,7 @@ export class CreatePaymentDto {
   @ApiProperty({
     description: 'Payment method',
     enum: PaymentMethod,
-    example: PaymentMethod.CREDIT_CARD,
+    example: PaymentMethod.CARD,
   })
   @IsEnum(PaymentMethod)
   method: PaymentMethod;
@@ -174,7 +169,6 @@ export class CreateSaleDto {
   })
   @IsOptional()
   @IsString()
-  @IsUUID()
   customerId?: string;
 
   @ApiProperty({
@@ -415,7 +409,7 @@ export class SaleQueryDto {
   @ApiPropertyOptional({
     description: 'Filter by payment method',
     enum: PaymentMethod,
-    example: PaymentMethod.CREDIT_CARD,
+    example: PaymentMethod.CARD,
   })
   @IsOptional()
   @IsEnum(PaymentMethod)
@@ -429,6 +423,14 @@ export class SaleQueryDto {
   @IsString()
   @IsUUID()
   customerId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by cashier ID (user who created the sale)',
+    example: 'clv123abc456',
+  })
+  @IsOptional()
+  @IsString()
+  cashierId?: string;
 
   @ApiPropertyOptional({
     description: 'Start date for filtering (YYYY-MM-DD)',
@@ -588,6 +590,12 @@ export class SaleResponseDto {
   @ApiProperty({ enum: SaleStatus })
   status: SaleStatus;
 
+  @ApiProperty({ enum: ['CASH', 'CARD', 'BANK_TRANSFER', 'CHEQUE', 'DIGITAL_WALLET', 'INSTALLMENT'] })
+  paymentMethod: string;
+
+  @ApiProperty({ enum: ['PENDING', 'COMPLETED', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED'] })
+  paymentStatus: string;
+
   @ApiProperty()
   subtotal: number;
 
@@ -635,6 +643,12 @@ export class SaleResponseDto {
 
   @ApiProperty()
   createdByName: string;
+
+  @ApiProperty()
+  cashierId: string;
+
+  @ApiProperty()
+  cashierName: string;
 
   @ApiProperty()
   createdAt: string;

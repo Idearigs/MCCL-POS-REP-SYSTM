@@ -8,6 +8,8 @@ import {
   Request,
   Get,
   Patch,
+  Query,
+  Param,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -190,6 +192,89 @@ export class AuthController {
     @Body() changePasswordDto: ChangePasswordDto,
   ): Promise<void> {
     await this.authService.changePassword(userId, changePasswordDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('users')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Get all users',
+    description: 'Get list of all users/cashiers (admin only)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Users retrieved successfully',
+  })
+  async getUsers(
+    @CurrentTenant() tenant: TenantInfo,
+    @Query('role') role?: string,
+    @Query('isActive') isActive?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.authService.getUsers(
+      tenant.id,
+      role,
+      isActive === 'true' ? true : isActive === 'false' ? false : undefined,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 100,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('users/:id')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Get user by ID',
+    description: 'Get a specific user by their ID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User retrieved successfully',
+  })
+  async getUserById(
+    @CurrentTenant() tenant: TenantInfo,
+    @Param('id') id: string,
+  ) {
+    return this.authService.getUserById(tenant.id, id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('users/:id')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Update user',
+    description: 'Update user details (admin only)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User updated successfully',
+  })
+  async updateUser(
+    @CurrentTenant() tenant: TenantInfo,
+    @Param('id') id: string,
+    @Body() updateData: any,
+  ) {
+    return this.authService.updateUser(tenant.id, id, updateData);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('users/:id/password')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Reset user password',
+    description: 'Reset password for a user (admin only)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Password reset successfully',
+  })
+  async resetUserPassword(
+    @CurrentTenant() tenant: TenantInfo,
+    @Param('id') id: string,
+    @Body() body: { password: string },
+  ) {
+    return this.authService.resetUserPassword(tenant.id, id, body.password);
   }
 
   @Public()

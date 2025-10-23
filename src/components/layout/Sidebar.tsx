@@ -13,7 +13,7 @@ import {
   SidebarMenuButton,
   SidebarFooter
 } from "@/components/ui/sidebar";
-import { Package, FileText, User, Settings, Calendar, Tag, Search, Database, LogOut, CreditCard, History } from 'lucide-react';
+import { Package, FileText, User, Settings, Calendar, Tag, Search, Database, LogOut, CreditCard, History, TrendingUp, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,6 +28,8 @@ interface NavigationItem {
 const mainNavigation: NavigationItem[] = [
   { title: 'Dashboard', path: '/', icon: Database },
   { title: 'Point of Sale', path: '/pos', icon: Tag },
+  { title: 'Sales', path: '/sales', icon: TrendingUp },
+  { title: 'Cashiers', path: '/cashiers', icon: Users },
   { title: 'Repair Jobs', path: '/repairs', icon: FileText },
   { title: 'Customers', path: '/customers', icon: User },
   { title: 'Inventory', path: '/inventory', icon: Package },
@@ -40,8 +42,23 @@ const Sidebar = () => {
   const isMobile = useIsMobile();
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, auth } = useAuth();
   const { toast } = useToast();
+
+  // Filter navigation based on user role
+  const getFilteredNavigation = () => {
+    if (auth.user?.role === 'STAFF') {
+      // STAFF users only see POS and Sales
+      return mainNavigation.filter(item =>
+        item.path === '/pos' || item.path === '/sales'
+      );
+    }
+    // OWNER, MANAGER, READONLY see all navigation items
+    return mainNavigation;
+  };
+
+  const filteredNavigation = getFilteredNavigation();
+  const isStaff = auth.user?.role === 'STAFF';
   
   return (
     <SidebarComponent className="bg-navy border-r border-navy-dark shadow-sm">
@@ -67,10 +84,10 @@ const Sidebar = () => {
           <SidebarGroupLabel className="text-xs font-medium text-gray-400 px-3 py-2">Main Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {mainNavigation.map((item) => {
+              {filteredNavigation.map((item) => {
                 // Special case for Dashboard since it could be / or /dashboard
                 const isDashboard = item.path === '/' && (location.pathname === '/' || location.pathname === '/dashboard');
-                const isActive = isDashboard || location.pathname === item.path || 
+                const isActive = isDashboard || location.pathname === item.path ||
                   (item.path !== '/' && location.pathname.startsWith(item.path));
                   
                 return (
@@ -95,6 +112,7 @@ const Sidebar = () => {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {!isStaff && (
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-medium text-gray-400 px-3 py-2">System</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -148,6 +166,7 @@ const Sidebar = () => {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        )}
       </SidebarContent>
       
       <SidebarFooter className="p-4 border-t border-navy-dark">
