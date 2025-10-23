@@ -47,7 +47,7 @@ export class SalesService {
 
         // Validate customer exists if provided
         if (createSaleDto.customerId) {
-          const customer = await prisma.customers.findFirst({
+          const customer = await prisma.customer.findFirst({
             where: { id: createSaleDto.customerId, tenantId },
           });
           if (!customer) {
@@ -58,7 +58,7 @@ export class SalesService {
         // Validate products and check stock
         const productValidations = await Promise.all(
           createSaleDto.items.map(async (item) => {
-            const product = await prisma.products.findFirst({
+            const product = await prisma.product.findFirst({
               where: { id: item.productId, tenantId, isActive: true },
             });
             
@@ -121,7 +121,7 @@ export class SalesService {
           : createSaleDto.payments.reduce((max, payment) => payment.amount > max.amount ? payment : max);
 
         // Create sale
-        const sale = await (prisma.sales as any).create({
+        const sale = await (prisma.sale as any).create({
           data: {
             id: generateId(),
             saleNumber,
@@ -181,7 +181,7 @@ export class SalesService {
           ...productValidations.map(({ product, item }) =>
             Promise.all([
               // Update product stock
-              prisma.products.update({
+              prisma.product.update({
                 where: { id: product.id },
                 data: { 
                   stockQuantity: { decrement: item.quantity },
@@ -193,7 +193,7 @@ export class SalesService {
           ),
           // Update customer stats if customer exists
           ...(createSaleDto.customerId ? [
-            prisma.customers.update({
+            prisma.customer.update({
               where: { id: createSaleDto.customerId },
               data: {
                 totalSpent: { increment: totalAmount },
@@ -323,7 +323,7 @@ export class SalesService {
 
       // Get sales and total count
       const [sales, total] = await Promise.all([
-        this.prismaService.sales.findMany({
+        this.prismaService.sale.findMany({
           where,
           skip,
           take: limit,
@@ -339,7 +339,7 @@ export class SalesService {
             users: true,
           },
         }),
-        this.prismaService.sales.count({ where }),
+        this.prismaService.sale.count({ where }),
       ]);
 
       const result = new PaginatedResponseDto(
@@ -375,7 +375,7 @@ export class SalesService {
         return cachedSale;
       }
 
-      const sale = await this.prismaService.sales.findFirst({
+      const sale = await this.prismaService.sale.findFirst({
         where: { id, tenantId },
         include: {
           sale_items: {
@@ -416,7 +416,7 @@ export class SalesService {
   ): Promise<SaleResponseDto> {
     try {
       // Check if sale exists
-      const existingSale = await this.prismaService.sales.findFirst({
+      const existingSale = await this.prismaService.sale.findFirst({
         where: { id, tenantId },
       });
 
@@ -431,7 +431,7 @@ export class SalesService {
         }
       }
 
-      const sale = await this.prismaService.sales.update({
+      const sale = await this.prismaService.sale.update({
         where: { id },
         data: {
           notes: updateSaleDto.notes,
@@ -475,7 +475,7 @@ export class SalesService {
   ): Promise<SaleResponseDto> {
     try {
       return await this.prismaService.$transaction(async (prisma) => {
-        const sale = await prisma.sales.findFirst({
+        const sale = await prisma.sale.findFirst({
           where: { id, tenantId },
           include: {
             sale_items: {
@@ -517,7 +517,7 @@ export class SalesService {
 
           // Add stock back to product
           refundOperations.push(
-            prisma.products.update({
+            prisma.product.update({
               where: { id: saleItem.productId },
               data: {
                 stockQuantity: { increment: refundItem.quantity },
@@ -528,7 +528,7 @@ export class SalesService {
           // Update or remove sale item
           if (refundItem.quantity === saleItem.quantity) {
             refundOperations.push(
-              prisma.sale_items.delete({
+              prisma.saleItem.delete({
                 where: { id: saleItem.id },
               })
             );
@@ -537,7 +537,7 @@ export class SalesService {
             const newTotalPrice = (Number(saleItem.totalPrice) / saleItem.quantity) * newQuantity;
             
             refundOperations.push(
-              prisma.sale_items.update({
+              prisma.saleItem.update({
                 where: { id: saleItem.id },
                 data: {
                   quantity: newQuantity,
@@ -562,7 +562,7 @@ export class SalesService {
         // Payment model needs additional fields (reference, refundReason, etc) to properly track refunds
         // For now, refund is tracked via refundedAmount field in Sale model
 
-        const updatedSale = await prisma.sales.update({
+        const updatedSale = await prisma.sale.update({
           where: { id },
           data: {
             status: PrismaSaleStatus.REFUNDED, // Use REFUNDED instead of PARTIAL_REFUND
@@ -586,7 +586,7 @@ export class SalesService {
 
         // Update customer stats if applicable
         if (sale.customerId) {
-          await prisma.customers.update({
+          await prisma.customer.update({
             where: { id: sale.customerId },
             data: {
               totalSpent: { decrement: totalRefundAmount },
@@ -642,42 +642,42 @@ export class SalesService {
         topProducts,
         hourlySales,
       ] = await Promise.all([
-        this.prismaService.sales.count({ where: { tenantId } }),
-        this.prismaService.sales.count({ where: { tenantId, status: 'COMPLETED' } }),
+        this.prismaService.sale.count({ where: { tenantId } }),
+        this.prismaService.sale.count({ where: { tenantId, status: 'COMPLETED' } }),
         // PENDING status doesn't exist in SaleStatus enum - using DRAFT instead
-        this.prismaService.sales.count({ where: { tenantId, status: 'DRAFT' } }),
-        this.prismaService.sales.count({ where: { tenantId, status: 'CANCELLED' } }),
-        this.prismaService.sales.aggregate({
+        this.prismaService.sale.count({ where: { tenantId, status: 'DRAFT' } }),
+        this.prismaService.sale.count({ where: { tenantId, status: 'CANCELLED' } }),
+        this.prismaService.sale.aggregate({
           where: { tenantId, status: 'COMPLETED' },
           _sum: { totalAmount: true },
         }),
-        this.prismaService.sales.aggregate({
+        this.prismaService.sale.aggregate({
           where: { tenantId },
           _sum: { refundedAmount: true },
         }),
-        this.prismaService.sales.count({
+        this.prismaService.sale.count({
           where: { tenantId, createdAt: { gte: startOfDay } },
         }),
-        this.prismaService.sales.count({
+        this.prismaService.sale.count({
           where: { tenantId, createdAt: { gte: startOfMonth } },
         }),
-        this.prismaService.sales.count({
+        this.prismaService.sale.count({
           where: { tenantId, createdAt: { gte: startOfYear } },
         }),
-        this.prismaService.sales.aggregate({
+        this.prismaService.sale.aggregate({
           where: { tenantId, status: SaleStatus.COMPLETED, createdAt: { gte: startOfDay } },
           _sum: { totalAmount: true },
         }),
-        this.prismaService.sales.aggregate({
+        this.prismaService.sale.aggregate({
           where: { tenantId, status: SaleStatus.COMPLETED, createdAt: { gte: startOfMonth } },
           _sum: { totalAmount: true },
         }),
-        this.prismaService.sales.aggregate({
+        this.prismaService.sale.aggregate({
           where: { tenantId, status: SaleStatus.COMPLETED, createdAt: { gte: startOfYear } },
           _sum: { totalAmount: true },
         }),
         // Payment method breakdown
-        (this.prismaService.payments.groupBy as any)({
+        (this.prismaService.payment.groupBy as any)({
           by: ['method'],
           where: {
             sales: { tenantId },
@@ -687,7 +687,7 @@ export class SalesService {
           _count: { method: true },
         }),
         // Top selling products
-        (this.prismaService.sale_items.groupBy as any)({
+        (this.prismaService.saleItem.groupBy as any)({
           by: ['productId'],
           where: { sales: { tenantId, status: SaleStatus.COMPLETED } },
           _sum: { quantity: true, totalPrice: true },
@@ -695,7 +695,7 @@ export class SalesService {
           take: 10,
         }),
         // Hourly sales for today
-        this.prismaService.sales.findMany({
+        this.prismaService.sale.findMany({
           where: {
             tenantId,
             status: PrismaSaleStatus.COMPLETED,
@@ -719,7 +719,7 @@ export class SalesService {
 
       // Process top selling products
       const productIds = topProducts.map(p => p.productId);
-      const products = await this.prismaService.products.findMany({
+      const products = await this.prismaService.product.findMany({
         where: { id: { in: productIds } },
         select: { id: true, name: true },
       });

@@ -33,7 +33,7 @@ export class TenantGuard implements CanActivate {
       // Try header first
       if (tenantIdHeader) {
         try {
-          tenant = await this.prismaService.tenants.findUnique({
+          tenant = await this.prismaService.tenant.findUnique({
             where: { id: tenantIdHeader },
           });
           this.logger.log(`Tenant lookup by header ID: ${tenant ? tenant.name : 'not found'}`);
@@ -48,7 +48,7 @@ export class TenantGuard implements CanActivate {
         this.logger.log(`Attempting to find tenant by domain: ${domain}`);
 
         try {
-          tenant = await this.prismaService.tenants.findFirst({
+          tenant = await this.prismaService.tenant.findFirst({
             where: {
               OR: [
                 { domain: domain },
@@ -70,7 +70,7 @@ export class TenantGuard implements CanActivate {
         this.logger.log('No tenant found by domain, fetching first active tenant');
 
         try {
-          tenant = await this.prismaService.tenants.findFirst({
+          tenant = await this.prismaService.tenant.findFirst({
             where: { status: 'ACTIVE' },
             orderBy: { createdAt: 'asc' },
           });
@@ -89,7 +89,7 @@ export class TenantGuard implements CanActivate {
 
         // As a last resort, try to get ANY tenant
         try {
-          const anyTenant = await this.prismaService.tenants.findFirst();
+          const anyTenant = await this.prismaService.tenant.findFirst();
           if (anyTenant) {
             this.logger.warn(`Using ANY tenant as emergency fallback: ${anyTenant.name}`);
             tenant = anyTenant;
