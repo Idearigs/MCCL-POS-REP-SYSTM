@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Filter, Plus, Calendar, Trash2, LayoutGrid, List, Eye, Edit } from 'lucide-react';
+import { Search, Filter, Plus, Calendar, Trash2, LayoutGrid, List, Eye, Edit, Settings } from 'lucide-react';
 import RepairJobCard from '@/components/repair/RepairJobCard';
 import RepairStatusBadge from '@/components/repair/RepairStatusBadge';
 import NewRepairJobForm from '@/components/repair/NewRepairJobForm';
 import RepairDetailModal from '@/components/repair/RepairDetailModal';
+import RepairMessagesSettings from '@/components/repair/RepairMessagesSettings';
 import {
   Dialog,
   DialogContent,
@@ -129,6 +130,7 @@ const RepairsPage: React.FC = () => {
   const [repairToDelete, setRepairToDelete] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [isMessagesSettingsOpen, setIsMessagesSettingsOpen] = useState(false);
 
   useEffect(() => {
     localStorage.removeItem('repairJobs');
@@ -455,10 +457,19 @@ const RepairsPage: React.FC = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            
-            <Button 
+
+            <Button
+              variant="outline"
+              onClick={() => setIsMessagesSettingsOpen(true)}
+              className="rounded-full px-4 border border-gray-200 shadow-sm hover:bg-gray-50"
+            >
+              <Settings size={16} className="mr-1" />
+              Messages
+            </Button>
+
+            <Button
               onClick={() => setIsNewJobDialogOpen(true)}
-              className="rounded-full bg-navy hover:bg-navy-dark text-white shadow-sm ml-2"
+              className="rounded-full bg-navy hover:bg-navy-dark text-white shadow-sm"
             >
               <Plus size={16} className="mr-1" />
               New Repair Job
@@ -679,6 +690,11 @@ const RepairsPage: React.FC = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <RepairMessagesSettings
+          isOpen={isMessagesSettingsOpen}
+          onClose={() => setIsMessagesSettingsOpen(false)}
+        />
       </div>
     </MainLayout>
   );

@@ -9,6 +9,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { TransactionProvider } from "./contexts/TransactionContext";
 import { CustomerProvider } from "./contexts/CustomerContext";
 import { InventoryProvider } from "./contexts/InventoryContext";
+import { RepairMessagesProvider } from "./contexts/RepairMessagesContext";
 import PrivateRoute from "./components/auth/PrivateRoute";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -55,7 +56,8 @@ const App = () => (
         <TransactionProvider>
           <CustomerProvider>
             <InventoryProvider>
-            <TooltipProvider>
+              <RepairMessagesProvider>
+                <TooltipProvider>
               <Toaster />
               <Sonner />
               {/* PWA Components */}
@@ -90,7 +92,8 @@ const App = () => (
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </PageTransition>
-            </TooltipProvider>
+                </TooltipProvider>
+              </RepairMessagesProvider>
             </InventoryProvider>
           </CustomerProvider>
         </TransactionProvider>
