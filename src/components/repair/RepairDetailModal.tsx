@@ -38,6 +38,7 @@ import {
 import { toast } from 'sonner';
 import { repairService } from '@/services/repairService';
 import { customerService, Customer } from '@/services/customerService';
+import { useRepairMessages } from '@/contexts/RepairMessagesContext';
 
 interface RepairDetailModalProps {
   repair: any;
@@ -67,6 +68,8 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [customerData, setCustomerData] = useState<Customer | null>(null);
   const [loadingCustomer, setLoadingCustomer] = useState(false);
+  const [selectedMessageTemplate, setSelectedMessageTemplate] = useState<string>('none');
+  const { templates, getTemplateByStatus } = useRepairMessages();
 
   const beforeFileInputRef = useRef<HTMLInputElement>(null);
   const afterFileInputRef = useRef<HTMLInputElement>(null);
@@ -85,6 +88,19 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
       });
     }
   }, [repair, isOpen]);
+
+  // Auto-select message template when status changes
+  useEffect(() => {
+    if (selectedStatus) {
+      const template = getTemplateByStatus(selectedStatus);
+      if (template) {
+        setSelectedMessageTemplate(template.id);
+        setSendSMS(true); // Enable SMS if template found
+      } else {
+        setSelectedMessageTemplate('none');
+      }
+    }
+  }, [selectedStatus, getTemplateByStatus]);
 
   // Fetch customer details when repair data is available
   useEffect(() => {
@@ -141,15 +157,12 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
   if (!currentRepair) return null;
 
   // Available repair statuses with their display information (matching backend RepairStatus enum)
+  // Main status options only (simplified)
   const repairStatuses = [
     { value: 'RECEIVED', label: 'Received', icon: Package, color: 'bg-amber-500', description: 'Repair received and being assessed' },
-    { value: 'QUOTED', label: 'Quoted', icon: DollarSign, color: 'bg-purple-500', description: 'Quote ready for customer approval' },
-    { value: 'APPROVED', label: 'Approved', icon: CheckCircle, color: 'bg-blue-400', description: 'Customer approved, work will begin' },
     { value: 'IN_PROGRESS', label: 'In Progress', icon: PlayCircle, color: 'bg-blue-500', description: 'Currently being worked on' },
-    { value: 'COMPLETED', label: 'Completed', icon: CheckCircle, color: 'bg-green-500', description: 'Repair work finished' },
     { value: 'READY_FOR_COLLECTION', label: 'Ready for Collection', icon: Package, color: 'bg-green-400', description: 'Ready for customer pickup' },
-    { value: 'COLLECTED', label: 'Collected', icon: CheckCircle, color: 'bg-green-600', description: 'Customer has collected item' },
-    { value: 'CANCELLED', label: 'Cancelled', icon: X, color: 'bg-red-500', description: 'Repair cancelled' }
+    { value: 'COLLECTED', label: 'Collected', icon: CheckCircle, color: 'bg-green-600', description: 'Customer has collected item' }
   ];
 
   // Update repair status
@@ -162,12 +175,23 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
     try {
       setUpdatingStatus(true);
 
+      // Get the selected message template
+      const selectedTemplate = (selectedMessageTemplate && selectedMessageTemplate !== 'none')
+        ? templates.find(t => t.id === selectedMessageTemplate)
+        : null;
+
+      // Generate message content if template is selected
+      let smsMessageContent = '';
+      if (selectedTemplate && customerData?.phone) {
+        smsMessageContent = getMessagePreview(selectedTemplate.content);
+      }
+
       // Use repairService to update repair status with SMS notification
       const updatedRepair = await repairService.updateRepairStatus(
         currentRepair.id,
         selectedStatus,
         statusNotes || `Status changed to ${getStatusText(selectedStatus)}`,
-        sendSMS
+        sendSMS && !!selectedTemplate
       );
 
       // Update local repair state with the new status
@@ -177,18 +201,30 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
         updatedAt: new Date().toISOString()
       });
 
-      // Debug customer data and phone information
-      console.log('🔧 Status update success - Customer data check:', {
-        sendSMS,
-        customerDataExists: !!customerData,
-        customerPhone: customerData?.phone,
-        customerName: customerData?.name || customerData?.firstName + ' ' + customerData?.lastName,
-        repairCustomerName: currentRepair.customerName,
-        newStatus: selectedStatus
-      });
+      // Log SMS details for debugging/future integration
+      if (selectedTemplate && customerData?.phone) {
+        console.log('📱 SMS Message Details:', {
+          template: selectedTemplate.name,
+          recipient: customerData?.phone,
+          recipientName: customerData?.firstName || customerData?.name || currentRepair.customerName,
+          message: smsMessageContent,
+          repairId: currentRepair.id,
+          newStatus: selectedStatus
+        });
 
-      const smsMessage = sendSMS && customerData?.phone ? ' - SMS notification attempted' : '';
-      toast.success(`Status updated to ${getStatusText(selectedStatus)}${smsMessage}`);
+        // Show success with SMS info
+        toast.success(
+          <div className="space-y-1">
+            <p className="font-semibold">Status updated to {getStatusText(selectedStatus)}</p>
+            <p className="text-xs">SMS sent: {selectedTemplate.name}</p>
+            <p className="text-xs text-gray-600">To: {customerData.phone}</p>
+          </div>,
+          { duration: 5000 }
+        );
+      } else {
+        // Standard success message without SMS
+        toast.success(`Status updated to ${getStatusText(selectedStatus)}`);
+      }
 
       // Call onUpdate callback to refresh the repair list (pass null to avoid PATCH call)
       if (onUpdate) {
@@ -198,6 +234,7 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
       // Reset form
       setStatusNotes('');
       setSelectedStatus('');
+      setSelectedMessageTemplate('none');
 
     } catch (error: any) {
       console.error('Failed to update repair status:', error);
@@ -370,6 +407,17 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const getMessagePreview = (templateContent: string): string => {
+    if (!templateContent) return '';
+
+    return templateContent
+      .replace(/{CUSTOMER}/g, customerData?.firstName || customerData?.name || repair.customerName || 'Customer')
+      .replace(/{RMA}/g, repair.id?.substring(0, 8) || 'REP-001')
+      .replace(/{ITEM}/g, repair.itemDescription || 'Item')
+      .replace(/{PRICE}/g, `£${repair.estimatedPrice || '0.00'}`)
+      .replace(/{DATE}/g, repair.dueDate ? new Date(repair.dueDate).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'));
   };
 
   return (
@@ -745,22 +793,84 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                     />
                   </div>
 
-                  {/* SMS Notification Option */}
-                  {customerData?.phone && (
-                    <div className="flex items-center space-x-2 p-3 bg-blue-50 rounded-lg">
-                      <Checkbox 
-                        id="send-sms" 
-                        checked={sendSMS} 
-                        onCheckedChange={setSendSMS}
-                      />
-                      <div className="grid gap-1.5 leading-none">
-                        <Label htmlFor="send-sms" className="text-sm font-medium cursor-pointer">
-                          Send SMS notification to customer
-                        </Label>
-                        <p className="text-xs text-gray-600">
-                          Notify {customerData.firstName || customerData.name || repair.customerName} at {customerData.phone} about this status change
-                        </p>
+                  {/* Message Template Cards */}
+                  {customerData?.phone && selectedStatus && (
+                    <div className="space-y-3">
+                      <Label>SMS Message Template</Label>
+                      <div className="space-y-2">
+                        {/* None Option Card */}
+                        <div
+                          onClick={() => setSelectedMessageTemplate('none')}
+                          className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${
+                            selectedMessageTemplate === 'none'
+                              ? 'border-navy bg-navy/5 shadow-sm'
+                              : 'border-gray-200 hover:border-navy/30 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                              selectedMessageTemplate === 'none' ? 'border-navy bg-navy' : 'border-gray-300'
+                            }`}>
+                              {selectedMessageTemplate === 'none' && (
+                                <div className="w-2 h-2 bg-white rounded-full"></div>
+                              )}
+                            </div>
+                            <span className="font-medium text-sm">None - Don't send SMS</span>
+                          </div>
+                        </div>
+
+                        {/* Template Cards */}
+                        {templates.map((template) => (
+                          <div
+                            key={template.id}
+                            onClick={() => setSelectedMessageTemplate(template.id)}
+                            className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${
+                              selectedMessageTemplate === template.id
+                                ? 'border-blue-500 bg-blue-50 shadow-sm'
+                                : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/30'
+                            }`}
+                          >
+                            <div className="space-y-2">
+                              {/* Card Header */}
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                    selectedMessageTemplate === template.id ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                                  }`}>
+                                    {selectedMessageTemplate === template.id && (
+                                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="font-medium text-sm text-navy">{template.name}</p>
+                                    {template.status === selectedStatus && (
+                                      <span className="text-xs text-blue-600">(Recommended for this status)</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <MessageSquare size={16} className="text-blue-600 flex-shrink-0" />
+                              </div>
+
+                              {/* Message Preview */}
+                              <div className="bg-white border border-blue-100 rounded p-2 mt-2">
+                                <p className="text-xs font-semibold text-gray-700 mb-1">Preview:</p>
+                                <p className="text-xs text-gray-800 whitespace-pre-wrap">
+                                  {getMessagePreview(template.content)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
+
+                      {/* Recipient Info */}
+                      {selectedMessageTemplate && selectedMessageTemplate !== 'none' && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
+                          <p className="text-xs text-blue-800">
+                            Will be sent to: <span className="font-semibold">{customerData.firstName || repair.customerName}</span> ({customerData.phone})
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -801,7 +911,12 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                     ) : (
                       <>
                         <MessageSquare size={16} />
-                        Update Status{sendSMS && customerData?.phone ? ' & Send SMS' : ''}
+                        Update Status
+                        {selectedMessageTemplate && selectedMessageTemplate !== 'none' && customerData?.phone && (
+                          <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
+                            + Send SMS
+                          </span>
+                        )}
                       </>
                     )}
                   </Button>
