@@ -36,6 +36,11 @@ export const StockTakingPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState<StockTakeStatus | 'all'>('all');
 
+  // Debug: Log sessions when they change
+  useEffect(() => {
+    console.log('Sessions state updated:', sessions);
+  }, [sessions]);
+
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -52,19 +57,23 @@ export const StockTakingPage: React.FC = () => {
   const [approvalReason, setApprovalReason] = useState('');
 
   useEffect(() => {
+    console.log('useEffect triggered, filterStatus:', filterStatus);
     fetchSessions();
-  }, [filterStatus]);
+  }, [filterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchSessions = async () => {
     try {
       setLoading(true);
       const status = filterStatus === 'all' ? undefined : filterStatus;
+      console.log('Fetching sessions with status filter:', status);
       const data = await stockTakingService.getSessions(status);
+      console.log('Received sessions data:', data);
+      console.log('Sessions count:', data?.length);
       setSessions(data || []);
     } catch (error: any) {
       toast({ title: "Error", description: "Failed to load sessions", variant: "destructive" });
       setSessions([]); // Ensure sessions is always an array
-      console.error(error);
+      console.error('Error fetching sessions:', error);
     } finally {
       setLoading(false);
     }
@@ -294,10 +303,15 @@ export const StockTakingPage: React.FC = () => {
           <h1 className="text-3xl font-bold text-navy">Stock Taking</h1>
           <p className="text-gray-600 mt-1">Manage inventory stock take sessions</p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-navy hover:bg-navy/90">
-          <Plus size={16} className="mr-2" />
-          New Stock Take
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={fetchSessions} variant="outline">
+            🔄 Refresh
+          </Button>
+          <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-navy hover:bg-navy/90">
+            <Plus size={16} className="mr-2" />
+            New Stock Take
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

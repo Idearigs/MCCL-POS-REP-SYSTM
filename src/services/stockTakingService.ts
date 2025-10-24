@@ -21,7 +21,10 @@ export const stockTakingService = {
   // Get all sessions
   getSessions: async (status?: StockTakeStatus): Promise<StockTakeSession[]> => {
     const params = status ? { status } : {};
+    console.log('getSessions params:', params);
     const response = await apiClient.get('/stock-taking/sessions', { params });
+    console.log('getSessions response:', response);
+    console.log('getSessions response.data:', response.data);
     return response.data;
   },
 
