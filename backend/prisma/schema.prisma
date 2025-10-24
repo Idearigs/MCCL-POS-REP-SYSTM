@@ -163,6 +163,7 @@ model products {
   description    String?
   sku            String
   barcode        String?
+  qrCode         String?
   categoryId     String?
   supplierId     String?
   costPrice      Decimal?
@@ -327,9 +328,10 @@ model tenants {
   inventory_logs   inventory_logs[]
   products         products[]
   repairs          repairs[]
-  sales            sales[]
-  suppliers        suppliers[]
-  users            users[]
+  sales                 sales[]
+  suppliers             suppliers[]
+  users                 users[]
+  stock_take_sessions   stock_take_sessions[]
 }
 
 model users {
@@ -349,9 +351,12 @@ model users {
   audit_logs      audit_logs[]
   calendar_events calendar_events[]
   documents       documents[]
-  repairs         repairs[]
-  sales           sales[]
-  tenants         tenants           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  repairs                     repairs[]
+  sales                       sales[]
+  tenants                     tenants                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  created_stock_takes         stock_take_sessions[]     @relation("StockTakeCreator")
+  approved_stock_takes        stock_take_sessions[]     @relation("StockTakeApprover")
+  scanned_stock_items         stock_take_items[]
 }
 
 enum ContactType {
@@ -452,4 +457,61 @@ enum UserRole {
   MANAGER
   STAFF
   READONLY
+}
+
+enum StockTakeStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum StockTakeItemStatus {
+  VERIFIED
+  MISSING
+  UNEXPECTED
+  DAMAGED
+}
+
+model stock_take_sessions {
+  id                String             @id
+  tenantId          String
+  sessionName       String
+  location          String?
+  remarks           String?
+  status            StockTakeStatus    @default(DRAFT)
+  createdBy         String
+  approvedBy        String?
+  approvedAt        DateTime?
+  rejectionReason   String?
+  completedAt       DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime
+  tenants           tenants            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  creator           users              @relation("StockTakeCreator", fields: [createdBy], references: [id])
+  approver          users?             @relation("StockTakeApprover", fields: [approvedBy], references: [id])
+  stock_take_items  stock_take_items[]
+}
+
+model stock_take_items {
+  id                String                @id
+  sessionId         String
+  productId         String?
+  scannedCode       String
+  productName       String?
+  productSku        String?
+  expectedQuantity  Int?
+  scannedQuantity   Int                   @default(1)
+  systemQuantity    Int?
+  variance          Int?
+  status            StockTakeItemStatus
+  notes             String?
+  scannedBy         String
+  scannedAt         DateTime              @default(now())
+  createdAt         DateTime              @default(now())
+  session           stock_take_sessions   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  scanner           users                 @relation(fields: [scannedBy], references: [id])
 }
