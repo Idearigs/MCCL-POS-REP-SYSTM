@@ -13,7 +13,7 @@ import {
   SidebarMenuButton,
   SidebarFooter
 } from "@/components/ui/sidebar";
-import { Package, FileText, User, Settings, Calendar, Tag, Search, Database, LogOut, CreditCard, History, TrendingUp, Users } from 'lucide-react';
+import { Package, FileText, User, Settings, Calendar, Tag, Search, Database, LogOut, CreditCard, History, TrendingUp, Users, ClipboardCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,6 +33,7 @@ const mainNavigation: NavigationItem[] = [
   { title: 'Repair Jobs', path: '/repairs', icon: FileText },
   { title: 'Customers', path: '/customers', icon: User },
   { title: 'Inventory', path: '/inventory', icon: Package },
+  { title: 'Stock Taking', path: '/stock-taking', icon: ClipboardCheck },
   { title: 'Calendar', path: '/calendar', icon: Calendar },
   { title: 'History', path: '/history', icon: History },
 ];

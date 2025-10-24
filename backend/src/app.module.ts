@@ -17,6 +17,7 @@ import {
   RepairsModule
 } from './features';
 import { CalendarEventsModule } from './features/calendar-events/calendar-events.module';
+import { StockTakingModule } from './features/stock-taking/stock-taking.module';
 
 // External integrations
 import { 
@@ -85,6 +86,7 @@ import {
     SalesModule,
     RepairsModule,
     CalendarEventsModule,
+    StockTakingModule,
   ],
   controllers: [AppController],
   providers: [

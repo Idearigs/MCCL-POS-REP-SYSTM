@@ -30,6 +30,7 @@ import ApiTestPage from "./components/ApiTestPage";
 import AdminManagement from "./pages/AdminManagement";
 import SalesPage from "./pages/SalesPage";
 import CashiersPage from "./pages/CashiersPage";
+import { StockTakingPage } from "./pages/StockTakingPage";
 import PWAInstallPrompt from "./components/pwa/PWAInstallPrompt";
 import OfflineIndicator from "./components/pwa/OfflineIndicator";
 import PWAUpdateNotifier from "./components/pwa/PWAUpdateNotifier";
@@ -76,6 +77,7 @@ const App = () => (
                   <Route path="/repairs" element={<PrivateRoute><RepairsPage /></PrivateRoute>} />
                   <Route path="/customers" element={<PrivateRoute><CustomersPage /></PrivateRoute>} />
                   <Route path="/inventory" element={<PrivateRoute><InventoryPage /></PrivateRoute>} />
+                  <Route path="/stock-taking" element={<PrivateRoute><StockTakingPage /></PrivateRoute>} />
                   <Route path="/sales" element={<PrivateRoute><SalesPage /></PrivateRoute>} />
                   <Route path="/cashiers" element={<PrivateRoute><CashiersPage /></PrivateRoute>} />
                   <Route path="/calendar" element={<PrivateRoute><CalendarPage /></PrivateRoute>} />
