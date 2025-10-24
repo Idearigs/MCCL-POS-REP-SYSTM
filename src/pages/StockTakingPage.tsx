@@ -85,11 +85,14 @@ export const StockTakingPage: React.FC = () => {
       };
 
       const session = await stockTakingService.createSession(data);
+      console.log('Created session:', session);
       toast({ title: "Success", description: "Session created successfully" });
       setIsCreateDialogOpen(false);
       resetCreateForm();
       fetchSessions();
-      openSession(session.id);
+      if (session && session.id) {
+        openSession(session.id);
+      }
     } catch (error: any) {
       toast({ title: "Error", description: "Failed to create session", variant: "destructive" });
       console.error(error);

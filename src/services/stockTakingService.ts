@@ -13,6 +13,8 @@ export const stockTakingService = {
   // Create a new stock take session
   createSession: async (data: CreateSessionDto): Promise<StockTakeSession> => {
     const response = await apiClient.post('/stock-taking/sessions', data);
+    console.log('API Response:', response);
+    console.log('Response data:', response.data);
     return response.data;
   },
 
