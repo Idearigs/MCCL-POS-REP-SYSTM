@@ -60,9 +60,10 @@ export const StockTakingPage: React.FC = () => {
       setLoading(true);
       const status = filterStatus === 'all' ? undefined : filterStatus;
       const data = await stockTakingService.getSessions(status);
-      setSessions(data);
+      setSessions(data || []);
     } catch (error: any) {
       toast({ title: "Error", description: "Failed to load sessions", variant: "destructive" });
+      setSessions([]); // Ensure sessions is always an array
       console.error(error);
     } finally {
       setLoading(false);
@@ -321,7 +322,7 @@ export const StockTakingPage: React.FC = () => {
 
       {/* Sessions List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {sessions.map((session) => (
+        {sessions && sessions.length > 0 && sessions.map((session) => (
           <Card key={session.id} className="hover:shadow-lg transition-shadow cursor-pointer">
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -377,7 +378,7 @@ export const StockTakingPage: React.FC = () => {
         ))}
       </div>
 
-      {sessions.length === 0 && !loading && (
+      {(!sessions || sessions.length === 0) && !loading && (
         <Card className="py-12">
           <CardContent className="text-center">
             <Package size={48} className="mx-auto text-gray-400 mb-4" />
