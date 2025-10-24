@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Camera, X, AlertCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription } from '../ui/alert';
+import jsQR from 'jsqr';
 
 interface QRScannerProps {
   onScan: (code: string) => void;
@@ -17,17 +18,6 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen })
   const streamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Import BarcodeDetector dynamically
-  const [barcodeDetector, setBarcodeDetector] = useState<any>(null);
-
-  useEffect(() => {
-    // Check if BarcodeDetector is available
-    if ('BarcodeDetector' in window) {
-      // @ts-ignore
-      const detector = new window.BarcodeDetector({ formats: ['qr_code', 'ean_13', 'code_128'] });
-      setBarcodeDetector(detector);
-    }
-  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -68,10 +58,10 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen })
         await videoRef.current.play();
       }
 
-      // Start scanning loop
+      // Start scanning loop - scan frequently for instant detection
       scanIntervalRef.current = setInterval(() => {
         captureAndScan();
-      }, 500); // Scan every 500ms
+      }, 100); // Scan every 100ms for faster detection
     } catch (err: any) {
       console.error('Camera error:', err);
       setError(err.message || 'Failed to access camera');
@@ -100,7 +90,7 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen })
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
+    const context = canvas.getContext('2d', { willReadFrequently: true });
 
     if (!context || video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
@@ -112,41 +102,20 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen })
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     try {
-      if (barcodeDetector) {
-        // Use native BarcodeDetector API if available
-        const barcodes = await barcodeDetector.detect(canvas);
-        if (barcodes.length > 0) {
-          const code = barcodes[0].rawValue;
-          handleScan(code);
-        }
-      } else {
-        // Fallback: Use jsQR library
-        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-        const code = await scanImageData(imageData);
-        if (code) {
-          handleScan(code);
-        }
+      // Get image data from canvas
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+
+      // Scan for QR code using jsQR
+      const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'dontInvert',
+      });
+
+      if (code && code.data) {
+        handleScan(code.data);
       }
     } catch (err) {
       console.error('Scan error:', err);
     }
-  };
-
-  // Fallback QR code scanning using jsQR
-  const scanImageData = async (imageData: ImageData): Promise<string | null> => {
-    try {
-      // @ts-ignore - jsQR will be loaded dynamically
-      if (typeof window.jsQR !== 'undefined') {
-        // @ts-ignore
-        const code = window.jsQR(imageData.data, imageData.width, imageData.height);
-        if (code) {
-          return code.data;
-        }
-      }
-    } catch (err) {
-      console.error('jsQR scan error:', err);
-    }
-    return null;
   };
 
   const handleScan = (code: string) => {
