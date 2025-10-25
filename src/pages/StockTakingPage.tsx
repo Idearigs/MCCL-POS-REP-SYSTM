@@ -36,11 +36,6 @@ export const StockTakingPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState<StockTakeStatus | 'all'>('all');
 
-  // Debug: Log sessions when they change
-  useEffect(() => {
-    console.log('Sessions state updated:', sessions);
-  }, [sessions]);
-
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -57,7 +52,6 @@ export const StockTakingPage: React.FC = () => {
   const [approvalReason, setApprovalReason] = useState('');
 
   useEffect(() => {
-    console.log('useEffect triggered, filterStatus:', filterStatus);
     fetchSessions();
   }, [filterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -65,15 +59,12 @@ export const StockTakingPage: React.FC = () => {
     try {
       setLoading(true);
       const status = filterStatus === 'all' ? undefined : filterStatus;
-      console.log('Fetching sessions with status filter:', status);
       const data = await stockTakingService.getSessions(status);
-      console.log('Received sessions data:', data);
-      console.log('Sessions count:', data?.length);
       setSessions(data || []);
     } catch (error: any) {
       toast({ title: "Error", description: "Failed to load sessions", variant: "destructive" });
       setSessions([]); // Ensure sessions is always an array
-      console.error('Error fetching sessions:', error);
+      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -94,7 +85,6 @@ export const StockTakingPage: React.FC = () => {
       };
 
       const session = await stockTakingService.createSession(data);
-      console.log('Created session:', session);
       toast({ title: "Success", description: "Session created successfully" });
       setIsCreateDialogOpen(false);
       resetCreateForm();

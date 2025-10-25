@@ -12,32 +12,23 @@ import {
 export const stockTakingService = {
   // Create a new stock take session
   createSession: async (data: CreateSessionDto): Promise<StockTakeSession> => {
-    const response = await apiClient.post('/stock-taking/sessions', data);
-    console.log('API Response:', response);
-    console.log('Response data:', response.data);
-    return response.data;
+    return await apiClient.post('/stock-taking/sessions', data);
   },
 
   // Get all sessions
   getSessions: async (status?: StockTakeStatus): Promise<StockTakeSession[]> => {
     const params = status ? { status } : {};
-    console.log('getSessions params:', params);
-    const response = await apiClient.get('/stock-taking/sessions', { params });
-    console.log('getSessions response:', response);
-    console.log('getSessions response.data:', response.data);
-    return response.data;
+    return await apiClient.get('/stock-taking/sessions', params);
   },
 
   // Get a single session with details
   getSession: async (id: string): Promise<StockTakeSession> => {
-    const response = await apiClient.get(`/stock-taking/sessions/${id}`);
-    return response.data;
+    return await apiClient.get(`/stock-taking/sessions/${id}`);
   },
 
   // Update session
   updateSession: async (id: string, data: UpdateSessionDto): Promise<StockTakeSession> => {
-    const response = await apiClient.patch(`/stock-taking/sessions/${id}`, data);
-    return response.data;
+    return await apiClient.patch(`/stock-taking/sessions/${id}`, data);
   },
 
   // Delete session
@@ -47,20 +38,17 @@ export const stockTakingService = {
 
   // Scan an item
   scanItem: async (sessionId: string, data: ScanItemDto): Promise<ScanResult> => {
-    const response = await apiClient.post(`/stock-taking/sessions/${sessionId}/scan`, data);
-    return response.data;
+    return await apiClient.post(`/stock-taking/sessions/${sessionId}/scan`, data);
   },
 
   // Complete session
   completeSession: async (id: string): Promise<StockTakeSession> => {
-    const response = await apiClient.patch(`/stock-taking/sessions/${id}/complete`);
-    return response.data;
+    return await apiClient.patch(`/stock-taking/sessions/${id}/complete`);
   },
 
   // Approve or reject session
   approveSession: async (id: string, data: ApproveSessionDto): Promise<StockTakeSession> => {
-    const response = await apiClient.patch(`/stock-taking/sessions/${id}/approve`, data);
-    return response.data;
+    return await apiClient.patch(`/stock-taking/sessions/${id}/approve`, data);
   },
 
   // Delete item from session
@@ -70,7 +58,6 @@ export const stockTakingService = {
 
   // Get session report
   getSessionReport: async (id: string): Promise<any> => {
-    const response = await apiClient.get(`/stock-taking/sessions/${id}/report`);
-    return response.data;
+    return await apiClient.get(`/stock-taking/sessions/${id}/report`);
   },
 };
