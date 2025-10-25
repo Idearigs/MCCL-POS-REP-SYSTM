@@ -32,12 +32,17 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, hasPaymentWarning = false })
 
   // Get user information from auth context
   const user = auth.user;
-  const userName = user ? `${user.firstName} ${user.lastName}` : "Guest";
+  const userName = user && user.firstName && user.lastName
+    ? `${user.firstName} ${user.lastName}`
+    : "Guest";
   const userRole = user?.role || "GUEST";
-  const userInitials = user ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}` : "G";
+  const userInitials = user && user.firstName && user.lastName
+    ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`
+    : "G";
 
   // Format role for display (capitalize first letter, lowercase rest)
   const formatRole = (role: string) => {
+    if (!role) return "Guest";
     return role.charAt(0) + role.slice(1).toLowerCase();
   };
 
