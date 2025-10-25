@@ -12,6 +12,7 @@ import {
   Calendar,
   Filter,
 } from 'lucide-react';
+import MainLayout from '../components/layout/MainLayout';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -408,23 +409,24 @@ export const UsersPage: React.FC = () => {
   }, []);
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <UsersIcon className="h-8 w-8" />
-            User Management
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Manage users, roles, and permissions for your store
-          </p>
+    <MainLayout pageTitle="User Management">
+      <div className="p-6 space-y-6">
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <UsersIcon className="h-8 w-8" />
+              User Management
+            </h1>
+            <p className="text-gray-600 mt-1">
+              Manage users, roles, and permissions for your store
+            </p>
+          </div>
+          <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add New User
+          </Button>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add New User
-        </Button>
-      </div>
 
       {/* Stats Cards - Memoized */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -710,6 +712,7 @@ export const UsersPage: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </MainLayout>
   );
 };
