@@ -26,6 +26,7 @@ export interface InventoryItemDetails {
   id: string;
   name: string;
   category: string;
+  condition?: string;
   sku: string;
   description: string;
   price: number;
@@ -60,6 +61,7 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
     id: '',
     name: '',
     category: '',
+    condition: 'BRAND_NEW',
     sku: '',
     description: '',
     price: 0,
@@ -233,8 +235,8 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
             </div>
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
-              <Select 
-                value={editedItem.category} 
+              <Select
+                value={editedItem.category}
                 onValueChange={(value) => handleSelectChange('category', value)}
               >
                 <SelectTrigger>
@@ -252,7 +254,26 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
               </Select>
             </div>
           </div>
-          
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="condition">Product Condition</Label>
+              <Select
+                value={editedItem.condition || 'BRAND_NEW'}
+                onValueChange={(value) => handleSelectChange('condition', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select condition" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BRAND_NEW">Brand New</SelectItem>
+                  <SelectItem value="USED">Used</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2"></div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="sku">SKU</Label>

@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { QRScanner } from '../components/stock-taking/QRScanner';
+import { VarianceReportDialog } from '../components/stock-taking/VarianceReportDialog';
 import { stockTakingService } from '../services/stockTakingService';
 import { StockTakeSession, StockTakeStatus, StockTakeItem, CreateSessionDto, ScanItemDto, StockTakeItemStatus } from '../types/stock-taking';
 import { useToast } from '../components/ui/use-toast';
@@ -40,6 +41,7 @@ export const StockTakingPage: React.FC = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
+  const [isVarianceDialogOpen, setIsVarianceDialogOpen] = useState(false);
   const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
 
   // Form states
@@ -494,7 +496,7 @@ export const StockTakingPage: React.FC = () => {
             </Button>
           )}
           {canApprove && (
-            <Button onClick={() => setIsApprovalDialogOpen(true)} className="bg-green-600 hover:bg-green-700">
+            <Button onClick={() => setIsVarianceDialogOpen(true)} className="bg-green-600 hover:bg-green-700">
               <CheckCircle size={16} className="mr-2" />
               Review & Approve
             </Button>
@@ -762,6 +764,18 @@ export const StockTakingPage: React.FC = () => {
         isOpen={isScannerOpen}
         onScan={handleScan}
         onClose={() => setIsScannerOpen(false)}
+      />
+
+      {/* Variance Report Dialog (shown before approval) */}
+      <VarianceReportDialog
+        sessionId={currentSession?.id || null}
+        sessionName={currentSession?.sessionName || ''}
+        isOpen={isVarianceDialogOpen}
+        onClose={() => setIsVarianceDialogOpen(false)}
+        onProceedToApproval={() => {
+          setIsVarianceDialogOpen(false);
+          setIsApprovalDialogOpen(true);
+        }}
       />
     </div>
   );

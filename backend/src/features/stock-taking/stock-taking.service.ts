@@ -367,6 +367,7 @@ export class StockTakingService {
       },
       include: {
         stock_take_items: true,
+        creator: true,
       },
     });
 
@@ -376,6 +377,18 @@ export class StockTakingService {
 
     if (session.status !== PrismaStockTakeStatus.PENDING_APPROVAL && session.status !== PrismaStockTakeStatus.COMPLETED) {
       throw new BadRequestException('Can only approve sessions that are pending approval or completed');
+    }
+
+    // CRITICAL SECURITY: Prevent self-approval
+    if (session.createdBy === userId) {
+      throw new ForbiddenException(
+        'You cannot approve your own stock take session. Another manager or owner must approve this session for security and accountability.'
+      );
+    }
+
+    // RELIABILITY: Validate variance thresholds before approval
+    if (dto.approve && dto.applyToInventory) {
+      await this.validateVariances(session.stock_take_items);
     }
 
     if (dto.approve) {
@@ -392,9 +405,9 @@ export class StockTakingService {
         data: updateData,
       });
 
-      // Apply to inventory if requested
+      // Apply to inventory if requested (using transaction for reliability)
       if (dto.applyToInventory) {
-        await this.applyToInventory(tenantId, session);
+        await this.applyToInventory(tenantId, session, userId);
       }
 
       return updated;
@@ -417,39 +430,111 @@ export class StockTakingService {
     }
   }
 
-  // Apply stock take results to inventory
-  private async applyToInventory(tenantId: string, session: any) {
+  // Validate variance thresholds (reliability check)
+  private async validateVariances(items: any[]) {
+    const largeVariances = items.filter((item) => {
+      if (!item.variance || !item.systemQuantity) return false;
+
+      // Calculate variance percentage
+      const variancePercent = Math.abs((item.variance / item.systemQuantity) * 100);
+
+      // Flag if variance is more than 20% OR absolute variance > 10 items
+      return variancePercent > 20 || Math.abs(item.variance) > 10;
+    });
+
+    if (largeVariances.length > 0) {
+      const details = largeVariances.map((item) => {
+        const variancePercent = Math.abs((item.variance / item.systemQuantity) * 100).toFixed(1);
+        return `${item.productName} (SKU: ${item.productSku}): ${item.variance > 0 ? '+' : ''}${item.variance} units (${variancePercent}% variance)`;
+      }).join('; ');
+
+      throw new BadRequestException(
+        `Large inventory variances detected in ${largeVariances.length} product(s). Please review carefully: ${details}. If this is correct, contact your system administrator.`
+      );
+    }
+  }
+
+  // Apply stock take results to inventory (TRANSACTION-BASED for reliability)
+  private async applyToInventory(tenantId: string, session: any, userId: string) {
     const items = session.stock_take_items;
 
-    for (const item of items) {
-      if (item.productId && item.status === StockTakeItemStatus.VERIFIED) {
-        // Update product stock quantity
-        await this.prisma.products.update({
-          where: { id: item.productId },
-          data: {
-            stockQuantity: item.scannedQuantity,
-            updatedAt: new Date(),
-          },
-        });
+    // Check for concurrent active stock takes
+    const activeStockTakes = await this.prisma.stock_take_sessions.count({
+      where: {
+        tenantId,
+        id: { not: session.id },
+        status: {
+          in: [PrismaStockTakeStatus.IN_PROGRESS, PrismaStockTakeStatus.PENDING_APPROVAL],
+        },
+      },
+    });
 
-        // Create inventory log entry
-        if (item.variance !== 0 && item.variance !== null) {
-          await this.prisma.inventory_logs.create({
-            data: {
-              id: `invlog_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-              tenantId,
-              productId: item.productId,
-              type: 'ADJUSTMENT',
-              quantity: Math.abs(item.variance),
-              previousQty: item.systemQuantity || 0,
-              newQty: item.scannedQuantity,
-              reason: `Stock take adjustment - Session: ${session.sessionName}`,
-              reference: session.id,
-              createdAt: new Date(),
-            },
-          });
+    if (activeStockTakes > 0) {
+      throw new BadRequestException(
+        'There are other active stock take sessions. Please complete or cancel them before applying this stock take to prevent inventory conflicts.'
+      );
+    }
+
+    // Use transaction to ensure all-or-nothing update (CRITICAL for data integrity)
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        let updatedCount = 0;
+        let adjustmentCount = 0;
+
+        for (const item of items) {
+          if (item.productId && item.status === StockTakeItemStatus.VERIFIED) {
+            // Verify product still exists and hasn't been modified
+            const currentProduct = await tx.products.findUnique({
+              where: { id: item.productId },
+            });
+
+            if (!currentProduct) {
+              throw new BadRequestException(
+                `Product ${item.productName} (SKU: ${item.productSku}) no longer exists in the system. Cannot apply stock take.`
+              );
+            }
+
+            // Update product stock quantity
+            await tx.products.update({
+              where: { id: item.productId },
+              data: {
+                stockQuantity: item.scannedQuantity,
+                updatedAt: new Date(),
+              },
+            });
+
+            updatedCount++;
+
+            // Create inventory log entry for ALL items (even zero variance for audit trail)
+            await tx.inventory_logs.create({
+              data: {
+                id: `invlog_${Date.now()}_${Math.random().toString(36).substring(7)}_${updatedCount}`,
+                tenantId,
+                productId: item.productId,
+                type: 'ADJUSTMENT',
+                quantity: Math.abs(item.variance || 0),
+                previousQty: item.systemQuantity || 0,
+                newQty: item.scannedQuantity,
+                reason: `Stock take adjustment - Session: ${session.sessionName} | Variance: ${item.variance > 0 ? '+' : ''}${item.variance || 0} | Approved by: ${userId}`,
+                reference: session.id,
+                createdAt: new Date(),
+              },
+            });
+
+            if (item.variance !== 0 && item.variance !== null) {
+              adjustmentCount++;
+            }
+          }
         }
-      }
+
+        console.log(`✅ Stock take applied: ${updatedCount} products updated, ${adjustmentCount} adjustments made`);
+      });
+    } catch (error) {
+      // Transaction failed - inventory remains unchanged
+      console.error('❌ Stock take application failed:', error.message);
+      throw new BadRequestException(
+        `Failed to apply stock take to inventory: ${error.message}. All changes have been rolled back.`
+      );
     }
   }
 
@@ -550,6 +635,107 @@ export class StockTakingService {
       },
       summary: session.summary,
       items: session.stock_take_items,
+    };
+  }
+
+  // Get detailed variance report (for approval review)
+  async getVarianceReport(tenantId: string, sessionId: string) {
+    const session = await this.prisma.stock_take_sessions.findFirst({
+      where: {
+        id: sessionId,
+        tenantId,
+      },
+      include: {
+        stock_take_items: {
+          where: {
+            variance: {
+              not: 0,
+            },
+          },
+          orderBy: {
+            variance: 'desc',
+          },
+        },
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Stock take session not found');
+    }
+
+    // Categorize variances
+    const criticalVariances = []; // >20% or >10 items
+    const moderateVariances = []; // 10-20% or 5-10 items
+    const minorVariances = []; // <10% and <5 items
+
+    let totalVarianceValue = 0;
+
+    for (const item of session.stock_take_items) {
+      if (!item.variance || item.variance === 0) continue;
+
+      const variancePercent = item.systemQuantity
+        ? Math.abs((item.variance / item.systemQuantity) * 100)
+        : 0;
+
+      const absVariance = Math.abs(item.variance);
+
+      // Get product value for impact calculation
+      const product = await this.prisma.products.findUnique({
+        where: { id: item.productId },
+        select: { sellingPrice: true },
+      });
+
+      const valueImpact = product
+        ? parseFloat(product.sellingPrice.toString()) * absVariance
+        : 0;
+
+      totalVarianceValue += item.variance > 0 ? valueImpact : -valueImpact;
+
+      const varianceData = {
+        productName: item.productName,
+        productSku: item.productSku,
+        systemQuantity: item.systemQuantity,
+        scannedQuantity: item.scannedQuantity,
+        variance: item.variance,
+        variancePercent: variancePercent.toFixed(1),
+        valueImpact: valueImpact.toFixed(2),
+        status: item.status,
+      };
+
+      if (variancePercent > 20 || absVariance > 10) {
+        criticalVariances.push(varianceData);
+      } else if (variancePercent > 10 || absVariance > 5) {
+        moderateVariances.push(varianceData);
+      } else {
+        minorVariances.push(varianceData);
+      }
+    }
+
+    return {
+      sessionId: session.id,
+      sessionName: session.sessionName,
+      totalItems: session.stock_take_items.length,
+      totalVarianceValue: totalVarianceValue.toFixed(2),
+      variances: {
+        critical: {
+          count: criticalVariances.length,
+          items: criticalVariances,
+          requiresAdminApproval: criticalVariances.length > 0,
+        },
+        moderate: {
+          count: moderateVariances.length,
+          items: moderateVariances,
+        },
+        minor: {
+          count: minorVariances.length,
+          items: minorVariances,
+        },
+      },
+      recommendation: criticalVariances.length > 0
+        ? 'REVIEW_REQUIRED: Critical variances detected. Please verify physical count before approving.'
+        : moderateVariances.length > 0
+        ? 'CAUTION: Moderate variances detected. Review recommended.'
+        : 'OK: Only minor variances detected.',
     };
   }
 }

@@ -169,10 +169,12 @@ model products {
   costPrice      Decimal?
   sellingPrice   Decimal
   discountPrice  Decimal?
+  taxRate        Decimal?         @default(0)
   stockQuantity  Int              @default(0)
   minStockLevel  Int              @default(1)
   maxStockLevel  Int?
   material       JewelryMaterial?
+  condition      ProductCondition?    @default(BRAND_NEW)
   weight         Decimal?
   purity         String?
   gemstone       String?
@@ -402,6 +404,11 @@ enum JewelryMaterial {
   GEMSTONE
   STAINLESS_STEEL
   OTHER
+}
+
+enum ProductCondition {
+  BRAND_NEW
+  USED
 }
 
 enum PaymentMethod {

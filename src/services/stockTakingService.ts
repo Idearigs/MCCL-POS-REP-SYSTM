@@ -60,4 +60,9 @@ export const stockTakingService = {
   getSessionReport: async (id: string): Promise<any> => {
     return await apiClient.get(`/stock-taking/sessions/${id}/report`);
   },
+
+  // Get variance report (for approval review)
+  getVarianceReport: async (id: string): Promise<any> => {
+    return await apiClient.get(`/stock-taking/sessions/${id}/variance-report`);
+  },
 };

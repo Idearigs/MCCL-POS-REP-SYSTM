@@ -119,4 +119,13 @@ export class StockTakingController {
   ) {
     return this.stockTakingService.getSessionReport(tenantId, id);
   }
+
+  // Get detailed variance report (for approval review)
+  @Get('sessions/:id/variance-report')
+  async getVarianceReport(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.stockTakingService.getVarianceReport(tenantId, id);
+  }
 }

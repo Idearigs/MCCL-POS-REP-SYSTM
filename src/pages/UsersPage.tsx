@@ -1,0 +1,715 @@
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import {
+  Users as UsersIcon,
+  Plus,
+  Edit,
+  Key,
+  UserCheck,
+  UserX,
+  Search,
+  Shield,
+  Mail,
+  Calendar,
+  Filter,
+} from 'lucide-react';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '../components/ui/dialog';
+import { Label } from '../components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
+import { useToast } from '../components/ui/use-toast';
+import { userService } from '../services/userService';
+import { User, UserRole, CreateUserDto, UpdateUserDto } from '../types/user';
+
+// Optimized: Memoized User Card Component
+interface UserCardProps {
+  user: User;
+  onEdit: (user: User) => void;
+  onResetPassword: (user: User) => void;
+  onToggleStatus: (user: User) => void;
+}
+
+const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onToggleStatus }) => {
+  const getRoleBadgeColor = useCallback((role: UserRole) => {
+    switch (role) {
+      case UserRole.OWNER:
+        return 'bg-purple-100 text-purple-800 border-purple-200';
+      case UserRole.MANAGER:
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case UserRole.STAFF:
+        return 'bg-green-100 text-green-800 border-green-200';
+      case UserRole.READONLY:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  }, []);
+
+  const getRoleIcon = useCallback((role: UserRole) => {
+    switch (role) {
+      case UserRole.OWNER:
+      case UserRole.MANAGER:
+        return <Shield className="h-3 w-3" />;
+      case UserRole.STAFF:
+      case UserRole.READONLY:
+        return <UsersIcon className="h-3 w-3" />;
+      default:
+        return <UsersIcon className="h-3 w-3" />;
+    }
+  }, []);
+
+  return (
+    <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+      <div className="flex items-center gap-4 flex-1">
+        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+          {user.firstName.charAt(0)}
+          {user.lastName.charAt(0)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-semibold">
+              {user.firstName} {user.lastName}
+            </h3>
+            <Badge className={getRoleBadgeColor(user.role)}>
+              <span className="flex items-center gap-1">
+                {getRoleIcon(user.role)}
+                {user.role}
+              </span>
+            </Badge>
+            {user.isActive ? (
+              <Badge className="bg-green-100 text-green-800 border-green-200">Active</Badge>
+            ) : (
+              <Badge className="bg-red-100 text-red-800 border-red-200">Inactive</Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-4 text-sm text-gray-600 mt-1 flex-wrap">
+            <span className="flex items-center gap-1 truncate">
+              <Mail className="h-3 w-3 flex-shrink-0" />
+              {user.email}
+            </span>
+            {user.lastLogin && (
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3 w-3 flex-shrink-0" />
+                Last: {new Date(user.lastLogin).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-2 flex-shrink-0">
+        <Button variant="outline" size="sm" onClick={() => onEdit(user)}>
+          <Edit className="h-4 w-4 mr-1" />
+          Edit
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => onResetPassword(user)}>
+          <Key className="h-4 w-4 mr-1" />
+          Reset
+        </Button>
+        <Button
+          variant={user.isActive ? 'destructive' : 'default'}
+          size="sm"
+          onClick={() => onToggleStatus(user)}
+        >
+          {user.isActive ? (
+            <>
+              <UserX className="h-4 w-4 mr-1" />
+              Deactivate
+            </>
+          ) : (
+            <>
+              <UserCheck className="h-4 w-4 mr-1" />
+              Activate
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+});
+
+UserCard.displayName = 'UserCard';
+
+// Optimized: Stats Card Component
+interface StatsCardProps {
+  title: string;
+  value: number;
+  icon: React.ReactNode;
+}
+
+const StatsCard = memo<StatsCardProps>(({ title, value, icon }) => (
+  <Card>
+    <CardContent className="pt-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-gray-600">{title}</p>
+          <p className="text-2xl font-bold">{value}</p>
+        </div>
+        {icon}
+      </div>
+    </CardContent>
+  </Card>
+));
+
+StatsCard.displayName = 'StatsCard';
+
+export const UsersPage: React.FC = () => {
+  const { toast } = useToast();
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [filterRole, setFilterRole] = useState<UserRole | 'all'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+
+  // Dialog states
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
+  // Form states
+  const [formData, setFormData] = useState<CreateUserDto>({
+    email: '',
+    password: '',
+    firstName: '',
+    lastName: '',
+    role: UserRole.STAFF,
+  });
+  const [newPassword, setNewPassword] = useState('');
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await userService.getUsers();
+      setUsers(response.data || []);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load users',
+        variant: 'destructive',
+      });
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  // Optimized: Memoized filtered users
+  const filteredUsers = useMemo(() => {
+    return users.filter((user) => {
+      const searchLower = debouncedSearch.toLowerCase();
+      const matchesSearch =
+        user.firstName.toLowerCase().includes(searchLower) ||
+        user.lastName.toLowerCase().includes(searchLower) ||
+        user.email.toLowerCase().includes(searchLower);
+
+      const matchesRole = filterRole === 'all' || user.role === filterRole;
+
+      const matchesStatus =
+        filterStatus === 'all' ||
+        (filterStatus === 'active' && user.isActive) ||
+        (filterStatus === 'inactive' && !user.isActive);
+
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+  }, [users, debouncedSearch, filterRole, filterStatus]);
+
+  // Optimized: Memoized statistics
+  const stats = useMemo(() => ({
+    total: users.length,
+    active: users.filter((u) => u.isActive).length,
+    managers: users.filter((u) => u.role === UserRole.MANAGER || u.role === UserRole.OWNER).length,
+    staff: users.filter((u) => u.role === UserRole.STAFF).length,
+  }), [users]);
+
+  // Optimized: Stable callback functions
+  const handleCreateUser = useCallback(async () => {
+    if (!formData.email || !formData.password || !formData.firstName || !formData.lastName) {
+      toast({
+        title: 'Error',
+        description: 'Please fill in all required fields',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await userService.createUser(formData);
+      toast({
+        title: 'Success',
+        description: 'User created successfully',
+      });
+      setIsCreateDialogOpen(false);
+      setFormData({
+        email: '',
+        password: '',
+        firstName: '',
+        lastName: '',
+        role: UserRole.STAFF,
+      });
+      fetchUsers();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to create user',
+        variant: 'destructive',
+      });
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, [formData, toast, fetchUsers]);
+
+  const handleUpdateUser = useCallback(async () => {
+    if (!selectedUser) return;
+
+    try {
+      setLoading(true);
+      const updateData: UpdateUserDto = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        role: formData.role,
+      };
+      await userService.updateUser(selectedUser.id, updateData);
+      toast({
+        title: 'Success',
+        description: 'User updated successfully',
+      });
+      setIsEditDialogOpen(false);
+      setSelectedUser(null);
+      fetchUsers();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to update user',
+        variant: 'destructive',
+      });
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedUser, formData, toast, fetchUsers]);
+
+  const handleResetPassword = useCallback(async () => {
+    if (!selectedUser || !newPassword) {
+      toast({
+        title: 'Error',
+        description: 'Please enter a new password',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: 'Error',
+        description: 'Password must be at least 6 characters',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await userService.resetPassword(selectedUser.id, newPassword);
+      toast({
+        title: 'Success',
+        description: 'Password reset successfully',
+      });
+      setIsPasswordDialogOpen(false);
+      setNewPassword('');
+      setSelectedUser(null);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to reset password',
+        variant: 'destructive',
+      });
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedUser, newPassword, toast]);
+
+  const handleToggleUserStatus = useCallback(async (user: User) => {
+    try {
+      setLoading(true);
+      if (user.isActive) {
+        await userService.deactivateUser(user.id);
+        toast({
+          title: 'Success',
+          description: 'User deactivated successfully',
+        });
+      } else {
+        await userService.activateUser(user.id);
+        toast({
+          title: 'Success',
+          description: 'User activated successfully',
+        });
+      }
+      fetchUsers();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to update user status',
+        variant: 'destructive',
+      });
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, [toast, fetchUsers]);
+
+  const openEditDialog = useCallback((user: User) => {
+    setSelectedUser(user);
+    setFormData({
+      email: user.email,
+      password: '',
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+    });
+    setIsEditDialogOpen(true);
+  }, []);
+
+  const openPasswordDialog = useCallback((user: User) => {
+    setSelectedUser(user);
+    setNewPassword('');
+    setIsPasswordDialogOpen(true);
+  }, []);
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <UsersIcon className="h-8 w-8" />
+            User Management
+          </h1>
+          <p className="text-gray-600 mt-1">
+            Manage users, roles, and permissions for your store
+          </p>
+        </div>
+        <Button onClick={() => setIsCreateDialogOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add New User
+        </Button>
+      </div>
+
+      {/* Stats Cards - Memoized */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <StatsCard
+          title="Total Users"
+          value={stats.total}
+          icon={<UsersIcon className="h-8 w-8 text-blue-600" />}
+        />
+        <StatsCard
+          title="Active Users"
+          value={stats.active}
+          icon={<UserCheck className="h-8 w-8 text-green-600" />}
+        />
+        <StatsCard
+          title="Managers"
+          value={stats.managers}
+          icon={<Shield className="h-8 w-8 text-purple-600" />}
+        />
+        <StatsCard
+          title="Staff"
+          value={stats.staff}
+          icon={<UsersIcon className="h-8 w-8 text-gray-600" />}
+        />
+      </div>
+
+      {/* Filters and Search */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filter Users
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label>Search</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search by name or email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Role</Label>
+              <Select value={filterRole} onValueChange={(value: any) => setFilterRole(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Roles</SelectItem>
+                  <SelectItem value={UserRole.OWNER}>Owner</SelectItem>
+                  <SelectItem value={UserRole.MANAGER}>Manager</SelectItem>
+                  <SelectItem value={UserRole.STAFF}>Staff</SelectItem>
+                  <SelectItem value={UserRole.READONLY}>Read Only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Status</Label>
+              <Select value={filterStatus} onValueChange={(value: any) => setFilterStatus(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="active">Active Only</SelectItem>
+                  <SelectItem value="inactive">Inactive Only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Users List */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Users ({filteredUsers.length})</CardTitle>
+          <CardDescription>All users in your organization</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading && (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          )}
+
+          {!loading && filteredUsers.length === 0 && (
+            <div className="text-center py-8 text-gray-500">No users found</div>
+          )}
+
+          {!loading && filteredUsers.length > 0 && (
+            <div className="space-y-3">
+              {filteredUsers.map((user) => (
+                <UserCard
+                  key={user.id}
+                  user={user}
+                  onEdit={openEditDialog}
+                  onResetPassword={openPasswordDialog}
+                  onToggleStatus={handleToggleUserStatus}
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Create User Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New User</DialogTitle>
+            <DialogDescription>Add a new user to your organization</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="firstName">First Name *</Label>
+                <Input
+                  id="firstName"
+                  value={formData.firstName}
+                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  placeholder="John"
+                />
+              </div>
+              <div>
+                <Label htmlFor="lastName">Last Name *</Label>
+                <Input
+                  id="lastName"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  placeholder="Doe"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="john.doe@example.com"
+              />
+            </div>
+            <div>
+              <Label htmlFor="password">Password *</Label>
+              <Input
+                id="password"
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="Min. 6 characters"
+              />
+            </div>
+            <div>
+              <Label htmlFor="role">Role *</Label>
+              <Select
+                value={formData.role}
+                onValueChange={(value: UserRole) => setFormData({ ...formData, role: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UserRole.OWNER}>Owner - Full system access</SelectItem>
+                  <SelectItem value={UserRole.MANAGER}>
+                    Manager - Can manage users and approve actions
+                  </SelectItem>
+                  <SelectItem value={UserRole.STAFF}>Staff - Standard POS access</SelectItem>
+                  <SelectItem value={UserRole.READONLY}>Read Only - View access only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateUser} disabled={loading}>
+              Create User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>Update user information and role</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="editFirstName">First Name</Label>
+                <Input
+                  id="editFirstName"
+                  value={formData.firstName}
+                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="editLastName">Last Name</Label>
+                <Input
+                  id="editLastName"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Email</Label>
+              <Input value={formData.email} disabled />
+              <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+            </div>
+            <div>
+              <Label htmlFor="editRole">Role</Label>
+              <Select
+                value={formData.role}
+                onValueChange={(value: UserRole) => setFormData({ ...formData, role: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UserRole.OWNER}>Owner</SelectItem>
+                  <SelectItem value={UserRole.MANAGER}>Manager</SelectItem>
+                  <SelectItem value={UserRole.STAFF}>Staff</SelectItem>
+                  <SelectItem value={UserRole.READONLY}>Read Only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateUser} disabled={loading}>
+              Update User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset User Password</DialogTitle>
+            <DialogDescription>
+              Set a new password for {selectedUser?.firstName} {selectedUser?.lastName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="newPassword">New Password</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Min. 6 characters"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                The user will need to use this password on their next login
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPasswordDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleResetPassword} disabled={loading}>
+              Reset Password
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};

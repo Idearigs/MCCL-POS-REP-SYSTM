@@ -13,7 +13,7 @@ import {
   SidebarMenuButton,
   SidebarFooter
 } from "@/components/ui/sidebar";
-import { Package, FileText, User, Settings, Calendar, Tag, Search, Database, LogOut, CreditCard, History, TrendingUp, Users, ClipboardCheck } from 'lucide-react';
+import { Package, FileText, User, Settings, Calendar, Tag, Search, Database, LogOut, CreditCard, History, TrendingUp, Users, ClipboardCheck, UserCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/contexts/AuthContext';
@@ -134,7 +134,7 @@ const Sidebar = () => {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton 
+                <SidebarMenuButton
                   asChild
                   isActive={location.pathname === '/settings'}
                   tooltip="Settings"
@@ -148,8 +148,25 @@ const Sidebar = () => {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {(auth.user?.role === 'OWNER' || auth.user?.role === 'MANAGER') && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location.pathname === '/users'}
+                    tooltip="User Management"
+                    className={`rounded-xl transition-all duration-200 ${location.pathname === '/users' ? 'bg-navy-dark text-gold font-medium' : 'text-white hover:bg-navy-light'}`}
+                  >
+                    <Link to="/users" className="flex items-center px-3 py-2">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${location.pathname === '/users' ? 'bg-navy-dark' : 'bg-navy-light'}`}>
+                        <UserCog size={16} className={location.pathname === '/users' ? 'text-gold' : 'text-gray-300'} />
+                      </div>
+                      <span>User Management</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
               <SidebarMenuItem>
-                <SidebarMenuButton 
+                <SidebarMenuButton
                   asChild
                   isActive={location.pathname === '/subscription'}
                   tooltip="Subscription"

@@ -28,6 +28,11 @@ export enum JewelryMaterial {
   OTHER = 'OTHER',
 }
 
+export enum ProductCondition {
+  BRAND_NEW = 'BRAND_NEW',
+  USED = 'USED',
+}
+
 export enum InventoryLogType {
   SALE = 'SALE',
   PURCHASE = 'PURCHASE',
@@ -178,6 +183,16 @@ export class CreateProductDto {
   @IsOptional()
   @IsEnum(JewelryMaterial)
   material?: JewelryMaterial;
+
+  @ApiPropertyOptional({
+    description: 'Product condition',
+    enum: ProductCondition,
+    example: ProductCondition.BRAND_NEW,
+    default: ProductCondition.BRAND_NEW,
+  })
+  @IsOptional()
+  @IsEnum(ProductCondition)
+  condition?: ProductCondition;
 
   @ApiPropertyOptional({
     description: 'Weight in grams',
@@ -565,6 +580,9 @@ export class ProductResponseDto {
 
   @ApiPropertyOptional({ enum: JewelryMaterial, example: JewelryMaterial.GOLD })
   material?: JewelryMaterial;
+
+  @ApiPropertyOptional({ enum: ProductCondition, example: ProductCondition.BRAND_NEW })
+  condition?: ProductCondition;
 
   @ApiPropertyOptional({ example: 5.5 })
   weight?: number;
