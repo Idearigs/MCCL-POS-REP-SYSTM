@@ -468,11 +468,54 @@ export const UsersPage: React.FC = () => {
               Manage users, roles, and permissions for your store
             </p>
           </div>
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
+          <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700">
             <Plus className="h-4 w-4 mr-2" />
             Add New User
           </Button>
         </div>
+
+        {/* Role Management Info Card */}
+        <Card className="border-blue-200 bg-gradient-to-br from-blue-50/50 to-indigo-50/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Shield className="h-5 w-5 text-blue-600" />
+              Role Permissions
+            </CardTitle>
+            <CardDescription>Understanding user roles and their access levels</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 rounded-lg border border-purple-200 bg-white">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="h-4 w-4 text-purple-600" />
+                  <h3 className="font-semibold text-purple-800">Owner</h3>
+                </div>
+                <p className="text-xs text-gray-600">Full system access including user management, settings, and all features</p>
+              </div>
+              <div className="p-4 rounded-lg border border-blue-200 bg-white">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="h-4 w-4 text-blue-600" />
+                  <h3 className="font-semibold text-blue-800">Manager</h3>
+                </div>
+                <p className="text-xs text-gray-600">Can manage users, approve stock takes, and access most features</p>
+              </div>
+              <div className="p-4 rounded-lg border border-green-200 bg-white">
+                <div className="flex items-center gap-2 mb-2">
+                  <UsersIcon className="h-4 w-4 text-green-600" />
+                  <h3 className="font-semibold text-green-800">Staff</h3>
+                </div>
+                <p className="text-xs text-gray-600">Standard POS access for sales, repairs, and customer management</p>
+              </div>
+              <div className="p-4 rounded-lg border border-gray-200 bg-white">
+                <div className="flex items-center gap-2 mb-2">
+                  <UsersIcon className="h-4 w-4 text-gray-600" />
+                  <h3 className="font-semibold text-gray-800">Read Only</h3>
+                </div>
+                <p className="text-xs text-gray-600">View-only access to reports and data, no modifications allowed</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
       {/* Stats Cards - Memoized */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

@@ -21,16 +21,26 @@ import NotificationsDialog from "@/components/notifications/NotificationsDialog"
 
 interface HeaderProps {
   pageTitle: string;
-  userName?: string;
   hasPaymentWarning?: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ pageTitle, userName = "Staff Member", hasPaymentWarning = false }) => {
+const Header: React.FC<HeaderProps> = ({ pageTitle, hasPaymentWarning = false }) => {
   const navigate = useNavigate();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isNotificationsDialogOpen, setIsNotificationsDialogOpen] = useState(false);
   const { auth, markNotificationAsRead } = useAuth();
-  
+
+  // Get user information from auth context
+  const user = auth.user;
+  const userName = user ? `${user.firstName} ${user.lastName}` : "Guest";
+  const userRole = user?.role || "GUEST";
+  const userInitials = user ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}` : "G";
+
+  // Format role for display (capitalize first letter, lowercase rest)
+  const formatRole = (role: string) => {
+    return role.charAt(0) + role.slice(1).toLowerCase();
+  };
+
   // Get notifications from auth context
   const { notifications } = auth;
   
@@ -173,12 +183,31 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, userName = "Staff Member", h
             <Button variant="outline" size="sm" className="flex items-center gap-2 rounded-full bg-white/90 border-gray-100 hover:bg-gray-50 hover:border-gray-200 shadow-sm">
               <Avatar className="w-6 h-6 border border-gray-100">
                 <AvatarImage src="https://github.com/shadcn.png" alt={userName} />
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-medium">{userName.substring(0, 2)}</AvatarFallback>
+                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-medium">{userInitials}</AvatarFallback>
               </Avatar>
-              <span className="hidden md:inline text-gray-700">{userName}</span>
+              <div className="hidden md:flex flex-col items-start">
+                <span className="text-sm font-medium text-gray-800">{userName}</span>
+                <span className="text-xs text-gray-500">{formatRole(userRole)}</span>
+              </div>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-white/90 backdrop-blur-lg border border-gray-100 shadow-md rounded-xl overflow-hidden min-w-[180px]">
+          <DropdownMenuContent align="end" className="bg-white/90 backdrop-blur-lg border border-gray-100 shadow-md rounded-xl overflow-hidden min-w-[220px]">
+            {/* User Info Header */}
+            <div className="px-3 py-3 border-b border-gray-100 bg-gradient-to-br from-blue-50/50 to-indigo-50/50">
+              <div className="flex items-center gap-3">
+                <Avatar className="w-10 h-10 border-2 border-white shadow-sm">
+                  <AvatarImage src="https://github.com/shadcn.png" alt={userName} />
+                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-bold">{userInitials}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{userName}</p>
+                  <p className="text-xs text-gray-600">{formatRole(userRole)}</p>
+                  {user?.email && (
+                    <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                  )}
+                </div>
+              </div>
+            </div>
             <DropdownMenuItem onClick={() => navigate('/profile')} className="hover:bg-gray-50/70 py-2.5">
               <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mr-2">
                 <User className="h-4 w-4 text-blue-500" />
