@@ -47,9 +47,11 @@ interface UserCardProps {
   onEdit: (user: User) => void;
   onResetPassword: (user: User) => void;
   onToggleStatus: (user: User) => void;
+  onChangeRole: (user: User) => void;
+  currentUserId: string;
 }
 
-const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onToggleStatus }) => {
+const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onToggleStatus, onChangeRole, currentUserId }) => {
   const getRoleBadgeColor = useCallback((role: UserRole) => {
     switch (role) {
       case UserRole.OWNER:
@@ -116,11 +118,23 @@ const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onToggleS
           </div>
         </div>
       </div>
-      <div className="flex gap-2 flex-shrink-0">
+      <div className="flex gap-2 flex-shrink-0 flex-wrap">
         <Button variant="outline" size="sm" onClick={() => onEdit(user)}>
           <Edit className="h-4 w-4 mr-1" />
           Edit
         </Button>
+        {/* Change Role button - only show if not the current user */}
+        {user.id !== currentUserId && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onChangeRole(user)}
+            className="border-blue-200 text-blue-700 hover:bg-blue-50"
+          >
+            <Shield className="h-4 w-4 mr-1" />
+            Role
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={() => onResetPassword(user)}>
           <Key className="h-4 w-4 mr-1" />
           Reset
@@ -199,7 +213,9 @@ export const UsersPage: React.FC = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.STAFF);
 
   // Form states
   const [formData, setFormData] = useState<CreateUserDto>({
@@ -438,6 +454,57 @@ export const UsersPage: React.FC = () => {
     setIsPasswordDialogOpen(true);
   }, []);
 
+  const openRoleDialog = useCallback((user: User) => {
+    setSelectedUser(user);
+    setSelectedRole(user.role);
+    setIsRoleDialogOpen(true);
+  }, []);
+
+  const handleChangeRole = useCallback(async () => {
+    if (!selectedUser) return;
+
+    // Prevent changing own role
+    if (selectedUser.id === auth.user?.id) {
+      toast({
+        title: 'Error',
+        description: 'You cannot change your own role',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Confirm role change
+    if (selectedRole === selectedUser.role) {
+      toast({
+        title: 'Info',
+        description: 'Role is already set to this value',
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await userService.updateUser(selectedUser.id, { role: selectedRole });
+      toast({
+        title: 'Success',
+        description: `Role changed to ${selectedRole} successfully`,
+      });
+      setIsRoleDialogOpen(false);
+      setSelectedUser(null);
+      fetchUsers();
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to change role';
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+      console.error('Change role error:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedUser, selectedRole, auth.user?.id, toast, fetchUsers]);
+
   // Show access denied message for unauthorized users
   if (!auth.user || (auth.user.role !== 'OWNER' && auth.user.role !== 'MANAGER')) {
     return (
@@ -621,6 +688,8 @@ export const UsersPage: React.FC = () => {
                   onEdit={openEditDialog}
                   onResetPassword={openPasswordDialog}
                   onToggleStatus={handleToggleUserStatus}
+                  onChangeRole={openRoleDialog}
+                  currentUserId={auth.user?.id || ''}
                 />
               ))}
             </div>
@@ -800,6 +869,102 @@ export const UsersPage: React.FC = () => {
             </Button>
             <Button onClick={handleResetPassword} disabled={loading}>
               Reset Password
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Role Dialog */}
+      <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-blue-600" />
+              Change User Role
+            </DialogTitle>
+            <DialogDescription>
+              Change the role for {selectedUser?.firstName} {selectedUser?.lastName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Current Role Display */}
+            <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
+              <p className="text-sm text-gray-600 mb-1">Current Role:</p>
+              <p className="text-lg font-semibold text-gray-900">{selectedUser?.role}</p>
+            </div>
+
+            {/* New Role Selection */}
+            <div>
+              <Label htmlFor="newRole">Select New Role *</Label>
+              <Select value={selectedRole} onValueChange={(value: UserRole) => setSelectedRole(value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UserRole.OWNER}>
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-purple-600" />
+                      <div>
+                        <p className="font-semibold">Owner</p>
+                        <p className="text-xs text-gray-500">Full system access</p>
+                      </div>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value={UserRole.MANAGER}>
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-blue-600" />
+                      <div>
+                        <p className="font-semibold">Manager</p>
+                        <p className="text-xs text-gray-500">Manage users & approvals</p>
+                      </div>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value={UserRole.STAFF}>
+                    <div className="flex items-center gap-2">
+                      <UsersIcon className="h-4 w-4 text-green-600" />
+                      <div>
+                        <p className="font-semibold">Staff</p>
+                        <p className="text-xs text-gray-500">Standard POS access</p>
+                      </div>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value={UserRole.READONLY}>
+                    <div className="flex items-center gap-2">
+                      <UsersIcon className="h-4 w-4 text-gray-600" />
+                      <div>
+                        <p className="font-semibold">Read Only</p>
+                        <p className="text-xs text-gray-500">View-only access</p>
+                      </div>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500 mt-1">
+                This will immediately change the user's permissions.
+              </p>
+            </div>
+
+            {/* Warning Alert */}
+            {selectedUser && selectedUser.id === auth.user?.id && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  You cannot change your own role. Ask another admin to change it.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRoleDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleChangeRole}
+              disabled={loading || selectedUser?.id === auth.user?.id}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Shield className="h-4 w-4 mr-2" />
+              Change Role
             </Button>
           </DialogFooter>
         </DialogContent>
