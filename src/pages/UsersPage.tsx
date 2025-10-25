@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Users as UsersIcon,
   Plus,
@@ -11,6 +12,7 @@ import {
   Mail,
   Calendar,
   Filter,
+  AlertCircle,
 } from 'lucide-react';
 import MainLayout from '../components/layout/MainLayout';
 import { Button } from '../components/ui/button';
@@ -33,7 +35,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import { useToast } from '../components/ui/use-toast';
+import { useAuth } from '../contexts/AuthContext';
 import { userService } from '../services/userService';
 import { User, UserRole, CreateUserDto, UpdateUserDto } from '../types/user';
 
@@ -170,12 +174,26 @@ StatsCard.displayName = 'StatsCard';
 
 export const UsersPage: React.FC = () => {
   const { toast } = useToast();
+  const { auth } = useAuth();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterRole, setFilterRole] = useState<UserRole | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+
+  // Role-based access control: Only OWNER and MANAGER can access this page
+  useEffect(() => {
+    if (!auth.user || (auth.user.role !== 'OWNER' && auth.user.role !== 'MANAGER')) {
+      toast({
+        title: 'Access Denied',
+        description: 'You do not have permission to access this page',
+        variant: 'destructive',
+      });
+      navigate('/dashboard');
+    }
+  }, [auth.user, navigate, toast]);
 
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -262,6 +280,16 @@ export const UsersPage: React.FC = () => {
       return;
     }
 
+    // Backend requires minimum 8 characters
+    if (formData.password.length < 8) {
+      toast({
+        title: 'Error',
+        description: 'Password must be at least 8 characters long',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       setLoading(true);
       await userService.createUser(formData);
@@ -279,12 +307,13 @@ export const UsersPage: React.FC = () => {
       });
       fetchUsers();
     } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to create user';
       toast({
         title: 'Error',
-        description: error.response?.data?.message || 'Failed to create user',
+        description: errorMessage,
         variant: 'destructive',
       });
-      console.error(error);
+      console.error('Create user error:', error);
     } finally {
       setLoading(false);
     }
@@ -330,10 +359,10 @@ export const UsersPage: React.FC = () => {
       return;
     }
 
-    if (newPassword.length < 6) {
+    if (newPassword.length < 8) {
       toast({
         title: 'Error',
-        description: 'Password must be at least 6 characters',
+        description: 'Password must be at least 8 characters long',
         variant: 'destructive',
       });
       return;
@@ -350,12 +379,13 @@ export const UsersPage: React.FC = () => {
       setNewPassword('');
       setSelectedUser(null);
     } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to reset password';
       toast({
         title: 'Error',
-        description: error.response?.data?.message || 'Failed to reset password',
+        description: errorMessage,
         variant: 'destructive',
       });
-      console.error(error);
+      console.error('Reset password error:', error);
     } finally {
       setLoading(false);
     }
@@ -407,6 +437,22 @@ export const UsersPage: React.FC = () => {
     setNewPassword('');
     setIsPasswordDialogOpen(true);
   }, []);
+
+  // Show access denied message for unauthorized users
+  if (!auth.user || (auth.user.role !== 'OWNER' && auth.user.role !== 'MANAGER')) {
+    return (
+      <MainLayout pageTitle="Access Denied">
+        <div className="p-6">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              You do not have permission to access User Management. This page is only available to Owners and Managers.
+            </AlertDescription>
+          </Alert>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout pageTitle="User Management">
@@ -584,8 +630,10 @@ export const UsersPage: React.FC = () => {
                 type="password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                placeholder="Min. 6 characters"
+                placeholder="Min. 8 characters"
+                minLength={8}
               />
+              <p className="text-xs text-gray-500 mt-1">Password must be at least 8 characters long</p>
             </div>
             <div>
               <Label htmlFor="role">Role *</Label>
@@ -695,10 +743,11 @@ export const UsersPage: React.FC = () => {
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Min. 6 characters"
+                placeholder="Min. 8 characters"
+                minLength={8}
               />
               <p className="text-xs text-gray-500 mt-1">
-                The user will need to use this password on their next login
+                Password must be at least 8 characters. The user will need to use this password on their next login.
               </p>
             </div>
           </div>
