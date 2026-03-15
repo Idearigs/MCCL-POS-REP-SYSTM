@@ -13,6 +13,7 @@ import {
   Eye,
   Download,
   FileText,
+  Nfc,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -22,10 +23,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { QRScanner } from '../components/stock-taking/QRScanner';
+import { RFIDScanner } from '../components/stock-taking/RFIDScanner';
 import { VarianceReportDialog } from '../components/stock-taking/VarianceReportDialog';
 import { stockTakingService } from '../services/stockTakingService';
 import { StockTakeSession, StockTakeStatus, StockTakeItem, CreateSessionDto, ScanItemDto, StockTakeItemStatus } from '../types/stock-taking';
 import { useToast } from '../components/ui/use-toast';
+import MainLayout from '../components/layout/MainLayout';
 
 type ViewMode = 'list' | 'session' | 'scanning';
 
@@ -40,6 +43,7 @@ export const StockTakingPage: React.FC = () => {
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isRFIDScannerOpen, setIsRFIDScannerOpen] = useState(false);
   const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
   const [isVarianceDialogOpen, setIsVarianceDialogOpen] = useState(false);
   const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
@@ -483,6 +487,10 @@ export const StockTakingPage: React.FC = () => {
                 <Camera size={16} className="mr-2" />
                 Scan QR/Barcode
               </Button>
+              <Button onClick={() => setIsRFIDScannerOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+                <Nfc size={16} className="mr-2" />
+                RFID Scanner
+              </Button>
               <Button variant="outline" onClick={() => setIsManualEntryOpen(true)}>
                 <Edit size={16} className="mr-2" />
                 Manual Entry
@@ -589,9 +597,10 @@ export const StockTakingPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6">
-      {viewMode === 'list' && renderListView()}
-      {viewMode === 'session' && renderSessionView()}
+    <MainLayout>
+      <div className="p-6">
+        {viewMode === 'list' && renderListView()}
+        {viewMode === 'session' && renderSessionView()}
 
       {/* Create Session Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -766,6 +775,14 @@ export const StockTakingPage: React.FC = () => {
         onClose={() => setIsScannerOpen(false)}
       />
 
+      {/* RFID Scanner */}
+      <RFIDScanner
+        isOpen={isRFIDScannerOpen}
+        onScan={handleScan}
+        onClose={() => setIsRFIDScannerOpen(false)}
+        mode="bulk"
+      />
+
       {/* Variance Report Dialog (shown before approval) */}
       <VarianceReportDialog
         sessionId={currentSession?.id || null}
@@ -777,6 +794,7 @@ export const StockTakingPage: React.FC = () => {
           setIsApprovalDialogOpen(true);
         }}
       />
-    </div>
+      </div>
+    </MainLayout>
   );
 };

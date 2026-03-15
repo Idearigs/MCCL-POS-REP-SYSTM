@@ -1,0 +1,21 @@
+name,sku,category,supplier,material,purity,weight,price,cost,quantity,threshold,description,location,barcode
+18K Gold Diamond Ring,JWL-RING-001,Rings,ABC Jewelry Suppliers,GOLD,18K,5.5,1200.00,500.00,10,3,"Beautiful 18K gold ring with 0.5ct diamond",Shelf A1,1234567890001
+14K White Gold Necklace,JWL-NCK-002,Necklaces,XYZ Wholesalers,GOLD,14K,12.3,850.00,380.00,8,2,"Elegant white gold chain necklace",Shelf A2,1234567890002
+Sterling Silver Bracelet,JWL-BRC-003,Bracelets,Silver Masters Ltd,SILVER,925,18.5,320.00,150.00,15,5,"Classic sterling silver charm bracelet",Shelf B1,1234567890003
+Platinum Wedding Band,JWL-RING-004,Rings,Premium Metals Co,PLATINUM,950,8.2,1850.00,920.00,6,2,"Premium platinum wedding band",Vault,1234567890004
+22K Gold Bangle,JWL-BNG-005,Bangles,Golden Touch,GOLD,22K,35.5,2200.00,1100.00,4,2,"Traditional 22K gold bangle set",Vault,1234567890005
+Pearl Stud Earrings,JWL-EAR-006,Earrings,Pearl Paradise,SILVER,925,3.2,180.00,75.00,20,8,"Freshwater pearl earrings with silver posts",Shelf C1,1234567890006
+Rose Gold Pendant,JWL-PND-007,Necklaces,ABC Jewelry Suppliers,GOLD,14K,4.8,425.00,185.00,12,4,"Rose gold heart pendant with chain",Shelf A3,1234567890007
+Diamond Tennis Bracelet,JWL-BRC-008,Bracelets,Diamond Direct,GOLD,18K,15.6,3500.00,1800.00,3,1,"Stunning tennis bracelet with 2ct total diamonds",Vault,1234567890008
+Gold Chain Necklace,JWL-NCK-009,Necklaces,Golden Touch,GOLD,18K,8.9,680.00,320.00,10,3,"18K gold rope chain necklace 20 inch",Shelf A4,1234567890009
+Silver Hoop Earrings,JWL-EAR-010,Earrings,Silver Masters Ltd,SILVER,925,4.5,95.00,42.00,25,10,"Medium sized silver hoop earrings",Shelf C2,1234567890010
+Sapphire Ring,JWL-RING-011,Rings,Premium Gems,GOLD,14K,6.3,1450.00,680.00,5,2,"Blue sapphire ring with diamond accents",Vault,1234567890011
+Gold Anklet,JWL-ANK-012,Anklets,ABC Jewelry Suppliers,GOLD,14K,3.8,340.00,165.00,8,3,"Delicate 14K gold anklet with heart charm",Shelf B2,1234567890012
+Emerald Pendant,JWL-PND-013,Necklaces,Premium Gems,GOLD,18K,5.2,980.00,450.00,6,2,"Natural emerald pendant in gold setting",Vault,1234567890013
+Silver Ring Set,JWL-RING-014,Rings,Silver Masters Ltd,SILVER,925,12.5,215.00,95.00,18,6,"Stackable silver ring set of 3",Shelf C3,1234567890014
+Gold Cufflinks,JWL-CFL-015,Accessories,Premium Metals Co,GOLD,14K,7.8,580.00,275.00,7,2,"Men's 14K gold cufflinks",Shelf D1,1234567890015
+Diamond Stud Earrings,JWL-EAR-016,Earrings,Diamond Direct,GOLD,14K,2.4,1250.00,625.00,8,3,"0.75ct total weight diamond studs",Vault,1234567890016
+Gold Toe Ring,JWL-TOE-017,Rings,Golden Touch,GOLD,14K,1.8,125.00,58.00,15,5,"Adjustable gold toe ring",Shelf B3,1234567890017
+Silver Charm Bracelet,JWL-BRC-018,Bracelets,Silver Masters Ltd,SILVER,925,22.3,385.00,175.00,10,4,"Silver charm bracelet with 5 charms",Shelf C4,1234567890018
+Ruby Ring,JWL-RING-019,Rings,Premium Gems,GOLD,18K,7.1,1680.00,820.00,4,2,"Natural ruby ring with diamond halo",Vault,1234567890019
+Gold Chain Bracelet,JWL-BRC-020,Bracelets,ABC Jewelry Suppliers,GOLD,18K,11.2,890.00,425.00,9,3,"18K gold figaro chain bracelet",Shelf A5,1234567890020

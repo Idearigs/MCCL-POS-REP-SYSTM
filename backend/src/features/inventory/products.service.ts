@@ -538,14 +538,14 @@ export class ProductsService {
   /**
    * Get categories
    */
-  async getCategories(tenantId: string): Promise<string[]> {
+  async getCategories(tenantId: string): Promise<Array<{ id: string; name: string }>> {
     try {
       const categories = await this.prismaService.categories.findMany({
         where: { tenantId, isActive: true },
-        select: { name: true },
+        select: { id: true, name: true },
         orderBy: { name: 'asc' }
       });
-      return categories.map(cat => cat.name);
+      return categories;
     } catch (error) {
       this.logger.error('Failed to get categories:', error.message);
       throw error;
@@ -669,6 +669,93 @@ export class ProductsService {
       return results;
     } catch (error) {
       this.logger.error('Failed to bulk update stock:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Bulk assign RFID tags to products by SKU
+   */
+  async bulkAssignRFID(
+    assignments: Array<{ sku: string; rfidTag: string }>,
+    tenantId: string,
+    userId?: string
+  ): Promise<{ success: number; failed: number; errors: any[] }> {
+    try {
+      const results = {
+        success: 0,
+        failed: 0,
+        errors: []
+      };
+
+      for (const assignment of assignments) {
+        try {
+          // Find product by SKU
+          const product = await this.prismaService.products.findFirst({
+            where: {
+              sku: assignment.sku,
+              tenantId,
+              isActive: true,
+            },
+          });
+
+          if (!product) {
+            results.failed++;
+            results.errors.push({
+              sku: assignment.sku,
+              error: 'Product not found with this SKU',
+            });
+            continue;
+          }
+
+          // Check if RFID tag is already assigned to another product
+          if (assignment.rfidTag) {
+            const existingRFID = await this.prismaService.products.findFirst({
+              where: {
+                rfidTag: assignment.rfidTag,
+                tenantId,
+                isActive: true,
+                NOT: { id: product.id },
+              },
+            });
+
+            if (existingRFID) {
+              results.failed++;
+              results.errors.push({
+                sku: assignment.sku,
+                error: `RFID tag ${assignment.rfidTag} is already assigned to another product (SKU: ${existingRFID.sku})`,
+              });
+              continue;
+            }
+          }
+
+          // Update product with RFID tag
+          await this.prismaService.products.update({
+            where: { id: product.id },
+            data: { rfidTag: assignment.rfidTag },
+          });
+
+          results.success++;
+        } catch (error) {
+          results.failed++;
+          results.errors.push({
+            sku: assignment.sku,
+            error: error.message,
+          });
+        }
+      }
+
+      // Invalidate cache
+      // TODO: Implement pattern-based cache invalidation
+      // await this.cacheService.invalidateTenantData(tenantId, 'products:*');
+
+      this.logger.log(
+        `Bulk RFID assignment completed: ${results.success} success, ${results.failed} failed`
+      );
+
+      return results;
+    } catch (error) {
+      this.logger.error('Failed to bulk assign RFID:', error.message);
       throw error;
     }
   }

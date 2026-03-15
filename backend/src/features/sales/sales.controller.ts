@@ -339,18 +339,18 @@ export class SalesController {
     const currentDate = new Date();
     const reportYear = year || currentDate.getFullYear();
     const reportMonth = month || (currentDate.getMonth() + 1);
-    
+
     const startDate = new Date(reportYear, reportMonth - 1, 1).toISOString().split('T')[0];
     const endDate = new Date(reportYear, reportMonth, 0).toISOString().split('T')[0];
-    
+
     const query: SaleQueryDto = {
       startDate,
       endDate,
       limit: 10000, // Get all sales for the month
     };
-    
+
     const salesData = await this.salesService.findAll(query, tenantId);
-    
+
     // Group sales by day
     const dailySales = salesData.data.reduce((acc, sale) => {
       const day = sale.createdAt.split('T')[0];
@@ -361,17 +361,17 @@ export class SalesController {
       acc[day].revenue += sale.totalAmount;
       return acc;
     }, {} as Record<string, { count: number; revenue: number }>);
-    
+
     return {
       year: reportYear,
       month: reportMonth,
       totalSales: salesData.data.length,
       totalRevenue: salesData.data.reduce((sum, sale) => sum + sale.totalAmount, 0),
-      averageDailySales: Object.keys(dailySales).length > 0 
-        ? salesData.data.length / Object.keys(dailySales).length 
+      averageDailySales: Object.keys(dailySales).length > 0
+        ? salesData.data.length / Object.keys(dailySales).length
         : 0,
-      averageDailyRevenue: Object.keys(dailySales).length > 0 
-        ? salesData.data.reduce((sum, sale) => sum + sale.totalAmount, 0) / Object.keys(dailySales).length 
+      averageDailyRevenue: Object.keys(dailySales).length > 0
+        ? salesData.data.reduce((sum, sale) => sum + sale.totalAmount, 0) / Object.keys(dailySales).length
         : 0,
       dailyBreakdown: dailySales,
       paymentMethodTrends: salesData.data.reduce((acc, sale) => {
@@ -380,6 +380,48 @@ export class SalesController {
         });
         return acc;
       }, {} as Record<string, number>),
+    };
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Delete a sale',
+    description: 'Permanently delete a sale record. This will also adjust stock quantities for returned items.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Sale ID',
+    example: 'clv123abc456',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sale deleted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Sale deleted successfully' },
+        success: { type: 'boolean', example: true },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Sale not found',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Not authorized to delete this sale',
+  })
+  async remove(
+    @Param('id') id: string,
+    @TenantId() tenantId: string,
+    @CurrentUser('id') userId: string,
+  ): Promise<{ message: string; success: boolean }> {
+    await this.salesService.remove(id, tenantId, userId);
+    return {
+      message: 'Sale deleted successfully',
+      success: true,
     };
   }
 }

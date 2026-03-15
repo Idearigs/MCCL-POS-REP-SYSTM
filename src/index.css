@@ -37,14 +37,54 @@
 
     --radius: 0.5rem;
 
-    --sidebar-background: 215 60% 15%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 45 68% 52%;
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-primary: 24 95% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 215 50% 22%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 215 50% 22%;
-    --sidebar-ring: 45 68% 52%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent-foreground: 24 95% 53%;
+    --sidebar-border: 217 33% 17%;
+    --sidebar-ring: 24 95% 53%;
+  }
+
+  /* Dark Mode Variables */
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 96%;
+
+    --card: 217 33% 17%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 217 33% 17%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 24 95% 53%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 217 33% 22%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 217 33% 22%;
+    --muted-foreground: 215 18% 65%;
+
+    --accent: 217 33% 22%;
+    --accent-foreground: 210 40% 96%;
+
+    --destructive: 0 62.8% 50.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 33% 27%;
+    --input: 217 33% 27%;
+    --ring: 24 95% 53%;
+
+    --sidebar-background: 222 50% 8%;
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-primary: 24 95% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 33% 14%;
+    --sidebar-accent-foreground: 24 95% 53%;
+    --sidebar-border: 217 33% 14%;
+    --sidebar-ring: 24 95% 53%;
   }
 
   * {
@@ -114,4 +154,258 @@
 .scrollbar-thin {
   scrollbar-width: thin;
   scrollbar-color: rgb(209 213 219) rgb(243 244 246);
+}
+
+/* Dark mode scrollbar */
+.dark .scrollbar-thin::-webkit-scrollbar-track {
+  @apply bg-gray-800 rounded-full;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  @apply bg-gray-600 rounded-full hover:bg-gray-500;
+}
+
+.dark .scrollbar-thin {
+  scrollbar-color: rgb(75 85 99) rgb(31 41 55);
+}
+
+/* Compact View Styles */
+.compact {
+  font-size: 0.875rem;
+}
+
+.compact .card {
+  padding: 0.75rem;
+}
+
+.compact h1 {
+  @apply text-2xl md:text-3xl;
+}
+
+.compact h2 {
+  @apply text-xl md:text-2xl;
+}
+
+.compact h3 {
+  @apply text-lg md:text-xl;
+}
+
+.compact table th,
+.compact table td {
+  padding: 0.5rem 0.75rem;
+}
+
+.compact .p-4 {
+  padding: 0.75rem;
+}
+
+.compact .p-6 {
+  padding: 1rem;
+}
+
+.compact .py-4 {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.compact .px-4 {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.compact .gap-4 {
+  gap: 0.75rem;
+}
+
+.compact .gap-6 {
+  gap: 1rem;
+}
+
+.compact .space-y-4 > * + * {
+  margin-top: 0.75rem;
+}
+
+.compact .space-y-6 > * + * {
+  margin-top: 1rem;
+}
+
+/* Dark mode transitions */
+html {
+  transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+}
+
+body {
+  transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+}
+
+/* Dark mode specific adjustments */
+.dark .text-gray-900 {
+  @apply text-gray-100;
+}
+
+.dark .text-gray-800 {
+  @apply text-gray-200;
+}
+
+.dark .text-gray-700 {
+  @apply text-gray-300;
+}
+
+.dark .text-gray-600 {
+  @apply text-gray-400;
+}
+
+.dark .bg-white {
+  @apply bg-gray-800;
+}
+
+.dark .bg-gray-50 {
+  @apply bg-gray-900;
+}
+
+.dark .bg-gray-100 {
+  @apply bg-gray-800;
+}
+
+.dark .border-gray-200 {
+  @apply border-gray-700;
+}
+
+.dark .border-gray-300 {
+  @apply border-gray-600;
+}
+
+.dark .shadow-sm {
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.dark .shadow {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.dark .shadow-md {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+}
+
+.dark .shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+}
+
+/* Dark mode hover states */
+.dark .hover\:bg-gray-50:hover {
+  @apply bg-gray-700;
+}
+
+.dark .hover\:bg-gray-100:hover {
+  @apply bg-gray-700;
+}
+
+/* Dark mode input focus */
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  @apply ring-primary border-primary;
+}
+
+/* ===== Quick POS Category View Animations - Apple-like Smooth ===== */
+
+/* Apple-style cubic bezier for smooth, natural motion */
+:root {
+  --apple-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --apple-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --apple-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --apple-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Smooth fade transition overlay */
+@keyframes wipe-in {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.animate-wipe-in {
+  animation: wipe-in 0.4s var(--apple-ease-out) forwards;
+}
+
+/* Apple-style fade in animation - smooth and elegant */
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.98) translateY(8px);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s var(--apple-ease-out) forwards;
+}
+
+/* Slide down animation for forms - smoother */
+@keyframes slide-down {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px);
+    max-height: 0;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 500px;
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.45s var(--apple-ease-out) forwards;
+}
+
+/* Slide up animation - Apple style */
+@keyframes slide-up {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.45s var(--apple-ease-out) forwards;
+}
+
+/* Scale in animation for product cards - subtle and smooth Apple-like */
+@keyframes scale-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s var(--apple-ease-out) forwards;
+}
+
+/* Shake animation for empty cart warning */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+  20%, 40%, 60%, 80% { transform: translateX(8px); }
+}
+
+.animate-shake {
+  animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }

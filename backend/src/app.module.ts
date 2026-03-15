@@ -18,13 +18,22 @@ import {
 } from './features';
 import { CalendarEventsModule } from './features/calendar-events/calendar-events.module';
 import { StockTakingModule } from './features/stock-taking/stock-taking.module';
+import { FloatModule } from './features/float/float.module';
+import { PettyCashModule } from './features/petty-cash/petty-cash.module';
+import { ShiftsModule } from './features/shifts/shifts.module';
+import { FinancialIntelligenceModule } from './features/financial-intelligence/financial-intelligence.module';
+import { ChatbotModule } from './features/chatbot/chatbot.module';
+import { MainframeModule } from './features/mainframe/mainframe.module';
+import { TasksModule } from './features/tasks/tasks.module';
+// import { ExternalRepairersModule } from './features/external-repairers/external-repairers.module'; // TODO: Enable after running Prisma migrations
 
 // External integrations
-import { 
-  GoogleDriveModule, 
-  FileStorageModule, 
-  SmsModule 
+import {
+  GoogleDriveModule,
+  FileStorageModule,
+  SmsModule
 } from './integrations';
+import { OpenAIModule } from './integrations/openai/openai.module';
 
 @Module({
   imports: [
@@ -79,6 +88,7 @@ import {
     GoogleDriveModule,
     FileStorageModule,
     SmsModule,
+    OpenAIModule,
     AuthModule,
     // UsersModule,
     CustomersModule,
@@ -87,6 +97,14 @@ import {
     RepairsModule,
     CalendarEventsModule,
     StockTakingModule,
+    FloatModule,
+    PettyCashModule,
+    ShiftsModule,
+    FinancialIntelligenceModule,
+    ChatbotModule,
+    MainframeModule,
+    TasksModule,
+    // ExternalRepairersModule, // TODO: Enable after running Prisma migrations
   ],
   controllers: [AppController],
   providers: [

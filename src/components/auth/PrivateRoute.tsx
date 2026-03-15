@@ -29,11 +29,11 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
 
   // Role-based access control for STAFF users
   if (auth.user?.role === 'STAFF') {
-    const allowedPaths = ['/pos', '/sales'];
+    const allowedPaths = ['/pos', '/sales', '/cash-up', '/shifts', '/repairs', '/customers', '/inventory', '/calendar', '/search'];
     const currentPath = location.pathname;
 
     // If STAFF user tries to access a restricted page, redirect to POS
-    if (!allowedPaths.includes(currentPath)) {
+    if (!allowedPaths.some(path => currentPath.startsWith(path))) {
       return <Navigate to="/pos" replace />;
     }
   }

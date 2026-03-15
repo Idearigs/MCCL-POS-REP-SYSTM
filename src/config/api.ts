@@ -37,11 +37,20 @@ export const API_CONFIG = {
     SALES_STATS: '/sales/stats',
     SALES_TODAY: '/sales/today',
     CREATE_SALE: '/sales',
+    DELETE_SALE: '/sales/{id}',
     REFUND_SALE: '/sales/{id}/refund',
     SALE_RECEIPT: '/sales/{id}/receipt',
     DAILY_REPORT: '/sales/reports/daily',
     MONTHLY_REPORT: '/sales/reports/monthly',
-    
+
+    // Shifts
+    SHIFTS: '/shifts',
+    SHIFT_START: '/shifts/start',
+    SHIFT_CLOSE: '/shifts/{id}/close',
+    SHIFT_ACTIVE: '/shifts/active',
+    SHIFT_REPORT: '/shifts/{id}/report',
+    SHIFT_STATISTICS: '/shifts/statistics',
+
     // Repairs
     REPAIRS: '/repairs',
     REPAIR_STATS: '/repairs/stats',

@@ -183,10 +183,99 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Login function
   const login = async (email: string, password: string, tenantId?: string): Promise<boolean> => {
     setAuth(prev => ({ ...prev, loading: true, error: null }));
-    
+
     try {
       const response = await authService.login({ email, password, tenantId });
-      
+
+      // Save user permissions to localStorage
+      const userId = response.user.id;
+      const userRole = response.user.role;
+      const permissionKey = `user_permissions_${userId}`;
+
+      // If user has permissions in response, save them
+      if (response.user.permissions) {
+        localStorage.setItem(permissionKey, JSON.stringify(response.user.permissions));
+      } else {
+        // Create default permissions based on role
+        let defaultPermissions = {};
+
+        if (userRole === 'OWNER') {
+          // OWNER has all permissions
+          defaultPermissions = {
+            dashboard: true,
+            pos: true,
+            sales: true,
+            cashiers: true,
+            repairs: true,
+            customers: true,
+            inventory: true,
+            stockTaking: true,
+            calendar: true,
+            history: true,
+            search: true,
+            settings: true,
+            userManagement: true,
+            subscription: true,
+          };
+        } else if (userRole === 'MANAGER') {
+          // MANAGER has most permissions except user management
+          defaultPermissions = {
+            dashboard: true,
+            pos: true,
+            sales: true,
+            cashiers: true,
+            repairs: true,
+            customers: true,
+            inventory: true,
+            stockTaking: true,
+            calendar: true,
+            history: true,
+            search: true,
+            settings: false,
+            userManagement: false,
+            subscription: false,
+          };
+        } else if (userRole === 'STAFF') {
+          // STAFF/CASHIER has basic POS and customer access
+          defaultPermissions = {
+            dashboard: true,
+            pos: true,
+            sales: true,
+            cashiers: false,
+            repairs: true,
+            customers: true,
+            inventory: true,
+            stockTaking: false,
+            calendar: true,
+            history: false,
+            search: true,
+            settings: false,
+            userManagement: false,
+            subscription: false,
+          };
+        } else if (userRole === 'READONLY') {
+          // READONLY has view-only access
+          defaultPermissions = {
+            dashboard: true,
+            pos: false,
+            sales: true,
+            cashiers: false,
+            repairs: true,
+            customers: true,
+            inventory: true,
+            stockTaking: false,
+            calendar: true,
+            history: true,
+            search: true,
+            settings: false,
+            userManagement: false,
+            subscription: false,
+          };
+        }
+
+        localStorage.setItem(permissionKey, JSON.stringify(defaultPermissions));
+      }
+
       setAuth(prev => ({
         ...prev,
         user: {
@@ -199,7 +288,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading: false,
         error: null
       }));
-      
+
       return true;
     } catch (error: any) {
       console.error('Login failed:', error);
@@ -210,7 +299,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading: false,
         error: error.message || 'Login failed'
       }));
-      
+
       return false;
     }
   };

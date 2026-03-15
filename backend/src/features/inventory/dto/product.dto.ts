@@ -86,6 +86,16 @@ export class CreateProductDto {
   barcode?: string;
 
   @ApiPropertyOptional({
+    description: 'RFID tag identifier for fast inventory scanning',
+    example: 'E2801170000002010DC90E8F',
+    maxLength: 100,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100, { message: 'RFID tag must not exceed 100 characters' })
+  rfidTag?: string;
+
+  @ApiPropertyOptional({
     description: 'Category ID',
     example: 'clv123abc456',
   })

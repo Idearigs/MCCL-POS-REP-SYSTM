@@ -124,35 +124,51 @@ class DashboardService {
       const repairStats = await repairService.getRepairStats();
       const statusBreakdown = repairStats.statusBreakdown || {};
 
-      return [
+      console.log('Repair stats received:', repairStats);
+      console.log('Status breakdown:', statusBreakdown);
+
+      // Combine related statuses for cleaner chart display
+      const received = (statusBreakdown.RECEIVED || 0);
+      const quoted = (statusBreakdown.QUOTED || 0);
+      const approved = (statusBreakdown.APPROVED || 0);
+      const inProgress = (statusBreakdown.IN_PROGRESS || 0);
+      const completed = (statusBreakdown.COMPLETED || 0);
+      const readyForCollection = (statusBreakdown.READY_FOR_COLLECTION || 0);
+      const collected = (statusBreakdown.COLLECTED || 0);
+
+      // Group statuses logically
+      const chartData = [
         {
-          name: 'Received',
-          value: statusBreakdown.RECEIVED || statusBreakdown.PENDING || 0,
+          name: 'Pending',
+          value: received + quoted + approved,  // All pending statuses
           color: '#0A84FF',
         },
         {
           name: 'In Progress',
-          value: statusBreakdown.IN_PROGRESS || 0,
+          value: inProgress,
           color: '#FF9F0A',
         },
         {
           name: 'Completed',
-          value: statusBreakdown.COMPLETED || 0,
+          value: completed,
           color: '#30D158',
         },
         {
-          name: 'Collected',
-          value: (statusBreakdown.COLLECTED || 0) + (statusBreakdown.READY_FOR_COLLECTION || 0),
+          name: 'Ready/Collected',
+          value: readyForCollection + collected,
           color: '#8E8E93',
         },
       ];
+
+      console.log('Chart data prepared:', chartData);
+      return chartData;
     } catch (error) {
       console.error('Error fetching repair status data:', error);
       return [
-        { name: 'Received', value: 0, color: '#0A84FF' },
+        { name: 'Pending', value: 0, color: '#0A84FF' },
         { name: 'In Progress', value: 0, color: '#FF9F0A' },
         { name: 'Completed', value: 0, color: '#30D158' },
-        { name: 'Collected', value: 0, color: '#8E8E93' },
+        { name: 'Ready/Collected', value: 0, color: '#8E8E93' },
       ];
     }
   }
@@ -175,14 +191,26 @@ class DashboardService {
   // Helper methods
 
   private formatSaleForDashboard(sale: Sale): RecentSale {
+    // Defensive null checks
+    if (!sale) {
+      return {
+        id: '',
+        customer: 'Unknown',
+        initials: 'UK',
+        items: 'No items',
+        amount: '£0.00',
+        date: 'Unknown',
+      };
+    }
+
     const customerName = sale.customerName || 'Walk-in Customer';
     const initials = this.getInitials(customerName);
-    const itemsText = this.formatSaleItems(sale.items);
-    const amount = this.formatCurrency(sale.totalAmount);
-    const date = this.formatRelativeDate(sale.createdAt);
+    const itemsText = this.formatSaleItems(sale.items || []);
+    const amount = this.formatCurrency(sale.totalAmount || 0);
+    const date = this.formatRelativeDate(sale.createdAt || new Date().toISOString());
 
     return {
-      id: sale.id,
+      id: sale.id || '',
       customer: customerName,
       initials,
       items: itemsText,
@@ -200,14 +228,24 @@ class DashboardService {
   }
 
   private formatSaleItems(items: any[]): string {
-    if (!items || items.length === 0) return 'No items';
+    // Defensive null check
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return 'No items';
+    }
 
-    if (items.length === 1) {
-      return items[0].productName || 'Product';
-    } else if (items.length === 2) {
-      return `${items[0].productName} + ${items[1].productName}`;
+    // Filter out null/undefined items
+    const validItems = items.filter(item => item && item.productName);
+
+    if (validItems.length === 0) {
+      return 'No items';
+    }
+
+    if (validItems.length === 1) {
+      return validItems[0].productName || 'Product';
+    } else if (validItems.length === 2) {
+      return `${validItems[0].productName} + ${validItems[1].productName}`;
     } else {
-      return `${items[0].productName} + ${items.length - 1} more`;
+      return `${validItems[0].productName} + ${validItems.length - 1} more`;
     }
   }
 
@@ -219,40 +257,60 @@ class DashboardService {
   }
 
   private formatRelativeDate(dateString: string): string {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    try {
+      // Defensive null check and validation
+      if (!dateString) {
+        return 'Unknown date';
+      }
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
-    if (diffHours < 24) {
-      const time = date.toLocaleTimeString('en-GB', {
+      const date = new Date(dateString);
+
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return 'Invalid date';
+      }
+
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+      if (diffHours < 24) {
+        const time = date.toLocaleTimeString('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        return `Today at ${time}`;
+      }
+      if (diffDays === 1) {
+        const time = date.toLocaleTimeString('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        return `Yesterday at ${time}`;
+      }
+      return date.toLocaleDateString('en-GB', {
+        month: 'short',
+        day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
       });
-      return `Today at ${time}`;
+    } catch (error) {
+      console.error('Error formatting relative date:', error);
+      return 'Unknown date';
     }
-    if (diffDays === 1) {
-      const time = date.toLocaleTimeString('en-GB', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      return `Yesterday at ${time}`;
-    }
-    return date.toLocaleDateString('en-GB', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
   }
 
   private calculateTrend(current: number, previous: number): number {
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return Math.round(((current - previous) / previous) * 100);
+    // Defensive null checks
+    const curr = current || 0;
+    const prev = previous || 0;
+
+    if (prev === 0) return curr > 0 ? 100 : 0;
+    return Math.round(((curr - prev) / prev) * 100);
   }
 
   // Default stats for error handling
@@ -284,11 +342,21 @@ class DashboardService {
   private getDefaultProductStats(): ProductStats {
     return {
       totalProducts: 0,
-      totalInventoryValue: 0,
+      activeProducts: 0,
+      inactiveProducts: 0,
+      damagedProducts: 0,
+      lowStockProducts: 0,
+      totalStockValue: 0,
+      averageProductValue: 0,
+      outOfStockProducts: 0,
+      productsByMaterial: {},
+      productsByCategory: {},
+      // Compatibility fields
       lowStockCount: 0,
+      totalInventoryValue: 0,
       outOfStockCount: 0,
-      productsByCategory: [],
-      topSellingProducts: [],
+      topCategories: [],
+      topMaterials: [],
     };
   }
 
@@ -296,7 +364,17 @@ class DashboardService {
     return {
       totalCustomers: 0,
       activeCustomers: 0,
+      inactiveCustomers: 0,
+      redFlaggedCustomers: 0,
+      newCustomersThisMonth: 0,
+      totalSpentAllTime: 0,
+      averageSpentPerCustomer: 0,
+      customersWithEmailConsent: 0,
+      customersWithSmsConsent: 0,
+      // Compatibility fields
       newThisMonth: 0,
+      topCities: [],
+      customersByCountry: [],
       topCustomers: [],
       customerGrowth: [],
     };

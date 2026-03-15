@@ -134,16 +134,16 @@ export class CustomersService {
         }),
       };
 
-      // Check cache first
+      // Check cache first (temporarily disabled for debugging - TODO: re-enable after fixing cache invalidation)
       const cacheKey = `customers:list:${JSON.stringify({ where, skip, limit, sortBy, sortOrder })}`;
-      const cachedResult = await this.cacheService.getTenantData<PaginatedResponseDto<CustomerResponseDto>>(
-        tenantId,
-        cacheKey,
-      );
+      let cachedResult = null; // Disabled: await this.cacheService.getTenantData<PaginatedResponseDto<CustomerResponseDto>>(tenantId, cacheKey);
 
       if (cachedResult) {
+        this.logger.debug(`📦 Returning cached customers for tenant ${tenantId}`);
         return cachedResult;
       }
+
+      this.logger.debug(`🔍 Fetching fresh customers from database for tenant ${tenantId}`);
 
       // Get customers and total count
       const [customers, total] = await Promise.all([
@@ -163,8 +163,10 @@ export class CustomersService {
         total,
       );
 
-      // Cache result for 5 minutes
-      await this.cacheService.setTenantData(tenantId, cacheKey, result, 300);
+      // Cache result for 5 minutes (temporarily disabled for debugging - TODO: re-enable)
+      // await this.cacheService.setTenantData(tenantId, cacheKey, result, 300);
+
+      this.logger.debug(`✅ Returning ${customers.length} customers from database (total: ${total})`);
 
       return result;
     } catch (error) {
@@ -290,32 +292,83 @@ export class CustomersService {
   }
 
   /**
-   * Delete customer (soft delete)
+   * Delete customer (permanent delete)
    */
   async remove(id: string, tenantId: string): Promise<void> {
     try {
+      this.logger.log(`🗑️ PERMANENT DELETE requested for customer: ${id} in tenant ${tenantId}`);
+
       const customer = await this.prismaService.customers.findFirst({
         where: { id, tenantId },
       });
 
       if (!customer) {
+        this.logger.error(`❌ Customer not found: ${id}`);
         throw new NotFoundException(`Customer with ID ${id} not found`);
       }
 
-      // Soft delete by setting isActive to false
-      await this.prismaService.customers.update({
-        where: { id },
-        data: { isActive: false },
+      this.logger.log(`✅ Customer found: ${customer.firstName} ${customer.lastName} (${customer.email})`);
+
+      // Permanent delete - remove related records first to avoid constraint errors
+      await this.prismaService.$transaction(async (prisma) => {
+        // Delete related documents
+        await prisma.documents.deleteMany({ where: { customerId: id } });
+
+        // Update sales to remove customer reference (nullify instead of delete)
+        await prisma.sales.updateMany({
+          where: { customerId: id },
+          data: { customerId: null },
+        });
+
+        // Update repairs to remove customer reference (nullify instead of delete)
+        await prisma.repairs.updateMany({
+          where: { customerId: id },
+          data: { customerId: null },
+        });
+
+        // Finally delete customer permanently
+        await prisma.customers.delete({ where: { id } });
       });
 
-      // Clear cache
-      await this.cacheService.delTenantData(tenantId, `customer:${id}`);
-      await this.cacheService.delTenantData(tenantId, 'customers:list');
-      await this.cacheService.delTenantData(tenantId, 'customers:stats');
+      this.logger.log(`🗑️ Transaction completed - Customer ${id} permanently deleted from database`);
 
-      this.logger.log(`Customer soft deleted: ${id} in tenant ${tenantId}`);
+      // Verify deletion
+      const deletedCheck = await this.prismaService.customers.findUnique({ where: { id } });
+      if (deletedCheck) {
+        this.logger.error(`❌ ERROR: Customer ${id} still exists in database after delete!`);
+        throw new Error('Customer deletion failed - record still exists');
+      }
+      this.logger.log(`✅ Verified: Customer ${id} no longer exists in database`);
+
+      // Clear ALL customer-related cache entries
+      // Since cache keys include query parameters, we need to clear all variations
+      await this.cacheService.delTenantData(tenantId, `customer:${id}`);
+
+      // Clear all possible customer list cache keys by using a wildcard pattern
+      // This ensures all paginated/filtered queries are invalidated
+      const cacheKeys = [
+        'customers:list',
+        'customers:stats',
+        'customers:search',
+        'customers:count',
+      ];
+
+      for (const key of cacheKeys) {
+        try {
+          await this.cacheService.delTenantData(tenantId, key);
+          // Also try to delete with pattern matching if supported
+          await this.cacheService.delTenantData(tenantId, `${key}:*`);
+        } catch (error) {
+          // Ignore errors for pattern deletion if not supported
+          this.logger.debug(`Cache key ${key} deletion skipped:`, error.message);
+        }
+      }
+
+      this.logger.log(`Customer permanently deleted: ${id} in tenant ${tenantId}`);
     } catch (error) {
       this.logger.error(`Failed to delete customer ${id}:`, error.message);
+      this.logger.error(`Error stack:`, error.stack);
+      this.logger.error(`Full error:`, JSON.stringify(error, null, 2));
       throw error;
     }
   }

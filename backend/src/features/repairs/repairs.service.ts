@@ -82,6 +82,8 @@ export class RepairsService {
           internalNotes: combinedNotes,
           isInsuranceClaim: Boolean(createRepairDto.insuranceValue),
           insuranceNumber: createRepairDto.insuranceNumber,
+          tagId: createRepairDto.tagId || null,
+          rmaId: createRepairDto.rmaId || null,
           updatedAt: new Date(),
         } as any,
         include: {
@@ -199,6 +201,9 @@ export class RepairsService {
         collectedDate: updateRepairDto.status === 'COLLECTED' ? new Date() : existingRepair.collectedDate,
         customerNotes: updateRepairDto.customerInstructions || existingRepair.customerNotes,
         internalNotes: updateRepairDto.internalNotes || existingRepair.internalNotes,
+        tagId: updateRepairDto.tagId !== undefined ? updateRepairDto.tagId : existingRepair.tagId,
+        rmaId: updateRepairDto.rmaId !== undefined ? updateRepairDto.rmaId : existingRepair.rmaId,
+        updatedAt: new Date(),
       },
       include: {
         customers: true,
@@ -229,6 +234,7 @@ export class RepairsService {
       activeRepairs,
       completedRepairs,
       overdueRepairs,
+      allRepairs,
     ] = await Promise.all([
       this.prismaService.repairs.count({ where: { tenantId } }),
       this.prismaService.repairs.count({
@@ -250,7 +256,74 @@ export class RepairsService {
           estimatedDueDate: { lt: new Date() },
         },
       }),
+      // Get all repairs to calculate status breakdown
+      this.prismaService.repairs.findMany({
+        where: { tenantId },
+        select: { status: true, finalCost: true, createdAt: true },
+      }),
     ]);
+
+    // Calculate status breakdown
+    const statusBreakdown: Record<string, number> = {
+      RECEIVED: 0,
+      QUOTED: 0,
+      APPROVED: 0,
+      IN_PROGRESS: 0,
+      COMPLETED: 0,
+      READY_FOR_COLLECTION: 0,
+      COLLECTED: 0,
+      CANCELLED: 0,
+    };
+
+    let totalRevenue = 0;
+    let repairsThisMonth = 0;
+    let revenueThisMonth = 0;
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    allRepairs.forEach((repair) => {
+      // Count by status
+      if (statusBreakdown[repair.status] !== undefined) {
+        statusBreakdown[repair.status]++;
+      }
+
+      // Calculate revenue
+      if (repair.finalCost) {
+        totalRevenue += Number(repair.finalCost);
+
+        // Check if repair is from this month
+        if (new Date(repair.createdAt) >= startOfMonth) {
+          repairsThisMonth++;
+          revenueThisMonth += Number(repair.finalCost);
+        }
+      }
+    });
+
+    const averageRepairCost = totalRepairs > 0 ? totalRevenue / totalRepairs : 0;
+
+    // Initialize priority breakdown with all enum values
+    const priorityBreakdown = {
+      LOW: 0,
+      NORMAL: 0,
+      HIGH: 0,
+      URGENT: 0,
+    };
+
+    // Initialize repair type breakdown with all enum values
+    const repairTypeBreakdown = {
+      CLEANING: 0,
+      POLISHING: 0,
+      SIZING: 0,
+      STONE_SETTING: 0,
+      PRONG_REPAIR: 0,
+      CHAIN_REPAIR: 0,
+      CLASP_REPAIR: 0,
+      ENGRAVING: 0,
+      RESTORATION: 0,
+      CUSTOM_WORK: 0,
+      OTHER: 0,
+    };
 
     return {
       totalRepairs,
@@ -259,12 +332,15 @@ export class RepairsService {
       overdueRepairs,
       waitingForParts: 0,
       averageRepairTime: 0,
-      repairsThisMonth: 0,
-      statusBreakdown: {},
-      totalRevenue: 0,
-      averageRepairCost: 0,
-      revenueThisMonth: 0,
-    } as any;
+      repairsThisMonth,
+      statusBreakdown: statusBreakdown as any,
+      priorityBreakdown: priorityBreakdown as any,
+      repairTypeBreakdown,
+      totalRevenue,
+      averageRepairCost,
+      revenueThisMonth,
+      topTechnicians: [],
+    };
   }
 
   private async generateRepairNumber(tenantId: string): Promise<string> {

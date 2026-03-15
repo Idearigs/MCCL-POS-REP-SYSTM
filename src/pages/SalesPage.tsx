@@ -14,6 +14,8 @@ import {
   Card,
   CardContent,
 } from "@/components/ui/card";
+import VoidTransactionDialog from '@/components/sales/VoidTransactionDialog';
+import { XCircle } from 'lucide-react';
 import { Eye, Printer, RotateCcw, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { salesService, Sale, SaleFilters as SaleFiltersType } from '@/services/salesService';
@@ -23,6 +25,11 @@ import SaleDetailModal from '@/components/sales/SaleDetailModal';
 import RefundSaleDialog from '@/components/sales/RefundSaleDialog';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
+import { userService } from '@/services/userService';
+import { shiftService, Shift } from '@/services/shiftService';
+import ShiftList from '@/components/shifts/ShiftList';
+import ShiftReport from '@/components/shifts/ShiftReport';
+import ProductSalesReport from '@/components/sales/ProductSalesReport';
 
 const SalesPage = () => {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -33,6 +40,18 @@ const SalesPage = () => {
   const [isRefundDialogOpen, setIsRefundDialogOpen] = useState(false);
   const [refundingSale, setRefundingSale] = useState<Sale | null>(null);
   const [isRefundProcessing, setIsRefundProcessing] = useState(false);
+
+  const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
+  const [voidingSale, setVoidingSale] = useState<Sale | null>(null);
+  const [isVoidProcessing, setIsVoidProcessing] = useState(false);
+
+  const [cashiers, setCashiers] = useState<{id: string; name: string}[]>([]);
+
+  // Shift management
+  const [viewMode, setViewMode] = useState<'sales' | 'shifts' | 'products'>('sales');
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [shiftsLoading, setShiftsLoading] = useState(false);
+  const [selectedShiftForReport, setSelectedShiftForReport] = useState<string | null>(null);
 
   const { auth } = useAuth();
 
@@ -53,7 +72,9 @@ const SalesPage = () => {
     paymentStatus: 'all',
     status: 'all',
     dateFrom: undefined,
-    dateTo: undefined
+    dateTo: undefined,
+    cashierId: 'all',
+    shift: 'all'
   });
 
   const { toast } = useToast();
@@ -62,12 +83,43 @@ const SalesPage = () => {
   useEffect(() => {
     loadSales();
     loadStatistics();
+    loadCashiers();
   }, []);
 
   // Apply filters when they change
   useEffect(() => {
     applyFilters();
   }, [sales, filters]);
+
+  // Load shifts when date range changes for filtering
+  const [availableShifts, setAvailableShifts] = useState<Shift[]>([]);
+  useEffect(() => {
+    if (filters.dateFrom && filters.dateTo) {
+      loadAvailableShifts();
+    }
+  }, [filters.dateFrom, filters.dateTo]);
+
+  const loadAvailableShifts = async () => {
+    if (!filters.dateFrom || !filters.dateTo) return;
+
+    try {
+      const shiftsData = await shiftService.getShiftsByDateRange({
+        startDate: filters.dateFrom.toISOString(),
+        endDate: filters.dateTo.toISOString(),
+      });
+      setAvailableShifts(shiftsData || []);
+    } catch (error) {
+      console.error('Error loading available shifts:', error);
+      setAvailableShifts([]);
+    }
+  };
+
+  // Load shifts when switching to shifts view
+  useEffect(() => {
+    if (viewMode === 'shifts') {
+      loadShifts();
+    }
+  }, [viewMode]);
 
   const loadSales = async () => {
     try {
@@ -108,6 +160,56 @@ const SalesPage = () => {
       console.error('Error loading statistics:', error);
       // Continue without statistics
     }
+  };
+
+  const loadCashiers = async () => {
+    try {
+      const response = await userService.getUsers();
+      const usersData = response.data || [];
+      const cashierList = usersData.map((user: any) => ({
+        id: user.id,
+        name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Unknown'
+      }));
+      setCashiers(cashierList);
+    } catch (error) {
+      console.error('Failed to load cashiers:', error);
+      // Continue without cashiers list
+    }
+  };
+
+  const loadShifts = async () => {
+    // Only load shifts if date range is provided
+    if (!filters.dateFrom || !filters.dateTo) {
+      toast({
+        title: 'Date Range Required',
+        description: 'Please select a date range to view shifts',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      setShiftsLoading(true);
+      const shiftsData = await shiftService.getShiftsByDateRange({
+        startDate: filters.dateFrom.toISOString(),
+        endDate: filters.dateTo.toISOString(),
+        userId: filters.cashierId !== 'all' ? filters.cashierId : undefined,
+      });
+      setShifts(shiftsData);
+    } catch (error) {
+      console.error('Error loading shifts:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load shifts',
+        variant: 'destructive'
+      });
+    } finally {
+      setShiftsLoading(false);
+    }
+  };
+
+  const handleViewShift = (shift: Shift) => {
+    setSelectedShiftForReport(shift.id);
   };
 
   const applyFilters = () => {
@@ -151,6 +253,19 @@ const SalesPage = () => {
         const endOfDay = new Date(filters.dateTo!);
         endOfDay.setHours(23, 59, 59, 999);
         return saleDate <= endOfDay;
+      });
+    }
+
+    // Cashier filter
+    if (filters.cashierId && filters.cashierId !== 'all') {
+      result = result.filter(sale => sale.cashierId === filters.cashierId);
+    }
+
+    // Shift filter - now using actual shift IDs
+    if (filters.shift && filters.shift !== 'all') {
+      result = result.filter(sale => {
+        // Check if sale has a shiftId that matches the selected shift
+        return (sale as any).shiftId === filters.shift;
       });
     }
 
@@ -267,6 +382,39 @@ const SalesPage = () => {
         description: 'Failed to download receipt',
         variant: 'destructive'
       });
+    }
+  };
+
+
+  const handleVoid = (sale: Sale) => {
+    setVoidingSale(sale);
+    setIsVoidDialogOpen(true);
+  };
+
+  const handleVoidConfirm = async (reason: string, details: string) => {
+    if (!voidingSale) return;
+
+    setIsVoidProcessing(true);
+    try {
+      await salesService.voidSale(voidingSale.id, reason, details);
+      
+      toast({
+        title: 'Transaction Voided',
+        description: `Sale ${voidingSale.receiptNumber} has been successfully voided.`,
+      });
+
+      setIsVoidDialogOpen(false);
+      setVoidingSale(null);
+      loadSales();
+    } catch (error) {
+      console.error('Error voiding sale:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to void transaction. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsVoidProcessing(false);
     }
   };
 
@@ -391,9 +539,34 @@ const SalesPage = () => {
           onFilterChange={setFilters}
           onExportCSV={handleExportCSV}
           onExportPDF={handleExportPDF}
+          cashiers={cashiers}
+          shifts={availableShifts}
         />
 
+        {/* View Mode Selector */}
+        <div className="flex gap-2 mb-4">
+          <Button
+            variant={viewMode === 'sales' ? 'default' : 'outline'}
+            onClick={() => setViewMode('sales')}
+          >
+            Sales
+          </Button>
+          <Button
+            variant={viewMode === 'shifts' ? 'default' : 'outline'}
+            onClick={() => setViewMode('shifts')}
+          >
+            Shifts
+          </Button>
+          <Button
+            variant={viewMode === 'products' ? 'default' : 'outline'}
+            onClick={() => setViewMode('products')}
+          >
+            Products
+          </Button>
+        </div>
+
         {/* Sales List */}
+        {viewMode === 'sales' && (
         <Card className="shadow-sm">
           <CardContent className="p-0">
             {loading ? (
@@ -490,6 +663,17 @@ const SalesPage = () => {
                                 <RotateCcw className="h-4 w-4" />
                               </Button>
                             )}
+                            {sale.status === 'COMPLETED' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleVoid(sale)}
+                                className="h-8 w-8 p-0 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                title="Void Transaction"
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -500,9 +684,28 @@ const SalesPage = () => {
             )}
           </CardContent>
         </Card>
+        )}
+
+        {/* Shifts View */}
+        {viewMode === 'shifts' && (
+          <Card className="shadow-sm">
+            <CardContent className="p-6">
+              <ShiftList
+                shifts={shifts}
+                onViewReport={handleViewShift}
+                loading={shiftsLoading}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Products Sales Report View */}
+        {viewMode === 'products' && (
+          <ProductSalesReport />
+        )}
 
         {/* Results Summary */}
-        {!loading && filteredSales.length > 0 && (
+        {viewMode === 'sales' && !loading && filteredSales.length > 0 && (
           <div className="mt-4 text-sm text-gray-600 text-center">
             Showing {filteredSales.length} of {sales.length} sales
             {filters.search && ` • Filtered by: "${filters.search}"`}
@@ -533,6 +736,25 @@ const SalesPage = () => {
         onConfirmRefund={handleConfirmRefund}
         isProcessing={isRefundProcessing}
       />
+
+      {/* Void Transaction Dialog */}
+      <VoidTransactionDialog
+        open={isVoidDialogOpen}
+        onOpenChange={setIsVoidDialogOpen}
+        onConfirm={handleVoidConfirm}
+        saleNumber={voidingSale?.receiptNumber || voidingSale?.id}
+        totalAmount={voidingSale?.totalAmount || 0}
+        loading={isVoidProcessing}
+      />
+
+      {/* Shift Report Dialog */}
+      {selectedShiftForReport && (
+        <ShiftReport
+          open={!!selectedShiftForReport}
+          onClose={() => setSelectedShiftForReport(null)}
+          shiftId={selectedShiftForReport}
+        />
+      )}
     </MainLayout>
   );
 };

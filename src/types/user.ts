@@ -5,6 +5,27 @@ export enum UserRole {
   READONLY = 'READONLY',
 }
 
+export interface UserPermissions {
+  dashboard?: boolean;
+  pos?: boolean;
+  sales?: boolean;
+  floatManagement?: boolean;
+  pettyCash?: boolean;
+  cashiers?: boolean;
+  repairs?: boolean;
+  customers?: boolean;
+  inventory?: boolean;
+  stockTaking?: boolean;
+  calendar?: boolean;
+  history?: boolean;
+  search?: boolean;
+  settings?: boolean;
+  userManagement?: boolean;
+  subscription?: boolean;
+  mainframe?: boolean;
+  financial_intelligence?: boolean;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -12,6 +33,7 @@ export interface User {
   lastName: string;
   role: UserRole;
   isActive: boolean;
+  permissions?: UserPermissions;
   lastLogin: string | null;
   createdAt: string;
   updatedAt: string;

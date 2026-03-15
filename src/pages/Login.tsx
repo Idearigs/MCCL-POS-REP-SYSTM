@@ -5,8 +5,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import IntroAnimation from "@/components/ui/intro-animation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, LockKeyhole, User, ShieldCheck } from "lucide-react";
-import { motion } from "framer-motion";
+import { Eye, EyeOff, LockKeyhole, User } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,14 +13,10 @@ import {
   FormControl,
   FormField,
   FormItem,
-  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { cn } from "@/lib/utils";
-import { Separator } from "@/components/ui/separator";
 
 // Define the form schema with Zod
 const formSchema = z.object({
@@ -39,15 +34,7 @@ const Login = () => {
   const { auth, login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [showLoginForm, setShowLoginForm] = useState(false);
-  const [loginError, setLoginError] = useState("");
   const [showIntroAnimation, setShowIntroAnimation] = useState(false);
-  
-  // Animate the login form after component mounts
-  useEffect(() => {
-    const timer = setTimeout(() => setShowLoginForm(true), 300);
-    return () => clearTimeout(timer);
-  }, []);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -70,31 +57,21 @@ const Login = () => {
   // Handle form submission
   const onSubmit = async (data: FormValues) => {
     setIsLoading(true);
-    setLoginError("");
-    
+
     try {
-      console.log("Login attempt with:", data);
-      
-      // Use the login function from auth context
       const success = await login(data.email, data.password);
-      
+
       if (success) {
-        // Login successful
         toast({
           title: "Login successful",
-          description: "Welcome to MCCL POS System",
+          description: "Welcome to TrueDesk",
         });
-        
-        // Show intro animation, navigation will happen after completion
         setShowIntroAnimation(true);
       } else {
-        // Login failed
-        setLoginError("Invalid email or password");
         throw new Error("Invalid credentials");
       }
     } catch (error: any) {
       const errorMessage = error.message || "Invalid email or password";
-      setLoginError(errorMessage);
       toast({
         title: "Login failed",
         description: errorMessage,
@@ -113,186 +90,136 @@ const Login = () => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
-      {showIntroAnimation && <IntroAnimation targetRoute={location.state?.from?.pathname || '/dashboard'} onComplete={handleIntroComplete} />}
-      {/* Simple background with subtle pattern */}
-      <div className="absolute inset-0 bg-gradient-to-b from-gray-50 to-gray-100 opacity-80"></div>
+    <div className="min-h-screen w-full flex items-center justify-center bg-slate-50">
+      {showIntroAnimation && (
+        <IntroAnimation
+          targetRoute={location.state?.from?.pathname || '/dashboard'}
+          onComplete={handleIntroComplete}
+        />
+      )}
 
-      {/* Logo */}
-      <motion.div 
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="absolute top-8 left-8 md:top-12 md:left-12 z-10"
-      >
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-md bg-primary flex items-center justify-center shadow-sm">
-            <ShieldCheck className="h-5 w-5 text-white" />
+      {/* Login Card */}
+      <div className="w-full max-w-md mx-4">
+        {/* Logo & Branding */}
+        <div className="text-center mb-10">
+          {/* TruedeskPOS Logo */}
+          <div className="inline-flex items-center justify-center mb-6">
+            <div className="relative">
+              {/* Logo Icon */}
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/25">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="w-9 h-9 text-white"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <rect x="2" y="3" width="20" height="14" rx="2" />
+                  <path d="M8 21h8" strokeLinecap="round" />
+                  <path d="M12 17v4" strokeLinecap="round" />
+                  <path d="M6 8h4M6 11h8" strokeLinecap="round" />
+                </svg>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-col">
-            <span className="font-bold text-xl tracking-tight text-gray-800">MCCL POS</span>
-            <span className="text-xs text-gray-500">Point of Sale System</span>
-          </div>
+
+          {/* Brand Name */}
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            TrueDesk
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Sign in to your account
+          </p>
         </div>
-      </motion.div>
-      
-      <div className="w-full max-w-md z-10">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: showLoginForm ? 1 : 0, y: showLoginForm ? 0 : 10 }}
-          transition={{ duration: 0.4 }}
-          className="w-full"
-        >
-          <Card className="w-full bg-white border border-gray-200 shadow-md rounded-lg overflow-hidden">
-            <div className="h-1 bg-primary w-full"></div>
-            <CardHeader className="space-y-2 pb-4 pt-6">
-              <motion.div
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1, duration: 0.3 }}
+
+        {/* Form Card */}
+        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-8">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              {/* Email Field */}
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="relative">
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                        <User className="h-5 w-5" />
+                      </div>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          placeholder="Email address"
+                          className="pl-12 h-12 text-base bg-slate-50 border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                          {...field}
+                          disabled={isLoading}
+                        />
+                      </FormControl>
+                    </div>
+                    <FormMessage className="text-xs font-medium text-red-500 mt-1.5 ml-1" />
+                  </FormItem>
+                )}
+              />
+
+              {/* Password Field */}
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="relative">
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                        <LockKeyhole className="h-5 w-5" />
+                      </div>
+                      <FormControl>
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Password"
+                          className="pl-12 pr-12 h-12 text-base bg-slate-50 border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                          {...field}
+                          disabled={isLoading}
+                        />
+                      </FormControl>
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
+                    </div>
+                    <FormMessage className="text-xs font-medium text-red-500 mt-1.5 ml-1" />
+                  </FormItem>
+                )}
+              />
+
+              {/* Login Button */}
+              <Button
+                type="submit"
+                className="w-full h-12 text-base font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all duration-300"
+                disabled={isLoading}
               >
-                <CardTitle className="text-2xl font-bold text-center text-gray-800">
-                  Welcome Back
-                </CardTitle>
-                <CardDescription className="text-center mt-2 text-gray-500">
-                  Sign in to access your account
-                </CardDescription>
-              </motion.div>
-            </CardHeader>
-            <CardContent className="pt-2 pb-6">
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3, duration: 0.5 }}
-                  >
-                    <FormField
-                      control={form.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem className="space-y-2">
-                          <FormLabel className="text-sm font-medium text-gray-700">Email</FormLabel>
-                          <div className="relative group">
-                            <div className="absolute left-3 top-3 text-gray-400 group-focus-within:text-primary transition-colors duration-200">
-                              <User className="h-5 w-5" />
-                            </div>
-                            <FormControl>
-                              <Input 
-                                type="email"
-                                placeholder="admin@example.com" 
-                                className="pl-10 h-11 bg-white focus:bg-white transition-all duration-200 rounded-md border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/20" 
-                                {...field} 
-                                disabled={isLoading}
-                              />
-                            </FormControl>
-                          </div>
-                          <FormMessage className="text-xs font-medium text-red-500" />
-                        </FormItem>
-                      )}
-                    />
-                  </motion.div>
-                  
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4, duration: 0.5 }}
-                  >
-                    <FormField
-                      control={form.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <FormLabel className="text-sm font-medium text-gray-700">Password</FormLabel>
-                            <a href="#" className="text-xs text-primary hover:text-primary/80 transition-colors duration-200">
-                              Forgot password?
-                            </a>
-                          </div>
-                          <div className="relative group">
-                            <div className="absolute left-3 top-3 text-gray-400 group-focus-within:text-primary transition-colors duration-200">
-                              <LockKeyhole className="h-5 w-5" />
-                            </div>
-                            <FormControl>
-                              <Input 
-                                type={showPassword ? "text" : "password"}
-                                placeholder="••••••••" 
-                                className="pl-10 h-11 bg-white focus:bg-white transition-all duration-200 rounded-md border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/20"
-                                {...field}
-                                disabled={isLoading}
-                              />
-                            </FormControl>
-                            <button
-                              type="button"
-                              onClick={() => setShowPassword(!showPassword)}
-                              className={cn(
-                                "absolute right-3 top-3 transition-colors duration-200",
-                                showPassword ? "text-primary" : "text-gray-400 hover:text-gray-500"
-                              )}
-                              tabIndex={-1}
-                            >
-                              {showPassword ? (
-                                <EyeOff className="h-5 w-5" />
-                              ) : (
-                                <Eye className="h-5 w-5" />
-                              )}
-                            </button>
-                          </div>
-                          <FormMessage className="text-xs font-medium text-red-500" />
-                        </FormItem>
-                      )}
-                    />
-                  </motion.div>
-                  
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5, duration: 0.5 }}
-                  >
-                    <Button 
-                      type="submit" 
-                      className="w-full h-11 mt-4 text-base font-medium bg-primary hover:bg-primary/90 shadow-sm border-0 rounded-md transition-all duration-200" 
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (
-                        <div className="flex items-center justify-center space-x-2">
-                          <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          <span>Signing in...</span>
-                        </div>
-                      ) : (
-                        <span>Sign in</span>
-                      )}
-                    </Button>
-                  </motion.div>
-                </form>
-              </Form>
-            </CardContent>
-            <CardFooter className="flex flex-col gap-5 pt-0 pb-6">
-              {/* Social login options removed as requested */}
-              
-              <motion.p 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3, duration: 0.3 }}
-                className="text-xs text-center text-gray-500 mt-4"
-              >
-                Don't have an account? <a href="#" className="text-primary hover:text-primary/80 transition-all duration-200">Contact administrator</a>
-              </motion.p>
-              
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4, duration: 0.3 }}
-                className="flex justify-center mt-4"
-              >
-                <p className="text-xs text-gray-500">© {new Date().getFullYear()} MCCL POS System. All rights reserved.</p>
-              </motion.div>
-            </CardFooter>
-          </Card>
-        </motion.div>
+                {isLoading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Signing in...</span>
+                  </div>
+                ) : (
+                  <span>Sign In</span>
+                )}
+              </Button>
+            </form>
+          </Form>
+        </div>
+
+        {/* Footer */}
+        <p className="text-center text-sm text-slate-400 mt-8">
+          © {new Date().getFullYear()} TrueDesk. All rights reserved.
+        </p>
       </div>
     </div>
   );

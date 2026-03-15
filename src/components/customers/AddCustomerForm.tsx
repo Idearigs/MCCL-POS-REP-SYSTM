@@ -5,6 +5,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -29,6 +36,8 @@ const AddCustomerForm: React.FC<AddCustomerFormProps> = ({
     phone: '',
     email: '',
     notes: '',
+    customerGroup: 'RETAIL' as string,
+    creditLimit: 0,
     marketingConsent: {
       email: false,
       sms: false,
@@ -71,6 +80,8 @@ const AddCustomerForm: React.FC<AddCustomerFormProps> = ({
         phone: newCustomer.phone,
         email: newCustomer.email,
         notes: newCustomer.notes,
+        customerGroup: newCustomer.customerGroup,
+        creditLimit: newCustomer.creditLimit,
         redFlag: false,
         since: formattedDate,
         marketingConsent: newCustomer.marketingConsent,
@@ -86,6 +97,8 @@ const AddCustomerForm: React.FC<AddCustomerFormProps> = ({
         phone: '',
         email: '',
         notes: '',
+        customerGroup: 'RETAIL',
+        creditLimit: 0,
         marketingConsent: {
           email: false,
           sms: false,
@@ -177,15 +190,59 @@ const AddCustomerForm: React.FC<AddCustomerFormProps> = ({
         
         <div className="grid gap-2">
           <label htmlFor="notes" className="text-sm font-medium">Notes</label>
-          <Textarea 
-            id="notes" 
+          <Textarea
+            id="notes"
             value={newCustomer.notes}
             onChange={(e) => setNewCustomer({...newCustomer, notes: e.target.value})}
             placeholder="Additional information"
             rows={3}
           />
         </div>
-        
+
+        {/* Customer Group & Credit Management */}
+        <div className="space-y-4 border rounded-md p-4 mt-2">
+          <h3 className="font-medium mb-2">Customer Type & Credit</h3>
+
+          <div className="grid gap-2">
+            <label htmlFor="customerGroup" className="text-sm font-medium">Customer Group</label>
+            <Select
+              value={newCustomer.customerGroup}
+              onValueChange={(value) => setNewCustomer({...newCustomer, customerGroup: value})}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select customer group" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="RETAIL">Retail - Regular walk-in customers</SelectItem>
+                <SelectItem value="WHOLESALE">Wholesale - Bulk buyers, resellers</SelectItem>
+                <SelectItem value="VIP">VIP - High-value customers</SelectItem>
+                <SelectItem value="TRADE">Trade - Trade professionals</SelectItem>
+                <SelectItem value="CORPORATE">Corporate - Business accounts</SelectItem>
+                <SelectItem value="REGULAR">Regular - Frequent buyers</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Customer group determines pricing, discounts, and loyalty point rates
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <label htmlFor="creditLimit" className="text-sm font-medium">Credit Limit (£)</label>
+            <Input
+              id="creditLimit"
+              type="number"
+              min="0"
+              step="0.01"
+              value={newCustomer.creditLimit}
+              onChange={(e) => setNewCustomer({...newCustomer, creditLimit: parseFloat(e.target.value) || 0})}
+              placeholder="0.00"
+            />
+            <p className="text-xs text-muted-foreground">
+              Maximum credit allowed for this customer (0 = no credit)
+            </p>
+          </div>
+        </div>
+
         {/* Marketing & Data Processing Consent */}
         <div className="space-y-4 border rounded-md p-4 mt-2">
           <h3 className="font-medium mb-2">Marketing & Data Processing Consent</h3>

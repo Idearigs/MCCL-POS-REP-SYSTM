@@ -1,0 +1,32 @@
+
+
+  async holdBill(saleData: CreateSaleData): Promise<Sale> {
+    try {
+      const draftSale = { ...saleData, status: 'DRAFT' as const };
+      return await this.createSale(draftSale);
+    } catch (error) {
+      console.error('Failed to hold bill:', error);
+      throw error;
+    }
+  }
+
+  async resumeBill(saleId: string): Promise<Sale> {
+    try {
+      return await this.getSaleById(saleId);
+    } catch (error) {
+      console.error(`Failed to resume bill ${saleId}:`, error);
+      throw error;
+    }
+  }
+
+  async updateSaleStatus(saleId: string, status: 'DRAFT' | 'COMPLETED' | 'CANCELLED' | 'REFUNDED'): Promise<Sale> {
+    try {
+      const endpoint = apiClient.replaceUrlParams(API_CONFIG.ENDPOINTS.UPDATE_SALE, {
+        id: saleId,
+      });
+      return await apiClient.put<Sale>(endpoint, { status });
+    } catch (error) {
+      console.error(`Failed to update sale status ${saleId}:`, error);
+      throw error;
+    }
+  }

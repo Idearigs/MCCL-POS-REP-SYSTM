@@ -16,7 +16,8 @@ import {
   List,
   Eye,
   Edit,
-  Trash2
+  Trash2,
+  Nfc
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useInventory, InventoryItem } from '@/contexts/InventoryContext';
@@ -59,6 +60,7 @@ import {
   generateCSVTemplate
 } from '@/utils/intelligentCSVParser';
 import CSVImportDialog from '@/components/inventory/CSVImportDialog';
+import BulkRFIDAssignment from '@/components/inventory/BulkRFIDAssignment';
 
 import InventoryItemComponent, { InventoryItemProps} from '@/components/inventory/InventoryItem';
 import InventoryDetail from '@/components/inventory/InventoryDetail';
@@ -80,7 +82,9 @@ const InventoryPage = () => {
   const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null);
   const [parsedCSVData, setParsedCSVData] = useState<ParsedCSVData | null>(null);
   const [isCSVImportDialogOpen, setIsCSVImportDialogOpen] = useState(false);
+  const [isBulkRFIDDialogOpen, setIsBulkRFIDDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [quickFilter, setQuickFilter] = useState<'lowStock' | 'outOfStock' | null>(null);
   const { toast } = useToast();
   
   // Set isLoaded to true after component mounts to prevent initial render issues
@@ -90,9 +94,9 @@ const InventoryPage = () => {
   }, []);
 
   // Apply search and filters to inventory
-  const applyFilters = (searchTerm: string, filters?: any) => {
+  const applyFilters = (searchTerm: string, filters?: any, activeQuickFilter?: 'lowStock' | 'outOfStock' | null) => {
     let result = [...inventory];
-    
+
     // Apply search
     if (searchTerm) {
       const lowercaseQuery = searchTerm.toLowerCase();
@@ -103,14 +107,22 @@ const InventoryPage = () => {
         (item.description && item.description.toLowerCase().includes(lowercaseQuery))
       );
     }
-    
+
+    // Apply quick filter (Low Stock or Out of Stock button clicks)
+    const currentQuickFilter = activeQuickFilter !== undefined ? activeQuickFilter : quickFilter;
+    if (currentQuickFilter === 'lowStock') {
+      result = result.filter(item => item.quantity > 0 && item.quantity <= item.threshold);
+    } else if (currentQuickFilter === 'outOfStock') {
+      result = result.filter(item => item.quantity <= 0);
+    }
+
     // Apply filters if provided
     if (filters) {
       // Filter by categories
       if (filters.categories.length > 0) {
         result = result.filter(item => filters.categories.includes((item as any).categoryName || item.category));
       }
-      
+
       // Filter by price range
       if (filters.minPrice !== null) {
         result = result.filter(item => item.price >= filters.minPrice);
@@ -118,31 +130,33 @@ const InventoryPage = () => {
       if (filters.maxPrice !== null) {
         result = result.filter(item => item.price <= filters.maxPrice);
       }
-      
-      // Filter by stock status
-      result = result.filter(item => {
-        if (item.quantity <= 0 && !filters.stockStatus.outOfStock) return false;
-        if (item.quantity <= item.threshold && item.quantity > 0 && !filters.stockStatus.lowStock) return false;
-        if (item.quantity > item.threshold && !filters.stockStatus.inStock) return false;
-        return true;
-      });
+
+      // Filter by stock status (only if quick filter is not active)
+      if (!currentQuickFilter) {
+        result = result.filter(item => {
+          if (item.quantity <= 0 && !filters.stockStatus.outOfStock) return false;
+          if (item.quantity <= item.threshold && item.quantity > 0 && !filters.stockStatus.lowStock) return false;
+          if (item.quantity > item.threshold && !filters.stockStatus.inStock) return false;
+          return true;
+        });
+      }
     }
-    
+
     // Apply sorting
     result.sort((a, b) => {
       let valueA: any = a[sortBy as keyof InventoryItem];
       let valueB: any = b[sortBy as keyof InventoryItem];
-      
+
       if (typeof valueA === 'string') {
         valueA = valueA.toLowerCase();
         valueB = valueB.toLowerCase();
       }
-      
+
       if (valueA < valueB) return sortOrder === 'asc' ? -1 : 1;
       if (valueA > valueB) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-    
+
     setFilteredInventory(result);
   };
   
@@ -150,25 +164,32 @@ const InventoryPage = () => {
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
     setSearchQuery(query);
-    applyFilters(query);
+    applyFilters(query, undefined, quickFilter);
+  };
+
+  // Handle quick filter toggle (Low Stock / Out of Stock buttons)
+  const handleQuickFilter = (filterType: 'lowStock' | 'outOfStock') => {
+    const newFilter = quickFilter === filterType ? null : filterType;
+    setQuickFilter(newFilter);
+    applyFilters(searchQuery, undefined, newFilter);
   };
   
   // Handle sorting changes
   const handleSortChange = (value: string) => {
     setSortBy(value);
-    applyFilters(searchQuery);
+    applyFilters(searchQuery, undefined, quickFilter);
   };
-  
+
   // Toggle sort order
   const toggleSortOrder = () => {
     const newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
     setSortOrder(newOrder);
-    applyFilters(searchQuery);
+    applyFilters(searchQuery, undefined, quickFilter);
   };
-  
+
   // Handle filter changes
   const handleFilterChange = (filters: any) => {
-    applyFilters(searchQuery, filters);
+    applyFilters(searchQuery, filters, quickFilter);
   };
   
   // Open the detail dialog for editing an item
@@ -443,7 +464,40 @@ const InventoryPage = () => {
       });
     }
   };
-  
+
+  // Handle bulk RFID assignment
+  const handleBulkRFIDAssign = async (assignments: Array<{ sku: string; rfidTag: string }>) => {
+    try {
+      const result = await productService.bulkAssignRFID(assignments);
+
+      // Show success toast
+      if (result.success > 0) {
+        toast({
+          title: "RFID Assignment Complete",
+          description: `Successfully assigned RFID tags to ${result.success} product${result.success !== 1 ? 's' : ''}.${result.failed > 0 ? ` ${result.failed} failed.` : ''}`,
+        });
+      }
+
+      // Show errors if any
+      if (result.failed > 0 && result.errors.length > 0) {
+        console.error('RFID assignment errors:', result.errors);
+      }
+
+      // Refresh inventory to show updated RFID tags
+      await refreshInventory();
+
+      return result;
+    } catch (error) {
+      console.error('Bulk RFID assignment error:', error);
+      toast({
+        title: "Assignment Failed",
+        description: "An error occurred while assigning RFID tags.",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
   // Save new or updated item
   const handleSaveItem = async (item: InventoryItem, imageFiles?: File[]) => {
     console.log('📥 handleSaveItem called with imageFiles:', imageFiles);
@@ -523,8 +577,8 @@ const InventoryPage = () => {
   
   // Update filtered inventory when inventory changes
   useEffect(() => {
-    applyFilters(searchQuery);
-  }, [inventory]);
+    applyFilters(searchQuery, undefined, quickFilter);
+  }, [inventory, quickFilter]);
 
   // Don't render until component is fully loaded to prevent initialization errors
   if (!isLoaded) {
@@ -554,25 +608,55 @@ const InventoryPage = () => {
             </div>
           </div>
           
-          <div className="bg-card p-4 rounded-lg shadow-sm border">
+          <button
+            onClick={() => handleQuickFilter('lowStock')}
+            className={`bg-card p-4 rounded-lg shadow-sm border transition-all hover:shadow-md cursor-pointer ${
+              quickFilter === 'lowStock'
+                ? 'ring-2 ring-amber-500 bg-amber-50 border-amber-500'
+                : 'hover:border-amber-300'
+            }`}
+          >
             <div className="flex justify-between items-center">
               <div>
-                <p className="text-sm text-muted-foreground">Low Stock</p>
+                <p className={`text-sm ${quickFilter === 'lowStock' ? 'text-amber-700 font-medium' : 'text-muted-foreground'}`}>
+                  Low Stock {quickFilter === 'lowStock' && '(Filtered)'}
+                </p>
                 <h3 className="text-2xl font-bold">{lowStockItems}</h3>
               </div>
-              <AlertTriangle className={`h-8 w-8 ${lowStockItems > 0 ? 'text-amber-500' : 'text-muted-foreground/70'}`} />
+              <AlertTriangle className={`h-8 w-8 ${
+                quickFilter === 'lowStock'
+                  ? 'text-amber-600'
+                  : lowStockItems > 0
+                    ? 'text-amber-500'
+                    : 'text-muted-foreground/70'
+              }`} />
             </div>
-          </div>
-          
-          <div className="bg-card p-4 rounded-lg shadow-sm border">
+          </button>
+
+          <button
+            onClick={() => handleQuickFilter('outOfStock')}
+            className={`bg-card p-4 rounded-lg shadow-sm border transition-all hover:shadow-md cursor-pointer ${
+              quickFilter === 'outOfStock'
+                ? 'ring-2 ring-red-500 bg-red-50 border-red-500'
+                : 'hover:border-red-300'
+            }`}
+          >
             <div className="flex justify-between items-center">
               <div>
-                <p className="text-sm text-muted-foreground">Out of Stock</p>
+                <p className={`text-sm ${quickFilter === 'outOfStock' ? 'text-red-700 font-medium' : 'text-muted-foreground'}`}>
+                  Out of Stock {quickFilter === 'outOfStock' && '(Filtered)'}
+                </p>
                 <h3 className="text-2xl font-bold">{outOfStockItems}</h3>
               </div>
-              <AlertTriangle className={`h-8 w-8 ${outOfStockItems > 0 ? 'text-destructive' : 'text-muted-foreground/70'}`} />
+              <AlertTriangle className={`h-8 w-8 ${
+                quickFilter === 'outOfStock'
+                  ? 'text-red-600'
+                  : outOfStockItems > 0
+                    ? 'text-destructive'
+                    : 'text-muted-foreground/70'
+              }`} />
             </div>
-          </div>
+          </button>
           
           <div className="bg-card p-4 rounded-lg shadow-sm border">
             <div className="flex justify-between items-center">
@@ -665,14 +749,24 @@ const InventoryPage = () => {
                 <Download size={16} />
               </Button>
               
-              <Button 
-                variant="outline" 
-                size="icon" 
+              <Button
+                variant="outline"
+                size="icon"
                 className="h-8 w-8 rounded-full bg-white/90 border-navy/10 hover:bg-navy/5 text-navy hover:text-navy"
                 onClick={handleUpload}
                 title="Upload CSV file"
               >
                 <Upload size={16} />
+              </Button>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-full bg-white/90 border-navy/10 hover:bg-navy/5 text-navy hover:text-navy"
+                onClick={() => setIsBulkRFIDDialogOpen(true)}
+                title="Bulk assign RFID tags"
+              >
+                <Nfc size={16} />
               </Button>
             </div>
             
@@ -847,6 +941,12 @@ const InventoryPage = () => {
           }}
           parsedData={parsedCSVData}
           onConfirmImport={handleConfirmCSVImport}
+        />
+
+        <BulkRFIDAssignment
+          isOpen={isBulkRFIDDialogOpen}
+          onClose={() => setIsBulkRFIDDialogOpen(false)}
+          onAssign={handleBulkRFIDAssign}
         />
       </div>
     </MainLayout>

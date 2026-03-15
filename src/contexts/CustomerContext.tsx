@@ -80,7 +80,7 @@ interface CustomerContextType {
   error: string | null;
   getCustomerById: (id: string) => Customer | undefined;
   addCustomer: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'tenantId' | 'isActive'>) => Promise<Customer>;
-  updateCustomer: (id: string, updates: Partial<Customer>) => Promise<void>;
+  updateCustomer: (id: string, updates: Partial<Customer>) => Promise<Customer>;
   deleteCustomer: (id: string) => Promise<void>;
   refreshCustomers: () => Promise<void>;
 }
@@ -158,7 +158,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   // Update an existing customer
-  const updateCustomer = async (id: string, updates: Partial<Customer>) => {
+  const updateCustomer = async (id: string, updates: Partial<Customer>): Promise<Customer> => {
     console.log('CustomerContext: Starting customer update', { id, updates });
     setLoading(true);
     setError(null);
@@ -175,27 +175,29 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       if (updates.country !== undefined) backendUpdates.country = updates.country;
       if (updates.dateOfBirth !== undefined) backendUpdates.dateOfBirth = updates.dateOfBirth;
       if (updates.notes !== undefined) backendUpdates.notes = updates.notes || undefined;
-      
+
       // Handle marketing consent updates
       if (updates.marketingConsent) {
         backendUpdates.marketingEmail = updates.marketingConsent.email;
         backendUpdates.marketingSms = updates.marketingConsent.sms;
         backendUpdates.marketingPhone = updates.marketingConsent.phone;
       }
-      
+
       console.log('CustomerContext: Sending to backend', backendUpdates);
       const updatedBackendCustomer = await customerService.updateCustomer(id, backendUpdates);
       console.log('CustomerContext: Backend response', updatedBackendCustomer);
-      
+
       const updatedCustomer = convertBackendCustomer(updatedBackendCustomer);
       console.log('CustomerContext: Converted customer', updatedCustomer);
-      
-      setCustomers(prevCustomers => 
-        prevCustomers.map(customer => 
-          customer.id === id ? { ...updatedCustomer, ...updates } : customer
+
+      setCustomers(prevCustomers =>
+        prevCustomers.map(customer =>
+          customer.id === id ? updatedCustomer : customer
         )
       );
       console.log('CustomerContext: Customer update completed successfully');
+
+      return updatedCustomer;
     } catch (err: any) {
       console.error('CustomerContext: Failed to update customer:', err);
       setError(err.message || 'Failed to update customer');
@@ -210,13 +212,35 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     setLoading(true);
     setError(null);
     try {
-      await customerService.deleteCustomer(id);
-      setCustomers(prevCustomers => 
-        prevCustomers.filter(customer => customer.id !== id)
-      );
+      console.log('🗑️ CustomerContext: Deleting customer:', id);
+
+      // Call backend to delete customer
+      const deleteResult = await customerService.deleteCustomer(id);
+      console.log('✅ CustomerContext: Backend delete successful:', deleteResult);
+
+      // Remove from local state immediately for responsive UI
+      setCustomers(prevCustomers => {
+        const filtered = prevCustomers.filter(customer => customer.id !== id);
+        console.log(`📊 Customers before: ${prevCustomers.length}, after: ${filtered.length}`);
+        return filtered;
+      });
+
+      // Refresh from backend to ensure deletion persisted
+      console.log('🔄 CustomerContext: Refreshing customer list from backend...');
+      await loadCustomers();
+      console.log('✅ CustomerContext: Customer list refreshed from backend');
+
     } catch (err: any) {
-      console.error('Failed to delete customer:', err);
+      console.error('❌ CustomerContext: Failed to delete customer:', err);
+      console.error('Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
       setError(err.message || 'Failed to delete customer');
+
+      // Refresh from backend even on error to ensure UI is in sync
+      await loadCustomers();
       throw err;
     } finally {
       setLoading(false);

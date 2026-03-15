@@ -9,6 +9,7 @@ export interface BackendProduct {
   description?: string;
   sku: string;
   barcode?: string;
+  rfidTag?: string;
   categoryId?: string;
   supplierId?: string;
   supplierName?: string;
@@ -35,6 +36,7 @@ export interface Product {
   description?: string;
   sku: string;
   barcode?: string;
+  rfidTag?: string;
   category: string;  // Category ID
   categoryName?: string;  // Category display name
   supplier?: string | { id: string; name: string };  // Can be string or object from backend
@@ -62,6 +64,7 @@ export interface BackendCreateProductData {
   description?: string;
   sku: string;
   barcode?: string;
+  rfidTag?: string;
   categoryId?: string;
   supplierName?: string;
   material?: string;
@@ -78,6 +81,7 @@ export interface CreateProductData {
   description?: string;
   sku: string;
   barcode?: string;
+  rfidTag?: string;
   category: string;
   material: string;
   weight?: number;
@@ -104,15 +108,24 @@ export interface ProductFilters {
   maxPrice?: number;
 }
 
+// Backend ProductStats interface - matches backend DTO exactly
 export interface ProductStats {
   totalProducts: number;
   activeProducts: number;
   inactiveProducts: number;
-  lowStockProducts: number;
-  totalValue: number;
-  averagePrice: number;
-  topCategories: Array<{ category: string; count: number; value: number }>;
-  topMaterials: Array<{ material: string; count: number; value: number }>;
+  damagedProducts: number;
+  lowStockProducts: number;  // Backend field name
+  totalStockValue: number;   // Backend field name
+  averageProductValue: number;
+  outOfStockProducts: number;
+  productsByMaterial: Record<string, number>;
+  productsByCategory: Record<string, number>;
+  // Legacy/compatibility fields
+  lowStockCount?: number;    // Computed from lowStockProducts
+  totalInventoryValue?: number; // Computed from totalStockValue
+  outOfStockCount?: number;  // Computed from outOfStockProducts
+  topCategories?: Array<{ category: string; count: number; value: number }>;
+  topMaterials?: Array<{ material: string; count: number; value: number }>;
 }
 
 // Transformation functions
@@ -122,6 +135,7 @@ const transformBackendToFrontend = (backendProduct: BackendProduct): Product => 
   description: backendProduct.description,
   sku: backendProduct.sku,
   barcode: backendProduct.barcode,
+  rfidTag: backendProduct.rfidTag,
   // Store category ID for backend operations
   category: backendProduct.category?.id || backendProduct.categoryId || '',
   // Store category NAME for display
@@ -152,6 +166,7 @@ const transformFrontendToBackend = (frontendProduct: CreateProductData): Backend
   description: frontendProduct.description,
   sku: frontendProduct.sku,
   barcode: frontendProduct.barcode,
+  rfidTag: frontendProduct.rfidTag,
   categoryId: frontendProduct.category || undefined,
   supplierName: (frontendProduct as any).supplier || undefined,  // Map supplier to supplierName
   material: frontendProduct.material as any, // Backend expects enum
@@ -264,6 +279,7 @@ class ProductService {
       if (productData.description !== undefined) backendData.description = productData.description;
       if (productData.sku !== undefined) backendData.sku = productData.sku;
       if (productData.barcode !== undefined) backendData.barcode = productData.barcode;
+      if (productData.rfidTag !== undefined) backendData.rfidTag = productData.rfidTag;
       if (productData.category !== undefined) backendData.categoryId = productData.category;
       if ((productData as any).supplier !== undefined) backendData.supplierName = (productData as any).supplier;
       if (productData.material !== undefined) backendData.material = productData.material;
@@ -293,7 +309,15 @@ class ProductService {
 
   async getProductStats(): Promise<ProductStats> {
     try {
-      return await apiClient.get<ProductStats>(API_CONFIG.ENDPOINTS.PRODUCT_STATS);
+      const stats = await apiClient.get<ProductStats>(API_CONFIG.ENDPOINTS.PRODUCT_STATS);
+
+      // Add compatibility fields for frontend code that uses old field names
+      return {
+        ...stats,
+        lowStockCount: stats.lowStockProducts,
+        totalInventoryValue: stats.totalStockValue,
+        outOfStockCount: stats.outOfStockProducts,
+      };
     } catch (error) {
       console.error('Failed to fetch product stats:', error);
       throw error;
@@ -309,9 +333,9 @@ class ProductService {
     }
   }
 
-  async getCategories(): Promise<string[]> {
+  async getCategories(): Promise<Array<{ id: string; name: string }>> {
     try {
-      return await apiClient.get<string[]>(API_CONFIG.ENDPOINTS.PRODUCT_CATEGORIES);
+      return await apiClient.get<Array<{ id: string; name: string }>>(API_CONFIG.ENDPOINTS.PRODUCT_CATEGORIES);
     } catch (error) {
       console.error('Failed to fetch product categories:', error);
       throw error;
@@ -359,6 +383,15 @@ class ProductService {
     }
   }
 
+  async bulkAssignRFID(assignments: Array<{ sku: string; rfidTag: string }>): Promise<{ success: number; failed: number; errors: any[] }> {
+    try {
+      return await apiClient.post(`${API_CONFIG.ENDPOINTS.PRODUCTS}/bulk-assign-rfid`, { assignments });
+    } catch (error) {
+      console.error('Failed to bulk assign RFID:', error);
+      throw error;
+    }
+  }
+
   async uploadProductImage(productId: string, file: File): Promise<{ imageUrl: string }> {
     try {
       return await apiClient.uploadFile<{ imageUrl: string }>(
@@ -397,9 +430,9 @@ class ProductService {
   }
 
   formatPrice(amount: number): string {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-GB', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'GBP',
     }).format(amount);
   }
 }

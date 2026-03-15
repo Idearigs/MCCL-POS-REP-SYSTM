@@ -28,7 +28,7 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, hasPaymentWarning = false })
   const navigate = useNavigate();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isNotificationsDialogOpen, setIsNotificationsDialogOpen] = useState(false);
-  const { auth, markNotificationAsRead } = useAuth();
+  const { auth, logout, markNotificationAsRead } = useAuth();
 
   // Get user information from auth context
   const user = auth.user;
@@ -68,9 +68,17 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, hasPaymentWarning = false })
   // Count new notifications
   const newNotificationsCount = allNotifications.filter(n => n.isNew).length;
   
-  const handleSignOut = () => {
-    // Navigate to login page
-    navigate('/login');
+  const handleSignOut = async () => {
+    try {
+      // Call logout to clear authentication state
+      await logout();
+      // Navigate to login page
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      // Still navigate to login even if logout fails
+      navigate('/login');
+    }
   };
   
   const handleNotificationClick = (notification: { id: string, link?: string }) => {
@@ -108,17 +116,17 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, hasPaymentWarning = false })
     }
   };
   return (
-    <header className="bg-white/90 backdrop-blur-md border-b border-gray-100 py-3 px-4 flex justify-between items-center shadow-sm">
+    <header className="bg-card/90 backdrop-blur-md border-b border-border py-3 px-4 flex justify-between items-center shadow-sm transition-colors duration-200">
       <div className="flex items-center gap-4">
-        <SidebarTrigger className="text-gray-700 hover:bg-gray-100 rounded-full p-1 transition-colors" />
-        <h1 className="text-xl font-heading font-semibold text-gray-800">{pageTitle}</h1>
+        <SidebarTrigger className="text-foreground/70 hover:bg-accent rounded-full p-1 transition-colors" />
+        <h1 className="text-xl font-heading font-semibold text-foreground">{pageTitle}</h1>
       </div>
       
       <div className="flex items-center gap-4">
         <DropdownMenu open={isNotificationOpen} onOpenChange={setIsNotificationOpen}>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon" className="relative rounded-full bg-white/90 border-navy/10 hover:bg-navy/5 hover:text-navy shadow-sm">
-              <Bell size={18} className={newNotificationsCount > 0 ? "text-red-500" : "text-navy/70"} />
+            <Button variant="outline" size="icon" className="relative rounded-full bg-card/90 border-border hover:bg-accent shadow-sm">
+              <Bell size={18} className={newNotificationsCount > 0 ? "text-red-500" : "text-foreground/70"} />
               {newNotificationsCount > 0 && (
                 <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 flex items-center justify-center shadow-sm animate-pulse">
                   <span className="text-[10px] font-bold text-white">{newNotificationsCount}</span>
@@ -126,8 +134,8 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, hasPaymentWarning = false })
               )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80 bg-white/95 backdrop-blur-lg border border-navy/10 shadow-md rounded-xl overflow-hidden">
-            <div className="px-4 py-2 font-medium text-navy">Notifications</div>
+          <DropdownMenuContent align="end" className="w-80 bg-popover/95 backdrop-blur-lg border border-border shadow-md rounded-xl overflow-hidden">
+            <div className="px-4 py-2 font-medium text-foreground">Notifications</div>
             <div className="max-h-[400px] overflow-y-auto">
               {allNotifications.length > 0 ? (
                 allNotifications.map((notification) => (
@@ -185,49 +193,49 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, hasPaymentWarning = false })
         
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="flex items-center gap-2 rounded-full bg-white/90 border-gray-100 hover:bg-gray-50 hover:border-gray-200 shadow-sm">
-              <Avatar className="w-6 h-6 border border-gray-100">
+            <Button variant="outline" size="sm" className="flex items-center gap-2 rounded-full bg-card/90 border-border hover:bg-accent shadow-sm">
+              <Avatar className="w-6 h-6 border border-border">
                 <AvatarImage src="https://github.com/shadcn.png" alt={userName} />
                 <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-medium">{userInitials}</AvatarFallback>
               </Avatar>
               <div className="hidden md:flex flex-col items-start">
-                <span className="text-sm font-medium text-gray-800">{userName}</span>
-                <span className="text-xs text-gray-500">{formatRole(userRole)}</span>
+                <span className="text-sm font-medium text-foreground">{userName}</span>
+                <span className="text-xs text-muted-foreground">{formatRole(userRole)}</span>
               </div>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-white/90 backdrop-blur-lg border border-gray-100 shadow-md rounded-xl overflow-hidden min-w-[220px]">
+          <DropdownMenuContent align="end" className="bg-popover/95 backdrop-blur-lg border border-border shadow-md rounded-xl overflow-hidden min-w-[220px]">
             {/* User Info Header */}
-            <div className="px-3 py-3 border-b border-gray-100 bg-gradient-to-br from-blue-50/50 to-indigo-50/50">
+            <div className="px-3 py-3 border-b border-border bg-accent/50">
               <div className="flex items-center gap-3">
-                <Avatar className="w-10 h-10 border-2 border-white shadow-sm">
+                <Avatar className="w-10 h-10 border-2 border-background shadow-sm">
                   <AvatarImage src="https://github.com/shadcn.png" alt={userName} />
                   <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-bold">{userInitials}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{userName}</p>
-                  <p className="text-xs text-gray-600">{formatRole(userRole)}</p>
+                  <p className="text-sm font-semibold text-foreground truncate">{userName}</p>
+                  <p className="text-xs text-muted-foreground">{formatRole(userRole)}</p>
                   {user?.email && (
-                    <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                   )}
                 </div>
               </div>
             </div>
-            <DropdownMenuItem onClick={() => navigate('/profile')} className="hover:bg-gray-50/70 py-2.5">
-              <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mr-2">
+            <DropdownMenuItem onClick={() => navigate('/profile')} className="hover:bg-accent py-2.5">
+              <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center mr-2">
                 <User className="h-4 w-4 text-blue-500" />
               </div>
-              <span className="text-gray-700">Profile</span>
+              <span className="text-foreground">Profile</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/settings')} className="hover:bg-gray-50/70 py-2.5">
-              <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center mr-2">
-                <Settings className="h-4 w-4 text-gray-500" />
+            <DropdownMenuItem onClick={() => navigate('/settings')} className="hover:bg-accent py-2.5">
+              <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center mr-2">
+                <Settings className="h-4 w-4 text-muted-foreground" />
               </div>
-              <span className="text-gray-700">My Settings</span>
+              <span className="text-foreground">My Settings</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut} className="text-red-500 hover:text-red-600 hover:bg-red-50/50 py-2.5">
-              <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center mr-2">
+            <DropdownMenuItem onClick={handleSignOut} className="text-red-500 hover:text-red-600 hover:bg-red-500/10 py-2.5">
+              <div className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center mr-2">
                 <LogOut className="h-4 w-4 text-red-500" />
               </div>
               <span>Sign Out</span>

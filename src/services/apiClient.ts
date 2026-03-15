@@ -223,28 +223,28 @@ class ApiClient {
   }
 
   // Generic HTTP methods
-  async get<T = any>(endpoint: string, params?: any): Promise<T> {
-    const response: AxiosResponse<T> = await this.client.get(endpoint, { params });
+  async get<T = any>(endpoint: string, params?: any, config?: AxiosRequestConfig): Promise<T> {
+    const response: AxiosResponse<T> = await this.client.get(endpoint, { params, ...config });
     return response.data;
   }
 
-  async post<T = any>(endpoint: string, data?: any): Promise<T> {
-    const response: AxiosResponse<T> = await this.client.post(endpoint, data);
+  async post<T = any>(endpoint: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    const response: AxiosResponse<T> = await this.client.post(endpoint, data, config);
     return response.data;
   }
 
-  async put<T = any>(endpoint: string, data?: any): Promise<T> {
-    const response: AxiosResponse<T> = await this.client.put(endpoint, data);
+  async put<T = any>(endpoint: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    const response: AxiosResponse<T> = await this.client.put(endpoint, data, config);
     return response.data;
   }
 
-  async patch<T = any>(endpoint: string, data?: any): Promise<T> {
-    const response: AxiosResponse<T> = await this.client.patch(endpoint, data);
+  async patch<T = any>(endpoint: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    const response: AxiosResponse<T> = await this.client.patch(endpoint, data, config);
     return response.data;
   }
 
-  async delete<T = any>(endpoint: string): Promise<T> {
-    const response: AxiosResponse<T> = await this.client.delete(endpoint);
+  async delete<T = any>(endpoint: string, config?: AxiosRequestConfig): Promise<T> {
+    const response: AxiosResponse<T> = await this.client.delete(endpoint, config);
     return response.data;
   }
 

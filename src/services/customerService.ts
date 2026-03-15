@@ -58,13 +58,23 @@ export interface CustomerFilters {
   country?: string;
 }
 
+// Backend CustomerStats interface - matches backend DTO exactly
 export interface CustomerStats {
   totalCustomers: number;
   activeCustomers: number;
   inactiveCustomers: number;
-  newCustomersThisMonth: number;
-  topCities: Array<{ city: string; count: number }>;
-  customersByCountry: Array<{ country: string; count: number }>;
+  redFlaggedCustomers: number;
+  newCustomersThisMonth: number;  // Backend field name
+  totalSpentAllTime: number;
+  averageSpentPerCustomer: number;
+  customersWithEmailConsent: number;
+  customersWithSmsConsent: number;
+  // Legacy/compatibility fields
+  newThisMonth?: number;  // Computed from newCustomersThisMonth
+  topCities?: Array<{ city: string; count: number }>;
+  customersByCountry?: Array<{ country: string; count: number }>;
+  topCustomers?: Array<any>;
+  customerGrowth?: Array<any>;
 }
 
 export interface SalesHistory {
@@ -195,7 +205,7 @@ class CustomerService {
 
   async updateCustomer(id: string | number, customerData: UpdateCustomerData | Partial<Customer>): Promise<Customer> {
     try {
-      return await apiClient.put<Customer>(`${API_CONFIG.ENDPOINTS.CUSTOMERS}/${id}`, customerData);
+      return await apiClient.patch<Customer>(`${API_CONFIG.ENDPOINTS.CUSTOMERS}/${id}`, customerData);
     } catch (error) {
       console.error(`Failed to update customer ${id}:`, error);
       throw error;
@@ -214,7 +224,17 @@ class CustomerService {
 
   async getCustomerStats(): Promise<CustomerStats> {
     try {
-      return await apiClient.get<CustomerStats>(API_CONFIG.ENDPOINTS.CUSTOMER_STATS);
+      const stats = await apiClient.get<CustomerStats>(API_CONFIG.ENDPOINTS.CUSTOMER_STATS);
+
+      // Add compatibility fields for frontend code that uses old field names
+      return {
+        ...stats,
+        newThisMonth: stats.newCustomersThisMonth,
+        topCities: [],
+        customersByCountry: [],
+        topCustomers: [],
+        customerGrowth: [],
+      };
     } catch (error) {
       console.error('Failed to fetch customer stats:', error);
       throw error;

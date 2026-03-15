@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
   DialogTitle,
   DialogFooter
 } from '@/components/ui/dialog';
@@ -11,9 +11,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, Mail, MapPin, Phone, ShoppingBag, User, ExternalLink, Eye, Wrench } from 'lucide-react';
+import { Calendar, Mail, MapPin, Phone, ShoppingBag, User, ExternalLink, Eye, Wrench, Award, DollarSign, TrendingUp, CreditCard, Star } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import ConsentForm from '@/components/gdpr/ConsentForm';
+import CustomerPurchaseHistory from './CustomerPurchaseHistory';
 import { Customer } from '@/contexts/CustomerContext';
 import { repairService } from '@/services/repairService';
 import { toast } from 'sonner';
@@ -130,128 +131,190 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
     }
   };
 
+  const getGroupBadgeStyle = (group: string) => {
+    switch (group) {
+      case 'VIP':
+        return 'bg-amber-500 text-white border-0';
+      case 'WHOLESALE':
+        return 'bg-blue-500 text-white border-0';
+      case 'CORPORATE':
+        return 'bg-purple-500 text-white border-0';
+      case 'TRADE':
+        return 'bg-green-500 text-white border-0';
+      case 'REGULAR':
+        return 'bg-indigo-500 text-white border-0';
+      default:
+        return 'bg-gray-200 text-gray-700';
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white/90 backdrop-blur-lg border border-gray-100 shadow-md rounded-xl">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-bold flex items-center gap-3 text-gray-800">
-            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-              <User size={20} className="text-blue-500" />
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto bg-white border shadow-lg rounded-xl">
+        <DialogHeader className="border-b pb-4">
+          <DialogTitle className="text-2xl font-semibold flex items-center gap-3 text-gray-800">
+            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
+              <User size={24} className="text-gray-600" />
             </div>
-            {customer.name}
+            <div>
+              <div className="flex items-center gap-2">
+                {customer.name}
+                <Badge className={`${getGroupBadgeStyle(customer.customerGroup || 'RETAIL')} text-xs`}>
+                  {customer.customerGroup === 'VIP' && <Star size={12} className="mr-1" />}
+                  {customer.customerGroup || 'RETAIL'}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-500 font-normal mt-1">
+                <Calendar size={12} />
+                <span>Member since {customer.since || 'Unknown'}</span>
+              </div>
+            </div>
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-3 mb-6 bg-gray-100/50 p-1 rounded-full">
-            <TabsTrigger value="overview" className="rounded-full data-[state=active]:bg-white data-[state=active]:text-gray-800 data-[state=active]:shadow-sm">Overview</TabsTrigger>
-            <TabsTrigger value="history" className="rounded-full data-[state=active]:bg-white data-[state=active]:text-gray-800 data-[state=active]:shadow-sm">Purchase & Repairs</TabsTrigger>
-            <TabsTrigger value="preferences" className="rounded-full data-[state=active]:bg-white data-[state=active]:text-gray-800 data-[state=active]:shadow-sm">Preferences</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-4">
+          <TabsList className="w-full grid grid-cols-3 mb-6 bg-gray-100 p-1 rounded-lg">
+            <TabsTrigger value="overview" className="rounded data-[state=active]:bg-white data-[state=active]:text-gray-800 data-[state=active]:shadow-sm">Overview</TabsTrigger>
+            <TabsTrigger value="history" className="rounded data-[state=active]:bg-white data-[state=active]:text-gray-800 data-[state=active]:shadow-sm">Purchase & Repairs</TabsTrigger>
+            <TabsTrigger value="preferences" className="rounded data-[state=active]:bg-white data-[state=active]:text-gray-800 data-[state=active]:shadow-sm">Preferences</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-5">
-            <Card className="border-gray-100 bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg rounded-xl shadow-sm overflow-hidden">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-medium text-gray-800">Contact Information</CardTitle>
+          <TabsContent value="overview" className="space-y-6">
+            {/* Contact Information Grid */}
+            <div className="grid grid-cols-2 gap-4">
+              <Card className="border shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <Mail size={18} className="text-gray-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-500 font-medium">Email Address</p>
+                      <p className="text-sm font-medium text-gray-800 truncate">{customer.email || 'Not provided'}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <Phone size={18} className="text-gray-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 font-medium">Phone Number</p>
+                      <p className="text-sm font-medium text-gray-800">{customer.phone || 'Not provided'}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <MapPin size={18} className="text-gray-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-500 font-medium">Address</p>
+                      <p className="text-sm font-medium text-gray-800 truncate">{customer.address || 'Not provided'}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <Wrench size={18} className="text-gray-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 font-medium">Repair Jobs</p>
+                      <p className="text-sm font-medium text-gray-800">{customerRepairs.length} repairs</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Credit & Financial Info */}
+            <Card className="border shadow-sm">
+              <CardHeader className="bg-gray-50 border-b">
+                <CardTitle className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                  <CreditCard size={20} className="text-gray-600" />
+                  Credit & Financial Information
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Mail size={16} className="text-gray-400" />
-                  <span className="text-gray-700">{customer.email || 'No email provided'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone size={16} className="text-gray-400" />
-                  <span className="text-gray-700">{customer.phone || 'No phone provided'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <MapPin size={16} className="text-gray-400" />
-                  <span className="text-gray-700">{customer.address || 'No address provided'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Calendar size={16} className="text-gray-400" />
-                  <span className="text-gray-700">Customer since: {customer.since || 'Unknown'}</span>
+              <CardContent className="p-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-gray-50 rounded-lg border">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Credit Limit</span>
+                      <TrendingUp size={16} className="text-gray-600" />
+                    </div>
+                    <p className="text-xl font-bold text-gray-800">£{(customer.creditLimit || 0).toFixed(2)}</p>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-lg border">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Outstanding Balance</span>
+                      <DollarSign size={16} className="text-gray-600" />
+                    </div>
+                    <p className="text-xl font-bold text-gray-800">£{(customer.outstandingBalance || 0).toFixed(2)}</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-medium">Marketing Preferences</CardTitle>
+            {/* Marketing Preferences */}
+            <Card className="border shadow-sm">
+              <CardHeader className="bg-gray-50 border-b">
+                <CardTitle className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                  <Mail size={20} className="text-gray-600" />
+                  Marketing Preferences
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant={customer.marketingConsent?.email ? "default" : "outline"}>
-                    Email {customer.marketingConsent?.email ? '✓' : '✗'}
-                  </Badge>
-                  <Badge variant={customer.marketingConsent?.sms ? "default" : "outline"}>
-                    SMS {customer.marketingConsent?.sms ? '✓' : '✗'}
-                  </Badge>
-                  <Badge variant={customer.marketingConsent?.phone ? "default" : "outline"}>
-                    Phone {customer.marketingConsent?.phone ? '✓' : '✗'}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-gray-100 bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg rounded-xl shadow-sm overflow-hidden">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-medium text-gray-800">Customer Stats</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between items-center p-2 bg-blue-50/50 rounded-lg">
-                  <span className="text-gray-700">Total spent:</span>
-                  <span className="font-semibold text-gray-800 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-100">£{(customer.totalSpent || 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between items-center p-2 bg-green-50/50 rounded-lg">
-                  <span className="text-gray-700">Purchase count:</span>
-                  <span className="font-semibold text-gray-800 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-100">{customer.purchaseHistory?.length || 0}</span>
-                </div>
-                <div className="flex justify-between items-center p-2 bg-purple-50/50 rounded-lg">
-                  <span className="text-gray-700">Repair jobs:</span>
-                  <span className="font-semibold text-gray-800 bg-white px-3 py-1 rounded-full shadow-sm border border-gray-100">{customerRepairs.length}</span>
+              <CardContent className="p-4">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="p-4 rounded-lg border bg-white">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Mail size={16} className="text-gray-600" />
+                      <span className="text-sm font-medium text-gray-700">Email</span>
+                    </div>
+                    <Badge variant={customer.marketingConsent?.email ? "default" : "secondary"}>
+                      {customer.marketingConsent?.email ? 'Enabled' : 'Disabled'}
+                    </Badge>
+                  </div>
+                  <div className="p-4 rounded-lg border bg-white">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Phone size={16} className="text-gray-600" />
+                      <span className="text-sm font-medium text-gray-700">SMS</span>
+                    </div>
+                    <Badge variant={customer.marketingConsent?.sms ? "default" : "secondary"}>
+                      {customer.marketingConsent?.sms ? 'Enabled' : 'Disabled'}
+                    </Badge>
+                  </div>
+                  <div className="p-4 rounded-lg border bg-white">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Phone size={16} className="text-gray-600" />
+                      <span className="text-sm font-medium text-gray-700">Phone Call</span>
+                    </div>
+                    <Badge variant={customer.marketingConsent?.phone ? "default" : "secondary"}>
+                      {customer.marketingConsent?.phone ? 'Enabled' : 'Disabled'}
+                    </Badge>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="history" className="space-y-6">
-            <div>
-              <h3 className="text-lg font-medium mb-4 flex items-center gap-2 text-gray-800">
-                <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
-                  <ShoppingBag size={16} className="text-blue-500" />
-                </div>
-                Purchase History
-              </h3>
-              {(customer.purchaseHistory?.length || 0) > 0 ? (
-                <div className="rounded-xl overflow-hidden border border-gray-100 shadow-sm">
-                  <Table>
-                    <TableHeader className="bg-gray-50">
-                      <TableRow>
-                        <TableHead className="text-gray-700">Date</TableHead>
-                        <TableHead className="text-gray-700">Items</TableHead>
-                        <TableHead className="text-right text-gray-700">Amount</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(customer.purchaseHistory || []).map((purchase) => (
-                        <TableRow key={purchase.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                          <TableCell className="text-gray-700">{formatDate(purchase.date)}</TableCell>
-                          <TableCell className="text-gray-700">{(purchase.items || []).join(', ')}</TableCell>
-                          <TableCell className="text-right font-medium text-gray-800">£{(purchase.amount || 0).toFixed(2)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-24 border border-gray-100 rounded-xl bg-white/50 backdrop-blur-sm">
-                  <p className="text-gray-400 flex items-center gap-2">
-                    <ShoppingBag size={16} className="text-gray-300" />
-                    No purchase history available
-                  </p>
-                </div>
-              )}
-            </div>
+            {/* Comprehensive Purchase History Component */}
+            <CustomerPurchaseHistory
+              customerId={customer.id}
+              customerName={`${customer.firstName} ${customer.lastName}`}
+            />
 
             <div>
               <h3 className="text-lg font-medium mb-4 flex items-center gap-2 text-gray-800">
@@ -355,27 +418,27 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
             </div>
           </TabsContent>
 
-          <TabsContent value="preferences">
-            <ConsentForm 
-              initialConsents={{
-                email: customer.marketingConsent?.email || false,
-                sms: customer.marketingConsent?.sms || false,
-                phone: customer.marketingConsent?.phone || false,
-                dataProcessing: true, // Assume true for existing customers
-              }}
-              onSubmit={handleConsentUpdate}
-            />
+          <TabsContent value="preferences" className="space-y-6">
+            <Card className="border shadow-sm">
+              <CardHeader className="bg-gray-50 border-b">
+                <CardTitle className="text-lg font-semibold text-gray-800">
+                  Update Consent Preferences
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <ConsentForm
+                  initialConsents={{
+                    email: customer.marketingConsent?.email || false,
+                    sms: customer.marketingConsent?.sms || false,
+                    phone: customer.marketingConsent?.phone || false,
+                    dataProcessing: true, // Assume true for existing customers
+                  }}
+                  onSubmit={handleConsentUpdate}
+                />
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
-
-        <DialogFooter className="mt-6">
-          <Button 
-            onClick={onClose}
-            className="rounded-full bg-blue-500 hover:bg-blue-600 text-white shadow-sm"
-          >
-            Close
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

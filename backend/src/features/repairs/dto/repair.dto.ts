@@ -227,6 +227,22 @@ export class CreateRepairDto {
   @IsNumber()
   @Min(0)
   insuranceValue?: number;
+
+  @ApiPropertyOptional({
+    description: 'Custom tag ID for categorizing repair',
+    example: '1',
+  })
+  @IsOptional()
+  @IsString()
+  tagId?: string;
+
+  @ApiPropertyOptional({
+    description: 'RMA ID (Return Merchandise Authorization)',
+    example: 'RMA-2024-001',
+  })
+  @IsOptional()
+  @IsString()
+  rmaId?: string;
 }
 
 export class UpdateRepairDto {
@@ -351,6 +367,30 @@ export class UpdateRepairDto {
   @IsOptional()
   @IsString()
   assignedTechnicianId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Custom tag ID for categorizing repair',
+    example: '1',
+  })
+  @IsOptional()
+  @IsString()
+  tagId?: string;
+
+  @ApiPropertyOptional({
+    description: 'RMA ID (Return Merchandise Authorization)',
+    example: 'RMA-2024-001',
+  })
+  @IsOptional()
+  @IsString()
+  rmaId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Notes about changes',
+    example: 'Updated tag to Allied Gold',
+  })
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }
 
 export class CreateRepairNoteDto {
@@ -653,6 +693,20 @@ export class RepairResponseDto {
     type: [String],
   })
   progressImages: string[];
+
+  @ApiProperty({
+    description: 'Custom tag ID for categorizing repair',
+    example: '1',
+    required: false,
+  })
+  tagId?: string;
+
+  @ApiProperty({
+    description: 'RMA ID (Return Merchandise Authorization)',
+    example: 'RMA-2024-001',
+    required: false,
+  })
+  rmaId?: string;
 }
 
 export class RepairStatsDto {

@@ -79,6 +79,8 @@ async function bootstrap() {
       const allowedOrigins = [
         configService.get('CORS_ORIGIN', 'http://localhost:3000'),
         'http://localhost:3000',
+        'http://localhost:5173',  // POS System frontend
+        'http://localhost:5174',  // MainFrame Admin frontend
         'http://localhost:8080',
         'http://localhost:8081',
         'http://localhost:8082',
@@ -87,7 +89,7 @@ async function bootstrap() {
         'https://pos.buymejewellery.co.uk',
         'https://buymejewellery.co.uk',
       ];
-      
+
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {

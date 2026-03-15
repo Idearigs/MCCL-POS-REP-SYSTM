@@ -256,6 +256,15 @@ export class CreateSaleDto {
   @IsOptional()
   @IsString()
   walkInCustomerPhone?: string;
+
+  @ApiPropertyOptional({
+    description: 'Sale status (default: COMPLETED, use DRAFT to hold bill)',
+    enum: SaleStatus,
+    example: SaleStatus.COMPLETED,
+  })
+  @IsOptional()
+  @IsEnum(SaleStatus)
+  status?: SaleStatus;
 }
 
 export class UpdateSaleDto {
@@ -380,12 +389,12 @@ export class SaleQueryDto {
     description: 'Items per page',
     example: 10,
     minimum: 1,
-    maximum: 100,
+    maximum: 1000,
   })
   @IsOptional()
   @IsNumber()
   @Min(1)
-  @Max(100)
+  @Max(1000)
   @Type(() => Number)
   limit?: number;
 

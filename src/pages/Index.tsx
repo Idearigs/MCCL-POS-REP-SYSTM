@@ -12,6 +12,7 @@ import MainLayout from '@/components/layout/MainLayout';
 import StatsCard from '@/components/dashboard/StatsCard';
 import RepairStatusChart from '@/components/dashboard/RepairStatusChart';
 import RecentSales from '@/components/dashboard/RecentSales';
+import GoldTrackingWidget from '@/components/dashboard/GoldTrackingWidget';
 import { dashboardService, DashboardStats, RecentSale, RepairStatusChartData } from '@/services/dashboardService';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -128,18 +129,26 @@ const Index = () => {
           />
         </div>
 
-        {/* Charts and recent activity */}
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-7">
-          <div className="md:col-span-1 lg:col-span-4">
-            <RecentSales 
-              sales={recentSales} 
-              className="bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg rounded-xl border border-gray-100 shadow-sm"
+        {/* Charts, Gold Tracking and recent activity */}
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-12">
+          {/* Recent Sales - Takes 5 columns on large screens */}
+          <div className="md:col-span-1 lg:col-span-5">
+            <RecentSales
+              sales={recentSales}
+              className="bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg rounded-xl border border-gray-100 shadow-sm h-full"
             />
           </div>
-          <div className="md:col-span-1 lg:col-span-3">
-            <RepairStatusChart 
-              data={repairStatusData} 
-              className="bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg rounded-xl border border-gray-100 shadow-sm"
+
+          {/* Gold Tracking Widget - Takes 4 columns on large screens */}
+          <div className="md:col-span-1 lg:col-span-4">
+            <GoldTrackingWidget className="h-full" />
+          </div>
+
+          {/* Repair Status Chart - Takes 3 columns on large screens */}
+          <div className="md:col-span-2 lg:col-span-3">
+            <RepairStatusChart
+              data={repairStatusData}
+              className="bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg rounded-xl border border-gray-100 shadow-sm h-full"
             />
           </div>
         </div>

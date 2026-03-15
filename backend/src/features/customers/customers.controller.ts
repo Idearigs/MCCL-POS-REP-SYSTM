@@ -167,8 +167,8 @@ export class CustomersController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
-    summary: 'Delete customer (soft delete)',
-    description: 'Soft delete a customer by setting isActive to false',
+    summary: 'Delete customer (permanent delete)',
+    description: 'Permanently delete a customer and remove related records',
   })
   @ApiParam({
     name: 'id',
@@ -177,7 +177,7 @@ export class CustomersController {
   })
   @ApiResponse({
     status: 204,
-    description: 'Customer deleted successfully',
+    description: 'Customer permanently deleted successfully',
   })
   @ApiResponse({
     status: 404,

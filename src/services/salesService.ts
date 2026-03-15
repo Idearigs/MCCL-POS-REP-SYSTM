@@ -68,8 +68,10 @@ export interface SaleFilters {
   paymentMethod?: string;
   paymentStatus?: string;
   status?: string;
-  dateFrom?: string;
-  dateTo?: string;
+  dateFrom?: string;  // Deprecated: use startDate
+  dateTo?: string;    // Deprecated: use endDate
+  startDate?: string; // Backend-compatible date filter
+  endDate?: string;   // Backend-compatible date filter
   minAmount?: number;
   maxAmount?: number;
 }
@@ -250,6 +252,22 @@ class SalesService {
     }
   }
 
+
+  async voidSale(saleId: string, reason: string, details: string): Promise<Sale> {
+    try {
+      const endpoint = apiClient.replaceUrlParams(API_CONFIG.ENDPOINTS.UPDATE_SALE, {
+        id: saleId,
+      });
+      return await apiClient.put<Sale>(endpoint, {
+        status: 'CANCELLED',
+        notes: `VOIDED - Reason: ${reason}
+Details: ${details}`,
+      });
+    } catch (error) {
+      console.error(`Failed to void sale ${saleId}:`, error);
+      throw error;
+    }
+  }
   async getSalesStats(): Promise<SalesStats> {
     try {
       return await apiClient.get<SalesStats>(API_CONFIG.ENDPOINTS.SALES_STATS);
@@ -339,9 +357,9 @@ class SalesService {
   }
 
   formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-GB', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'GBP',
     }).format(amount);
   }
 

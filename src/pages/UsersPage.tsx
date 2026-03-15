@@ -13,6 +13,7 @@ import {
   Calendar,
   Filter,
   AlertCircle,
+  Lock,
 } from 'lucide-react';
 import MainLayout from '../components/layout/MainLayout';
 import { Button } from '../components/ui/button';
@@ -39,7 +40,8 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import { useToast } from '../components/ui/use-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { userService } from '../services/userService';
-import { User, UserRole, CreateUserDto, UpdateUserDto } from '../types/user';
+import { User, UserRole, CreateUserDto, UpdateUserDto, UserPermissions } from '../types/user';
+import PermissionManagementDialog from '../components/users/PermissionManagementDialog';
 
 // Optimized: Memoized User Card Component
 interface UserCardProps {
@@ -48,10 +50,11 @@ interface UserCardProps {
   onResetPassword: (user: User) => void;
   onToggleStatus: (user: User) => void;
   onChangeRole: (user: User) => void;
+  onManagePermissions: (user: User) => void;
   currentUserId: string;
 }
 
-const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onToggleStatus, onChangeRole, currentUserId }) => {
+const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onToggleStatus, onChangeRole, onManagePermissions, currentUserId }) => {
   const getRoleBadgeColor = useCallback((role: UserRole) => {
     switch (role) {
       case UserRole.OWNER:
@@ -122,6 +125,16 @@ const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onToggleS
         <Button variant="outline" size="sm" onClick={() => onEdit(user)}>
           <Edit className="h-4 w-4 mr-1" />
           Edit
+        </Button>
+        {/* Manage Access button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onManagePermissions(user)}
+          className="border-purple-200 text-purple-700 hover:bg-purple-50"
+        >
+          <Lock className="h-4 w-4 mr-1" />
+          Access
         </Button>
         {/* Change Role button - only show if not the current user */}
         {user.id !== currentUserId && (
@@ -197,23 +210,15 @@ export const UsersPage: React.FC = () => {
   const [filterRole, setFilterRole] = useState<UserRole | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
 
-  // Role-based access control: Only OWNER and MANAGER can access this page
-  useEffect(() => {
-    if (!auth.user || (auth.user.role !== 'OWNER' && auth.user.role !== 'MANAGER')) {
-      toast({
-        title: 'Access Denied',
-        description: 'You do not have permission to access this page',
-        variant: 'destructive',
-      });
-      navigate('/dashboard');
-    }
-  }, [auth.user, navigate, toast]);
+  // Note: Access control is handled by PermissionGuard at the route level
+  // No need for additional role checks here
 
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
+  const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.STAFF);
 
@@ -244,7 +249,19 @@ export const UsersPage: React.FC = () => {
     try {
       setLoading(true);
       const response = await userService.getUsers();
-      setUsers(response.data || []);
+      const usersData = response.data || [];
+
+      // Load permissions from localStorage for each user
+      const usersWithPermissions = usersData.map((user) => {
+        const storageKey = `user_permissions_${user.id}`;
+        const savedPermissions = localStorage.getItem(storageKey);
+        return {
+          ...user,
+          permissions: savedPermissions ? JSON.parse(savedPermissions) : undefined,
+        };
+      });
+
+      setUsers(usersWithPermissions);
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -460,6 +477,39 @@ export const UsersPage: React.FC = () => {
     setIsRoleDialogOpen(true);
   }, []);
 
+  const openPermissionDialog = useCallback((user: User) => {
+    setSelectedUser(user);
+    setIsPermissionDialogOpen(true);
+  }, []);
+
+  const handleSavePermissions = useCallback(async (userId: string, permissions: UserPermissions) => {
+    try {
+      // Store permissions in localStorage for now (until backend is updated)
+      const storageKey = `user_permissions_${userId}`;
+      localStorage.setItem(storageKey, JSON.stringify(permissions));
+
+      // Update the user in state
+      setUsers((prevUsers) =>
+        prevUsers.map((u) =>
+          u.id === userId ? { ...u, permissions } : u
+        )
+      );
+
+      toast({
+        title: 'Success',
+        description: 'Permissions updated successfully',
+      });
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to save permissions';
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+      throw error;
+    }
+  }, [toast]);
+
   const handleChangeRole = useCallback(async () => {
     if (!selectedUser) return;
 
@@ -505,22 +555,8 @@ export const UsersPage: React.FC = () => {
     }
   }, [selectedUser, selectedRole, auth.user?.id, toast, fetchUsers]);
 
-  // Show access denied message for unauthorized users
-  if (!auth.user || (auth.user.role !== 'OWNER' && auth.user.role !== 'MANAGER')) {
-    return (
-      <MainLayout pageTitle="Access Denied">
-        <div className="p-6">
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              You do not have permission to access User Management. This page is only available to Owners and Managers.
-            </AlertDescription>
-          </Alert>
-        </div>
-      </MainLayout>
-    );
-  }
-
+  // Access control is handled by PermissionGuard at the route level
+  // Render the page directly
   return (
     <MainLayout pageTitle="User Management">
       <div className="p-6 space-y-6">
@@ -689,6 +725,7 @@ export const UsersPage: React.FC = () => {
                   onResetPassword={openPasswordDialog}
                   onToggleStatus={handleToggleUserStatus}
                   onChangeRole={openRoleDialog}
+                  onManagePermissions={openPermissionDialog}
                   currentUserId={auth.user?.id || ''}
                 />
               ))}
@@ -969,6 +1006,14 @@ export const UsersPage: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Permission Management Dialog */}
+      <PermissionManagementDialog
+        user={selectedUser}
+        isOpen={isPermissionDialogOpen}
+        onClose={() => setIsPermissionDialogOpen(false)}
+        onSave={handleSavePermissions}
+      />
       </div>
     </MainLayout>
   );

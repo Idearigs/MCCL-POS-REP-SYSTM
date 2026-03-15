@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Plus, Filter, LayoutGrid, List, Trash2, Mail, Phone, MapPin, Eye, Edit } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Search, Plus, Filter, LayoutGrid, List, Trash2, Mail, Phone, MapPin, Eye, Edit, Users, TrendingUp, Award, DollarSign, UserPlus, Star } from 'lucide-react';
 import CustomerCard from '@/components/customers/CustomerCard';
 import CustomerDetail from '@/components/customers/CustomerDetail';
 import AddCustomerForm from '@/components/customers/AddCustomerForm';
@@ -43,11 +44,31 @@ const CustomersPage = () => {
   const { toast } = useToast();
 
   // Filter customers based on search query
-  const filteredCustomers = customers.filter(customer => 
-    (customer.name?.toLowerCase().includes(searchQuery.toLowerCase())) || 
+  const filteredCustomers = customers.filter(customer =>
+    (customer.name?.toLowerCase().includes(searchQuery.toLowerCase())) ||
     (customer.email?.toLowerCase().includes(searchQuery.toLowerCase())) ||
     (customer.phone?.includes(searchQuery))
   );
+
+  // Calculate dashboard statistics
+  const totalCustomers = customers.length;
+  const vipCustomers = customers.filter(c => c.customerGroup === 'VIP').length;
+  const totalRevenue = customers.reduce((sum, c) => sum + (c.totalSpent || 0), 0);
+  const avgCustomerValue = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
+
+  // Calculate new customers this month
+  const now = new Date();
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const newThisMonth = customers.filter(c => {
+    if (!c.createdAt) return false;
+    const createdDate = new Date(c.createdAt);
+    return createdDate >= firstDayOfMonth;
+  }).length;
+
+  // Top customers by total spent
+  const topCustomers = [...customers]
+    .sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0))
+    .slice(0, 5);
 
   const handleCustomerClick = (id: string) => {
     const customer = customers.find(c => c.id === id);
@@ -90,6 +111,65 @@ const CustomersPage = () => {
   return (
     <MainLayout pageTitle="Customers">
       <div className="container mx-auto px-4">
+        {/* Dashboard Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 shadow-lg hover:shadow-xl transition-shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center justify-between">
+                <span>Total Customers</span>
+                <Users className="h-4 w-4 opacity-80" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{totalCustomers}</div>
+              <p className="text-xs text-blue-100 mt-1">
+                {newThisMonth > 0 && `+${newThisMonth} this month`}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white border-0 shadow-lg hover:shadow-xl transition-shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center justify-between">
+                <span>Total Revenue</span>
+                <DollarSign className="h-4 w-4 opacity-80" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">£{totalRevenue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <p className="text-xs text-green-100 mt-1">From all customers</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white border-0 shadow-lg hover:shadow-xl transition-shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center justify-between">
+                <span>Avg Customer Value</span>
+                <TrendingUp className="h-4 w-4 opacity-80" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">£{avgCustomerValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <p className="text-xs text-purple-100 mt-1">Per customer</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-amber-500 to-amber-600 text-white border-0 shadow-lg hover:shadow-xl transition-shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center justify-between">
+                <span>VIP Customers</span>
+                <Award className="h-4 w-4 opacity-80" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{vipCustomers}</div>
+              <p className="text-xs text-amber-100 mt-1">
+                {totalCustomers > 0 ? `${((vipCustomers / totalCustomers) * 100).toFixed(1)}% of total` : 'No customers yet'}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6 gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-navy/70" size={18} />
@@ -162,7 +242,7 @@ const CustomersPage = () => {
           </div>
         ) : filteredCustomers.length > 0 ? (
           viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredCustomers.map((customer) => (
                 <CustomerCard
                   key={customer.id}
@@ -171,6 +251,9 @@ const CustomersPage = () => {
                   email={customer.email}
                   phone={customer.phone}
                   since={customer.since}
+                  totalSpent={customer.totalSpent}
+                  loyaltyPoints={customer.loyaltyPoints}
+                  customerGroup={customer.customerGroup}
                   marketingConsent={customer.marketingConsent}
                   onClick={handleCustomerClick}
                 />
@@ -302,13 +385,15 @@ const CustomersPage = () => {
         )}
 
         {selectedCustomer && (
-          <CustomerDetail 
+          <CustomerDetail
             customer={selectedCustomer}
             isOpen={isDetailOpen}
             onClose={() => setIsDetailOpen(false)}
             onUpdate={async (id, updates) => {
               try {
-                await updateCustomer(id, updates);
+                const updatedCustomerData = await updateCustomer(id, updates);
+                // Refresh the selected customer with updated data from backend
+                setSelectedCustomer(updatedCustomerData);
                 toast({
                   title: "Customer Updated",
                   description: `Customer preferences have been updated successfully.`

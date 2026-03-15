@@ -25,7 +25,21 @@ export interface SalesFilterValues {
   paymentStatus: string;
   status: string;
   dateFrom?: Date;
+  cashierId?: string;
+  shift?: string;
   dateTo?: Date;
+}
+
+interface Shift {
+  id: string;
+  shiftNumber: string;
+  startTime: string;
+  endTime?: string;
+  status: string;
+  user?: {
+    firstName: string;
+    lastName: string;
+  };
 }
 
 interface SalesFiltersProps {
@@ -33,13 +47,17 @@ interface SalesFiltersProps {
   onFilterChange: (filters: SalesFilterValues) => void;
   onExportCSV: () => void;
   onExportPDF: () => void;
+  cashiers?: {id: string; name: string}[];
+  shifts?: Shift[];
 }
 
 const SalesFilters: React.FC<SalesFiltersProps> = ({
   filters,
   onFilterChange,
   onExportCSV,
-  onExportPDF
+  onExportPDF,
+  cashiers = [],
+  shifts = []
 }) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
 
@@ -67,6 +85,14 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
     onFilterChange({ ...filters, dateTo: date });
   };
 
+  const handleCashierChange = (value: string) => {
+    onFilterChange({ ...filters, cashierId: value });
+  };
+
+  const handleShiftChange = (value: string) => {
+    onFilterChange({ ...filters, shift: value });
+  };
+
   const clearFilters = () => {
     onFilterChange({
       search: '',
@@ -74,7 +100,9 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
       paymentStatus: 'all',
       status: 'all',
       dateFrom: undefined,
-      dateTo: undefined
+      dateTo: undefined,
+      cashierId: 'all',
+      shift: 'all'
     });
     setIsFilterOpen(false);
   };
@@ -86,6 +114,8 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
     if (filters.status && filters.status !== 'all') count++;
     if (filters.dateFrom) count++;
     if (filters.dateTo) count++;
+    if (filters.cashierId && filters.cashierId !== 'all') count++;
+    if (filters.shift && filters.shift !== 'all') count++;
     return count;
   };
 
@@ -287,6 +317,49 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
                     <SelectItem value="REFUNDED">Refunded</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Cashier Filter */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Cashier</Label>
+                <Select value={filters.cashierId || 'all'} onValueChange={handleCashierChange}>
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="All cashiers" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Cashiers</SelectItem>
+                    {cashiers.map(cashier => (<SelectItem key={cashier.id} value={cashier.id}>{cashier.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Shift Filter */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Shift</Label>
+                {!filters.dateFrom || !filters.dateTo ? (
+                  <div className="text-xs text-gray-500 italic p-2 bg-gray-50 rounded border border-gray-200">
+                    Select a date range to load available shifts
+                  </div>
+                ) : shifts.length === 0 ? (
+                  <div className="text-xs text-gray-500 italic p-2 bg-gray-50 rounded border border-gray-200">
+                    No shifts found for selected date range
+                  </div>
+                ) : (
+                  <Select value={filters.shift || 'all'} onValueChange={handleShiftChange}>
+                    <SelectTrigger className="text-xs">
+                      <SelectValue placeholder="All shifts" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Shifts</SelectItem>
+                      {shifts.map(shift => (
+                        <SelectItem key={shift.id} value={shift.id}>
+                          {shift.shiftNumber} - {shift.user ? `${shift.user.firstName} ${shift.user.lastName}` : 'Unknown'}
+                          ({format(new Date(shift.startTime), 'MMM dd, HH:mm')})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </div>
           </PopoverContent>

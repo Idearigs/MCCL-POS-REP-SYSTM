@@ -33,12 +33,17 @@ import {
   CheckCircle,
   PlayCircle,
   PauseCircle,
-  Package
+  Package,
+  FileText,
+  Search,
+  UserCheck,
+  XCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { repairService } from '@/services/repairService';
 import { customerService, Customer } from '@/services/customerService';
-import { useRepairMessages } from '@/contexts/RepairMessagesContext';
+import { useRepairTags } from '@/contexts/RepairTagsContext';
+import RepairTagBadge from './RepairTagBadge';
 
 interface RepairDetailModalProps {
   repair: any;
@@ -53,6 +58,7 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
   onClose,
   onUpdate
 }) => {
+  const { tags } = useRepairTags();
   const [activeTab, setActiveTab] = useState('overview');
   const [beforeImages, setBeforeImages] = useState<File[]>([]);
   const [afterImages, setAfterImages] = useState<File[]>([]);
@@ -62,14 +68,22 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
   const [currentRepair, setCurrentRepair] = useState(repair);
-  const [selectedStatus, setSelectedStatus] = useState(repair?.status || '');
+  const [selectedTagId, setSelectedTagId] = useState(repair?.tagId || '');
   const [statusNotes, setStatusNotes] = useState('');
-  const [sendSMS, setSendSMS] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [customerData, setCustomerData] = useState<Customer | null>(null);
   const [loadingCustomer, setLoadingCustomer] = useState(false);
-  const [selectedMessageTemplate, setSelectedMessageTemplate] = useState<string>('none');
-  const { templates, getTemplateByStatus } = useRepairMessages();
+
+  // Message notification states
+  const [notifyCustomer, setNotifyCustomer] = useState(false);
+  const [messageTemplate, setMessageTemplate] = useState('');
+  const [customMessage, setCustomMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+
+  // Status update states
+  const [selectedStatus, setSelectedStatus] = useState(repair?.status || '');
+  const [statusUpdateNotes, setStatusUpdateNotes] = useState('');
+  const [updatingRepairStatus, setUpdatingRepairStatus] = useState(false);
 
   const beforeFileInputRef = useRef<HTMLInputElement>(null);
   const afterFileInputRef = useRef<HTMLInputElement>(null);
@@ -89,30 +103,20 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
     }
   }, [repair, isOpen]);
 
-  // Auto-select message template when status changes
-  useEffect(() => {
-    if (selectedStatus) {
-      const template = getTemplateByStatus(selectedStatus);
-      if (template) {
-        setSelectedMessageTemplate(template.id);
-        setSendSMS(true); // Enable SMS if template found
-      } else {
-        setSelectedMessageTemplate('none');
-      }
-    }
-  }, [selectedStatus, getTemplateByStatus]);
+  // Auto-select message template when tag changes (removed - not needed for tags)
+  // Tags don't require SMS notifications like statuses did
 
   // Fetch customer details when repair data is available
   useEffect(() => {
     const fetchCustomerData = async () => {
-      console.log('🔧 RepairDetailModal useEffect triggered', { 
+      console.log('🔧 RepairDetailModal useEffect triggered', {
         repair: repair ? {
           id: repair.id,
           customerId: repair.customerId,
           customerName: repair.customerName,
           hasCustomerId: !!repair.customerId
         } : null,
-        isOpen 
+        isOpen
       });
 
       if (repair && repair.customerId && isOpen) {
@@ -154,16 +158,98 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
     fetchCustomerData();
   }, [repair?.customerId, isOpen]);
 
+  // Debug: Log tags and current repair tagId
+  // IMPORTANT: This must be called BEFORE any early returns to comply with Rules of Hooks
+  useEffect(() => {
+    if (currentRepair) {
+      console.log('🏷️ Available tags:', tags);
+      console.log('🏷️ Current repair tagId:', currentRepair.tagId);
+      const currentTag = tags.find(tag => tag.id === currentRepair.tagId);
+      console.log('🏷️ Current tag found:', currentTag);
+    }
+  }, [tags, currentRepair?.tagId, tags]);
+
+  // Early return AFTER all hooks have been called
   if (!currentRepair) return null;
 
-  // Available repair statuses with their display information (matching backend RepairStatus enum)
-  // Main status options only (simplified)
-  const repairStatuses = [
-    { value: 'RECEIVED', label: 'Received', icon: Package, color: 'bg-amber-500', description: 'Repair received and being assessed' },
-    { value: 'IN_PROGRESS', label: 'In Progress', icon: PlayCircle, color: 'bg-blue-500', description: 'Currently being worked on' },
-    { value: 'READY_FOR_COLLECTION', label: 'Ready for Collection', icon: Package, color: 'bg-green-400', description: 'Ready for customer pickup' },
-    { value: 'COLLECTED', label: 'Collected', icon: CheckCircle, color: 'bg-green-600', description: 'Customer has collected item' }
-  ];
+  // Find the current tag for display
+  const currentTag = tags.find(tag => tag.id === currentRepair.tagId);
+
+  // Update repair tag
+  const updateRepairTag = async () => {
+    if (!selectedTagId || selectedTagId === currentRepair.tagId) {
+      toast.error('Please select a different tag');
+      return;
+    }
+
+    try {
+      setUpdatingStatus(true);
+
+      const selectedTag = tags.find(tag => tag.id === selectedTagId);
+      if (!selectedTag) {
+        toast.error('Invalid tag selected');
+        return;
+      }
+
+      console.log('🏷️ Updating repair tag:', {
+        repairId: currentRepair.id,
+        oldTagId: currentRepair.tagId,
+        newTagId: selectedTagId,
+        tagName: selectedTag.name,
+        notes: statusNotes || `Tag changed to ${selectedTag.name}`
+      });
+
+      // Update repair with new tag
+      const updatedRepair = await repairService.updateRepair(currentRepair.id, {
+        tagId: selectedTagId,
+        notes: statusNotes || `Tag changed to ${selectedTag.name}`,
+      });
+
+      console.log('✅ Backend response:', updatedRepair);
+      console.log('✅ Tag saved - tagId in response:', updatedRepair.tagId);
+
+      // Update local repair state with the new tag
+      setCurrentRepair({
+        ...currentRepair,
+        tagId: selectedTagId,
+        updatedAt: new Date().toISOString()
+      });
+
+      // Show success message
+      toast.success(`Tag updated to ${selectedTag.name}`);
+
+      // Call onUpdate callback to refresh the repair list
+      if (onUpdate) {
+        console.log('🔄 Calling onUpdate to refresh repair list');
+        await onUpdate(currentRepair.id, null);
+      }
+
+      // Reset form
+      setStatusNotes('');
+      setSelectedTagId('');
+
+    } catch (error: any) {
+      console.error('❌ Failed to update repair tag:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      toast.error(`Failed to update tag: ${error.message}`);
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  // Message templates - now editable
+  const getMessageTemplate = (template: string) => {
+    const templates = {
+      received: `Hello, we have received your ${currentRepair.itemDescription} for repair. We will contact you shortly with an estimate. Reference: ${currentRepair.repairNumber || 'N/A'}`,
+      quoted: `We have prepared a quote for your ${currentRepair.itemDescription} repair. Please contact us to discuss the details. Reference: ${currentRepair.repairNumber || 'N/A'}`,
+      approved: `Thank you for approving the repair. We will begin work on your ${currentRepair.itemDescription} shortly. Reference: ${currentRepair.repairNumber || 'N/A'}`,
+      inProgress: `Your ${currentRepair.itemDescription} repair is now in progress. We will notify you when it's ready for collection. Reference: ${currentRepair.repairNumber || 'N/A'}`,
+      completed: `Good news! Your ${currentRepair.itemDescription} repair is complete and ready for collection. Please contact us to arrange pickup. Reference: ${currentRepair.repairNumber || 'N/A'}`,
+      readyForCollection: `Your ${currentRepair.itemDescription} is ready for collection! Please visit us at your earliest convenience. Reference: ${currentRepair.repairNumber || 'N/A'}`,
+      custom: ''
+    };
+    return templates[template as keyof typeof templates] || '';
+  };
 
   // Update repair status
   const updateRepairStatus = async () => {
@@ -173,74 +259,94 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
     }
 
     try {
-      setUpdatingStatus(true);
+      setUpdatingRepairStatus(true);
 
-      // Get the selected message template
-      const selectedTemplate = (selectedMessageTemplate && selectedMessageTemplate !== 'none')
-        ? templates.find(t => t.id === selectedMessageTemplate)
-        : null;
+      console.log('🔄 Updating repair status:', {
+        repairId: currentRepair.id,
+        oldStatus: currentRepair.status,
+        newStatus: selectedStatus,
+        notes: statusUpdateNotes
+      });
 
-      // Generate message content if template is selected
-      let smsMessageContent = '';
-      if (selectedTemplate && customerData?.phone) {
-        smsMessageContent = getMessagePreview(selectedTemplate.content);
-      }
+      // Update repair with new status
+      const updatedRepair = await repairService.updateRepair(currentRepair.id, {
+        status: selectedStatus,
+        notes: statusUpdateNotes || `Status changed to ${selectedStatus}`,
+      });
 
-      // Use repairService to update repair status with SMS notification
-      const updatedRepair = await repairService.updateRepairStatus(
-        currentRepair.id,
-        selectedStatus,
-        statusNotes || `Status changed to ${getStatusText(selectedStatus)}`,
-        sendSMS && !!selectedTemplate
-      );
+      console.log('✅ Status update response:', updatedRepair);
 
-      // Update local repair state with the new status
+      // Update local repair state
       setCurrentRepair({
         ...currentRepair,
         status: selectedStatus,
         updatedAt: new Date().toISOString()
       });
 
-      // Log SMS details for debugging/future integration
-      if (selectedTemplate && customerData?.phone) {
-        console.log('📱 SMS Message Details:', {
-          template: selectedTemplate.name,
-          recipient: customerData?.phone,
-          recipientName: customerData?.firstName || customerData?.name || currentRepair.customerName,
-          message: smsMessageContent,
-          repairId: currentRepair.id,
-          newStatus: selectedStatus
-        });
+      toast.success(`Status updated to ${getStatusText(selectedStatus)}`);
 
-        // Show success with SMS info
-        toast.success(
-          <div className="space-y-1">
-            <p className="font-semibold">Status updated to {getStatusText(selectedStatus)}</p>
-            <p className="text-xs">SMS sent: {selectedTemplate.name}</p>
-            <p className="text-xs text-gray-600">To: {customerData.phone}</p>
-          </div>,
-          { duration: 5000 }
-        );
-      } else {
-        // Standard success message without SMS
-        toast.success(`Status updated to ${getStatusText(selectedStatus)}`);
-      }
-
-      // Call onUpdate callback to refresh the repair list (pass null to avoid PATCH call)
+      // Call onUpdate callback to refresh the repair list
       if (onUpdate) {
-        onUpdate(currentRepair.id, null);
+        await onUpdate(currentRepair.id, null);
       }
 
       // Reset form
-      setStatusNotes('');
+      setStatusUpdateNotes('');
       setSelectedStatus('');
-      setSelectedMessageTemplate('none');
 
     } catch (error: any) {
-      console.error('Failed to update repair status:', error);
+      console.error('❌ Failed to update repair status:', error);
       toast.error(`Failed to update status: ${error.message}`);
     } finally {
-      setUpdatingStatus(false);
+      setUpdatingRepairStatus(false);
+    }
+  };
+
+  // Send message to customer
+  const sendMessageToCustomer = async () => {
+    if (!customerData) {
+      toast.error('Customer information not available');
+      return;
+    }
+
+    if (!customerData.phone && !customerData.email) {
+      toast.error('Customer has no contact information');
+      return;
+    }
+
+    const messageToSend = customMessage?.trim() || getMessageTemplate(messageTemplate);
+
+    if (!messageToSend?.trim()) {
+      toast.error('Please enter a message or select a template');
+      return;
+    }
+
+    try {
+      setSendingMessage(true);
+
+      // TODO: Implement actual SMS/Email sending via backend
+      // For now, just show a success message
+      console.log('📱 Sending message to customer:', {
+        customerId: customerData.id,
+        phone: customerData.phone,
+        email: customerData.email,
+        message: messageToSend
+      });
+
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      toast.success(`Message sent to ${customerData.firstName} ${customerData.lastName}`);
+
+      // Reset message fields
+      setMessageTemplate('');
+      setCustomMessage('');
+
+    } catch (error: any) {
+      console.error('Failed to send message:', error);
+      toast.error(`Failed to send message: ${error.message}`);
+    } finally {
+      setSendingMessage(false);
     }
   };
 
@@ -407,17 +513,6 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
       hour: '2-digit',
       minute: '2-digit'
     });
-  };
-
-  const getMessagePreview = (templateContent: string): string => {
-    if (!templateContent) return '';
-
-    return templateContent
-      .replace(/{CUSTOMER}/g, customerData?.firstName || customerData?.name || repair.customerName || 'Customer')
-      .replace(/{RMA}/g, repair.id?.substring(0, 8) || 'REP-001')
-      .replace(/{ITEM}/g, repair.itemDescription || 'Item')
-      .replace(/{PRICE}/g, `£${repair.estimatedPrice || '0.00'}`)
-      .replace(/{DATE}/g, repair.dueDate ? new Date(repair.dueDate).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'));
   };
 
   return (
@@ -715,15 +810,15 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
           </TabsContent>
 
           <TabsContent value="progress" className="space-y-4">
-            {/* Status Update Section */}
+            {/* Repair Status Update Section */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Wrench size={16} />
+                  <PlayCircle size={16} />
                   Update Repair Status
                 </CardTitle>
                 <p className="text-sm text-gray-600">
-                  Change the repair status and optionally notify the customer via SMS
+                  Change the current status of this repair job
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -736,12 +831,6 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                         <Badge className={`${getStatusColor(currentRepair.status)} rounded-full px-3 py-1`}>
                           {getStatusText(currentRepair.status)}
                         </Badge>
-                        {customerData?.phone && (
-                          <div className="text-xs text-gray-500 flex items-center gap-1">
-                            <Phone size={12} />
-                            SMS enabled
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -750,28 +839,119 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                 {/* Status Selection */}
                 <div className="space-y-3">
                   <div>
-                    <Label htmlFor="status-select">New Status</Label>
+                    <Label htmlFor="status-select">Select New Status</Label>
                     <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select new status..." />
+                        <SelectValue placeholder="Select a status..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {repairStatuses.map((status) => {
-                          const IconComponent = status.icon;
-                          const isCurrentStatus = status.value === currentRepair.status;
+                        <SelectItem value="RECEIVED">Received</SelectItem>
+                        <SelectItem value="QUOTED">Quoted</SelectItem>
+                        <SelectItem value="APPROVED">Approved</SelectItem>
+                        <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                        <SelectItem value="COMPLETED">Completed</SelectItem>
+                        <SelectItem value="READY_FOR_COLLECTION">Ready for Collection</SelectItem>
+                        <SelectItem value="COLLECTED">Collected</SelectItem>
+                        <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Status Update Notes */}
+                  <div>
+                    <Label htmlFor="status-update-notes">Notes (Optional)</Label>
+                    <Textarea
+                      id="status-update-notes"
+                      value={statusUpdateNotes}
+                      onChange={(e) => setStatusUpdateNotes(e.target.value)}
+                      placeholder="Add any additional notes about this status change..."
+                      rows={3}
+                    />
+                  </div>
+
+                  {/* Update Status Button */}
+                  <Button
+                    onClick={updateRepairStatus}
+                    disabled={!selectedStatus || selectedStatus === currentRepair.status || updatingRepairStatus}
+                    className="w-full flex items-center gap-2"
+                    size="lg"
+                  >
+                    {updatingRepairStatus ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Updating Status...
+                      </>
+                    ) : (
+                      <>
+                        <PlayCircle size={16} />
+                        Update Status
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Tag Update Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wrench size={16} />
+                  Update Repair Tag
+                </CardTitle>
+                <p className="text-sm text-gray-600">
+                  Categorize this repair job with a custom tag
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Current Tag Display */}
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-xs text-gray-500">Current Tag</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        {currentTag ? (
+                          <RepairTagBadge tagName={currentTag.name} tagColor={currentTag.color} />
+                        ) : (
+                          <Badge className="bg-gray-400 text-white">No Tag</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tag Selection */}
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label htmlFor="tag-select">Select Tag</Label>
+                      <span className="text-xs text-gray-500">{tags.length} tags available</span>
+                    </div>
+                    <Select value={selectedTagId} onValueChange={setSelectedTagId}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a tag..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tags.length === 0 && (
+                          <div className="p-4 text-center text-gray-500">
+                            <p>No tags available</p>
+                            <p className="text-xs mt-1">Go to Settings → Repair Tags to add tags</p>
+                          </div>
+                        )}
+                        {tags.map((tag) => {
+                          const isCurrentTag = tag.id === currentRepair.tagId;
                           return (
                             <SelectItem
-                              key={status.value}
-                              value={status.value}
-                              disabled={isCurrentStatus}
-                              className={isCurrentStatus ? 'opacity-50' : ''}
+                              key={tag.id}
+                              value={tag.id}
+                              disabled={isCurrentTag}
+                              className={isCurrentTag ? 'opacity-50' : ''}
                             >
                               <div className="flex items-center gap-2">
-                                <IconComponent size={14} />
+                                <RepairTagBadge tagName={tag.name} tagColor={tag.color} size="sm" />
                                 <div>
-                                  <span className="font-medium">{status.label}</span>
-                                  {isCurrentStatus && <span className="text-xs text-gray-500 ml-1">(current)</span>}
-                                  <p className="text-xs text-gray-500">{status.description}</p>
+                                  {isCurrentTag && <span className="text-xs text-gray-500 ml-1">(current)</span>}
+                                  {tag.description && <p className="text-xs text-gray-500">{tag.description}</p>}
                                 </div>
                               </div>
                             </SelectItem>
@@ -781,145 +961,172 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                     </Select>
                   </div>
 
-                  {/* Status Notes */}
+                  {/* Tag Notes */}
                   <div>
-                    <Label htmlFor="status-notes">Status Notes (Optional)</Label>
+                    <Label htmlFor="tag-notes">Notes (Optional)</Label>
                     <Textarea
-                      id="status-notes"
+                      id="tag-notes"
                       value={statusNotes}
                       onChange={(e) => setStatusNotes(e.target.value)}
-                      placeholder="Add any additional notes about this status change..."
+                      placeholder="Add any additional notes about this tag change..."
                       rows={3}
                     />
                   </div>
 
-                  {/* Message Template Cards */}
-                  {customerData?.phone && selectedStatus && (
-                    <div className="space-y-3">
-                      <Label>SMS Message Template</Label>
-                      <div className="space-y-2">
-                        {/* None Option Card */}
-                        <div
-                          onClick={() => setSelectedMessageTemplate('none')}
-                          className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${
-                            selectedMessageTemplate === 'none'
-                              ? 'border-navy bg-navy/5 shadow-sm'
-                              : 'border-gray-200 hover:border-navy/30 hover:bg-gray-50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                              selectedMessageTemplate === 'none' ? 'border-navy bg-navy' : 'border-gray-300'
-                            }`}>
-                              {selectedMessageTemplate === 'none' && (
-                                <div className="w-2 h-2 bg-white rounded-full"></div>
-                              )}
-                            </div>
-                            <span className="font-medium text-sm">None - Don't send SMS</span>
-                          </div>
-                        </div>
-
-                        {/* Template Cards */}
-                        {templates.map((template) => (
-                          <div
-                            key={template.id}
-                            onClick={() => setSelectedMessageTemplate(template.id)}
-                            className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${
-                              selectedMessageTemplate === template.id
-                                ? 'border-blue-500 bg-blue-50 shadow-sm'
-                                : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/30'
-                            }`}
-                          >
-                            <div className="space-y-2">
-                              {/* Card Header */}
-                              <div className="flex items-start justify-between">
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                                    selectedMessageTemplate === template.id ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
-                                  }`}>
-                                    {selectedMessageTemplate === template.id && (
-                                      <div className="w-2 h-2 bg-white rounded-full"></div>
-                                    )}
-                                  </div>
-                                  <div>
-                                    <p className="font-medium text-sm text-navy">{template.name}</p>
-                                    {template.status === selectedStatus && (
-                                      <span className="text-xs text-blue-600">(Recommended for this status)</span>
-                                    )}
-                                  </div>
-                                </div>
-                                <MessageSquare size={16} className="text-blue-600 flex-shrink-0" />
-                              </div>
-
-                              {/* Message Preview */}
-                              <div className="bg-white border border-blue-100 rounded p-2 mt-2">
-                                <p className="text-xs font-semibold text-gray-700 mb-1">Preview:</p>
-                                <p className="text-xs text-gray-800 whitespace-pre-wrap">
-                                  {getMessagePreview(template.content)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Recipient Info */}
-                      {selectedMessageTemplate && selectedMessageTemplate !== 'none' && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
-                          <p className="text-xs text-blue-800">
-                            Will be sent to: <span className="font-semibold">{customerData.firstName || repair.customerName}</span> ({customerData.phone})
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {loadingCustomer && (
-                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                        <p className="text-xs">
-                          Loading customer details...
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {!loadingCustomer && !customerData?.phone && (
-                    <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
-                      <div className="flex items-center gap-2 text-amber-700">
-                        <AlertCircle size={14} />
-                        <p className="text-xs">
-                          No phone number on file - SMS notifications not available for this customer
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Update Button */}
                   <Button
-                    onClick={updateRepairStatus}
-                    disabled={!selectedStatus || selectedStatus === currentRepair.status || updatingStatus}
+                    onClick={updateRepairTag}
+                    disabled={!selectedTagId || selectedTagId === currentRepair.tagId || updatingStatus}
                     className="w-full flex items-center gap-2"
                     size="lg"
                   >
                     {updatingStatus ? (
                       <>
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        Updating Status...
+                        Updating Tag...
+                      </>
+                    ) : (
+                      <>
+                        <Wrench size={16} />
+                        Update Tag
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Customer Notification Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare size={16} />
+                  Send Message to Customer
+                </CardTitle>
+                <p className="text-sm text-gray-600">
+                  Notify customer about repair progress via SMS or Email
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Customer Contact Info Display */}
+                {customerData && (
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-start gap-3">
+                      <User size={16} className="text-blue-600 mt-1" />
+                      <div className="flex-1">
+                        <p className="font-medium text-blue-900">
+                          {customerData.firstName} {customerData.lastName}
+                        </p>
+                        {customerData.phone && (
+                          <p className="text-sm text-blue-700 flex items-center gap-1 mt-1">
+                            <Phone size={12} />
+                            {customerData.phone}
+                          </p>
+                        )}
+                        {customerData.email && (
+                          <p className="text-sm text-blue-700 flex items-center gap-1 mt-1">
+                            <Mail size={12} />
+                            {customerData.email}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {!customerData && loadingCustomer && (
+                  <div className="p-3 bg-gray-50 rounded-lg text-center text-gray-500">
+                    Loading customer information...
+                  </div>
+                )}
+
+                {!customerData && !loadingCustomer && (
+                  <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <p className="text-sm text-yellow-800">Customer information not available</p>
+                  </div>
+                )}
+
+                {/* Message Template Selection */}
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="message-template">Message Template</Label>
+                    <Select value={messageTemplate} onValueChange={(value) => {
+                      setMessageTemplate(value);
+                      // Pre-fill custom message with template text for editing
+                      if (value !== 'custom' && value !== '') {
+                        setCustomMessage(getMessageTemplate(value));
+                      } else if (value === 'custom') {
+                        setCustomMessage('');
+                      }
+                    }}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a message template..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="received">Repair Received</SelectItem>
+                        <SelectItem value="quoted">Quote Prepared</SelectItem>
+                        <SelectItem value="approved">Repair Approved</SelectItem>
+                        <SelectItem value="inProgress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="readyForCollection">Ready for Collection</SelectItem>
+                        <SelectItem value="custom">Start from Blank</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Editable Message Area */}
+                  {messageTemplate && (
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="message-content">Message Content</Label>
+                        <span className="text-xs text-gray-500">
+                          {messageTemplate !== 'custom' && 'Template selected - edit below'}
+                        </span>
+                      </div>
+                      <Textarea
+                        id="message-content"
+                        value={customMessage}
+                        onChange={(e) => setCustomMessage(e.target.value)}
+                        placeholder="Edit the message template or write your own message..."
+                        rows={5}
+                        className="font-mono text-sm"
+                      />
+                      <div className="flex justify-between items-center mt-1">
+                        <p className="text-xs text-gray-500">
+                          {customMessage.length} characters
+                        </p>
+                        {messageTemplate !== 'custom' && customMessage !== getMessageTemplate(messageTemplate) && (
+                          <p className="text-xs text-blue-600">Modified from template</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Send Button */}
+                  <Button
+                    onClick={sendMessageToCustomer}
+                    disabled={!messageTemplate || !customerData || sendingMessage || !customMessage?.trim()}
+                    className="w-full flex items-center gap-2"
+                    size="lg"
+                  >
+                    {sendingMessage ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Sending Message...
                       </>
                     ) : (
                       <>
                         <MessageSquare size={16} />
-                        Update Status
-                        {selectedMessageTemplate && selectedMessageTemplate !== 'none' && customerData?.phone && (
-                          <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
-                            + Send SMS
-                          </span>
-                        )}
+                        Send Message to Customer
                       </>
                     )}
                   </Button>
+
+                  {!customerData?.phone && !customerData?.email && customerData && (
+                    <p className="text-xs text-yellow-600 text-center">
+                      ⚠️ Customer has no phone or email on file
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>

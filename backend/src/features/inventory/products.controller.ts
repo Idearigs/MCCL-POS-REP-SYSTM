@@ -327,6 +327,44 @@ export class ProductsController {
     return this.productsService.bulkUpdateStock(bulkUpdateDto, tenantId, userId);
   }
 
+  @Post('bulk-assign-rfid')
+  @ApiOperation({
+    summary: 'Bulk assign RFID tags to products',
+    description: 'Assign RFID tags to multiple products at once using SKU mapping. Perfect for when you purchase RFID tags and need to assign them to existing inventory.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Bulk RFID assignment completed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'number', example: 150 },
+        failed: { type: 'number', example: 2 },
+        errors: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              sku: { type: 'string', example: 'JWL-001' },
+              error: { type: 'string', example: 'Product not found with this SKU' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid bulk assignment data',
+  })
+  async bulkAssignRFID(
+    @Body() body: { assignments: Array<{ sku: string; rfidTag: string }> },
+    @TenantId() tenantId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.productsService.bulkAssignRFID(body.assignments, tenantId, userId);
+  }
+
   @Post(':id/upload-image')
   @UseInterceptors(FileInterceptor('image'))
   @ApiConsumes('multipart/form-data')

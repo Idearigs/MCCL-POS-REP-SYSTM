@@ -28,6 +28,7 @@ export interface InventoryItemDetails {
   category: string;
   condition?: string;
   sku: string;
+  rfidTag?: string;
   description: string;
   price: number;
   cost: number;
@@ -63,6 +64,7 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
     category: '',
     condition: 'BRAND_NEW',
     sku: '',
+    rfidTag: '',
     description: '',
     price: 0,
     cost: 0,
@@ -287,6 +289,20 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="rfidTag">RFID Tag</Label>
+              <Input
+                id="rfidTag"
+                name="rfidTag"
+                value={editedItem.rfidTag || ''}
+                onChange={handleChange}
+                placeholder="e.g., E2801170000002010DC90E8F"
+              />
+              <p className="text-xs text-gray-500">Optional: For fast inventory scanning</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
               <Label htmlFor="supplier">Supplier</Label>
               <Input
                 id="supplier"
@@ -294,6 +310,16 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
                 value={editedItem.supplier}
                 onChange={handleChange}
                 placeholder="e.g., ABC Gems Ltd"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="location">Location</Label>
+              <Input
+                id="location"
+                name="location"
+                value={editedItem.location}
+                onChange={handleChange}
+                placeholder="e.g., Shelf A1"
               />
             </div>
           </div>
@@ -355,7 +381,7 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
             <Textarea
               id="description"
               name="description"
-              value={editedItem.description}
+              value={editedItem.description || ''}
               onChange={handleChange}
               className="resize-none"
               rows={4}
