@@ -21,7 +21,8 @@ export const ChatWidget: React.FC = () => {
   const [conversationId, setConversationId] = useState<string>();
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [currentReport, setCurrentReport] = useState<{
-    reportData: unknown;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    reportData: any;
     reportType: string;
     reportPeriod?: string;
   } | null>(null);
@@ -168,7 +169,8 @@ export const ChatWidget: React.FC = () => {
     }
   };
 
-  const formatQuickActionResponse = (action: QuickActionType, data: Record<string, unknown>): string => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const formatQuickActionResponse = (action: QuickActionType, data: any): string => {
     switch (action) {
       case QuickActionType.TODAY_SALES:
         return `**Today's Sales Summary**\n\n• Total Sales: **£${data.totalRevenue?.toLocaleString() || 0}**\n• Total Invoices: **${data.totalInvoices || 0}**\n• Cash Payments: **£${data.cashPayments?.toLocaleString() || 0}**\n• Card Transactions: **${data.cardTransactions || 0}**\n• Best Seller: **${data.bestSeller || 'N/A'}**`;
@@ -182,7 +184,8 @@ export const ChatWidget: React.FC = () => {
 
       case QuickActionType.LOW_STOCK: {
         if (data.count === 0) return 'Great news! No low stock items at the moment.';
-        const items = (data.products as Array<{ name: string; sku: string; stockQuantity: number }>)?.slice(0, 5).map((p) =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const items = data.products?.slice(0, 5).map((p: any) =>
           `• ${p.name} (SKU: ${p.sku}) - **${p.stockQuantity} left**`
         ).join('\n') || '';
         return `**Low Stock Alert**\n\n${data.count} items need attention:\n\n${items}${data.count > 5 ? `\n\n...and ${data.count - 5} more items` : ''}`;

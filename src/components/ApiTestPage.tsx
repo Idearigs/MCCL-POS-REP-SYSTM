@@ -7,10 +7,12 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 
 const ApiTestPage: React.FC = () => {
-  const [results, setResults] = useState<{ test: string; result: unknown; success: boolean; timestamp: string }[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [results, setResults] = useState<{ test: string; result: any; success: boolean; timestamp: string }[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const addResult = (test: string, result: unknown, success: boolean) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const addResult = (test: string, result: any, success: boolean) => {
     setResults(prev => [...prev, {
       test,
       result,
@@ -19,7 +21,8 @@ const ApiTestPage: React.FC = () => {
     }]);
   };
 
-  const runTest = async (testName: string, testFn: () => Promise<unknown>) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const runTest = async (testName: string, testFn: () => Promise<any>) => {
     setLoading(true);
     try {
       const result = await testFn();
