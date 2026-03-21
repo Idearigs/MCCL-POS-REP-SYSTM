@@ -113,7 +113,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
       const meta = Array.isArray(firstResult) ? null : (firstResult as any).meta;
       const totalPages = meta?.totalPages || 1;
 
-      let allBackendCustomers = [...firstPage];
+      const allBackendCustomers = [...firstPage];
       if (totalPages > 1) {
         const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
         const results = await Promise.all(

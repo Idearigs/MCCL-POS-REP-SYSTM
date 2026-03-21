@@ -52,7 +52,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
       // Fetch repairs filtered by this customer - parallelize pages
       const firstRes = await repairService.getRepairs(1, 100, { customerId: customer.id });
       const totalPages = firstRes.meta?.totalPages || 1;
-      let customerRepairsList = [...(firstRes.data || [])];
+      const customerRepairsList = [...(firstRes.data || [])];
       if (totalPages > 1) {
         const remaining = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
         const results = await Promise.all(remaining.map(p => repairService.getRepairs(p, 100, { customerId: customer.id })));

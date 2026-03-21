@@ -504,7 +504,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       // Fetch first page to get total, then fetch remaining pages in parallel
       const firstResponse = await repairService.getRepairs(1, 100);
       const totalPages = firstResponse.meta?.totalPages || 1;
-      let allRepairData = [...firstResponse.data];
+      const allRepairData = [...firstResponse.data];
       if (totalPages > 1) {
         const remaining = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
         const results = await Promise.all(remaining.map(p => repairService.getRepairs(p, 100)));

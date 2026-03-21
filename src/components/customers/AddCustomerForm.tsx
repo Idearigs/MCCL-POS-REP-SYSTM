@@ -121,21 +121,22 @@ const AddCustomerForm: React.FC<AddCustomerFormProps> = ({
         onSuccess(createdCustomer);
       }
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating customer:', error);
-      
+
       // Handle specific error types
       let errorMessage = "Failed to create customer. Please try again.";
-      
-      if (error.message) {
-        if (error.message.includes('phone') && error.message.includes('already exists')) {
+      const errMsg = error instanceof Error ? error.message : '';
+
+      if (errMsg) {
+        if (errMsg.includes('phone') && errMsg.includes('already exists')) {
           errorMessage = "A customer with this phone number already exists.";
-        } else if (error.message.includes('email') && error.message.includes('already exists')) {
+        } else if (errMsg.includes('email') && errMsg.includes('already exists')) {
           errorMessage = "A customer with this email address already exists.";
-        } else if (error.message.includes('duplicate') || error.message.includes('unique constraint')) {
+        } else if (errMsg.includes('duplicate') || errMsg.includes('unique constraint')) {
           errorMessage = "A customer with this phone number or email already exists.";
         } else {
-          errorMessage = error.message;
+          errorMessage = errMsg;
         }
       }
       

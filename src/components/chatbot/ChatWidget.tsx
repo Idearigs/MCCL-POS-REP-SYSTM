@@ -21,7 +21,7 @@ export const ChatWidget: React.FC = () => {
   const [conversationId, setConversationId] = useState<string>();
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [currentReport, setCurrentReport] = useState<{
-    reportData: any;
+    reportData: unknown;
     reportType: string;
     reportPeriod?: string;
   } | null>(null);
@@ -73,10 +73,10 @@ export const ChatWidget: React.FC = () => {
       } else {
         setCurrentReport(null);
       }
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to send message',
+        description: error instanceof Error ? error.message : 'Failed to send message',
         variant: 'destructive',
       });
     } finally {
@@ -113,10 +113,10 @@ export const ChatWidget: React.FC = () => {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to execute quick action',
+        description: error instanceof Error ? error.message : 'Failed to execute quick action',
         variant: 'destructive',
       });
     } finally {
@@ -137,10 +137,10 @@ export const ChatWidget: React.FC = () => {
         title: 'Success',
         description: 'PDF report downloaded successfully',
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to download PDF',
+        description: error instanceof Error ? error.message : 'Failed to download PDF',
         variant: 'destructive',
       });
     }
@@ -159,16 +159,16 @@ export const ChatWidget: React.FC = () => {
         title: 'Success',
         description: 'CSV report downloaded successfully',
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to download CSV',
+        description: error instanceof Error ? error.message : 'Failed to download CSV',
         variant: 'destructive',
       });
     }
   };
 
-  const formatQuickActionResponse = (action: QuickActionType, data: any): string => {
+  const formatQuickActionResponse = (action: QuickActionType, data: Record<string, unknown>): string => {
     switch (action) {
       case QuickActionType.TODAY_SALES:
         return `**Today's Sales Summary**\n\n• Total Sales: **£${data.totalRevenue?.toLocaleString() || 0}**\n• Total Invoices: **${data.totalInvoices || 0}**\n• Cash Payments: **£${data.cashPayments?.toLocaleString() || 0}**\n• Card Transactions: **${data.cardTransactions || 0}**\n• Best Seller: **${data.bestSeller || 'N/A'}**`;

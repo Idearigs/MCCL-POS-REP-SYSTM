@@ -152,7 +152,7 @@ const ProductSalesReport: React.FC = () => {
       try {
         const firstRep = await repairService.getRepairs(1, 100);
         const repTotalPages = firstRep.meta?.totalPages || 1;
-        let allRepData = [...firstRep.data];
+        const allRepData = [...firstRep.data];
         if (repTotalPages > 1) {
           const remaining = Array.from({ length: repTotalPages - 1 }, (_, i) => i + 2);
           const results = await Promise.all(remaining.map(p => repairService.getRepairs(p, 100)));
@@ -166,7 +166,7 @@ const ProductSalesReport: React.FC = () => {
       }
 
       // Handle different response structures
-      let repairs = Array.isArray(repairsResponse)
+      const repairs = Array.isArray(repairsResponse)
         ? repairsResponse
         : (repairsResponse?.data || repairsResponse?.items || repairsResponse?.repairs || []);
       console.log('🔧 Repairs loaded:', repairs.length);
@@ -234,11 +234,12 @@ const ProductSalesReport: React.FC = () => {
       case 'month':
         startDate = startOfMonth(now);
         break;
-      default:
+      default: {
         // All time - return all valid sales
         const allSales = sales.filter(isValidSale);
         console.log('🔍 All time sales:', allSales.length);
         return allSales;
+      }
     }
 
     const filtered = sales.filter(sale => {
