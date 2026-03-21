@@ -149,7 +149,11 @@ describe('RepairsService', () => {
       mockPrismaService.repairs.findFirst.mockResolvedValue(null); // no existing repair number
       mockPrismaService.repairs.create.mockResolvedValue(mockRepair);
 
-      const result = await service.create(createDto as any, 'tenant-001', 'user-001');
+      const result = await service.create(
+        createDto as any,
+        'tenant-001',
+        'user-001',
+      );
 
       expect(mockPrismaService.customers.findFirst).toHaveBeenCalledWith({
         where: { id: 'customer-001', tenantId: 'tenant-001' },
@@ -172,8 +176,18 @@ describe('RepairsService', () => {
       const multiItemDto = {
         ...createDto,
         items: [
-          { itemDescription: 'Ring', repairType: RepairType.SIZING, repairDescription: 'Resize', estimatedCost: 50 },
-          { itemDescription: 'Chain', repairType: RepairType.CHAIN_REPAIR, repairDescription: 'Fix link', estimatedCost: 30 },
+          {
+            itemDescription: 'Ring',
+            repairType: RepairType.SIZING,
+            repairDescription: 'Resize',
+            estimatedCost: 50,
+          },
+          {
+            itemDescription: 'Chain',
+            repairType: RepairType.CHAIN_REPAIR,
+            repairDescription: 'Fix link',
+            estimatedCost: 30,
+          },
         ],
       };
 
@@ -185,7 +199,11 @@ describe('RepairsService', () => {
         estimatedCost: 80,
       });
 
-      const result = await service.create(multiItemDto as any, 'tenant-001', 'user-001');
+      const result = await service.create(
+        multiItemDto as any,
+        'tenant-001',
+        'user-001',
+      );
 
       const createCall = mockPrismaService.repairs.create.mock.calls[0][0];
       expect(createCall.data.estimatedCost).toBe(80); // 50 + 30
@@ -201,7 +219,10 @@ describe('RepairsService', () => {
       mockPrismaService.repairs.findMany.mockResolvedValue([mockRepair]);
       mockPrismaService.repairs.count.mockResolvedValue(1);
 
-      const result = await service.findAll({ page: 1, limit: 10 } as any, 'tenant-001');
+      const result = await service.findAll(
+        { page: 1, limit: 10 } as any,
+        'tenant-001',
+      );
 
       expect(result.data).toHaveLength(1);
       expect(result.meta.total).toBe(1);
@@ -213,7 +234,10 @@ describe('RepairsService', () => {
       mockPrismaService.repairs.findMany.mockResolvedValue([]);
       mockPrismaService.repairs.count.mockResolvedValue(0);
 
-      await service.findAll({ status: RepairStatus.IN_PROGRESS } as any, 'tenant-001');
+      await service.findAll(
+        { status: RepairStatus.IN_PROGRESS } as any,
+        'tenant-001',
+      );
 
       const findManyCall = mockPrismaService.repairs.findMany.mock.calls[0][0];
       expect(findManyCall.where.status).toBe('IN_PROGRESS');
@@ -284,9 +308,9 @@ describe('RepairsService', () => {
     it('should throw NotFoundException when repair not found', async () => {
       mockPrismaService.repairs.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne('nonexistent', 'tenant-001')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.findOne('nonexistent', 'tenant-001'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should include status history and photos in the response', async () => {
@@ -355,7 +379,9 @@ describe('RepairsService', () => {
         'user-001',
       );
 
-      expect(mockPrismaService.repair_status_history.create).toHaveBeenCalledWith(
+      expect(
+        mockPrismaService.repair_status_history.create,
+      ).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             repairId: 'repair-001',
@@ -377,7 +403,9 @@ describe('RepairsService', () => {
         'user-001',
       );
 
-      expect(mockPrismaService.repair_status_history.create).not.toHaveBeenCalled();
+      expect(
+        mockPrismaService.repair_status_history.create,
+      ).not.toHaveBeenCalled();
     });
   });
 
@@ -392,11 +420,19 @@ describe('RepairsService', () => {
         repair_photos: [],
         repair_status_history: [],
       });
-      mockPrismaService.repair_photos.deleteMany.mockResolvedValue({ count: 0 });
-      mockPrismaService.repair_status_history.deleteMany.mockResolvedValue({ count: 0 });
+      mockPrismaService.repair_photos.deleteMany.mockResolvedValue({
+        count: 0,
+      });
+      mockPrismaService.repair_status_history.deleteMany.mockResolvedValue({
+        count: 0,
+      });
       mockPrismaService.repairs.delete.mockResolvedValue(mockRepair);
 
-      const result = await service.delete('repair-001', 'tenant-001', 'user-001');
+      const result = await service.delete(
+        'repair-001',
+        'tenant-001',
+        'user-001',
+      );
 
       expect(result).toEqual({ success: true, message: expect.any(String) });
       expect(mockPrismaService.repairs.delete).toHaveBeenCalledWith({
@@ -420,10 +456,10 @@ describe('RepairsService', () => {
   describe('getStats()', () => {
     it('should return repair statistics', async () => {
       mockPrismaService.repairs.count
-        .mockResolvedValueOnce(50)  // total
-        .mockResolvedValueOnce(20)  // active
-        .mockResolvedValueOnce(25)  // completed
-        .mockResolvedValueOnce(5);  // overdue
+        .mockResolvedValueOnce(50) // total
+        .mockResolvedValueOnce(20) // active
+        .mockResolvedValueOnce(25) // completed
+        .mockResolvedValueOnce(5); // overdue
 
       mockPrismaService.repairs.findMany.mockResolvedValue([
         { status: 'COMPLETED', finalCost: 100, createdAt: new Date() },
@@ -467,8 +503,12 @@ describe('RepairsService', () => {
 
       expect(result).toHaveLength(1);
       const findManyCall = mockPrismaService.repairs.findMany.mock.calls[0][0];
-      expect(findManyCall.where.status).toEqual({ notIn: ['COMPLETED', 'COLLECTED', 'CANCELLED'] });
-      expect(findManyCall.where.estimatedDueDate).toEqual({ lt: expect.any(Date) });
+      expect(findManyCall.where.status).toEqual({
+        notIn: ['COMPLETED', 'COLLECTED', 'CANCELLED'],
+      });
+      expect(findManyCall.where.estimatedDueDate).toEqual({
+        lt: expect.any(Date),
+      });
     });
 
     it('should return empty array when no overdue repairs', async () => {

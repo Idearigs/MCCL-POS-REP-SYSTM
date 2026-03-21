@@ -102,14 +102,22 @@ const mockPrismaService = {
     count: jest.fn().mockResolvedValue(1),
     update: jest.fn().mockResolvedValue(mockSale),
     create: jest.fn().mockResolvedValue(mockSale),
+    aggregate: jest
+      .fn()
+      .mockResolvedValue({ _sum: { totalAmount: 0, refundedAmount: 0 } }),
   },
   products: {
     findFirst: jest.fn().mockResolvedValue(mockProduct),
     update: jest.fn().mockResolvedValue(mockProduct),
+    findMany: jest.fn().mockResolvedValue([]),
   },
   sale_items: {
     findMany: jest.fn().mockResolvedValue([]),
     create: jest.fn(),
+    groupBy: jest.fn().mockResolvedValue([]),
+  },
+  payments: {
+    groupBy: jest.fn().mockResolvedValue([]),
   },
 };
 
@@ -117,6 +125,9 @@ const mockCacheService = {
   get: jest.fn().mockResolvedValue(null),
   set: jest.fn().mockResolvedValue(undefined),
   del: jest.fn().mockResolvedValue(undefined),
+  getTenantData: jest.fn().mockResolvedValue(null),
+  setTenantData: jest.fn().mockResolvedValue(undefined),
+  delTenantData: jest.fn().mockResolvedValue(undefined),
 };
 
 const mockShiftsService = {
@@ -158,7 +169,10 @@ describe('SalesService', () => {
       mockPrismaService.sales.findMany.mockResolvedValue([mockSale]);
       mockPrismaService.sales.count.mockResolvedValue(1);
 
-      const result = await service.findAll({ page: 1, limit: 10 } as any, 'tenant-001');
+      const result = await service.findAll(
+        { page: 1, limit: 10 } as any,
+        'tenant-001',
+      );
 
       expect(result.data).toHaveLength(1);
       expect(result.meta.total).toBe(1);
@@ -179,7 +193,7 @@ describe('SalesService', () => {
       mockPrismaService.sales.count.mockResolvedValue(0);
 
       await service.findAll(
-        { dateFrom: '2026-01-01', dateTo: '2026-03-31' } as any,
+        { startDate: '2026-01-01', endDate: '2026-03-31' } as any,
         'tenant-001',
       );
 
@@ -204,9 +218,9 @@ describe('SalesService', () => {
     it('should throw NotFoundException when sale does not exist', async () => {
       mockPrismaService.sales.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne('nonexistent', 'tenant-001')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.findOne('nonexistent', 'tenant-001'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -217,12 +231,22 @@ describe('SalesService', () => {
   describe('getStats()', () => {
     it('should return sales statistics', async () => {
       mockPrismaService.sales.count
-        .mockResolvedValueOnce(100)  // total sales
-        .mockResolvedValueOnce(5);   // today sales
+        .mockResolvedValueOnce(100) // total sales
+        .mockResolvedValueOnce(5); // today sales
 
       mockPrismaService.sales.findMany.mockResolvedValue([
-        { totalAmount: 200, paymentMethod: 'CASH', status: 'COMPLETED', createdAt: new Date() },
-        { totalAmount: 300, paymentMethod: 'CARD', status: 'COMPLETED', createdAt: new Date() },
+        {
+          totalAmount: 200,
+          paymentMethod: 'CASH',
+          status: 'COMPLETED',
+          createdAt: new Date(),
+        },
+        {
+          totalAmount: 300,
+          paymentMethod: 'CARD',
+          status: 'COMPLETED',
+          createdAt: new Date(),
+        },
       ]);
 
       const result = await service.getStats('tenant-001');

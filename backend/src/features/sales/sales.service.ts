@@ -9,7 +9,11 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CacheService } from '../../core/cache/cache.service';
 import { ShiftsService } from '../shifts/shifts.service';
-import { PaymentMethod as PrismaPaymentMethod, PaymentStatus as PrismaPaymentStatus, SaleStatus as PrismaSaleStatus } from '@prisma/client';
+import {
+  PaymentMethod as PrismaPaymentMethod,
+  PaymentStatus as PrismaPaymentStatus,
+  SaleStatus as PrismaSaleStatus,
+} from '@prisma/client';
 import {
   CreateSaleDto,
   UpdateSaleDto,
@@ -43,246 +47,284 @@ export class SalesService {
     userId: string,
   ): Promise<SaleResponseDto> {
     try {
-      return await this.prismaService.$transaction(async (prisma) => {
-        // Generate sale number
-        const saleNumber = await this.generateSaleNumber(tenantId, prisma);
+      return await this.prismaService.$transaction(
+        async (prisma) => {
+          // Generate sale number
+          const saleNumber = await this.generateSaleNumber(tenantId, prisma);
 
-        // Validate customer exists if provided
-        if (createSaleDto.customerId) {
-          const customer = await prisma.customers.findFirst({
-            where: { id: createSaleDto.customerId, tenantId },
-          });
-          if (!customer) {
-            throw new NotFoundException('Customer not found');
-          }
-        }
-
-        // Validate products and check stock
-        const productValidations = await Promise.all(
-          createSaleDto.items.map(async (item) => {
-            // Check if this is a repair service item (special handling)
-            const isRepairService = item.notes?.includes('REPAIR SERVICE');
-
-            if (isRepairService) {
-              // For repair services, skip product validation
-              // Create a virtual product entry for the sale
-              return {
-                product: {
-                  id: item.productId,
-                  name: item.notes || 'Repair Service',
-                  stockQuantity: 999999, // Virtual unlimited stock
-                  price: item.unitPrice,
-                },
-                item,
-                isRepairService: true,
-              };
-            }
-
-            // Regular product validation
-            const product = await prisma.products.findFirst({
-              where: { id: item.productId, tenantId, isActive: true },
+          // Validate customer exists if provided
+          if (createSaleDto.customerId) {
+            const customer = await prisma.customers.findFirst({
+              where: { id: createSaleDto.customerId, tenantId },
             });
-
-            if (!product) {
-              throw new NotFoundException(`Product ${item.productId} not found`);
+            if (!customer) {
+              throw new NotFoundException('Customer not found');
             }
-
-            if (product.stockQuantity < item.quantity) {
-              throw new BadRequestException(
-                `Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`
-              );
-            }
-
-            return { product, item, isRepairService: false };
-          })
-        );
-
-        // Calculate totals and prepare sale items
-        let subtotal = 0;
-        const saleItems = [];
-        const repairServiceDetails = [];
-
-        for (const { product, item, isRepairService } of productValidations) {
-          const lineSubtotal = item.quantity * item.unitPrice;
-          const itemDiscountAmount = item.discountAmount ||
-            (item.discountPercentage ? lineSubtotal * (item.discountPercentage / 100) : 0);
-          const discountedAmount = lineSubtotal - itemDiscountAmount;
-          const taxAmount = item.taxRate ? discountedAmount * (item.taxRate / 100) : 0;
-          const totalPrice = discountedAmount + taxAmount;
-
-          subtotal += lineSubtotal;
-
-          // Only add actual products to sale_items (skip repair services due to FK constraint)
-          if (!isRepairService) {
-            saleItems.push({
-              id: generateId(),
-              productId: item.productId,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              discount: itemDiscountAmount,
-              totalPrice,
-            });
-          } else {
-            // Store repair service details for notes
-            repairServiceDetails.push({
-              name: item.notes || 'Repair Service',
-              price: item.unitPrice,
-              quantity: item.quantity,
-              total: totalPrice,
-            });
           }
-        }
 
-        // Apply overall discount
-        const overallDiscountAmount = createSaleDto.discountAmount || 
-          (createSaleDto.discountPercentage ? subtotal * (createSaleDto.discountPercentage / 100) : 0);
-        const discountedSubtotal = subtotal - overallDiscountAmount;
+          // Validate products and check stock
+          const productValidations = await Promise.all(
+            createSaleDto.items.map(async (item) => {
+              // Check if this is a repair service item (special handling)
+              const isRepairService = item.notes?.includes('REPAIR SERVICE');
 
-        // Calculate tax
-        const taxAmount = createSaleDto.taxRate ? discountedSubtotal * (createSaleDto.taxRate / 100) : 0;
-        const totalAmount = discountedSubtotal + taxAmount;
-
-        // Validate payment amount
-        const totalPayments = createSaleDto.payments.reduce((sum, payment) => sum + payment.amount, 0);
-        if (Math.abs(totalPayments - totalAmount) > 0.01) {
-          throw new BadRequestException(
-            `Payment amount (${totalPayments}) does not match total amount (${totalAmount})`
-          );
-        }
-
-        // Determine primary payment method (use first payment or the one with largest amount)
-        const primaryPayment = createSaleDto.payments.length === 1
-          ? createSaleDto.payments[0]
-          : createSaleDto.payments.reduce((max, payment) => payment.amount > max.amount ? payment : max);
-
-        // Build notes with repair service details
-        let saleNotes = createSaleDto.notes || '';
-        if (repairServiceDetails.length > 0) {
-          const repairInfo = repairServiceDetails
-            .map(r => `${r.name}: £${r.price.toFixed(2)}`)
-            .join(', ');
-          saleNotes = saleNotes
-            ? `${saleNotes}\n\nRepair Services: ${repairInfo}`
-            : `Repair Services: ${repairInfo}`;
-        }
-
-        // Get active shift for the user (if exists)
-        let activeShiftId: string | undefined;
-        try {
-          const activeShift = await this.shiftsService.getActiveShift(userId, tenantId);
-          if (activeShift) {
-            activeShiftId = activeShift.id;
-          }
-        } catch (error) {
-          // If no active shift, continue without linking (shift tracking is optional)
-          this.logger.debug(`No active shift found for user ${userId}: ${error.message}`);
-        }
-
-        // Create sale
-        const sale = await (prisma.sales as any).create({
-          data: {
-            id: generateId(),
-            saleNumber,
-            tenantId,
-            customerId: createSaleDto.customerId,
-            shiftId: activeShiftId,
-            // walkInCustomerName and walkInCustomerPhone fields don't exist in current schema
-            status: PrismaSaleStatus.COMPLETED,
-            subtotal,
-            // discountPercentage: createSaleDto.discountPercentage || 0, // Field doesn't exist
-            discountAmount: overallDiscountAmount,
-            // taxRate: createSaleDto.taxRate || 0, // Field doesn't exist
-            taxAmount,
-            totalAmount,
-            paymentMethod: primaryPayment.method as PrismaPaymentMethod,
-            paymentStatus: PrismaPaymentStatus.COMPLETED,
-            paidAmount: totalPayments,
-            refundedAmount: 0,
-            // balanceDue: 0, // Field doesn't exist
-            notes: saleNotes,
-            // expectedDeliveryDate: createSaleDto.expectedDeliveryDate ? new Date(createSaleDto.expectedDeliveryDate) : null,
-            createdBy: userId,
-            updatedAt: new Date(),
-            ...(saleItems.length > 0 && {
-              sale_items: {
-                create: saleItems,
-              },
-            }),
-            payments: {
-              create: createSaleDto.payments.map(payment => ({
-                id: generateId(),
-                method: payment.method as PrismaPaymentMethod,
-                amount: payment.amount,
-                status: PrismaPaymentStatus.COMPLETED,
-                transactionId: payment.reference,
-                processorData: payment.cardLast4 || payment.processorResponse || payment.notes
-                  ? {
-                      cardLast4: payment.cardLast4,
-                      processorResponse: payment.processorResponse,
-                      notes: payment.notes
-                    }
-                  : undefined,
-              })),
-            },
-          },
-          include: {
-            sale_items: {
-              include: {
-                products: true,
-              },
-            },
-            payments: true,
-            customers: true,
-            users: true,
-          },
-        });
-
-        // Update product stock and customer stats
-        await Promise.all([
-          ...productValidations
-            .filter(({ isRepairService }) => !isRepairService) // Skip repair services
-            .map(({ product, item }) =>
-              Promise.all([
-                // Update product stock
-                prisma.products.update({
-                  where: { id: product.id },
-                  data: {
-                    stockQuantity: { decrement: item.quantity },
-                    // soldQuantity field doesn't exist in current schema
+              if (isRepairService) {
+                // For repair services, skip product validation
+                // Create a virtual product entry for the sale
+                return {
+                  product: {
+                    id: item.productId,
+                    name: item.notes || 'Repair Service',
+                    stockQuantity: 999999, // Virtual unlimited stock
+                    price: item.unitPrice,
                   },
-                }),
-                // stockAdjustment table doesn't exist in current schema
-              ])
-            ),
-          // Update customer stats if customer exists
-          ...(createSaleDto.customerId ? [
-            prisma.customers.update({
-              where: { id: createSaleDto.customerId },
-              data: {
-                totalSpent: { increment: totalAmount },
-                visitCount: { increment: 1 },
-                // lastVisitDate: new Date(), // Field doesn't exist
+                  item,
+                  isRepairService: true,
+                };
+              }
+
+              // Regular product validation
+              const product = await prisma.products.findFirst({
+                where: { id: item.productId, tenantId, isActive: true },
+              });
+
+              if (!product) {
+                throw new NotFoundException(
+                  `Product ${item.productId} not found`,
+                );
+              }
+
+              if (product.stockQuantity < item.quantity) {
+                throw new BadRequestException(
+                  `Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`,
+                );
+              }
+
+              return { product, item, isRepairService: false };
+            }),
+          );
+
+          // Calculate totals and prepare sale items
+          let subtotal = 0;
+          const saleItems = [];
+          const repairServiceDetails = [];
+
+          for (const { product, item, isRepairService } of productValidations) {
+            const lineSubtotal = item.quantity * item.unitPrice;
+            const itemDiscountAmount =
+              item.discountAmount ||
+              (item.discountPercentage
+                ? lineSubtotal * (item.discountPercentage / 100)
+                : 0);
+            const discountedAmount = lineSubtotal - itemDiscountAmount;
+            const taxAmount = item.taxRate
+              ? discountedAmount * (item.taxRate / 100)
+              : 0;
+            const totalPrice = discountedAmount + taxAmount;
+
+            subtotal += lineSubtotal;
+
+            // Only add actual products to sale_items (skip repair services due to FK constraint)
+            if (!isRepairService) {
+              saleItems.push({
+                id: generateId(),
+                productId: item.productId,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                discount: itemDiscountAmount,
+                totalPrice,
+              });
+            } else {
+              // Store repair service details for notes
+              repairServiceDetails.push({
+                name: item.notes || 'Repair Service',
+                price: item.unitPrice,
+                quantity: item.quantity,
+                total: totalPrice,
+              });
+            }
+          }
+
+          // Apply overall discount
+          const overallDiscountAmount =
+            createSaleDto.discountAmount ||
+            (createSaleDto.discountPercentage
+              ? subtotal * (createSaleDto.discountPercentage / 100)
+              : 0);
+          const discountedSubtotal = subtotal - overallDiscountAmount;
+
+          // Calculate tax
+          const taxAmount = createSaleDto.taxRate
+            ? discountedSubtotal * (createSaleDto.taxRate / 100)
+            : 0;
+          const totalAmount = discountedSubtotal + taxAmount;
+
+          // Validate payment amount
+          const totalPayments = createSaleDto.payments.reduce(
+            (sum, payment) => sum + payment.amount,
+            0,
+          );
+          if (Math.abs(totalPayments - totalAmount) > 0.01) {
+            throw new BadRequestException(
+              `Payment amount (${totalPayments}) does not match total amount (${totalAmount})`,
+            );
+          }
+
+          // Determine primary payment method (use first payment or the one with largest amount)
+          const primaryPayment =
+            createSaleDto.payments.length === 1
+              ? createSaleDto.payments[0]
+              : createSaleDto.payments.reduce((max, payment) =>
+                  payment.amount > max.amount ? payment : max,
+                );
+
+          // Build notes with repair service details
+          let saleNotes = createSaleDto.notes || '';
+          if (repairServiceDetails.length > 0) {
+            const repairInfo = repairServiceDetails
+              .map((r) => `${r.name}: £${r.price.toFixed(2)}`)
+              .join(', ');
+            saleNotes = saleNotes
+              ? `${saleNotes}\n\nRepair Services: ${repairInfo}`
+              : `Repair Services: ${repairInfo}`;
+          }
+
+          // Get active shift for the user (if exists)
+          let activeShiftId: string | undefined;
+          try {
+            const activeShift = await this.shiftsService.getActiveShift(
+              userId,
+              tenantId,
+            );
+            if (activeShift) {
+              activeShiftId = activeShift.id;
+            }
+          } catch (error) {
+            // If no active shift, continue without linking (shift tracking is optional)
+            this.logger.debug(
+              `No active shift found for user ${userId}: ${error.message}`,
+            );
+          }
+
+          // Create sale
+          const sale = await (prisma.sales as any).create({
+            data: {
+              id: generateId(),
+              saleNumber,
+              tenantId,
+              customerId: createSaleDto.customerId,
+              shiftId: activeShiftId,
+              // walkInCustomerName and walkInCustomerPhone fields don't exist in current schema
+              status: PrismaSaleStatus.COMPLETED,
+              subtotal,
+              // discountPercentage: createSaleDto.discountPercentage || 0, // Field doesn't exist
+              discountAmount: overallDiscountAmount,
+              // taxRate: createSaleDto.taxRate || 0, // Field doesn't exist
+              taxAmount,
+              totalAmount,
+              paymentMethod: primaryPayment.method as PrismaPaymentMethod,
+              paymentStatus: PrismaPaymentStatus.COMPLETED,
+              paidAmount: totalPayments,
+              refundedAmount: 0,
+              // balanceDue: 0, // Field doesn't exist
+              notes: saleNotes,
+              // expectedDeliveryDate: createSaleDto.expectedDeliveryDate ? new Date(createSaleDto.expectedDeliveryDate) : null,
+              createdBy: userId,
+              updatedAt: new Date(),
+              ...(saleItems.length > 0 && {
+                sale_items: {
+                  create: saleItems,
+                },
+              }),
+              payments: {
+                create: createSaleDto.payments.map((payment) => ({
+                  id: generateId(),
+                  method: payment.method as PrismaPaymentMethod,
+                  amount: payment.amount,
+                  status: PrismaPaymentStatus.COMPLETED,
+                  transactionId: payment.reference,
+                  processorData:
+                    payment.cardLast4 ||
+                    payment.processorResponse ||
+                    payment.notes
+                      ? {
+                          cardLast4: payment.cardLast4,
+                          processorResponse: payment.processorResponse,
+                          notes: payment.notes,
+                        }
+                      : undefined,
+                })),
               },
-            })
-          ] : []),
-        ]);
+            },
+            include: {
+              sale_items: {
+                include: {
+                  products: true,
+                },
+              },
+              payments: true,
+              customers: true,
+              users: true,
+            },
+          });
 
-        // Clear caches
-        await Promise.all([
-          this.cacheService.delTenantData(tenantId, 'sales:list'),
-          this.cacheService.delTenantData(tenantId, 'sales:stats'),
-          this.cacheService.delTenantData(tenantId, 'products:list'),
-          this.cacheService.delTenantData(tenantId, 'products:stats'),
-          ...(createSaleDto.customerId ? [
-            this.cacheService.delTenantData(tenantId, `customer:${createSaleDto.customerId}`),
-            this.cacheService.delTenantData(tenantId, 'customers:stats'),
-          ] : []),
-        ]);
+          // Update product stock and customer stats
+          await Promise.all([
+            ...productValidations
+              .filter(({ isRepairService }) => !isRepairService) // Skip repair services
+              .map(({ product, item }) =>
+                Promise.all([
+                  // Update product stock
+                  prisma.products.update({
+                    where: { id: product.id },
+                    data: {
+                      stockQuantity: { decrement: item.quantity },
+                      // soldQuantity field doesn't exist in current schema
+                    },
+                  }),
+                  // stockAdjustment table doesn't exist in current schema
+                ]),
+              ),
+            // Update customer stats if customer exists
+            ...(createSaleDto.customerId
+              ? [
+                  prisma.customers.update({
+                    where: { id: createSaleDto.customerId },
+                    data: {
+                      totalSpent: { increment: totalAmount },
+                      visitCount: { increment: 1 },
+                      // lastVisitDate: new Date(), // Field doesn't exist
+                    },
+                  }),
+                ]
+              : []),
+          ]);
 
-        this.logger.log(`Sale created: ${saleNumber} (${sale.id}) in tenant ${tenantId}`);
+          // Clear caches
+          await Promise.all([
+            this.cacheService.delTenantData(tenantId, 'sales:list'),
+            this.cacheService.delTenantData(tenantId, 'sales:stats'),
+            this.cacheService.delTenantData(tenantId, 'products:list'),
+            this.cacheService.delTenantData(tenantId, 'products:stats'),
+            ...(createSaleDto.customerId
+              ? [
+                  this.cacheService.delTenantData(
+                    tenantId,
+                    `customer:${createSaleDto.customerId}`,
+                  ),
+                  this.cacheService.delTenantData(tenantId, 'customers:stats'),
+                ]
+              : []),
+          ]);
 
-        return this.mapToResponseDto(sale);
-      }, { timeout: 30000 });
+          this.logger.log(
+            `Sale created: ${saleNumber} (${sale.id}) in tenant ${tenantId}`,
+          );
+
+          return this.mapToResponseDto(sale);
+        },
+        { timeout: 30000 },
+      );
     } catch (error) {
       this.logger.error('Failed to create sale:', error.message);
       throw error;
@@ -292,11 +334,14 @@ export class SalesService {
   /**
    * Generate unique sale number
    */
-  private async generateSaleNumber(tenantId: string, prisma?: any): Promise<string> {
+  private async generateSaleNumber(
+    tenantId: string,
+    prisma?: any,
+  ): Promise<string> {
     const db = prisma || this.prismaService;
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    
+
     // Get the count of sales this month
     const salesThisMonth = await db.sales.count({
       where: {
@@ -339,17 +384,19 @@ export class SalesService {
       const skip = (page - 1) * limit;
 
       // Build where clause
-      const where: any = { // Simplified type
+      const where: any = {
+        // Simplified type
         tenantId,
         ...(status && { status: status as PrismaSaleStatus }),
         ...(customerId && { customerId }),
         ...(cashierId && { createdBy: cashierId }),
-        ...(startDate && endDate && {
-          createdAt: {
-            gte: new Date(startDate),
-            lte: new Date(endDate + 'T23:59:59.999Z'),
-          },
-        }),
+        ...(startDate &&
+          endDate && {
+            createdAt: {
+              gte: new Date(startDate),
+              lte: new Date(endDate + 'T23:59:59.999Z'),
+            },
+          }),
         ...(minAmount !== undefined && { totalAmount: { gte: minAmount } }),
         ...(maxAmount !== undefined && { totalAmount: { lte: maxAmount } }),
         ...(paymentMethod && {
@@ -362,20 +409,22 @@ export class SalesService {
             { saleNumber: { contains: search, mode: 'insensitive' } },
             // { walkInCustomerName: { contains: search, mode: 'insensitive' } },
             { notes: { contains: search, mode: 'insensitive' } },
-            { customers: {
-              OR: [
-                { firstName: { contains: search, mode: 'insensitive' } },
-                { lastName: { contains: search, mode: 'insensitive' } },
-                { email: { contains: search, mode: 'insensitive' } },
-              ],
-            }},
+            {
+              customers: {
+                OR: [
+                  { firstName: { contains: search, mode: 'insensitive' } },
+                  { lastName: { contains: search, mode: 'insensitive' } },
+                  { email: { contains: search, mode: 'insensitive' } },
+                ],
+              },
+            },
           ],
         }),
       };
 
       // Check cache (temporarily disabled for debugging - TODO: re-enable after fixing cache invalidation)
       const cacheKey = `sales:list:${JSON.stringify({ where, skip, limit, sortBy, sortOrder })}`;
-      let cachedResult = null; // Disabled: await this.cacheService.getTenantData<PaginatedResponseDto<SaleResponseDto>>(tenantId, cacheKey);
+      const cachedResult = null; // Disabled: await this.cacheService.getTenantData<PaginatedResponseDto<SaleResponseDto>>(tenantId, cacheKey);
 
       if (cachedResult) {
         return cachedResult;
@@ -403,7 +452,7 @@ export class SalesService {
       ]);
 
       const result = new PaginatedResponseDto(
-        sales.map(sale => this.mapToResponseDto(sale)),
+        sales.map((sale) => this.mapToResponseDto(sale)),
         page,
         limit,
         total,
@@ -487,9 +536,21 @@ export class SalesService {
       }
 
       // Prevent updates to completed sales with restrictions
-      if (existingSale.status === SaleStatus.COMPLETED && updateSaleDto.status !== SaleStatus.CANCELLED) {
-        if (Object.keys(updateSaleDto).some(key => !['notes', 'expectedDeliveryDate', 'actualDeliveryDate'].includes(key))) {
-          throw new BadRequestException('Only notes and delivery dates can be updated for completed sales');
+      if (
+        existingSale.status === SaleStatus.COMPLETED &&
+        updateSaleDto.status !== SaleStatus.CANCELLED
+      ) {
+        if (
+          Object.keys(updateSaleDto).some(
+            (key) =>
+              !['notes', 'expectedDeliveryDate', 'actualDeliveryDate'].includes(
+                key,
+              ),
+          )
+        ) {
+          throw new BadRequestException(
+            'Only notes and delivery dates can be updated for completed sales',
+          );
         }
       }
 
@@ -562,19 +623,25 @@ export class SalesService {
 
         // Process each refund item
         for (const refundItem of createRefundDto.items) {
-          const saleItem = sale.sale_items.find(item => item.id === refundItem.saleItemId);
+          const saleItem = sale.sale_items.find(
+            (item) => item.id === refundItem.saleItemId,
+          );
           if (!saleItem) {
-            throw new NotFoundException(`Sale item ${refundItem.saleItemId} not found`);
+            throw new NotFoundException(
+              `Sale item ${refundItem.saleItemId} not found`,
+            );
           }
 
           if (refundItem.quantity > saleItem.quantity) {
             throw new BadRequestException(
-              `Cannot refund more than sold quantity. Item quantity: ${saleItem.quantity}, Refund quantity: ${refundItem.quantity}`
+              `Cannot refund more than sold quantity. Item quantity: ${saleItem.quantity}, Refund quantity: ${refundItem.quantity}`,
             );
           }
 
           // Calculate refund amount proportionally
-          const refundAmount = (Number(saleItem.totalPrice) / saleItem.quantity) * refundItem.quantity;
+          const refundAmount =
+            (Number(saleItem.totalPrice) / saleItem.quantity) *
+            refundItem.quantity;
           totalRefundAmount += refundAmount;
 
           // Add stock back to product
@@ -584,7 +651,7 @@ export class SalesService {
               data: {
                 stockQuantity: { increment: refundItem.quantity },
               },
-            })
+            }),
           );
 
           // Update or remove sale item
@@ -592,12 +659,13 @@ export class SalesService {
             refundOperations.push(
               prisma.sale_items.delete({
                 where: { id: saleItem.id },
-              })
+              }),
             );
           } else {
             const newQuantity = saleItem.quantity - refundItem.quantity;
-            const newTotalPrice = (Number(saleItem.totalPrice) / saleItem.quantity) * newQuantity;
-            
+            const newTotalPrice =
+              (Number(saleItem.totalPrice) / saleItem.quantity) * newQuantity;
+
             refundOperations.push(
               prisma.sale_items.update({
                 where: { id: saleItem.id },
@@ -605,7 +673,7 @@ export class SalesService {
                   quantity: newQuantity,
                   totalPrice: newTotalPrice,
                 },
-              })
+              }),
             );
           }
         }
@@ -615,10 +683,12 @@ export class SalesService {
 
         // Update sale totals
         const newTotalAmount = Number(sale.totalAmount) - totalRefundAmount;
-        const newRefundedAmount = Number(sale.refundedAmount) + totalRefundAmount;
-        const newStatus = newTotalAmount === newRefundedAmount 
-          ? 'REFUNDED' as const
-          : 'PARTIAL_REFUND' as const;
+        const newRefundedAmount =
+          Number(sale.refundedAmount) + totalRefundAmount;
+        const newStatus =
+          newTotalAmount === newRefundedAmount
+            ? ('REFUNDED' as const)
+            : ('PARTIAL_REFUND' as const);
 
         // TODO: Create refund payment record
         // Payment model needs additional fields (reference, refundReason, etc) to properly track refunds
@@ -656,12 +726,17 @@ export class SalesService {
           });
         }
 
-        this.logger.log(`Refund processed for sale ${sale.saleNumber}: $${totalRefundAmount}`);
+        this.logger.log(
+          `Refund processed for sale ${sale.saleNumber}: $${totalRefundAmount}`,
+        );
 
         return this.mapToResponseDto(updatedSale);
       });
     } catch (error) {
-      this.logger.error(`Failed to create refund for sale ${id}:`, error.message);
+      this.logger.error(
+        `Failed to create refund for sale ${id}:`,
+        error.message,
+      );
       throw error;
     }
   }
@@ -683,7 +758,11 @@ export class SalesService {
       }
 
       const today = new Date();
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const startOfDay = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+      );
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       const startOfYear = new Date(today.getFullYear(), 0, 1);
 
@@ -705,10 +784,16 @@ export class SalesService {
         hourlySales,
       ] = await Promise.all([
         this.prismaService.sales.count({ where: { tenantId } }),
-        this.prismaService.sales.count({ where: { tenantId, status: 'COMPLETED' } }),
+        this.prismaService.sales.count({
+          where: { tenantId, status: 'COMPLETED' },
+        }),
         // PENDING status doesn't exist in SaleStatus enum - using DRAFT instead
-        this.prismaService.sales.count({ where: { tenantId, status: 'DRAFT' } }),
-        this.prismaService.sales.count({ where: { tenantId, status: 'CANCELLED' } }),
+        this.prismaService.sales.count({
+          where: { tenantId, status: 'DRAFT' },
+        }),
+        this.prismaService.sales.count({
+          where: { tenantId, status: 'CANCELLED' },
+        }),
         this.prismaService.sales.aggregate({
           where: { tenantId, status: 'COMPLETED' },
           _sum: { totalAmount: true },
@@ -727,15 +812,27 @@ export class SalesService {
           where: { tenantId, createdAt: { gte: startOfYear } },
         }),
         this.prismaService.sales.aggregate({
-          where: { tenantId, status: SaleStatus.COMPLETED, createdAt: { gte: startOfDay } },
+          where: {
+            tenantId,
+            status: SaleStatus.COMPLETED,
+            createdAt: { gte: startOfDay },
+          },
           _sum: { totalAmount: true },
         }),
         this.prismaService.sales.aggregate({
-          where: { tenantId, status: SaleStatus.COMPLETED, createdAt: { gte: startOfMonth } },
+          where: {
+            tenantId,
+            status: SaleStatus.COMPLETED,
+            createdAt: { gte: startOfMonth },
+          },
           _sum: { totalAmount: true },
         }),
         this.prismaService.sales.aggregate({
-          where: { tenantId, status: SaleStatus.COMPLETED, createdAt: { gte: startOfYear } },
+          where: {
+            tenantId,
+            status: SaleStatus.COMPLETED,
+            createdAt: { gte: startOfYear },
+          },
           _sum: { totalAmount: true },
         }),
         // Payment method breakdown
@@ -768,11 +865,14 @@ export class SalesService {
       ]);
 
       // Process payment method breakdown
-      const paymentMethodBreakdown = Object.values(PaymentMethod).reduce((acc, method) => {
-        acc[method] = 0;
-        return acc;
-      }, {} as Record<PaymentMethod, number>);
-      
+      const paymentMethodBreakdown = Object.values(PaymentMethod).reduce(
+        (acc, method) => {
+          acc[method] = 0;
+          return acc;
+        },
+        {} as Record<PaymentMethod, number>,
+      );
+
       paymentMethods.forEach(({ method, _count }) => {
         if (method && typeof method === 'string') {
           paymentMethodBreakdown[method as any] = _count.method;
@@ -780,14 +880,14 @@ export class SalesService {
       });
 
       // Process top selling products
-      const productIds = topProducts.map(p => p.productId);
+      const productIds = topProducts.map((p) => p.productId);
       const products = await this.prismaService.products.findMany({
         where: { id: { in: productIds } },
         select: { id: true, name: true },
       });
 
-      const topSellingProducts = topProducts.map(item => {
-        const product = products.find(p => p.id === item.productId);
+      const topSellingProducts = topProducts.map((item) => {
+        const product = products.find((p) => p.id === item.productId);
         return {
           productId: item.productId,
           productName: product?.name || 'Unknown Product',
@@ -797,14 +897,17 @@ export class SalesService {
       });
 
       // Process hourly sales
-      const salesByHour = Array.from({ length: 24 }, (_, i) => 
-        String(i).padStart(2, '0')
-      ).reduce((acc, hour) => {
-        acc[hour] = 0;
-        return acc;
-      }, {} as Record<string, number>);
+      const salesByHour = Array.from({ length: 24 }, (_, i) =>
+        String(i).padStart(2, '0'),
+      ).reduce(
+        (acc, hour) => {
+          acc[hour] = 0;
+          return acc;
+        },
+        {} as Record<string, number>,
+      );
 
-      hourlySales.forEach(sale => {
+      hourlySales.forEach((sale) => {
         const hour = String(sale.createdAt.getHours()).padStart(2, '0');
         salesByHour[hour]++;
       });
@@ -815,8 +918,14 @@ export class SalesService {
         pendingSales,
         cancelledSales,
         totalSalesAmount: Number(totalSalesAmount._sum.totalAmount || 0),
-        averageSaleAmount: completedSales > 0 ? Number(totalSalesAmount._sum.totalAmount || 0) / completedSales : 0,
-        totalRefundedAmount: Number(totalRefundedAmount._sum?.refundedAmount || 0),
+        totalRevenue: Number(totalSalesAmount._sum.totalAmount || 0),
+        averageSaleAmount:
+          completedSales > 0
+            ? Number(totalSalesAmount._sum.totalAmount || 0) / completedSales
+            : 0,
+        totalRefundedAmount: Number(
+          totalRefundedAmount._sum?.refundedAmount || 0,
+        ),
         salesToday,
         salesThisMonth,
         salesThisYear,
@@ -846,7 +955,7 @@ export class SalesService {
       id: sale.id,
       saleNumber: sale.saleNumber,
       customerId: sale.customerId,
-      customerName: sale.customers 
+      customerName: sale.customers
         ? `${sale.customers.firstName} ${sale.customers.lastName}`.trim()
         : '',
       walkInCustomerName: '', // Not in current schema
@@ -866,35 +975,37 @@ export class SalesService {
       notes: sale.notes,
       expectedDeliveryDate: null,
       actualDeliveryDate: null,
-      items: sale.sale_items?.map((item: any) => ({
-        id: item.id,
-        productId: item.productId,
-        productName: item.products?.name || 'Unknown Product',
-        productSku: item.products?.sku || '',
-        quantity: item.quantity,
-        unitPrice: Number(item.unitPrice),
-        discountPercentage: 0,
-        discountAmount: Number(item.discount || 0),
-        taxRate: 0,
-        taxAmount: 0,
-        totalPrice: Number(item.totalPrice),
-        notes: '',
-        createdAt: sale.createdAt.toISOString(),
-        updatedAt: sale.updatedAt.toISOString(),
-      })) || [],
-      payments: sale.payments?.map((payment: any) => ({
-        id: payment.id,
-        method: payment.method,
-        amount: Number(payment.amount),
-        status: payment.status,
-        reference: payment.transactionId,
-        cardLast4: payment.processorData?.cardLast4,
-        processorResponse: payment.processorData?.processorResponse,
-        processedAt: null,
-        notes: payment.processorData?.notes,
-        createdAt: payment.createdAt.toISOString(),
-        updatedAt: payment.createdAt.toISOString(),
-      })) || [],
+      items:
+        sale.sale_items?.map((item: any) => ({
+          id: item.id,
+          productId: item.productId,
+          productName: item.products?.name || 'Unknown Product',
+          productSku: item.products?.sku || '',
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice),
+          discountPercentage: 0,
+          discountAmount: Number(item.discount || 0),
+          taxRate: 0,
+          taxAmount: 0,
+          totalPrice: Number(item.totalPrice),
+          notes: '',
+          createdAt: sale.createdAt.toISOString(),
+          updatedAt: sale.updatedAt.toISOString(),
+        })) || [],
+      payments:
+        sale.payments?.map((payment: any) => ({
+          id: payment.id,
+          method: payment.method,
+          amount: Number(payment.amount),
+          status: payment.status,
+          reference: payment.transactionId,
+          cardLast4: payment.processorData?.cardLast4,
+          processorResponse: payment.processorData?.processorResponse,
+          processedAt: null,
+          notes: payment.processorData?.notes,
+          createdAt: payment.createdAt.toISOString(),
+          updatedAt: payment.createdAt.toISOString(),
+        })) || [],
       createdBy: sale.createdBy,
       createdByName: sale.users
         ? `${sale.users.firstName} ${sale.users.lastName}`.trim()
@@ -912,11 +1023,7 @@ export class SalesService {
    * Delete a sale
    * This will restore inventory for sold items and mark the sale as deleted
    */
-  async remove(
-    id: string,
-    tenantId: string,
-    userId: string,
-  ): Promise<void> {
+  async remove(id: string, tenantId: string, userId: string): Promise<void> {
     try {
       await this.prismaService.$transaction(async (prisma) => {
         // Find the sale

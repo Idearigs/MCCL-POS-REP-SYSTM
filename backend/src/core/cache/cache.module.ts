@@ -10,10 +10,10 @@ import { CacheService } from './cache.service';
   imports: [
     CacheModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => {
-        const isRedisEnabled = 
-          configService.get('REDIS_HOST') && 
-          configService.get('REDIS_PORT');
+
+      useFactory: (configService: ConfigService): any => {
+        const isRedisEnabled =
+          configService.get('REDIS_HOST') && configService.get('REDIS_PORT');
 
         if (isRedisEnabled) {
           return {

@@ -42,10 +42,18 @@ const mockPrismaService = {
     create: jest.fn(),
     update: jest.fn(),
   },
+  tenants: {
+    findUnique: jest.fn().mockResolvedValue({
+      id: 'tenant-001',
+      status: 'ACTIVE',
+      name: 'Test Tenant',
+    }),
+  },
 };
 
 const mockJwtService = {
   sign: jest.fn().mockReturnValue('mock.jwt.token'),
+  signAsync: jest.fn().mockResolvedValue('mock.jwt.token'),
   verify: jest.fn(),
 };
 
@@ -62,9 +70,15 @@ const mockConfigService = {
 };
 
 const mockCacheService = {
-  get: jest.fn(),
-  set: jest.fn(),
-  del: jest.fn(),
+  get: jest.fn().mockResolvedValue(null),
+  set: jest.fn().mockResolvedValue(undefined),
+  del: jest.fn().mockResolvedValue(undefined),
+  setUserData: jest.fn().mockResolvedValue(undefined),
+  getUserData: jest.fn().mockResolvedValue(null),
+  delUserData: jest.fn().mockResolvedValue(undefined),
+  getTenantData: jest.fn().mockResolvedValue(null),
+  setTenantData: jest.fn().mockResolvedValue(undefined),
+  delTenantData: jest.fn().mockResolvedValue(undefined),
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -185,7 +199,10 @@ describe('AuthService', () => {
       });
       mockCacheService.set.mockResolvedValue(undefined);
 
-      const result = await service.register(registerDto as RegisterDto, 'tenant-001');
+      const result = await service.register(
+        registerDto as RegisterDto,
+        'tenant-001',
+      );
 
       expect(result).toHaveProperty('accessToken');
       expect(result.user.email).toBe('newuser@test.com');

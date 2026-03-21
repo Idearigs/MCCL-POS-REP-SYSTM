@@ -38,6 +38,7 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-enum-comparison': 'warn',
       '@typescript-eslint/prefer-promise-reject-errors': 'warn',
       '@typescript-eslint/no-require-imports': 'warn',
+      '@typescript-eslint/unbound-method': 'warn',
     },
   },
 );

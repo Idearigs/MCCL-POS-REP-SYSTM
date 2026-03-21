@@ -142,7 +142,9 @@ export class CreatePaymentDto {
   })
   @IsOptional()
   @IsString()
-  @Matches(/^\d{4}$/, { message: 'Card last 4 digits must be exactly 4 digits' })
+  @Matches(/^\d{4}$/, {
+    message: 'Card last 4 digits must be exactly 4 digits',
+  })
   cardLast4?: string;
 
   @ApiPropertyOptional({
@@ -599,10 +601,21 @@ export class SaleResponseDto {
   @ApiProperty({ enum: SaleStatus })
   status: SaleStatus;
 
-  @ApiProperty({ enum: ['CASH', 'CARD', 'BANK_TRANSFER', 'CHEQUE', 'DIGITAL_WALLET', 'INSTALLMENT'] })
+  @ApiProperty({
+    enum: [
+      'CASH',
+      'CARD',
+      'BANK_TRANSFER',
+      'CHEQUE',
+      'DIGITAL_WALLET',
+      'INSTALLMENT',
+    ],
+  })
   paymentMethod: string;
 
-  @ApiProperty({ enum: ['PENDING', 'COMPLETED', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED'] })
+  @ApiProperty({
+    enum: ['PENDING', 'COMPLETED', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED'],
+  })
   paymentStatus: string;
 
   @ApiProperty()
@@ -693,9 +706,15 @@ export class SalesStatsDto {
 
   @ApiProperty({
     description: 'Total sales amount',
-    example: 125000.50,
+    example: 125000.5,
   })
   totalSalesAmount: number;
+
+  @ApiProperty({
+    description: 'Total revenue (alias for totalSalesAmount)',
+    example: 125000.5,
+  })
+  totalRevenue: number;
 
   @ApiProperty({
     description: 'Average sale amount',
@@ -759,8 +778,18 @@ export class SalesStatsDto {
   @ApiProperty({
     description: 'Top selling products',
     example: [
-      { productId: 'abc123', productName: 'Gold Ring', quantity: 50, revenue: 25000 },
-      { productId: 'def456', productName: 'Silver Necklace', quantity: 30, revenue: 15000 },
+      {
+        productId: 'abc123',
+        productName: 'Gold Ring',
+        quantity: 50,
+        revenue: 25000,
+      },
+      {
+        productId: 'def456',
+        productName: 'Silver Necklace',
+        quantity: 30,
+        revenue: 15000,
+      },
     ],
   })
   topSellingProducts: Array<{
