@@ -49,9 +49,15 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
       setLoadingRepairs(true);
       setRepairError(null);
       
-      // Get all repairs and filter by customer ID
-      const allRepairs = await repairService.getRepairs();
-      const customerRepairsList = allRepairs.data?.filter(repair => repair.customerId === customer.id) || [];
+      // Fetch repairs filtered by this customer - parallelize pages
+      const firstRes = await repairService.getRepairs(1, 100, { customerId: customer.id });
+      const totalPages = firstRes.meta?.totalPages || 1;
+      let customerRepairsList = [...(firstRes.data || [])];
+      if (totalPages > 1) {
+        const remaining = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+        const results = await Promise.all(remaining.map(p => repairService.getRepairs(p, 100, { customerId: customer.id })));
+        for (const r of results) customerRepairsList.push(...(r.data || []));
+      }
       
       setCustomerRepairs(customerRepairsList);
       console.log(`✅ Loaded ${customerRepairsList.length} repairs for customer ${customer.name}`, customerRepairsList);

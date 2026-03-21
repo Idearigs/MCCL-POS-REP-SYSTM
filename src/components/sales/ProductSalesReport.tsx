@@ -150,8 +150,16 @@ const ProductSalesReport: React.FC = () => {
       console.log('🔧 Loading repairs...');
       let repairsResponse: any;
       try {
-        repairsResponse = await repairService.getRepairs(1, 500);
-        console.log('🔧 Repairs response:', repairsResponse);
+        const firstRep = await repairService.getRepairs(1, 100);
+        const repTotalPages = firstRep.meta?.totalPages || 1;
+        let allRepData = [...firstRep.data];
+        if (repTotalPages > 1) {
+          const remaining = Array.from({ length: repTotalPages - 1 }, (_, i) => i + 2);
+          const results = await Promise.all(remaining.map(p => repairService.getRepairs(p, 100)));
+          for (const r of results) allRepData.push(...r.data);
+        }
+        repairsResponse = { data: allRepData };
+        console.log('🔧 Repairs loaded:', allRepData.length);
       } catch (repairError) {
         console.error('❌ Failed to load repairs list:', repairError);
         repairsResponse = { data: [] };

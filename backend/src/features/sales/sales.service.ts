@@ -282,7 +282,7 @@ export class SalesService {
         this.logger.log(`Sale created: ${saleNumber} (${sale.id}) in tenant ${tenantId}`);
 
         return this.mapToResponseDto(sale);
-      });
+      }, { timeout: 30000 });
     } catch (error) {
       this.logger.error('Failed to create sale:', error.message);
       throw error;

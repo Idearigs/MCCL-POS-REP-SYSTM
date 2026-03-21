@@ -426,12 +426,12 @@ export class RepairQueryDto {
     description: 'Items per page',
     example: 10,
     minimum: 1,
-    maximum: 100,
+    maximum: 1000,
   })
   @IsOptional()
   @IsNumber()
   @Min(1)
-  @Max(100)
+  @Max(1000)
   @Type(() => Number)
   limit?: number;
 

@@ -39,8 +39,8 @@ model calendar_events {
   reminderId  String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime
-  tenants     tenants   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   users       users     @relation(fields: [createdBy], references: [id])
+  tenants     tenants   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model categories {
@@ -75,10 +75,6 @@ model customers {
   totalSpent            Decimal        @default(0)
   visitCount            Int            @default(0)
   loyaltyPoints         Int            @default(0)
-  customerGroup         CustomerGroup? @default(RETAIL)
-  creditLimit           Decimal        @default(0)
-  outstandingBalance    Decimal        @default(0)
-  lastPurchaseDate      DateTime?
   preferredContact      ContactType    @default(EMAIL)
   marketingEmail        Boolean        @default(false)
   marketingSms          Boolean        @default(false)
@@ -90,6 +86,10 @@ model customers {
   redFlagReason         String?
   createdAt             DateTime       @default(now())
   updatedAt             DateTime
+  creditLimit           Decimal        @default(0)
+  customerGroup         CustomerGroup? @default(RETAIL)
+  lastPurchaseDate      DateTime?
+  outstandingBalance    Decimal        @default(0)
   tenants               tenants        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   documents             documents[]
   repairs               repairs[]
@@ -167,19 +167,15 @@ model products {
   description    String?
   sku            String
   barcode        String?
-  qrCode         String?
-  rfidTag        String?
   categoryId     String?
   supplierId     String?
   costPrice      Decimal?
   sellingPrice   Decimal
   discountPrice  Decimal?
-  taxRate        Decimal?          @default(0)
   stockQuantity  Int               @default(0)
   minStockLevel  Int               @default(1)
   maxStockLevel  Int?
   material       JewelryMaterial?
-  condition      ProductCondition? @default(BRAND_NEW)
   weight         Decimal?
   purity         String?
   gemstone       String?
@@ -193,17 +189,16 @@ model products {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime
   supplierName   String?
+  qrCode         String?
+  taxRate        Decimal?          @default(0)
+  condition      ProductCondition? @default(BRAND_NEW)
+  rfidTag        String?
   inventory_logs inventory_logs[]
   product_images product_images[]
   categories     categories?       @relation(fields: [categoryId], references: [id])
   suppliers      suppliers?        @relation(fields: [supplierId], references: [id])
   tenants        tenants           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   sale_items     sale_items[]
-
-  // NOTE: SKU and barcode uniqueness is enforced by partial indexes in the database
-  // These indexes only apply when isActive = true, allowing SKU/barcode reuse for deleted products
-  // See backend/fix-unique-constraints.sql for the actual index definitions
-  // Prisma doesn't support partial indexes in schema, so we can't declare them here
 }
 
 model repair_photos {
@@ -252,17 +247,17 @@ model repairs {
   internalNotes         String?
   isInsuranceClaim      Boolean                 @default(false)
   insuranceNumber       String?
-  tagId                 String?
-  rmaId                 String?
   createdAt             DateTime                @default(now())
   updatedAt             DateTime
+  rmaId                 String?
+  tagId                 String?
+  repair_assignments    repair_assignments[]
   repair_photos         repair_photos[]
   repair_status_history repair_status_history[]
+  status_updates        repair_status_updates[]
   users                 users                   @relation(fields: [createdBy], references: [id])
   customers             customers?              @relation(fields: [customerId], references: [id])
   tenants               tenants                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  repair_assignments    repair_assignments[]
-  status_updates        repair_status_updates[]
 }
 
 model sale_items {
@@ -303,8 +298,8 @@ model sales {
   sale_items     sale_items[]
   users          users         @relation(fields: [createdBy], references: [id])
   customers      customers?    @relation(fields: [customerId], references: [id])
-  tenants        tenants       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   shift          shifts?       @relation("ShiftSales", fields: [shiftId], references: [id])
+  tenants        tenants       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model shifts {
@@ -314,11 +309,11 @@ model shifts {
   tenantId      String
   startTime     DateTime    @default(now())
   endTime       DateTime?
-  duration      Int? // Duration in minutes
+  duration      Int?
   openingFloat  Decimal     @default(0)
   closingFloat  Decimal?
   expectedFloat Decimal?
-  variance      Decimal? // closingFloat - expectedFloat
+  variance      Decimal?
   status        ShiftStatus @default(ACTIVE)
   deviceInfo    String?
   ipAddress     String?
@@ -327,9 +322,9 @@ model shifts {
   closingNotes  String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime
-  user          users       @relation("UserShifts", fields: [userId], references: [id])
-  tenant        tenants     @relation("TenantShifts", fields: [tenantId], references: [id], onDelete: Cascade)
   sales         sales[]     @relation("ShiftSales")
+  tenant        tenants     @relation("TenantShifts", fields: [tenantId], references: [id], onDelete: Cascade)
+  user          users       @relation("UserShifts", fields: [userId], references: [id])
 
   @@index([userId, startTime])
   @@index([tenantId, startTime])
@@ -364,69 +359,708 @@ model tenants {
   status                  TenantStatus              @default(ACTIVE)
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime
+  ai_recommendations      ai_recommendations[]
   calendar_events         calendar_events[]
   categories              categories[]
   customers               customers[]
   documents               documents[]
-  inventory_logs          inventory_logs[]
-  products                products[]
-  repairs                 repairs[]
-  sales                   sales[]
-  suppliers               suppliers[]
-  users                   users[]
-  stock_take_sessions     stock_take_sessions[]
+  external_repairers      external_repairers[]
+  financial_analyses      financial_analyses[]
+  financial_reports       financial_reports[]
   float_sessions          float_sessions[]
   float_transactions      float_transactions[]
+  inventory_logs          inventory_logs[]
   petty_cash_accounts     petty_cash_accounts[]
-  shifts                  shifts[]                  @relation("TenantShifts")
   petty_cash_transactions petty_cash_transactions[]
-  financial_analyses      financial_analyses[]
-  ai_recommendations      ai_recommendations[]
-  financial_reports       financial_reports[]
-  tasks                   tasks[]
-  external_repairers      external_repairers[]
+  products                products[]
   repair_assignments      repair_assignments[]
   repair_status_updates   repair_status_updates[]
+  repairs                 repairs[]
+  sales                   sales[]
+  shifts                  shifts[]                  @relation("TenantShifts")
+  stock_take_sessions     stock_take_sessions[]
+  suppliers               suppliers[]
+  tasks                   tasks[]
+  users                   users[]
 }
 
 model users {
-  id                          String                    @id
-  tenantId                    String
-  email                       String                    @unique
-  password                    String
-  firstName                   String
-  lastName                    String
-  role                        UserRole                  @default(STAFF)
-  permissions                 Json?
-  isActive                    Boolean                   @default(true)
-  lastLogin                   DateTime?
-  refreshToken                String?
-  createdAt                   DateTime                  @default(now())
-  updatedAt                   DateTime
-  audit_logs                  audit_logs[]
-  calendar_events             calendar_events[]
-  documents                   documents[]
-  repairs                     repairs[]
-  sales                       sales[]
-  tenants                     tenants                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  created_stock_takes         stock_take_sessions[]     @relation("StockTakeCreator")
-  approved_stock_takes        stock_take_sessions[]     @relation("StockTakeApprover")
-  scanned_stock_items         stock_take_items[]
-  float_sessions              float_sessions[]
-  float_transactions          float_transactions[]
-  created_petty_cash_accounts petty_cash_accounts[]     @relation("PettyCashAccountCreator")
-  requested_petty_cash        petty_cash_transactions[] @relation("PettyCashRequester")
-  approved_petty_cash         petty_cash_transactions[] @relation("PettyCashApprover")
-  rejected_petty_cash         petty_cash_transactions[] @relation("PettyCashRejecter")
-  shifts                      shifts[]                  @relation("UserShifts")
-  generated_financial_analyses financial_analyses[]     @relation("FinancialAnalysisGenerator")
-  implemented_recommendations ai_recommendations[]      @relation("RecommendationImplementer")
-  generated_financial_reports financial_reports[]       @relation("FinancialReportGenerator")
-  created_tasks               tasks[]                   @relation("TaskCreator")
-  task_comments               task_comments[]
-  task_activities             task_activities[]
-  repair_assignments          repair_assignments[]
-  repair_status_updates       repair_status_updates[]
+  id                           String                    @id
+  tenantId                     String
+  email                        String                    @unique
+  password                     String
+  firstName                    String
+  lastName                     String
+  role                         UserRole                  @default(STAFF)
+  permissions                  Json?
+  isActive                     Boolean                   @default(true)
+  lastLogin                    DateTime?
+  refreshToken                 String?
+  createdAt                    DateTime                  @default(now())
+  updatedAt                    DateTime
+  implemented_recommendations  ai_recommendations[]      @relation("RecommendationImplementer")
+  audit_logs                   audit_logs[]
+  calendar_events              calendar_events[]
+  documents                    documents[]
+  generated_financial_analyses financial_analyses[]      @relation("FinancialAnalysisGenerator")
+  generated_financial_reports  financial_reports[]       @relation("FinancialReportGenerator")
+  float_sessions               float_sessions[]
+  float_transactions           float_transactions[]
+  created_petty_cash_accounts  petty_cash_accounts[]     @relation("PettyCashAccountCreator")
+  approved_petty_cash          petty_cash_transactions[] @relation("PettyCashApprover")
+  rejected_petty_cash          petty_cash_transactions[] @relation("PettyCashRejecter")
+  requested_petty_cash         petty_cash_transactions[] @relation("PettyCashRequester")
+  repair_assignments           repair_assignments[]
+  repair_status_updates        repair_status_updates[]
+  repairs                      repairs[]
+  sales                        sales[]
+  shifts                       shifts[]                  @relation("UserShifts")
+  scanned_stock_items          stock_take_items[]
+  approved_stock_takes         stock_take_sessions[]     @relation("StockTakeApprover")
+  created_stock_takes          stock_take_sessions[]     @relation("StockTakeCreator")
+  task_activities              task_activities[]
+  task_comments                task_comments[]
+  created_tasks                tasks[]                   @relation("TaskCreator")
+  tenants                      tenants                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model stock_take_sessions {
+  id               String             @id
+  tenantId         String
+  sessionName      String
+  location         String?
+  remarks          String?
+  status           StockTakeStatus    @default(DRAFT)
+  createdBy        String
+  approvedBy       String?
+  approvedAt       DateTime?
+  rejectionReason  String?
+  completedAt      DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  stock_take_items stock_take_items[]
+  approver         users?             @relation("StockTakeApprover", fields: [approvedBy], references: [id])
+  creator          users              @relation("StockTakeCreator", fields: [createdBy], references: [id])
+  tenants          tenants            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model stock_take_items {
+  id               String              @id
+  sessionId        String
+  productId        String?
+  scannedCode      String
+  productName      String?
+  productSku       String?
+  expectedQuantity Int?
+  scannedQuantity  Int                 @default(1)
+  systemQuantity   Int?
+  variance         Int?
+  status           StockTakeItemStatus
+  notes            String?
+  scannedBy        String
+  scannedAt        DateTime            @default(now())
+  createdAt        DateTime            @default(now())
+  scanner          users               @relation(fields: [scannedBy], references: [id])
+  session          stock_take_sessions @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model float_sessions {
+  id                 String               @id
+  tenantId           String
+  userId             String
+  floatNumber        String               @unique
+  registerName       String?
+  openingBalance     Decimal
+  expectedClosing    Decimal?
+  actualClosing      Decimal?
+  difference         Decimal?             @default(0)
+  totalSales         Decimal              @default(0)
+  totalCashIn        Decimal              @default(0)
+  totalCashOut       Decimal              @default(0)
+  totalRefunds       Decimal              @default(0)
+  status             FloatStatus          @default(OPEN)
+  notes              String?
+  closingNotes       String?
+  openedAt           DateTime             @default(now())
+  closedAt           DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime
+  tenants            tenants              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  users              users                @relation(fields: [userId], references: [id])
+  float_transactions float_transactions[]
+}
+
+model float_transactions {
+  id        String               @id
+  sessionId String
+  tenantId  String
+  userId    String
+  type      FloatTransactionType
+  amount    Decimal
+  reason    String
+  reference String?
+  notes     String?
+  createdAt DateTime             @default(now())
+  session   float_sessions       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tenants   tenants              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  users     users                @relation(fields: [userId], references: [id])
+}
+
+model petty_cash_accounts {
+  id                      String                    @id
+  tenantId                String
+  accountName             String
+  accountNumber           String                    @unique
+  registerName            String?
+  location                String?
+  openingBalance          Decimal                   @default(0)
+  currentBalance          Decimal                   @default(0)
+  monthlyBudget           Decimal?
+  isActive                Boolean                   @default(true)
+  notes                   String?
+  createdBy               String
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime
+  creator                 users                     @relation("PettyCashAccountCreator", fields: [createdBy], references: [id])
+  tenants                 tenants                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  petty_cash_transactions petty_cash_transactions[]
+}
+
+model petty_cash_transactions {
+  id                String              @id
+  tenantId          String
+  accountId         String
+  transactionNumber String              @unique
+  category          PettyCashCategory
+  amount            Decimal
+  description       String
+  vendor            String?
+  receiptNumber     String?
+  receiptImage      String?
+  status            PettyCashStatus     @default(PENDING)
+  requestedBy       String
+  approvedBy        String?
+  rejectedBy        String?
+  approvalDate      DateTime?
+  rejectionReason   String?
+  notes             String?
+  transactionDate   DateTime            @default(now())
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  account           petty_cash_accounts @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  approver          users?              @relation("PettyCashApprover", fields: [approvedBy], references: [id])
+  rejecter          users?              @relation("PettyCashRejecter", fields: [rejectedBy], references: [id])
+  requester         users               @relation("PettyCashRequester", fields: [requestedBy], references: [id])
+  tenants           tenants             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model financial_analyses {
+  id                 String                @id
+  tenantId           String
+  analysisType       FinancialAnalysisType
+  reportPeriod       String
+  startDate          DateTime
+  endDate            DateTime
+  totalRevenue       Decimal               @default(0)
+  totalCost          Decimal               @default(0)
+  totalProfit        Decimal               @default(0)
+  profitMargin       Decimal               @default(0)
+  totalTransactions  Int                   @default(0)
+  averageTransaction Decimal               @default(0)
+  topProducts        Json?
+  topCustomers       Json?
+  salesTrends        Json?
+  aiInsights         String?
+  aiRecommendations  String?
+  improvementAreas   Json?
+  warnings           Json?
+  opportunities      Json?
+  metadata           Json?
+  generatedBy        String
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime
+  generator          users                 @relation("FinancialAnalysisGenerator", fields: [generatedBy], references: [id])
+  tenants            tenants               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, reportPeriod])
+  @@index([tenantId, analysisType])
+}
+
+model ai_recommendations {
+  id              String                 @id
+  tenantId        String
+  analysisId      String?
+  category        RecommendationCategory
+  priority        RecommendationPriority @default(MEDIUM)
+  title           String
+  description     String
+  reasoning       String?
+  expectedImpact  String?
+  actionItems     Json?
+  metrics         Json?
+  confidence      Decimal?
+  status          RecommendationStatus   @default(PENDING)
+  implementedDate DateTime?
+  implementedBy   String?
+  notes           String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime
+  implementer     users?                 @relation("RecommendationImplementer", fields: [implementedBy], references: [id])
+  tenants         tenants                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([tenantId, category])
+  @@index([tenantId, priority])
+}
+
+model financial_reports {
+  id           String              @id
+  tenantId     String
+  reportType   FinancialReportType
+  reportName   String
+  reportPeriod String
+  startDate    DateTime
+  endDate      DateTime
+  summary      Json?
+  charts       Json?
+  tables       Json?
+  pdfUrl       String?
+  excelUrl     String?
+  generatedBy  String
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime
+  generator    users               @relation("FinancialReportGenerator", fields: [generatedBy], references: [id])
+  tenants      tenants             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, reportType])
+  @@index([tenantId, reportPeriod])
+}
+
+model mf_customer_profiles {
+  id                       String                 @id @default(uuid())
+  businessName             String
+  businessEmail            String                 @unique
+  businessPhone            String?
+  businessAddress          String?
+  city                     String?
+  country                  String?
+  postalCode               String?
+  subdomain                String                 @unique
+  customDomain             String?
+  databaseName             String                 @unique
+  databaseHost             String?
+  databaseConnectionString String?
+  status                   CustomerProfileStatus  @default(PENDING_SETUP)
+  setupCompletedAt         DateTime?
+  logoUrl                  String?
+  primaryColor             String?                @default("#3B82F6")
+  secondaryColor           String?                @default("#6366F1")
+  contactFirstName         String
+  contactLastName          String
+  contactEmail             String
+  contactPhone             String?
+  internalNotes            String?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  activityLogs             mf_activity_logs[]
+  bugReports               mf_bug_reports[]
+  enabledFeatures          mf_customer_features[]
+  customerUsers            mf_customer_users[]
+  featureRequests          mf_feature_requests[]
+  invoices                 mf_invoices[]
+  subscription             mf_subscriptions?
+
+  @@index([subdomain])
+  @@index([status])
+  @@index([businessEmail])
+}
+
+model mf_customer_users {
+  id                 String               @id @default(uuid())
+  customerProfileId  String
+  firstName          String
+  lastName           String
+  email              String
+  phone              String?
+  passwordHash       String
+  passwordSalt       String?
+  tempPassword       String?
+  mustChangePassword Boolean              @default(true)
+  role               UserRole             @default(STAFF)
+  permissions        Json?
+  isActive           Boolean              @default(true)
+  lastLoginAt        DateTime?
+  loginAttempts      Int                  @default(0)
+  lockedUntil        DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  customerProfile    mf_customer_profiles @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([customerProfileId, email])
+  @@index([customerProfileId])
+  @@index([email])
+}
+
+model mf_features {
+  id               String                 @id @default(uuid())
+  featureKey       String                 @unique
+  featureName      String
+  description      String?
+  category         String?
+  currentVersion   String                 @default("1.0.0")
+  betaVersion      String?
+  status           FeatureStatus          @default(STABLE)
+  isIncludedInBase Boolean                @default(true)
+  additionalCost   Decimal?               @default(0)
+  dependsOn        String[]               @default([])
+  isEnabled        Boolean                @default(true)
+  isBeta           Boolean                @default(false)
+  requiresSetup    Boolean                @default(false)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  customerFeatures mf_customer_features[]
+  versions         mf_feature_versions[]
+
+  @@index([featureKey])
+  @@index([status])
+}
+
+model mf_feature_versions {
+  id                String        @id @default(uuid())
+  featureId         String
+  version           String
+  versionType       FeatureStatus
+  releaseNotes      String?
+  changelog         Json?
+  deployedAt        DateTime?
+  deployedBy        String?
+  canRollback       Boolean       @default(true)
+  previousVersionId String?
+  createdAt         DateTime      @default(now())
+  feature           mf_features   @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([featureId, version])
+  @@index([featureId])
+}
+
+model mf_customer_features {
+  id                String               @id @default(uuid())
+  customerProfileId String
+  featureId         String
+  isEnabled         Boolean              @default(true)
+  version           String?
+  config            Json?
+  lastUsedAt        DateTime?
+  usageCount        Int                  @default(0)
+  enabledAt         DateTime             @default(now())
+  disabledAt        DateTime?
+  customerProfile   mf_customer_profiles @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+  feature           mf_features          @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([customerProfileId, featureId])
+  @@index([customerProfileId])
+  @@index([featureId])
+}
+
+model mf_subscriptions {
+  id                 String               @id @default(uuid())
+  customerProfileId  String               @unique
+  plan               SubscriptionPlan     @default(STARTER)
+  billingCycle       BillingCycle         @default(MONTHLY)
+  basePrice          Decimal
+  perUserPrice       Decimal              @default(0)
+  includedUsers      Int                  @default(1)
+  maxUsers           Int?
+  currentUsers       Int                  @default(1)
+  discountPercent    Decimal?             @default(0)
+  discountReason     String?
+  startDate          DateTime             @default(now())
+  currentPeriodStart DateTime             @default(now())
+  currentPeriodEnd   DateTime
+  nextBillingDate    DateTime
+  isOnTrial          Boolean              @default(false)
+  trialEndsAt        DateTime?
+  isActive           Boolean              @default(true)
+  cancelledAt        DateTime?
+  cancellationReason String?
+  paymentMethod      String?
+  lastPaymentAt      DateTime?
+  lastPaymentAmount  Decimal?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  invoices           mf_invoices[]
+  customerProfile    mf_customer_profiles @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+
+  @@index([plan])
+  @@index([nextBillingDate])
+}
+
+model mf_invoices {
+  id                String               @id @default(uuid())
+  customerProfileId String
+  subscriptionId    String?
+  invoiceNumber     String               @unique
+  subtotal          Decimal
+  discount          Decimal              @default(0)
+  tax               Decimal              @default(0)
+  total             Decimal
+  periodStart       DateTime
+  periodEnd         DateTime
+  status            String               @default("pending")
+  dueDate           DateTime
+  paidAt            DateTime?
+  paymentMethod     String?
+  transactionId     String?
+  pdfUrl            String?
+  lineItems         Json
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  customerProfile   mf_customer_profiles @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+  subscription      mf_subscriptions?    @relation(fields: [subscriptionId], references: [id])
+
+  @@index([customerProfileId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model mf_bug_reports {
+  id                String                @id @default(uuid())
+  customerProfileId String?
+  title             String
+  description       String
+  priority          BugPriority           @default(MEDIUM)
+  status            BugStatus             @default(OPEN)
+  featureKey        String?
+  affectedVersion   String?
+  browser           String?
+  os                String?
+  deviceType        String?
+  stepsToReproduce  String?
+  expectedBehavior  String?
+  actualBehavior    String?
+  screenshots       String[]              @default([])
+  errorLogs         String?
+  assignedTo        String?
+  resolvedAt        DateTime?
+  resolution        String?
+  fixedInVersion    String?
+  errorStackTrace   String?
+  userAgent         String?
+  pageUrl           String?
+  reportedAt        DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  customerProfile   mf_customer_profiles? @relation(fields: [customerProfileId], references: [id])
+
+  @@index([customerProfileId])
+  @@index([priority])
+  @@index([status])
+  @@index([featureKey])
+}
+
+model mf_feature_requests {
+  id                   String                @id @default(uuid())
+  customerProfileId    String?
+  title                String
+  description          String
+  status               FeatureRequestStatus  @default(SUBMITTED)
+  priority             BugPriority           @default(MEDIUM)
+  votes                Int                   @default(0)
+  votedBy              String[]              @default([])
+  targetVersion        String?
+  targetFeatureKey     String?
+  assignedTo           String?
+  estimatedEffort      String?
+  implementedAt        DateTime?
+  implementedInVersion String?
+  rejectionReason      String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  customerProfile      mf_customer_profiles? @relation(fields: [customerProfileId], references: [id])
+
+  @@index([customerProfileId])
+  @@index([status])
+  @@index([votes])
+}
+
+model mf_activity_logs {
+  id                String                @id @default(uuid())
+  customerProfileId String?
+  action            String
+  description       String?
+  actorType         String
+  actorId           String?
+  actorEmail        String?
+  metadata          Json?
+  ipAddress         String?
+  userAgent         String?
+  createdAt         DateTime              @default(now())
+  customerProfile   mf_customer_profiles? @relation(fields: [customerProfileId], references: [id])
+
+  @@index([customerProfileId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model mf_admins {
+  id           String    @id @default(uuid())
+  firstName    String
+  lastName     String
+  email        String    @unique
+  passwordHash String
+  role         String    @default("admin")
+  permissions  Json?
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([email])
+  @@index([role])
+}
+
+model mf_settings {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       Json
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+}
+
+model tasks {
+  id          String            @id @default(uuid())
+  tenantId    String
+  title       String
+  description String?
+  priority    TaskPriority      @default(MEDIUM)
+  status      TaskStatus        @default(TODO)
+  createdBy   String
+  assignedTo  String[]
+  dueDate     DateTime?
+  startDate   DateTime?
+  completedAt DateTime?
+  tags        String[]          @default([])
+  attachments Json?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  activities  task_activities[]
+  comments    task_comments[]
+  creator     users             @relation("TaskCreator", fields: [createdBy], references: [id])
+  tenants     tenants           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([createdBy])
+  @@index([status])
+  @@index([priority])
+  @@index([dueDate])
+}
+
+model task_comments {
+  id        String   @id @default(uuid())
+  taskId    String
+  userId    String
+  comment   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  task      tasks    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      users    @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+  @@index([userId])
+}
+
+model task_activities {
+  id          String   @id @default(uuid())
+  taskId      String
+  userId      String
+  action      String
+  description String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  task        tasks    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        users    @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([action])
+}
+
+model external_repairers {
+  id               String                  @id @default(uuid())
+  tenantId         String
+  firstName        String
+  lastName         String
+  email            String
+  phone            String?
+  businessName     String?
+  specialization   String[]                @default([])
+  passwordHash     String
+  isActive         Boolean                 @default(true)
+  isVerified       Boolean                 @default(false)
+  totalRepairs     Int                     @default(0)
+  completedRepairs Int                     @default(0)
+  averageRating    Float?
+  lastLoginAt      DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  tenants          tenants                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedRepairs  repair_assignments[]
+  repairUpdates    repair_status_updates[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([email])
+  @@index([isActive])
+}
+
+model repair_assignments {
+  id                     String                 @id @default(uuid())
+  tenantId               String
+  repairId               String
+  repairerId             String
+  assignedBy             String
+  assignedAt             DateTime               @default(now())
+  expectedCompletionDate DateTime?
+  status                 RepairAssignmentStatus @default(ASSIGNED)
+  startedAt              DateTime?
+  completedAt            DateTime?
+  assignmentNotes        String?
+  completionNotes        String?
+  assignedByUser         users                  @relation(fields: [assignedBy], references: [id])
+  repair                 repairs                @relation(fields: [repairId], references: [id], onDelete: Cascade)
+  repairer               external_repairers     @relation(fields: [repairerId], references: [id])
+  tenants                tenants                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([repairId])
+  @@index([repairerId])
+  @@index([status])
+}
+
+model repair_status_updates {
+  id             String              @id @default(uuid())
+  tenantId       String
+  repairId       String
+  repairerId     String?
+  userId         String?
+  previousStatus String
+  newStatus      String
+  notes          String?
+  images         String[]            @default([])
+  location       String?
+  createdAt      DateTime            @default(now())
+  repair         repairs             @relation(fields: [repairId], references: [id], onDelete: Cascade)
+  repairer       external_repairers? @relation(fields: [repairerId], references: [id])
+  tenants        tenants             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user           users?              @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([repairId])
+  @@index([repairerId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 enum ShiftStatus {
@@ -567,47 +1201,6 @@ enum StockTakeItemStatus {
   DAMAGED
 }
 
-model stock_take_sessions {
-  id               String             @id
-  tenantId         String
-  sessionName      String
-  location         String?
-  remarks          String?
-  status           StockTakeStatus    @default(DRAFT)
-  createdBy        String
-  approvedBy       String?
-  approvedAt       DateTime?
-  rejectionReason  String?
-  completedAt      DateTime?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime
-  tenants          tenants            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  creator          users              @relation("StockTakeCreator", fields: [createdBy], references: [id])
-  approver         users?             @relation("StockTakeApprover", fields: [approvedBy], references: [id])
-  stock_take_items stock_take_items[]
-}
-
-model stock_take_items {
-  id               String              @id
-  sessionId        String
-  productId        String?
-  scannedCode      String
-  productName      String?
-  productSku       String?
-  expectedQuantity Int?
-  scannedQuantity  Int                 @default(1)
-  systemQuantity   Int?
-  variance         Int?
-  status           StockTakeItemStatus
-  notes            String?
-  scannedBy        String
-  scannedAt        DateTime            @default(now())
-  createdAt        DateTime            @default(now())
-  session          stock_take_sessions @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  scanner          users               @relation(fields: [scannedBy], references: [id])
-}
-
-// Float Management Models
 enum FloatStatus {
   OPEN
   CLOSED
@@ -623,49 +1216,6 @@ enum FloatTransactionType {
   EXPENSE
 }
 
-model float_sessions {
-  id                 String               @id
-  tenantId           String
-  userId             String
-  floatNumber        String               @unique
-  registerName       String?
-  openingBalance     Decimal
-  expectedClosing    Decimal?
-  actualClosing      Decimal?
-  difference         Decimal?             @default(0)
-  totalSales         Decimal              @default(0)
-  totalCashIn        Decimal              @default(0)
-  totalCashOut       Decimal              @default(0)
-  totalRefunds       Decimal              @default(0)
-  status             FloatStatus          @default(OPEN)
-  notes              String?
-  closingNotes       String?
-  openedAt           DateTime             @default(now())
-  closedAt           DateTime?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime
-  tenants            tenants              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  users              users                @relation(fields: [userId], references: [id])
-  float_transactions float_transactions[]
-}
-
-model float_transactions {
-  id        String               @id
-  sessionId String
-  tenantId  String
-  userId    String
-  type      FloatTransactionType
-  amount    Decimal
-  reason    String
-  reference String?
-  notes     String?
-  createdAt DateTime             @default(now())
-  session   float_sessions       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  tenants   tenants              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  users     users                @relation(fields: [userId], references: [id])
-}
-
-// Petty Cash Management Models
 enum PettyCashStatus {
   PENDING
   APPROVED
@@ -733,183 +1283,43 @@ enum FinancialReportType {
   CUSTOM
 }
 
-model petty_cash_accounts {
-  id                      String                    @id
-  tenantId                String
-  accountName             String
-  accountNumber           String                    @unique
-  registerName            String?
-  location                String?
-  openingBalance          Decimal                   @default(0)
-  currentBalance          Decimal                   @default(0)
-  monthlyBudget           Decimal?
-  isActive                Boolean                   @default(true)
-  notes                   String?
-  createdBy               String
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime
-  tenants                 tenants                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  creator                 users                     @relation("PettyCashAccountCreator", fields: [createdBy], references: [id])
-  petty_cash_transactions petty_cash_transactions[]
-}
-
-model petty_cash_transactions {
-  id                String              @id
-  tenantId          String
-  accountId         String
-  transactionNumber String              @unique
-  category          PettyCashCategory
-  amount            Decimal
-  description       String
-  vendor            String?
-  receiptNumber     String?
-  receiptImage      String?
-  status            PettyCashStatus     @default(PENDING)
-  requestedBy       String
-  approvedBy        String?
-  rejectedBy        String?
-  approvalDate      DateTime?
-  rejectionReason   String?
-  notes             String?
-  transactionDate   DateTime            @default(now())
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime
-  account           petty_cash_accounts @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  tenants           tenants             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  requester         users               @relation("PettyCashRequester", fields: [requestedBy], references: [id])
-  approver          users?              @relation("PettyCashApprover", fields: [approvedBy], references: [id])
-  rejecter          users?              @relation("PettyCashRejecter", fields: [rejectedBy], references: [id])
-}
-
-model financial_analyses {
-  id                 String              @id
-  tenantId           String
-  analysisType       FinancialAnalysisType
-  reportPeriod       String              // e.g., "2025-01", "2025-Q1", "2025"
-  startDate          DateTime
-  endDate            DateTime
-  totalRevenue       Decimal             @default(0)
-  totalCost          Decimal             @default(0)
-  totalProfit        Decimal             @default(0)
-  profitMargin       Decimal             @default(0)
-  totalTransactions  Int                 @default(0)
-  averageTransaction Decimal             @default(0)
-  topProducts        Json?               // Array of top selling products
-  topCustomers       Json?               // Array of top customers
-  salesTrends        Json?               // Daily/weekly/monthly trends
-  aiInsights         String?             // AI-generated insights (long text)
-  aiRecommendations  String?             // AI recommendations (long text)
-  improvementAreas   Json?               // Array of improvement suggestions
-  warnings           Json?               // Array of warnings/alerts
-  opportunities      Json?               // Growth opportunities
-  metadata           Json?               // Additional analysis data
-  generatedBy        String
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime
-  tenants            tenants             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  generator          users               @relation("FinancialAnalysisGenerator", fields: [generatedBy], references: [id])
-
-  @@index([tenantId, reportPeriod])
-  @@index([tenantId, analysisType])
-}
-
-model ai_recommendations {
-  id               String                     @id
-  tenantId         String
-  analysisId       String?
-  category         RecommendationCategory
-  priority         RecommendationPriority     @default(MEDIUM)
-  title            String
-  description      String
-  reasoning        String?                    // Why this recommendation
-  expectedImpact   String?                    // What impact to expect
-  actionItems      Json?                      // Array of action steps
-  metrics          Json?                      // Relevant metrics
-  confidence       Decimal?                   // AI confidence score (0-100)
-  status           RecommendationStatus       @default(PENDING)
-  implementedDate  DateTime?
-  implementedBy    String?
-  notes            String?
-  createdAt        DateTime                   @default(now())
-  updatedAt        DateTime
-  tenants          tenants                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  implementer      users?                     @relation("RecommendationImplementer", fields: [implementedBy], references: [id])
-
-  @@index([tenantId, status])
-  @@index([tenantId, category])
-  @@index([tenantId, priority])
-}
-
-model financial_reports {
-  id            String             @id
-  tenantId      String
-  reportType    FinancialReportType
-  reportName    String
-  reportPeriod  String             // e.g., "January 2025", "Q1 2025"
-  startDate     DateTime
-  endDate       DateTime
-  summary       Json?              // Report summary data
-  charts        Json?              // Chart data for visualization
-  tables        Json?              // Table data
-  pdfUrl        String?            // Generated PDF URL
-  excelUrl      String?            // Generated Excel URL
-  generatedBy   String
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime
-  tenants       tenants            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  generator     users              @relation("FinancialReportGenerator", fields: [generatedBy], references: [id])
-
-  @@index([tenantId, reportType])
-  @@index([tenantId, reportPeriod])
-}
-
-// ============================================================================
-// MAINFRAME SYSTEM - Multi-Tenant SaaS Management Platform
-// ============================================================================
-
-// Customer Profile Status
 enum CustomerProfileStatus {
-  PENDING_SETUP      // Initial state, subdomain being provisioned
-  ACTIVE             // Fully operational
-  SUSPENDED          // Payment issues or violations
-  MAINTENANCE        // Scheduled maintenance
-  DEACTIVATED        // Customer cancelled
+  PENDING_SETUP
+  ACTIVE
+  SUSPENDED
+  MAINTENANCE
+  DEACTIVATED
 }
 
-// Subscription Plans
 enum SubscriptionPlan {
-  STARTER            // Basic features, 1 user
-  PROFESSIONAL       // Standard features, 5 users
-  BUSINESS           // Advanced features, 15 users
-  ENTERPRISE         // All features, unlimited users
-  CUSTOM             // Custom negotiated plan
+  STARTER
+  PROFESSIONAL
+  BUSINESS
+  ENTERPRISE
+  CUSTOM
 }
 
-// Billing Cycle
 enum BillingCycle {
   MONTHLY
   QUARTERLY
   YEARLY
 }
 
-// Feature Status
 enum FeatureStatus {
-  STABLE             // Production ready
-  BETA               // Testing phase
-  ALPHA              // Early development
-  DEPRECATED         // Being phased out
-  DISABLED           // Temporarily disabled
+  STABLE
+  BETA
+  ALPHA
+  DEPRECATED
+  DISABLED
 }
 
-// Bug Priority
 enum BugPriority {
-  CRITICAL           // System down, data loss
-  HIGH               // Major feature broken
-  MEDIUM             // Feature partially working
-  LOW                // Minor issue, cosmetic
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
 }
 
-// Bug Status
 enum BugStatus {
   OPEN
   IN_PROGRESS
@@ -919,7 +1329,6 @@ enum BugStatus {
   WONT_FIX
 }
 
-// Feature Request Status
 enum FeatureRequestStatus {
   SUBMITTED
   UNDER_REVIEW
@@ -928,522 +1337,6 @@ enum FeatureRequestStatus {
   TESTING
   RELEASED
   REJECTED
-}
-
-// Customer Profiles - Each customer gets their own isolated instance
-model mf_customer_profiles {
-  id                    String                  @id @default(uuid())
-  businessName          String
-  businessEmail         String                  @unique
-  businessPhone         String?
-  businessAddress       String?
-  city                  String?
-  country               String?
-  postalCode            String?
-
-  // Subdomain Configuration (e.g., bhouse.truedesk.co.uk)
-  subdomain             String                  @unique
-  customDomain          String?                 // Optional custom domain
-
-  // Database Isolation
-  databaseName          String                  @unique  // Separate database per customer
-  databaseHost          String?
-  databaseConnectionString String?              // Encrypted connection string
-
-  // Status & Configuration
-  status                CustomerProfileStatus   @default(PENDING_SETUP)
-  setupCompletedAt      DateTime?
-
-  // Branding
-  logoUrl               String?
-  primaryColor          String?                 @default("#3B82F6")
-  secondaryColor        String?                 @default("#6366F1")
-
-  // Contact Person
-  contactFirstName      String
-  contactLastName       String
-  contactEmail          String
-  contactPhone          String?
-
-  // Notes
-  internalNotes         String?                 // Admin notes (not visible to customer)
-
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-
-  // Relations
-  subscription          mf_subscriptions?
-  customerUsers         mf_customer_users[]
-  enabledFeatures       mf_customer_features[]
-  bugReports            mf_bug_reports[]
-  featureRequests       mf_feature_requests[]
-  activityLogs          mf_activity_logs[]
-  invoices              mf_invoices[]
-
-  @@index([subdomain])
-  @@index([status])
-  @@index([businessEmail])
-}
-
-// Customer Users - Users belonging to a customer profile
-model mf_customer_users {
-  id                    String                  @id @default(uuid())
-  customerProfileId     String
-
-  firstName             String
-  lastName              String
-  email                 String
-  phone                 String?
-
-  // Authentication
-  passwordHash          String
-  passwordSalt          String?
-  tempPassword          String?                 // For initial setup, cleared after first login
-  mustChangePassword    Boolean                 @default(true)
-
-  // Role within customer's system
-  role                  UserRole                @default(STAFF)
-  permissions           Json?                   // Custom permission overrides
-
-  // Status
-  isActive              Boolean                 @default(true)
-  lastLoginAt           DateTime?
-  loginAttempts         Int                     @default(0)
-  lockedUntil           DateTime?
-
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-
-  customerProfile       mf_customer_profiles    @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
-
-  @@unique([customerProfileId, email])
-  @@index([customerProfileId])
-  @@index([email])
-}
-
-// Available Features in MainFrame
-model mf_features {
-  id                    String                  @id @default(uuid())
-
-  featureKey            String                  @unique  // e.g., "pos", "inventory", "repairs"
-  featureName           String
-  description           String?
-
-  // Categorization
-  category              String?                 // e.g., "Core", "Sales", "Inventory", "Reports"
-
-  // Versioning
-  currentVersion        String                  @default("1.0.0")
-  betaVersion           String?
-
-  // Status
-  status                FeatureStatus           @default(STABLE)
-
-  // Pricing (additional cost if applicable)
-  isIncludedInBase      Boolean                 @default(true)
-  additionalCost        Decimal?                @default(0)
-
-  // Dependencies
-  dependsOn             String[]                @default([])  // List of feature keys this depends on
-
-  // Feature Flags
-  isEnabled             Boolean                 @default(true)
-  isBeta                Boolean                 @default(false)
-  requiresSetup         Boolean                 @default(false)
-
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-
-  customerFeatures      mf_customer_features[]
-  versions              mf_feature_versions[]
-
-  @@index([featureKey])
-  @@index([status])
-}
-
-// Feature Versions - Track all versions of a feature
-model mf_feature_versions {
-  id                    String                  @id @default(uuid())
-  featureId             String
-
-  version               String                  // e.g., "1.2.0"
-  versionType           FeatureStatus           // STABLE, BETA, ALPHA
-
-  releaseNotes          String?
-  changelog             Json?                   // Detailed changes
-
-  // Deployment
-  deployedAt            DateTime?
-  deployedBy            String?
-
-  // Rollback
-  canRollback           Boolean                 @default(true)
-  previousVersionId     String?
-
-  createdAt             DateTime                @default(now())
-
-  feature               mf_features             @relation(fields: [featureId], references: [id], onDelete: Cascade)
-
-  @@unique([featureId, version])
-  @@index([featureId])
-}
-
-// Customer Features - Which features are enabled for which customer
-model mf_customer_features {
-  id                    String                  @id @default(uuid())
-  customerProfileId     String
-  featureId             String
-
-  // Override defaults
-  isEnabled             Boolean                 @default(true)
-  version               String?                 // Override version (null = use default)
-
-  // Configuration
-  config                Json?                   // Feature-specific configuration
-
-  // Usage tracking
-  lastUsedAt            DateTime?
-  usageCount            Int                     @default(0)
-
-  enabledAt             DateTime                @default(now())
-  disabledAt            DateTime?
-
-  customerProfile       mf_customer_profiles    @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
-  feature               mf_features             @relation(fields: [featureId], references: [id], onDelete: Cascade)
-
-  @@unique([customerProfileId, featureId])
-  @@index([customerProfileId])
-  @@index([featureId])
-}
-
-// Subscriptions - Customer billing information
-model mf_subscriptions {
-  id                    String                  @id @default(uuid())
-  customerProfileId     String                  @unique
-
-  // Plan Details
-  plan                  SubscriptionPlan        @default(STARTER)
-  billingCycle          BillingCycle            @default(MONTHLY)
-
-  // Pricing
-  basePrice             Decimal                 // Base subscription price
-  perUserPrice          Decimal                 @default(0)  // Additional per-user cost
-  includedUsers         Int                     @default(1)  // Users included in base price
-  maxUsers              Int?                    // null = unlimited
-
-  // Current Usage
-  currentUsers          Int                     @default(1)
-
-  // Discounts
-  discountPercent       Decimal?                @default(0)
-  discountReason        String?
-
-  // Billing Dates
-  startDate             DateTime                @default(now())
-  currentPeriodStart    DateTime                @default(now())
-  currentPeriodEnd      DateTime
-  nextBillingDate       DateTime
-
-  // Trial
-  isOnTrial             Boolean                 @default(false)
-  trialEndsAt           DateTime?
-
-  // Status
-  isActive              Boolean                 @default(true)
-  cancelledAt           DateTime?
-  cancellationReason    String?
-
-  // Payment
-  paymentMethod         String?                 // e.g., "card", "bank_transfer"
-  lastPaymentAt         DateTime?
-  lastPaymentAmount     Decimal?
-
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-
-  customerProfile       mf_customer_profiles    @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
-  invoices              mf_invoices[]
-
-  @@index([plan])
-  @@index([nextBillingDate])
-}
-
-// Invoices
-model mf_invoices {
-  id                    String                  @id @default(uuid())
-  customerProfileId     String
-  subscriptionId        String?
-
-  invoiceNumber         String                  @unique
-
-  // Amounts
-  subtotal              Decimal
-  discount              Decimal                 @default(0)
-  tax                   Decimal                 @default(0)
-  total                 Decimal
-
-  // Period
-  periodStart           DateTime
-  periodEnd             DateTime
-
-  // Status
-  status                String                  @default("pending")  // pending, paid, overdue, cancelled
-  dueDate               DateTime
-  paidAt                DateTime?
-
-  // Payment
-  paymentMethod         String?
-  transactionId         String?
-
-  // PDF
-  pdfUrl                String?
-
-  // Line items (stored as JSON for flexibility)
-  lineItems             Json                    // Array of items
-
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-
-  customerProfile       mf_customer_profiles    @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
-  subscription          mf_subscriptions?       @relation(fields: [subscriptionId], references: [id])
-
-  @@index([customerProfileId])
-  @@index([status])
-  @@index([dueDate])
-}
-
-// Bug Reports - Developer Portal
-model mf_bug_reports {
-  id                    String                  @id @default(uuid())
-  customerProfileId     String?                 // null = internal bug
-
-  title                 String
-  description           String
-
-  // Classification
-  priority              BugPriority             @default(MEDIUM)
-  status                BugStatus               @default(OPEN)
-
-  // Affected Area
-  featureKey            String?                 // Which feature is affected
-  affectedVersion       String?
-
-  // Environment
-  browser               String?
-  os                    String?
-  deviceType            String?
-
-  // Reproduction
-  stepsToReproduce      String?
-  expectedBehavior      String?
-  actualBehavior        String?
-
-  // Attachments
-  screenshots           String[]                @default([])
-  errorLogs             String?
-
-  // Resolution
-  assignedTo            String?
-  resolvedAt            DateTime?
-  resolution            String?
-  fixedInVersion        String?
-
-  // Auto-captured
-  errorStackTrace       String?
-  userAgent             String?
-  pageUrl               String?
-
-  reportedAt            DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-
-  customerProfile       mf_customer_profiles?   @relation(fields: [customerProfileId], references: [id], onDelete: SetNull)
-
-  @@index([customerProfileId])
-  @@index([priority])
-  @@index([status])
-  @@index([featureKey])
-}
-
-// Feature Requests
-model mf_feature_requests {
-  id                    String                  @id @default(uuid())
-  customerProfileId     String?                 // null = internal request
-
-  title                 String
-  description           String
-
-  // Status
-  status                FeatureRequestStatus    @default(SUBMITTED)
-  priority              BugPriority             @default(MEDIUM)
-
-  // Voting
-  votes                 Int                     @default(0)
-  votedBy               String[]                @default([])  // Customer profile IDs
-
-  // Target
-  targetVersion         String?
-  targetFeatureKey      String?                 // Existing feature to enhance, or new
-
-  // Development
-  assignedTo            String?
-  estimatedEffort       String?                 // e.g., "2 weeks"
-
-  // Resolution
-  implementedAt         DateTime?
-  implementedInVersion  String?
-  rejectionReason       String?
-
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-
-  customerProfile       mf_customer_profiles?   @relation(fields: [customerProfileId], references: [id], onDelete: SetNull)
-
-  @@index([customerProfileId])
-  @@index([status])
-  @@index([votes])
-}
-
-// Activity Logs - Track all MainFrame activities
-model mf_activity_logs {
-  id                    String                  @id @default(uuid())
-  customerProfileId     String?
-
-  action                String                  // e.g., "profile.created", "user.added", "feature.enabled"
-  description           String?
-
-  // Actor
-  actorType             String                  // "system", "admin", "customer"
-  actorId               String?
-  actorEmail            String?
-
-  // Details
-  metadata              Json?
-
-  // Request info
-  ipAddress             String?
-  userAgent             String?
-
-  createdAt             DateTime                @default(now())
-
-  customerProfile       mf_customer_profiles?   @relation(fields: [customerProfileId], references: [id], onDelete: SetNull)
-
-  @@index([customerProfileId])
-  @@index([action])
-  @@index([createdAt])
-}
-
-// MainFrame Admins - Separate from tenant users
-model mf_admins {
-  id                    String                  @id @default(uuid())
-
-  firstName             String
-  lastName              String
-  email                 String                  @unique
-
-  passwordHash          String
-
-  // Role
-  role                  String                  @default("admin")  // "super_admin", "admin", "support", "developer"
-  permissions           Json?
-
-  isActive              Boolean                 @default(true)
-  lastLoginAt           DateTime?
-
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-
-  @@index([email])
-  @@index([role])
-}
-
-// System Settings for MainFrame
-model mf_settings {
-  id                    String                  @id @default(uuid())
-
-  key                   String                  @unique
-  value                 Json
-  description           String?
-
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-
-  @@index([key])
-}
-
-// ============================================
-// TASK MANAGEMENT SYSTEM
-// ============================================
-
-model tasks {
-  id                String              @id @default(uuid())
-  tenantId          String
-
-  // Task Details
-  title             String
-  description       String?
-  priority          TaskPriority        @default(MEDIUM)
-  status            TaskStatus          @default(TODO)
-
-  // Assignment
-  createdBy         String              // Admin who created the task
-  assignedTo        String[]            // Array of user IDs
-
-  // Dates
-  dueDate           DateTime?
-  startDate         DateTime?
-  completedAt       DateTime?
-
-  // Metadata
-  tags              String[]            @default([])
-  attachments       Json?               // Array of file URLs/metadata
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-
-  // Relations
-  tenants           tenants             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  creator           users               @relation("TaskCreator", fields: [createdBy], references: [id])
-  comments          task_comments[]
-  activities        task_activities[]
-
-  @@index([tenantId])
-  @@index([createdBy])
-  @@index([status])
-  @@index([priority])
-  @@index([dueDate])
-}
-
-model task_comments {
-  id                String              @id @default(uuid())
-  taskId            String
-  userId            String
-  comment           String
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-
-  task              tasks               @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user              users               @relation(fields: [userId], references: [id])
-
-  @@index([taskId])
-  @@index([userId])
-}
-
-model task_activities {
-  id                String              @id @default(uuid())
-  taskId            String
-  userId            String
-  action            String              // "created", "assigned", "status_changed", "comment_added", "completed"
-  description       String
-  metadata          Json?
-  createdAt         DateTime            @default(now())
-
-  task              tasks               @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user              users               @relation(fields: [userId], references: [id])
-
-  @@index([taskId])
-  @@index([userId])
-  @@index([action])
 }
 
 enum TaskPriority {
@@ -1459,114 +1352,6 @@ enum TaskStatus {
   IN_REVIEW
   COMPLETED
   CANCELLED
-}
-
-// ============================================
-// EXTERNAL REPAIRER SYSTEM
-// ============================================
-
-model external_repairers {
-  id                String              @id @default(uuid())
-  tenantId          String
-
-  // Personal Info
-  firstName         String
-  lastName          String
-  email             String
-  phone             String?
-
-  // Business Info
-  businessName      String?
-  specialization    String[]            @default([]) // ["Ring Sizing", "Stone Setting", "Polishing", etc.]
-
-  // Login Credentials
-  passwordHash      String
-
-  // Status
-  isActive          Boolean             @default(true)
-  isVerified        Boolean             @default(false)
-
-  // Performance Metrics
-  totalRepairs      Int                 @default(0)
-  completedRepairs  Int                 @default(0)
-  averageRating     Float?
-
-  // Timestamps
-  lastLoginAt       DateTime?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-
-  // Relations
-  tenants           tenants             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  assignedRepairs   repair_assignments[]
-  repairUpdates     repair_status_updates[]
-
-  @@unique([tenantId, email])
-  @@index([tenantId])
-  @@index([email])
-  @@index([isActive])
-}
-
-model repair_assignments {
-  id                String              @id @default(uuid())
-  tenantId          String
-  repairId          String
-  repairerId        String
-
-  // Assignment Details
-  assignedBy        String              // Admin user ID
-  assignedAt        DateTime            @default(now())
-  expectedCompletionDate DateTime?
-
-  // Status
-  status            RepairAssignmentStatus @default(ASSIGNED)
-  startedAt         DateTime?
-  completedAt       DateTime?
-
-  // Notes
-  assignmentNotes   String?
-  completionNotes   String?
-
-  // Relations
-  tenants           tenants             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  repair            repairs             @relation(fields: [repairId], references: [id], onDelete: Cascade)
-  repairer          external_repairers  @relation(fields: [repairerId], references: [id])
-  assignedByUser    users               @relation(fields: [assignedBy], references: [id])
-
-  @@index([tenantId])
-  @@index([repairId])
-  @@index([repairerId])
-  @@index([status])
-}
-
-model repair_status_updates {
-  id                String              @id @default(uuid())
-  tenantId          String
-  repairId          String
-  repairerId        String?
-  userId            String?             // If updated by admin/staff
-
-  // Update Details
-  previousStatus    String
-  newStatus         String
-  notes             String?
-  images            String[]            @default([]) // Array of image URLs
-
-  // Metadata
-  location          String?             // Where the update was made from
-  createdAt         DateTime            @default(now())
-
-  // Relations
-  tenants           tenants             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  repair            repairs             @relation(fields: [repairId], references: [id], onDelete: Cascade)
-  repairer          external_repairers? @relation(fields: [repairerId], references: [id])
-  user              users?              @relation(fields: [userId], references: [id])
-
-  @@index([tenantId])
-  @@index([repairId])
-  @@index([repairerId])
-  @@index([userId])
-  @@index([createdAt])
 }
 
 enum RepairAssignmentStatus {

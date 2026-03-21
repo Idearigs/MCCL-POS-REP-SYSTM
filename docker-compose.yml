@@ -1,0 +1,97 @@
+version: '3.9'
+
+# ==========================================
+# Local Development Stack
+# ==========================================
+
+services:
+  # ---- PostgreSQL (local dev DB) ----
+  postgres:
+    image: postgres:16-alpine
+    container_name: mps_postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-MPSDB}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mpsdb2026}
+      POSTGRES_DB: ${DB_NAME:-mps_jewelry_pos}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-MPSDB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---- Redis ----
+  redis:
+    image: redis:7-alpine
+    container_name: mps_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ---- Backend (NestJS) ----
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: builder     # Use builder stage for hot-reload in dev
+    container_name: mps_backend
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://${DB_USER:-MPSDB}:${DB_PASSWORD:-mpsdb2026}@postgres:5432/${DB_NAME:-mps_jewelry_pos}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev_jwt_refresh_secret}
+      JWT_EXPIRATION: 15m
+      JWT_REFRESH_EXPIRATION: 7d
+      CORS_ORIGIN: http://localhost:5173
+      RATE_LIMIT_TTL: 60
+      RATE_LIMIT_LIMIT: 1000
+      VOODOOSMS_API_KEY: ${VOODOOSMS_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend/src:/app/src   # hot-reload
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: npm run start:dev
+    restart: unless-stopped
+
+  # ---- Frontend (Vite dev server) ----
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: mps_frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:3000/api/v1
+      VITE_TENANT_ID: buymejewellery
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+    depends_on:
+      - backend
+    command: npm run dev -- --host 0.0.0.0
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -78,16 +78,18 @@ async function bootstrap() {
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       const allowedOrigins = [
         configService.get('CORS_ORIGIN', 'http://localhost:3000'),
-        'http://localhost:3000',
-        'http://localhost:5173',  // POS System frontend
-        'http://localhost:5174',  // MainFrame Admin frontend
-        'http://localhost:8080',
-        'http://localhost:8081',
-        'http://localhost:8082',
-        'http://localhost:8083',
-        'http://localhost:8084',
+        // Production domains
+        'https://pos.truedesk.co.uk',
+        'https://api.truedesk.co.uk',
+        'https://truedesk.co.uk',
+        // Legacy domains
         'https://pos.buymejewellery.co.uk',
         'https://buymejewellery.co.uk',
+        // Local development
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'http://localhost:8080',
       ];
 
       if (!origin || allowedOrigins.includes(origin)) {
@@ -119,7 +121,7 @@ async function bootstrap() {
         value: error.value,
         constraints: error.constraints,
       }));
-      return new Error(JSON.stringify(result));
+      return new BadRequestException(result);
     },
   }));
 

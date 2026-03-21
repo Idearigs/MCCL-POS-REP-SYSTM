@@ -105,7 +105,7 @@ export class RepairsService {
     tenantId: string,
   ): Promise<PaginatedResponseDto<RepairResponseDto>> {
     const page = queryDto.page || 1;
-    const limit = Math.min(queryDto.limit || 20, 100);
+    const limit = Math.min(queryDto.limit || 20, 1000);
     const skip = (page - 1) * limit;
 
     const where: any = { tenantId };
@@ -133,8 +133,8 @@ export class RepairsService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          customers: true,
-          users: true,
+          customers: { select: { firstName: true, lastName: true, phone: true, email: true } },
+          users: { select: { firstName: true, lastName: true } },
         },
       }),
       this.prismaService.repairs.count({ where }),
@@ -781,8 +781,8 @@ export class RepairsService {
       balanceDue: Math.max(0, Number(repair.finalCost || 0) - Number(repair.depositAmount || 0)),
       depositAmount: Number(repair.depositAmount || 0),
       insuranceValue: Number(repair.insuranceValue || 0),
-      expectedCompletionDate: repair.estimatedDueDate ? repair.estimatedDueDate.toISOString() : null,
-      actualCompletionDate: repair.completedDate ? repair.completedDate.toISOString() : null,
+      expectedCompletionDate: repair.estimatedDueDate ? (repair.estimatedDueDate instanceof Date ? repair.estimatedDueDate.toISOString() : new Date(repair.estimatedDueDate).toISOString()) : null,
+      actualCompletionDate: repair.completedDate ? (repair.completedDate instanceof Date ? repair.completedDate.toISOString() : new Date(repair.completedDate).toISOString()) : null,
       customerInstructions: repair.customerNotes || '',
       internalNotes: repair.internalNotes || '',
       assignedTechnicianId: repair.assignedTechnicianId || null,
@@ -790,18 +790,21 @@ export class RepairsService {
       isOverdue: repair.estimatedDueDate && repair.status !== 'COMPLETED' && repair.status !== 'COLLECTED' ? new Date() > repair.estimatedDueDate : false,
       createdBy: repair.createdBy,
       createdByName: repair.users ? `${repair.users.firstName} ${repair.users.lastName}` : 'Unknown',
-      createdAt: repair.createdAt.toISOString(),
-      updatedAt: repair.updatedAt.toISOString(),
+      createdAt: repair.createdAt instanceof Date ? repair.createdAt.toISOString() : repair.createdAt,
+      updatedAt: repair.updatedAt instanceof Date ? repair.updatedAt.toISOString() : repair.updatedAt,
       items: items || this.parseItemsFromNotes(repair.internalNotes),
-      notes: repair.repair_status_history ? repair.repair_status_history.map((history: any) => ({
-        id: history.id,
-        note: history.notes,
-        isCustomerVisible: true,
-        createdBy: history.changedBy,
-        createdByName: 'System',
-        createdAt: history.changedAt.toISOString(),
-        updatedAt: history.changedAt.toISOString(),
-      })) : [],
+      notes: repair.repair_status_history ? repair.repair_status_history.map((history: any) => {
+        const changedAt = history.changedAt instanceof Date ? history.changedAt : new Date(history.changedAt ?? Date.now());
+        return {
+          id: history.id,
+          note: history.notes,
+          isCustomerVisible: true,
+          createdBy: history.changedBy,
+          createdByName: 'System',
+          createdAt: changedAt.toISOString(),
+          updatedAt: changedAt.toISOString(),
+        };
+      }) : [],
       images: repair.repair_photos ? repair.repair_photos.map((photo: any) => photo.filePath || photo.driveViewLink) : [],
       beforeImages: repair.repair_photos ? repair.repair_photos
         .filter((photo: any) => photo.stage === 'before')

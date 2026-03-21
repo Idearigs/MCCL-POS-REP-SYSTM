@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Filter, Plus, Calendar, Trash2, LayoutGrid, List, Eye, Edit, Settings } from 'lucide-react';
+import { Search, Filter, Plus, Calendar, Trash2, LayoutGrid, List, Eye, Edit, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import RepairJobCard from '@/components/repair/RepairJobCard';
 import RepairStatusBadge from '@/components/repair/RepairStatusBadge';
 import NewRepairJobForm from '@/components/repair/NewRepairJobForm';
@@ -116,11 +116,22 @@ const convertRepairToUI = (repair: Repair): UIRepairJob => ({
   progressImages: repair.progressImages || []
 });
 
+const PAGE_SIZE = 50;
+
+// Map UI status filter to backend status values
+const statusToBackend: Partial<Record<UIRepairStatus | 'all', BackendRepairStatus | undefined>> = {
+  'in-progress': 'IN_PROGRESS',
+  'completed': 'COMPLETED',
+  'collected': 'COLLECTED',
+};
+
 const RepairsPage: React.FC = () => {
   const [repairJobs, setRepairJobs] = useState<UIRepairJob[]>([]);
-  const [filteredJobs, setFilteredJobs] = useState<UIRepairJob[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<UIRepairStatus | 'all'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedJob, setSelectedJob] = useState<UIRepairJob | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isNewJobDialogOpen, setIsNewJobDialogOpen] = useState(false);
@@ -131,57 +142,71 @@ const RepairsPage: React.FC = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [isMessagesSettingsOpen, setIsMessagesSettingsOpen] = useState(false);
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     localStorage.removeItem('repairJobs');
     localStorage.removeItem('repair_jobs');
     localStorage.removeItem('repairs');
-    console.log('Cleared repair jobs localStorage');
   }, []);
 
-  const loadRepairs = async () => {
+  const loadRepairs = async (page: number, search: string, status: UIRepairStatus | 'all') => {
     setLoading(true);
     setError(null);
     try {
-      const result = await repairService.getRepairs(1, 50);
+      const backendStatus = statusToBackend[status];
+      const filters: any = {};
+      if (search) filters.search = search;
+      if (backendStatus) filters.status = backendStatus;
+
+      const result = await repairService.getRepairs(page, PAGE_SIZE, filters);
       const uiRepairs = result.data.map(convertRepairToUI);
-      setRepairJobs(uiRepairs);
-      setFilteredJobs(uiRepairs);
+
+      // Client-side status filter for UI statuses that map to multiple backend statuses
+      // (e.g. 'received' = RECEIVED|QUOTED|APPROVED|CANCELLED)
+      const filtered = status !== 'all' && !backendStatus
+        ? uiRepairs.filter(job => job.status === status)
+        : uiRepairs;
+
+      setRepairJobs(filtered);
+      setCurrentPage(result.meta?.page || page);
+      setTotalPages(result.meta?.totalPages || 1);
+      setTotalCount(result.meta?.total || 0);
     } catch (err: any) {
       console.error('Failed to load repairs:', err);
       setError(err.message || 'Failed to load repairs');
       setRepairJobs([]);
-      setFilteredJobs([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadRepairs();
+    loadRepairs(1, searchTerm, selectedStatus);
   }, []);
 
-  useEffect(() => {
-    let result = repairJobs;
-    
-    if (searchTerm) {
-      const lowerSearchTerm = searchTerm.toLowerCase();
-      result = result.filter(job => 
-        job.customerName.toLowerCase().includes(lowerSearchTerm) || 
-        job.itemDescription.toLowerCase().includes(lowerSearchTerm) ||
-        job.id.toLowerCase().includes(lowerSearchTerm)
-      );
-    }
-    
-    if (selectedStatus !== 'all') {
-      result = result.filter(job => job.status === selectedStatus);
-    }
-    
-    setFilteredJobs(result);
-  }, [searchTerm, selectedStatus, repairJobs]);
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    searchDebounce.current = setTimeout(() => {
+      setCurrentPage(1);
+      loadRepairs(1, value, selectedStatus);
+    }, 400);
+  };
+
+  const handleStatusFilter = (status: UIRepairStatus | 'all') => {
+    setSelectedStatus(status);
+    setCurrentPage(1);
+    loadRepairs(1, searchTerm, status);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    loadRepairs(page, searchTerm, selectedStatus);
+  };
 
   const handleJobClick = async (id: string) => {
-    const job = repairJobs.find(job => job.id === id);
+    const job = repairJobs.find((job: UIRepairJob) => job.id === id);
     if (job) {
       // Set the job immediately to open the modal with basic data
       setSelectedJob(job);
@@ -206,10 +231,7 @@ const RepairsPage: React.FC = () => {
         await repairService.updateRepair(selectedJob.id, { status: backendStatus });
         
         const updatedJob = { ...selectedJob, status };
-        const updatedJobs = repairJobs.map(job => 
-          job.id === selectedJob.id ? updatedJob : job
-        );
-        setRepairJobs(updatedJobs);
+        setRepairJobs(prev => prev.map((job: UIRepairJob) => job.id === selectedJob.id ? updatedJob : job));
         setSelectedJob(updatedJob);
         toast.success('Status updated to ' + status);
       } catch (error: any) {
@@ -236,8 +258,8 @@ const RepairsPage: React.FC = () => {
       const result = await repairService.deleteRepair(repairToDelete);
       console.log('Delete result:', result);
 
-      // Reload repairs from database to ensure consistency
-      await loadRepairs();
+      // Reload current page
+      await loadRepairs(currentPage, searchTerm, selectedStatus);
 
       toast.success(result.message || 'Repair job deleted successfully');
     } catch (error: any) {
@@ -342,7 +364,8 @@ const RepairsPage: React.FC = () => {
         console.log('No images to upload for this repair');
       }
 
-      await loadRepairs();
+      await loadRepairs(1, searchTerm, selectedStatus);
+      setCurrentPage(1);
       setIsNewJobDialogOpen(false);
       toast.success('Repair job created successfully');
       
@@ -367,11 +390,11 @@ const RepairsPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-            <Input 
-              placeholder="Search by customer name, item or ID..." 
-              className="pl-10 bg-white/80 border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-gray-200 focus:border-transparent" 
+            <Input
+              placeholder="Search by customer name, item or ID..."
+              className="pl-10 bg-white/80 border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-gray-200 focus:border-transparent"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
             />
           </div>
           
@@ -399,62 +422,29 @@ const RepairsPage: React.FC = () => {
 
             <Button
               variant="outline"
-              className="rounded-full px-4 border border-gray-200 shadow-sm bg-navy text-white"
-              onClick={() => setSelectedStatus('all')}
+              className={`rounded-full px-4 border border-gray-200 shadow-sm ${selectedStatus === 'all' ? 'bg-navy text-white' : 'hover:bg-gray-50'}`}
+              onClick={() => handleStatusFilter('all')}
             >
-              All <Badge className="ml-1 rounded-full bg-white text-navy">{repairJobs.length}</Badge>
+              All <Badge className="ml-1 rounded-full bg-white/20 text-inherit">{totalCount}</Badge>
             </Button>
 
             <DropdownMenu open={isFilterOpen} onOpenChange={setIsFilterOpen}>
               <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  className="rounded-full px-4 border border-gray-200 shadow-sm hover:bg-gray-50"
+                <Button
+                  variant="outline"
+                  className={`rounded-full px-4 border border-gray-200 shadow-sm ${selectedStatus !== 'all' ? 'bg-navy text-white' : 'hover:bg-gray-50'}`}
                 >
                   <Filter size={16} className="mr-1" />
-                  Filters
+                  {selectedStatus !== 'all' ? selectedStatus.replace('-', ' ') : 'Filters'}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => setSelectedStatus('all')}>
-                  <div className="flex items-center justify-between w-full">
-                    All Repairs
-                    <Badge variant="secondary" className="ml-2">{repairJobs.length}</Badge>
-                  </div>
-                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleStatusFilter('all')}>All Repairs</DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setSelectedStatus('received')}>
-                  <div className="flex items-center justify-between w-full">
-                    Received
-                    <Badge variant="secondary" className="ml-2">
-                      {repairJobs.filter(job => job.status === 'received').length}
-                    </Badge>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedStatus('in-progress')}>
-                  <div className="flex items-center justify-between w-full">
-                    In Progress
-                    <Badge variant="secondary" className="ml-2">
-                      {repairJobs.filter(job => job.status === 'in-progress').length}
-                    </Badge>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedStatus('completed')}>
-                  <div className="flex items-center justify-between w-full">
-                    Completed
-                    <Badge variant="secondary" className="ml-2">
-                      {repairJobs.filter(job => job.status === 'completed').length}
-                    </Badge>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedStatus('collected')}>
-                  <div className="flex items-center justify-between w-full">
-                    Collected
-                    <Badge variant="secondary" className="ml-2">
-                      {repairJobs.filter(job => job.status === 'collected').length}
-                    </Badge>
-                  </div>
-                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleStatusFilter('received')}>Received</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleStatusFilter('in-progress')}>In Progress</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleStatusFilter('completed')}>Completed</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleStatusFilter('collected')}>Collected</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -498,10 +488,10 @@ const RepairsPage: React.FC = () => {
               </Button>
             </div>
           </div>
-        ) : filteredJobs.length > 0 ? (
+        ) : repairJobs.length > 0 ? (
           viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredJobs.map(job => (
+              {repairJobs.map(job => (
                 <RepairJobCard
                   key={job.id}
                   id={job.id}
@@ -531,7 +521,7 @@ const RepairsPage: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredJobs.map((job) => (
+                  {repairJobs.map((job) => (
                     <TableRow
                       key={job.id}
                       className="cursor-pointer hover:bg-navy/5 transition-colors"
@@ -609,6 +599,36 @@ const RepairsPage: React.FC = () => {
           </div>
         )}
 
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4 py-3 border-t border-gray-100">
+            <span className="text-sm text-gray-500">
+              Page {currentPage} of {totalPages} &mdash; {totalCount} total repairs
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage <= 1 || loading}
+                className="rounded-full"
+              >
+                <ChevronLeft size={16} />
+                Prev
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage >= totalPages || loading}
+                className="rounded-full"
+              >
+                Next
+                <ChevronRight size={16} />
+              </Button>
+            </div>
+          </div>
+        )}
+
         <RepairDetailModal
           repair={selectedJob}
           isOpen={isDetailOpen}
@@ -621,7 +641,7 @@ const RepairsPage: React.FC = () => {
                 toast.success('Repair updated successfully');
               }
               // Always refresh the repair list
-              await loadRepairs();
+              await loadRepairs(currentPage, searchTerm, selectedStatus);
 
               // Update the selected job with fresh data from database
               const refreshedRepair = await repairService.getRepairById(repairId);

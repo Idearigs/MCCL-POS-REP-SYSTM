@@ -98,8 +98,9 @@ const FloatingShiftButton: React.FC = () => {
       // User is in Quick POS, go back to admin panel
       window.dispatchEvent(new Event('quickPOSClosed'));
     } else {
-      // User is in admin panel, go to Quick POS
-      window.dispatchEvent(new Event('quickPOSOpened'));
+      // Navigate to POS page (works from any page), then signal QuickPOS to open
+      navigate('/pos');
+      setTimeout(() => window.dispatchEvent(new Event('quickPOSOpened')), 100);
     }
   };
 

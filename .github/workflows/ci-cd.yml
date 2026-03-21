@@ -1,0 +1,217 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+      - "fix/**"
+      - "hotfix/**"
+  pull_request:
+    branches:
+      - main
+
+env:
+  NODE_VERSION: "20"
+
+# =====================================================================
+# JOBS
+# =====================================================================
+jobs:
+
+  # -------------------------------------------------------------------
+  # JOB 1 — Backend lint & unit tests (no real DB required)
+  # -------------------------------------------------------------------
+  test-backend:
+    name: "Backend — Lint & Unit Tests"
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run ESLint
+        run: npm run lint
+        continue-on-error: false
+
+      - name: Run unit tests with coverage
+        run: npm run test:cov
+        env:
+          NODE_ENV: test
+          DATABASE_URL: "postgresql://test:test@localhost:5432/test"
+          JWT_SECRET: "test_jwt_secret_for_ci"
+          JWT_REFRESH_SECRET: "test_jwt_refresh_secret_for_ci"
+          REDIS_HOST: "localhost"
+          REDIS_PORT: "6379"
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: backend/coverage/lcov.info
+          flags: backend
+          token: ${{ secrets.CODECOV_TOKEN }}
+        continue-on-error: true
+
+      - name: Build TypeScript (compile check)
+        run: npm run build
+
+  # -------------------------------------------------------------------
+  # JOB 2 — Frontend lint & build validation
+  # -------------------------------------------------------------------
+  test-frontend:
+    name: "Frontend — Lint & Build"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+        continue-on-error: false
+
+      - name: Build frontend (type-check + bundle)
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: https://api.truedesk.co.uk/api/v1
+          VITE_TENANT_ID: buymejewellery
+          VITE_APP_TITLE: "MPS Jewelry System"
+          VITE_APP_VERSION: ${{ github.sha }}
+
+  # -------------------------------------------------------------------
+  # JOB 3 — Deploy backend via Coolify webhook (main only)
+  # -------------------------------------------------------------------
+  deploy-backend:
+    name: "Deploy — Backend (Coolify)"
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    environment:
+      name: production
+      url: https://api.truedesk.co.uk
+
+    steps:
+      - name: Trigger Coolify backend deployment
+        run: |
+          HTTP_STATUS=$(curl -s -o /tmp/coolify_backend_response.txt -w "%{http_code}" \
+            --max-time 30 \
+            -X GET \
+            "${{ secrets.COOLIFY_BACKEND_WEBHOOK }}&token=${{ secrets.COOLIFY_TOKEN }}")
+
+          echo "Coolify response: $(cat /tmp/coolify_backend_response.txt)"
+          echo "HTTP status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
+            echo "ERROR: Coolify backend webhook failed with status $HTTP_STATUS"
+            exit 1
+          fi
+
+          echo "Backend deployment triggered successfully"
+
+  # -------------------------------------------------------------------
+  # JOB 4 — Deploy frontend via Coolify webhook (main only)
+  # -------------------------------------------------------------------
+  deploy-frontend:
+    name: "Deploy — Frontend (Coolify)"
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    environment:
+      name: production
+      url: https://pos.truedesk.co.uk
+
+    steps:
+      - name: Trigger Coolify frontend deployment
+        run: |
+          HTTP_STATUS=$(curl -s -o /tmp/coolify_frontend_response.txt -w "%{http_code}" \
+            --max-time 30 \
+            -X GET \
+            "${{ secrets.COOLIFY_FRONTEND_WEBHOOK }}&token=${{ secrets.COOLIFY_TOKEN }}")
+
+          echo "Coolify response: $(cat /tmp/coolify_frontend_response.txt)"
+          echo "HTTP status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
+            echo "ERROR: Coolify frontend webhook failed with status $HTTP_STATUS"
+            exit 1
+          fi
+
+          echo "Frontend deployment triggered successfully"
+
+  # -------------------------------------------------------------------
+  # JOB 5 — Smoke test after both deploys complete
+  # -------------------------------------------------------------------
+  smoke-test:
+    name: "Smoke Test — Production"
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Wait for Coolify to finish building & deploying
+        run: |
+          echo "Waiting 60s for Coolify to build and deploy..."
+          sleep 60
+
+      - name: Health check — API (api.truedesk.co.uk)
+        run: |
+          echo "Checking API health..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 30 \
+            "https://api.truedesk.co.uk/health" || echo "000")
+
+          echo "API health status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "ERROR: API health check failed with status $HTTP_STATUS"
+            exit 1
+          fi
+          echo "API health check passed!"
+
+      - name: Health check — Frontend (pos.truedesk.co.uk)
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 30 \
+            "https://pos.truedesk.co.uk" || echo "000")
+
+          echo "Frontend status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "ERROR: Frontend health check failed with status $HTTP_STATUS"
+            exit 1
+          fi
+          echo "Frontend health check passed!"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Smoke test failed after deployment!"
+          echo "Check Coolify dashboard for build/deploy logs."

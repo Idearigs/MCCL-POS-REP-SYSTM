@@ -85,6 +85,7 @@ interface CartItem {
   name: string;
   price: number;
   quantity: number;
+  stock?: number; // Available stock for out-of-stock validation
   image?: string;
   sku?: string;
   isRepair?: boolean; // Flag to identify repair items
@@ -500,10 +501,16 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const fetchRepairs = async () => {
     setLoadingRepairs(true);
     try {
-      const response = await repairService.getRepairs(1, 100);
-
-      // Show all repairs (not filtered by status)
-      setRepairs(response.data);
+      // Fetch first page to get total, then fetch remaining pages in parallel
+      const firstResponse = await repairService.getRepairs(1, 100);
+      const totalPages = firstResponse.meta?.totalPages || 1;
+      let allRepairData = [...firstResponse.data];
+      if (totalPages > 1) {
+        const remaining = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+        const results = await Promise.all(remaining.map(p => repairService.getRepairs(p, 100)));
+        for (const r of results) allRepairData.push(...r.data);
+      }
+      setRepairs(allRepairData);
     } catch (error) {
       console.error('Failed to fetch repairs:', error);
       toast({
@@ -531,8 +538,16 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
   // Add to cart
   const addToCart = (product: InventoryItem) => {
+    if (product.stock !== undefined && product.stock <= 0) {
+      toast({ title: 'Out of stock', description: `"${product.name}" has no stock available`, variant: 'destructive', duration: 2000 });
+      return;
+    }
     const existing = cart.find(item => item.id === product.id);
     if (existing) {
+      if (product.stock !== undefined && existing.quantity >= product.stock) {
+        toast({ title: 'Out of stock', description: `Only ${product.stock} unit(s) of "${product.name}" available`, variant: 'destructive', duration: 2000 });
+        return;
+      }
       setCart(cart.map(item =>
         item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
       ));
@@ -542,6 +557,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         name: product.name,
         price: product.price,
         quantity: 1,
+        stock: product.stock,
         image: product.imageUrl,
         sku: product.sku,
       }]);
@@ -1170,6 +1186,18 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         toast({
           title: 'Cart is empty',
           description: 'Please add items to cart',
+          variant: 'destructive'
+        });
+        setProcessingPayment(false);
+        return;
+      }
+
+      // Check stock availability before hitting the API
+      const outOfStockItems = productItems.filter(item => item.stock !== undefined && item.stock < item.quantity);
+      if (outOfStockItems.length > 0) {
+        toast({
+          title: 'Insufficient Stock',
+          description: outOfStockItems.map(i => `"${i.name}" has only ${i.stock ?? 0} in stock`).join(', '),
           variant: 'destructive'
         });
         setProcessingPayment(false);
