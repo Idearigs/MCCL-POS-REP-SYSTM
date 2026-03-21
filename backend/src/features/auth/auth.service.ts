@@ -105,7 +105,7 @@ export class AuthService {
         expiresIn: this.getExpirationTime(),
       };
     } catch (error) {
-      this.logger.error(`Login failed for ${email}:`, error.message);
+      this.logger.error(`Login failed for ${email}:`, (error as Error).message);
       throw error;
     }
   }

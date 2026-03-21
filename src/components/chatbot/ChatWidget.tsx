@@ -180,12 +180,13 @@ export const ChatWidget: React.FC = () => {
         if (data.message) return data.message;
         return `**Shift Summary**\n\n• Shift: **${data.shiftNumber || 'N/A'}**\n• Cashier: **${data.cashier || 'N/A'}**\n• Opening Float: **£${data.openingFloat || 0}**\n• Total Sales: **£${data.totalSales?.toLocaleString() || 0}**\n• Transactions: **${data.transactionCount || 0}**\n• Status: **${data.status || 'N/A'}**`;
 
-      case QuickActionType.LOW_STOCK:
+      case QuickActionType.LOW_STOCK: {
         if (data.count === 0) return 'Great news! No low stock items at the moment.';
-        const items = data.products?.slice(0, 5).map((p: any) =>
+        const items = (data.products as Array<{ name: string; sku: string; stockQuantity: number }>)?.slice(0, 5).map((p) =>
           `• ${p.name} (SKU: ${p.sku}) - **${p.stockQuantity} left**`
         ).join('\n') || '';
         return `**Low Stock Alert**\n\n${data.count} items need attention:\n\n${items}${data.count > 5 ? `\n\n...and ${data.count - 5} more items` : ''}`;
+      }
 
       default:
         return JSON.stringify(data, null, 2);

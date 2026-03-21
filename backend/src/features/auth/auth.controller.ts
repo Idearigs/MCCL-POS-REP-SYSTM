@@ -153,7 +153,7 @@ export class AuthController {
     status: 401,
     description: 'Unauthorized',
   })
-  async getMe(@CurrentUser() user: { id: string; email: string; firstName: string; lastName: string; role: string; tenantId: string; tenants: unknown }) {
+  getMe(@CurrentUser() user: { id: string; email: string; firstName: string; lastName: string; role: string; tenantId: string; tenants: unknown; lastLogin?: Date }) {
     return {
       id: user.id,
       email: user.email,
@@ -287,7 +287,7 @@ export class AuthController {
     status: 200,
     description: 'Auth service is healthy',
   })
-  async health() {
+  health() {
     return {
       status: 'ok',
       service: 'auth',
