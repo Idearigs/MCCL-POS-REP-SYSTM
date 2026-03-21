@@ -481,9 +481,10 @@ export class FinancialIntelligenceService {
         return `${format(startOfWeek(date), 'yyyy-MM-dd')} to ${format(endOfWeek(date), 'yyyy-MM-dd')}`;
       case FinancialAnalysisType.MONTHLY:
         return format(date, 'yyyy-MM');
-      case FinancialAnalysisType.QUARTERLY:
+      case FinancialAnalysisType.QUARTERLY: {
         const quarter = Math.floor(date.getMonth() / 3) + 1;
         return `${date.getFullYear()}-Q${quarter}`;
+      }
       case FinancialAnalysisType.YEARLY:
         return date.getFullYear().toString();
       default:
