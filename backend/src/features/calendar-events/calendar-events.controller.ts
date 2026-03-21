@@ -12,6 +12,11 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import type { Request } from 'express';
+
+interface TenantRequest extends Request {
+  tenant: { id: string; tenantId?: string };
+}
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
@@ -36,7 +41,7 @@ export class CalendarEventsController {
   @ApiResponse({ status: 201, description: 'Event created successfully', type: EventResponseDto })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async createEvent(
-    @Req() req: any,
+    @Req() req: TenantRequest,
     @CurrentUser('id') userId: string,
     @Body() createEventDto: CreateEventDto,
   ): Promise<EventResponseDto> {
@@ -53,7 +58,7 @@ export class CalendarEventsController {
   @ApiQuery({ name: 'eventType', required: false, type: String, description: 'Filter by event type' })
   @ApiResponse({ status: 200, description: 'List of events retrieved', type: EventListResponseDto })
   async getEvents(
-    @Req() req: any,
+    @Req() req: TenantRequest,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('startDate') startDate?: string,
@@ -75,7 +80,7 @@ export class CalendarEventsController {
   @ApiOperation({ summary: 'Get events for a specific month' })
   @ApiResponse({ status: 200, description: 'Events for the month retrieved', type: [EventResponseDto] })
   async getEventsByMonth(
-    @Req() req: any,
+    @Req() req: TenantRequest,
     @Param('year') year: number,
     @Param('month') month: number,
   ): Promise<EventResponseDto[]> {
@@ -87,7 +92,7 @@ export class CalendarEventsController {
   @ApiOperation({ summary: 'Get a calendar event by ID' })
   @ApiResponse({ status: 200, description: 'Event retrieved successfully', type: EventResponseDto })
   @ApiResponse({ status: 404, description: 'Event not found' })
-  async getEventById(@Req() req: any, @Param('id') id: string): Promise<EventResponseDto> {
+  async getEventById(@Req() req: TenantRequest, @Param('id') id: string): Promise<EventResponseDto> {
     const tenantId = req.tenant?.id || req.tenant?.tenantId;
     return this.calendarEventsService.getEventById(tenantId, id);
   }
@@ -97,7 +102,7 @@ export class CalendarEventsController {
   @ApiResponse({ status: 200, description: 'Event updated successfully', type: EventResponseDto })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async updateEvent(
-    @Req() req: any,
+    @Req() req: TenantRequest,
     @Param('id') id: string,
     @Body() updateEventDto: UpdateEventDto,
   ): Promise<EventResponseDto> {
@@ -110,7 +115,7 @@ export class CalendarEventsController {
   @ApiOperation({ summary: 'Delete a calendar event' })
   @ApiResponse({ status: 200, description: 'Event deleted successfully' })
   @ApiResponse({ status: 404, description: 'Event not found' })
-  async deleteEvent(@Req() req: any, @Param('id') id: string): Promise<{ message: string }> {
+  async deleteEvent(@Req() req: TenantRequest, @Param('id') id: string): Promise<{ message: string }> {
     const tenantId = req.tenant?.id || req.tenant?.tenantId;
     return this.calendarEventsService.deleteEvent(tenantId, id);
   }

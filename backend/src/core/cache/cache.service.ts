@@ -56,8 +56,9 @@ export class CacheService {
   async reset(): Promise<void> {
     try {
       // Note: reset() method may not be available in all cache implementations
-      if (typeof (this.cacheManager as any).reset === 'function') {
-        await (this.cacheManager as any).reset();
+      const manager = this.cacheManager as Cache & { reset?: () => Promise<void> };
+      if (typeof manager.reset === 'function') {
+        await manager.reset();
       } else {
         this.logger.warn('Cache reset method not available, skipping reset');
       }
@@ -178,14 +179,11 @@ export class CacheService {
     const data = await this.getOrSet(key, factory, ttl);
     
     // Asynchronously refresh cache when approaching expiry
-    setTimeout(async () => {
-      try {
-        const refreshedData = await factory();
-        await this.set(key, refreshedData, ttl);
-        this.logger.debug(`Cache REFRESH for key: ${key}`);
-      } catch (error) {
-        this.logger.error(`Cache REFRESH error for key ${key}:`, error);
-      }
+    setTimeout(() => {
+      void factory()
+        .then((refreshedData) => this.set(key, refreshedData, ttl))
+        .then(() => this.logger.debug(`Cache REFRESH for key: ${key}`))
+        .catch((error: unknown) => this.logger.error(`Cache REFRESH error for key ${key}:`, error));
     }, ttl * refreshThreshold * 1000);
     
     return data;

@@ -1,7 +1,8 @@
 import { Module, Global } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import * as redisStore from 'cache-manager-redis-store';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const redisStore = require('cache-manager-redis-store') as object;
 import { CacheService } from './cache.service';
 
 @Global()
@@ -9,7 +10,7 @@ import { CacheService } from './cache.service';
   imports: [
     CacheModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => {
+      useFactory: (configService: ConfigService) => {
         const isRedisEnabled = 
           configService.get('REDIS_HOST') && 
           configService.get('REDIS_PORT');

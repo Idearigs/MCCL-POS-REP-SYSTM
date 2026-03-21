@@ -72,7 +72,7 @@ import { OpenAIModule } from './integrations/openai/openai.module';
             ttl: 300000, // 5 minutes in milliseconds
           };
         } catch (error) {
-          console.warn('⚠️  Redis connection failed, using in-memory cache:', error.message);
+          console.warn('⚠️  Redis connection failed, using in-memory cache:', (error as Error).message);
           // Fallback to in-memory cache
           return {
             store: 'memory',

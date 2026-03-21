@@ -153,7 +153,7 @@ export class AuthController {
     status: 401,
     description: 'Unauthorized',
   })
-  async getMe(@CurrentUser() user: any) {
+  async getMe(@CurrentUser() user: { id: string; email: string; firstName: string; lastName: string; role: string; tenantId: string; tenants: unknown }) {
     return {
       id: user.id,
       email: user.email,
@@ -253,7 +253,7 @@ export class AuthController {
   async updateUser(
     @CurrentTenant() tenant: TenantInfo,
     @Param('id') id: string,
-    @Body() updateData: any,
+    @Body() updateData: Record<string, unknown>,
   ) {
     return this.authService.updateUser(tenant.id, id, updateData);
   }

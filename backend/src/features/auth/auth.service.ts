@@ -496,7 +496,7 @@ export class AuthService {
   async resetUserPassword(tenantId: string, userId: string, newPassword: string): Promise<void> {
     try {
       // Hash new password
-      const saltRounds = parseInt(this.configService.get('HASH_SALT_ROUNDS', '12'), 10);
+      const saltRounds = parseInt(this.configService.get<string>('HASH_SALT_ROUNDS', '12'), 10);
       const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
       // Update password

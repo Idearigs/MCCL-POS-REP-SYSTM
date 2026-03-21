@@ -9,7 +9,11 @@ import {
   Res,
   Header,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+
+interface AuthenticatedRequest extends Request {
+  user: { id: string; tenantId: string };
+}
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
 import { ChatbotService } from './chatbot.service';
@@ -25,7 +29,7 @@ export class ChatbotController {
    */
   @Post('message')
   @HttpCode(HttpStatus.OK)
-  async sendMessage(@Req() req, @Body() body: SendMessageDto) {
+  async sendMessage(@Req() req: AuthenticatedRequest, @Body() body: SendMessageDto) {
     return this.chatbotService.sendMessage(
       req.user.id,
       req.user.tenantId,
@@ -39,7 +43,7 @@ export class ChatbotController {
    */
   @Post('quick-action')
   @HttpCode(HttpStatus.OK)
-  async quickAction(@Req() req, @Body() body: QuickActionDto) {
+  async quickAction(@Req() req: AuthenticatedRequest, @Body() body: QuickActionDto) {
     return this.chatbotService.handleQuickAction(
       req.user.tenantId,
       body.action,
@@ -52,7 +56,7 @@ export class ChatbotController {
    */
   @Post('export/pdf')
   @Header('Content-Type', 'application/pdf')
-  async exportPDF(@Req() req, @Body() body: ExportReportDto, @Res() res: Response) {
+  async exportPDF(@Req() req: AuthenticatedRequest, @Body() body: ExportReportDto, @Res() res: Response) {
     const pdfBuffer = await this.chatbotService.generatePDFReport(
       req.user.tenantId,
       body.reportData,
@@ -74,7 +78,7 @@ export class ChatbotController {
    */
   @Post('export/csv')
   @Header('Content-Type', 'text/csv')
-  async exportCSV(@Req() req, @Body() body: ExportReportDto, @Res() res: Response) {
+  async exportCSV(@Req() req: AuthenticatedRequest, @Body() body: ExportReportDto, @Res() res: Response) {
     const csvData = await this.chatbotService.generateCSVReport(
       req.user.tenantId,
       body.reportData,

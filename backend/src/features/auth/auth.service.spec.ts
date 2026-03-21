@@ -6,6 +6,7 @@ import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CacheService } from '../../core/cache/cache.service';
+import type { RegisterDto } from './dto/auth.dto';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Mock bcrypt
@@ -49,8 +50,8 @@ const mockJwtService = {
 };
 
 const mockConfigService = {
-  get: jest.fn((key: string, fallback?: any) => {
-    const config: Record<string, any> = {
+  get: jest.fn((key: string, fallback?: string) => {
+    const config: Record<string, string> = {
       JWT_SECRET: 'test_secret',
       JWT_REFRESH_SECRET: 'test_refresh_secret',
       JWT_EXPIRATION: '15m',
@@ -184,7 +185,7 @@ describe('AuthService', () => {
       });
       mockCacheService.set.mockResolvedValue(undefined);
 
-      const result = await service.register(registerDto as any, 'tenant-001');
+      const result = await service.register(registerDto as RegisterDto, 'tenant-001');
 
       expect(result).toHaveProperty('accessToken');
       expect(result.user.email).toBe('newuser@test.com');
@@ -194,7 +195,7 @@ describe('AuthService', () => {
       mockPrismaService.users.findFirst.mockResolvedValue(mockUser);
 
       await expect(
-        service.register(registerDto as any, 'tenant-001'),
+        service.register(registerDto as RegisterDto, 'tenant-001'),
       ).rejects.toThrow(ConflictException);
     });
   });
