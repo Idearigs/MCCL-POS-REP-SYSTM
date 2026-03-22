@@ -23,16 +23,20 @@ export class FeaturesService {
   }
 
   /** Called by the POS frontend on login to know which features are enabled for this tenant. */
-  async getTenantFeatures(subdomain: string): Promise<{ features: string[] }> {
+  async getTenantFeatures(subdomain: string): Promise<{ features: string[]; _source?: string }> {
+    const url = `${this.mainframeUrl}/mainframe/tenant-features/${subdomain}`;
     try {
       const { data } = await axios.get<{ features: string[] }>(
-        `${this.mainframeUrl}/mainframe/tenant-features/${subdomain}`,
+        url,
         { headers: { 'x-internal-key': this.internalKey }, timeout: 5000 },
       );
-      return data;
-    } catch {
-      // Fail open — return all features if mainframe is unreachable
-      return { features: [] };
+      return { ...data, _source: 'mainframe' };
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message || err?.message || 'unknown';
+      console.error(`[FeaturesService] getTenantFeatures FAILED for "${subdomain}" → ${url} → ${status ?? 'no-response'}: ${message}`);
+      // Fail open — frontend will show all features when mainframe is unreachable
+      return { features: [], _source: 'error' };
     }
   }
 

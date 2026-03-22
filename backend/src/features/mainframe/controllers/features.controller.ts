@@ -40,7 +40,7 @@ export class FeaturesController {
   @Get('tenant-features')
   async getTenantFeatures(@Req() req: Request) {
     const subdomain = (req.headers['x-tenant-id'] as string) || '';
-    if (!subdomain) return { features: [] };
+    if (!subdomain) return { features: [], _source: 'no-tenant-id' };
     return this.featuresService.getTenantFeatures(subdomain);
   }
 
