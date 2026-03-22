@@ -8,10 +8,10 @@ WORKDIR /app
 # Install system dependencies for native addons
 RUN apk add --no-cache python3 make g++
 
-# Copy package files and install all dependencies
+# Copy package files and install all dependencies (including devDeps needed to build)
 COPY package*.json ./
 COPY prisma ./prisma/
-RUN npm ci
+RUN npm ci --include=dev
 
 # Generate Prisma client
 RUN npx prisma generate
