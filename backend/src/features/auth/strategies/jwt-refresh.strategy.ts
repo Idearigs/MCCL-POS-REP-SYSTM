@@ -6,7 +6,10 @@ import { PrismaService } from '../../../core/prisma/prisma.service';
 import { Request } from 'express';
 
 @Injectable()
-export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
+export class JwtRefreshStrategy extends PassportStrategy(
+  Strategy,
+  'jwt-refresh',
+) {
   constructor(
     private configService: ConfigService,
     private prismaService: PrismaService,
@@ -14,7 +17,9 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     super({
       jwtFromRequest: ExtractJwt.fromBodyField('refreshToken'),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_REFRESH_SECRET') || 'default-refresh-secret',
+      secretOrKey:
+        configService.get<string>('JWT_REFRESH_SECRET') ||
+        'default-refresh-secret',
       passReqToCallback: true,
     });
   }
@@ -22,7 +27,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
   async validate(req: Request, payload: any) {
     try {
       const refreshToken = req.body.refreshToken;
-      
+
       // Find user with matching refresh token
       const user = await this.prismaService.users.findFirst({
         where: {

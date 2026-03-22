@@ -1,7 +1,15 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 import { CredentialsExportService } from './credentials-export.service';
-import { CreateCustomerUserDto, UpdateCustomerUserDto } from '../dto/customer-profile.dto';
+import {
+  CreateCustomerUserDto,
+  UpdateCustomerUserDto,
+} from '../dto/customer-profile.dto';
 
 @Injectable()
 export class CustomerUsersService {
@@ -27,7 +35,9 @@ export class CustomerUsersService {
     // Check user limit
     if (profile.subscription?.maxUsers) {
       if (profile._count.customerUsers >= profile.subscription.maxUsers) {
-        throw new BadRequestException(`User limit reached (${profile.subscription.maxUsers} users)`);
+        throw new BadRequestException(
+          `User limit reached (${profile.subscription.maxUsers} users)`,
+        );
       }
     }
 
@@ -44,13 +54,14 @@ export class CustomerUsersService {
     }
 
     // Create user with generated credentials
-    const { user, tempPassword } = await this.credentialsExportService.createUserWithCredentials(
-      dto.customerProfileId,
-      dto.email,
-      dto.firstName,
-      dto.lastName,
-      dto.role || 'STAFF',
-    );
+    const { user, tempPassword } =
+      await this.credentialsExportService.createUserWithCredentials(
+        dto.customerProfileId,
+        dto.email,
+        dto.firstName,
+        dto.lastName,
+        dto.role || 'STAFF',
+      );
 
     // Update subscription user count
     if (profile.subscription) {

@@ -6,25 +6,28 @@ export class BugReportsController {
   constructor(private readonly bugReportsService: BugReportsService) {}
 
   @Post()
-  async create(@Body() data: {
-    customerProfileId?: string;
-    title: string;
-    description: string;
-    priority?: string;
-    featureKey?: string;
-    affectedVersion?: string;
-    browser?: string;
-    os?: string;
-    deviceType?: string;
-    stepsToReproduce?: string;
-    expectedBehavior?: string;
-    actualBehavior?: string;
-    screenshots?: string[];
-    errorLogs?: string;
-    errorStackTrace?: string;
-    userAgent?: string;
-    pageUrl?: string;
-  }) {
+  async create(
+    @Body()
+    data: {
+      customerProfileId?: string;
+      title: string;
+      description: string;
+      priority?: string;
+      featureKey?: string;
+      affectedVersion?: string;
+      browser?: string;
+      os?: string;
+      deviceType?: string;
+      stepsToReproduce?: string;
+      expectedBehavior?: string;
+      actualBehavior?: string;
+      screenshots?: string[];
+      errorLogs?: string;
+      errorStackTrace?: string;
+      userAgent?: string;
+      pageUrl?: string;
+    },
+  ) {
     return this.bugReportsService.create(data);
   }
 
@@ -58,13 +61,17 @@ export class BugReportsController {
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() data: {
-    status?: string;
-    priority?: string;
-    assignedTo?: string;
-    resolution?: string;
-    fixedInVersion?: string;
-  }) {
+  async update(
+    @Param('id') id: string,
+    @Body()
+    data: {
+      status?: string;
+      priority?: string;
+      assignedTo?: string;
+      resolution?: string;
+      fixedInVersion?: string;
+    },
+  ) {
     return this.bugReportsService.update(id, data);
   }
 }

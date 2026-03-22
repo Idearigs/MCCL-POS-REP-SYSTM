@@ -36,7 +36,10 @@ export class CreateEventDto {
   @IsEnum(EventType)
   eventType: EventType;
 
-  @ApiPropertyOptional({ description: 'Is this an all-day event', default: false })
+  @ApiPropertyOptional({
+    description: 'Is this an all-day event',
+    default: false,
+  })
   @IsOptional()
   @IsBoolean()
   isAllDay?: boolean;

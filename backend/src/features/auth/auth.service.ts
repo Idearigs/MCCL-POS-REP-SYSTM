@@ -113,8 +113,17 @@ export class AuthService {
   /**
    * User registration
    */
-  async register(registerDto: RegisterDto, tenantId: string): Promise<AuthResponseDto> {
-    const { email, password, firstName, lastName, role = 'STAFF' } = registerDto;
+  async register(
+    registerDto: RegisterDto,
+    tenantId: string,
+  ): Promise<AuthResponseDto> {
+    const {
+      email,
+      password,
+      firstName,
+      lastName,
+      role = 'STAFF',
+    } = registerDto;
 
     try {
       // Check if user already exists
@@ -139,7 +148,10 @@ export class AuthService {
       }
 
       // Hash password
-      const saltRounds = parseInt(this.configService.get('HASH_SALT_ROUNDS', '12'), 10);
+      const saltRounds = parseInt(
+        this.configService.get('HASH_SALT_ROUNDS', '12'),
+        10,
+      );
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
       // Create user
@@ -195,7 +207,9 @@ export class AuthService {
   /**
    * Refresh access token
    */
-  async refreshToken(refreshTokenDto: RefreshTokenDto): Promise<AuthResponseDto> {
+  async refreshToken(
+    refreshTokenDto: RefreshTokenDto,
+  ): Promise<AuthResponseDto> {
     const { refreshToken } = refreshTokenDto;
 
     try {
@@ -302,7 +316,10 @@ export class AuthService {
       }
 
       // Hash new password
-      const saltRounds = parseInt(this.configService.get('HASH_SALT_ROUNDS', '12'), 10);
+      const saltRounds = parseInt(
+        this.configService.get('HASH_SALT_ROUNDS', '12'),
+        10,
+      );
       const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
 
       // Update password
@@ -313,7 +330,10 @@ export class AuthService {
 
       this.logger.log(`Password changed for user: ${userId}`);
     } catch (error) {
-      this.logger.error(`Password change failed for user ${userId}:`, error.message);
+      this.logger.error(
+        `Password change failed for user ${userId}:`,
+        error.message,
+      );
       throw error;
     }
   }
@@ -336,7 +356,10 @@ export class AuthService {
       }),
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRATION', '7d'),
+        expiresIn: this.configService.get<string>(
+          'JWT_REFRESH_EXPIRATION',
+          '7d',
+        ),
       }),
     ]);
 
@@ -375,7 +398,7 @@ export class AuthService {
     role?: string,
     isActive?: boolean,
     page: number = 1,
-    limit: number = 100
+    limit: number = 100,
   ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
     try {
       const where: any = { tenantId };
@@ -455,15 +478,25 @@ export class AuthService {
   /**
    * Update user
    */
-  async updateUser(tenantId: string, userId: string, updateData: any): Promise<any> {
+  async updateUser(
+    tenantId: string,
+    userId: string,
+    updateData: any,
+  ): Promise<any> {
     try {
       // Don't allow email updates for now
       const { email, ...allowedUpdates } = updateData;
 
       // Hash password if provided
       if (allowedUpdates.password) {
-        const saltRounds = parseInt(this.configService.get('HASH_SALT_ROUNDS', '12'), 10);
-        allowedUpdates.password = await bcrypt.hash(allowedUpdates.password, saltRounds);
+        const saltRounds = parseInt(
+          this.configService.get('HASH_SALT_ROUNDS', '12'),
+          10,
+        );
+        allowedUpdates.password = await bcrypt.hash(
+          allowedUpdates.password,
+          saltRounds,
+        );
       }
 
       const updatedUser = await this.prismaService.users.update({
@@ -493,10 +526,17 @@ export class AuthService {
   /**
    * Reset user password (admin only)
    */
-  async resetUserPassword(tenantId: string, userId: string, newPassword: string): Promise<void> {
+  async resetUserPassword(
+    tenantId: string,
+    userId: string,
+    newPassword: string,
+  ): Promise<void> {
     try {
       // Hash new password
-      const saltRounds = parseInt(this.configService.get<string>('HASH_SALT_ROUNDS', '12'), 10);
+      const saltRounds = parseInt(
+        this.configService.get<string>('HASH_SALT_ROUNDS', '12'),
+        10,
+      );
       const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
       // Update password
@@ -507,7 +547,10 @@ export class AuthService {
 
       this.logger.log(`Password reset for user: ${userId}`);
     } catch (error) {
-      this.logger.error(`Failed to reset password for user ${userId}:`, error.message);
+      this.logger.error(
+        `Failed to reset password for user ${userId}:`,
+        error.message,
+      );
       throw error;
     }
   }

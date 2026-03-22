@@ -3,10 +3,21 @@ import { MainframeAdminsService } from '../services/mainframe-admins.service';
 
 @Controller('mainframe/admins')
 export class MainframeAdminsController {
-  constructor(private readonly mainframeAdminsService: MainframeAdminsService) {}
+  constructor(
+    private readonly mainframeAdminsService: MainframeAdminsService,
+  ) {}
 
   @Post()
-  async create(@Body() data: { firstName: string; lastName: string; email: string; password: string; role?: string }) {
+  async create(
+    @Body()
+    data: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      password: string;
+      role?: string;
+    },
+  ) {
     return this.mainframeAdminsService.create(data);
   }
 
@@ -26,12 +37,24 @@ export class MainframeAdminsController {
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() data: { firstName?: string; lastName?: string; role?: string; isActive?: boolean }) {
+  async update(
+    @Param('id') id: string,
+    @Body()
+    data: {
+      firstName?: string;
+      lastName?: string;
+      role?: string;
+      isActive?: boolean;
+    },
+  ) {
     return this.mainframeAdminsService.update(id, data);
   }
 
   @Post(':id/change-password')
-  async changePassword(@Param('id') id: string, @Body('password') password: string) {
+  async changePassword(
+    @Param('id') id: string,
+    @Body('password') password: string,
+  ) {
     return this.mainframeAdminsService.changePassword(id, password);
   }
 }

@@ -44,7 +44,7 @@ export class PrismaService
     try {
       await this.$connect();
       this.logger.log('✅ Successfully connected to PostgreSQL database');
-      
+
       // Test database connection
       await this.$queryRaw`SELECT 1 as test`;
       this.logger.log('✅ Database health check passed');

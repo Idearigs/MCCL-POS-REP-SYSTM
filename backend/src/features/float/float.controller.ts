@@ -89,7 +89,9 @@ export class FloatController {
   }
 
   @Get('current')
-  @ApiOperation({ summary: 'Get current open float session for logged-in user' })
+  @ApiOperation({
+    summary: 'Get current open float session for logged-in user',
+  })
   @ApiResponse({
     status: 200,
     description: 'Current float session retrieved',

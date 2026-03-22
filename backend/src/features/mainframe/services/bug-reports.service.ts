@@ -69,7 +69,8 @@ export class BugReportsService {
     if (options?.status) where.status = options.status;
     if (options?.priority) where.priority = options.priority;
     if (options?.featureKey) where.featureKey = options.featureKey;
-    if (options?.customerProfileId) where.customerProfileId = options.customerProfileId;
+    if (options?.customerProfileId)
+      where.customerProfileId = options.customerProfileId;
 
     const [bugs, total] = await Promise.all([
       this.prisma.mf_bug_reports.findMany({
@@ -109,13 +110,16 @@ export class BugReportsService {
     return bug;
   }
 
-  async update(id: string, data: {
-    status?: string;
-    priority?: string;
-    assignedTo?: string;
-    resolution?: string;
-    fixedInVersion?: string;
-  }) {
+  async update(
+    id: string,
+    data: {
+      status?: string;
+      priority?: string;
+      assignedTo?: string;
+      resolution?: string;
+      fixedInVersion?: string;
+    },
+  ) {
     const existing = await this.prisma.mf_bug_reports.findUnique({
       where: { id },
     });
@@ -132,20 +136,26 @@ export class BugReportsService {
         assignedTo: data.assignedTo,
         resolution: data.resolution,
         fixedInVersion: data.fixedInVersion,
-        resolvedAt: data.status === 'RESOLVED' || data.status === 'CLOSED' ? new Date() : undefined,
+        resolvedAt:
+          data.status === 'RESOLVED' || data.status === 'CLOSED'
+            ? new Date()
+            : undefined,
       },
     });
   }
 
   async getStats() {
-    const [total, open, inProgress, resolved, critical, high] = await Promise.all([
-      this.prisma.mf_bug_reports.count(),
-      this.prisma.mf_bug_reports.count({ where: { status: 'OPEN' } }),
-      this.prisma.mf_bug_reports.count({ where: { status: 'IN_PROGRESS' } }),
-      this.prisma.mf_bug_reports.count({ where: { status: { in: ['RESOLVED', 'CLOSED'] } } }),
-      this.prisma.mf_bug_reports.count({ where: { priority: 'CRITICAL' } }),
-      this.prisma.mf_bug_reports.count({ where: { priority: 'HIGH' } }),
-    ]);
+    const [total, open, inProgress, resolved, critical, high] =
+      await Promise.all([
+        this.prisma.mf_bug_reports.count(),
+        this.prisma.mf_bug_reports.count({ where: { status: 'OPEN' } }),
+        this.prisma.mf_bug_reports.count({ where: { status: 'IN_PROGRESS' } }),
+        this.prisma.mf_bug_reports.count({
+          where: { status: { in: ['RESOLVED', 'CLOSED'] } },
+        }),
+        this.prisma.mf_bug_reports.count({ where: { priority: 'CRITICAL' } }),
+        this.prisma.mf_bug_reports.count({ where: { priority: 'HIGH' } }),
+      ]);
 
     const byFeature = await this.prisma.mf_bug_reports.groupBy({
       by: ['featureKey'],

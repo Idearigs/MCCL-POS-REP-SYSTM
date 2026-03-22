@@ -131,7 +131,8 @@ export class FloatService {
     }
 
     // Calculate expected closing
-    const expectedClosing = Number(session.openingBalance) +
+    const expectedClosing =
+      Number(session.openingBalance) +
       Number(session.totalSales) +
       Number(session.totalCashIn) -
       Number(session.totalCashOut) -
@@ -494,5 +495,4 @@ export class FloatService {
       user: transaction.users,
     };
   }
-
 }

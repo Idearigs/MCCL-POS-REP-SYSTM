@@ -81,11 +81,26 @@ export class CustomersController {
   })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
-  @ApiQuery({ name: 'search', required: false, type: String, example: 'Sarah Johnson' })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    example: 'Sarah Johnson',
+  })
   @ApiQuery({ name: 'isActive', required: false, type: Boolean, example: true })
   @ApiQuery({ name: 'redFlag', required: false, type: Boolean, example: false })
-  @ApiQuery({ name: 'sortBy', required: false, type: String, example: 'createdAt' })
-  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'], example: 'desc' })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    type: String,
+    example: 'createdAt',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['asc', 'desc'],
+    example: 'desc',
+  })
   async findAll(
     @Query() query: CustomerQueryDto,
     @TenantId() tenantId: string,
@@ -209,8 +224,10 @@ export class CustomersController {
     @CurrentUser('id') userId: string,
   ) {
     // Log GDPR export request for audit
-    console.log(`GDPR Export requested by user ${userId} for customer ${gdprExportDto.customerId} in tenant ${tenantId}`);
-    
+    console.log(
+      `GDPR Export requested by user ${userId} for customer ${gdprExportDto.customerId} in tenant ${tenantId}`,
+    );
+
     return this.customersService.exportCustomerData(
       gdprExportDto.customerId,
       tenantId,
@@ -221,7 +238,8 @@ export class CustomersController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'GDPR: Permanently delete customer data',
-    description: 'Permanently delete all customer data (DANGEROUS - use with extreme caution)',
+    description:
+      'Permanently delete all customer data (DANGEROUS - use with extreme caution)',
   })
   @ApiResponse({
     status: 204,
@@ -245,8 +263,10 @@ export class CustomersController {
     }
 
     // Log GDPR deletion request for audit
-    console.warn(`GDPR PERMANENT DELETION requested by user ${userId} for customer ${gdprDeleteDto.customerId} in tenant ${tenantId}`);
-    
+    console.warn(
+      `GDPR PERMANENT DELETION requested by user ${userId} for customer ${gdprDeleteDto.customerId} in tenant ${tenantId}`,
+    );
+
     return this.customersService.deleteCustomerDataPermanently(
       gdprDeleteDto.customerId,
       tenantId,

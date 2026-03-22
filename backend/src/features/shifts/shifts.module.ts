@@ -7,6 +7,6 @@ import { PrismaModule } from '../../core/prisma/prisma.module';
   imports: [PrismaModule],
   controllers: [ShiftsController],
   providers: [ShiftsService],
-  exports: [ShiftsService]
+  exports: [ShiftsService],
 })
 export class ShiftsModule {}

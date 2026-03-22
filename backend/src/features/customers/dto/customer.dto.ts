@@ -14,7 +14,11 @@ import {
   Min,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { PaginationDto, SearchDto, SortDto } from '../../../shared/dto/pagination.dto';
+import {
+  PaginationDto,
+  SearchDto,
+  SortDto,
+} from '../../../shared/dto/pagination.dto';
 
 export enum ContactType {
   EMAIL = 'EMAIL',
@@ -248,7 +252,7 @@ export class CustomerQueryDto extends PaginationDto {
     example: 'createdAt',
     enum: [
       'firstName',
-      'lastName', 
+      'lastName',
       'email',
       'totalSpent',
       'visitCount',
@@ -307,7 +311,7 @@ export class CustomerResponseDto {
   @ApiPropertyOptional({ example: 'Preferred customer, likes gold jewelry' })
   notes?: string;
 
-  @ApiProperty({ example: 2850.00 })
+  @ApiProperty({ example: 2850.0 })
   totalSpent: number;
 
   @ApiProperty({ example: 12 })
@@ -366,7 +370,7 @@ export class CustomerStatsDto {
   @ApiProperty({ example: 45 })
   newCustomersThisMonth: number;
 
-  @ApiProperty({ example: 234500.50 })
+  @ApiProperty({ example: 234500.5 })
   totalSpentAllTime: number;
 
   @ApiProperty({ example: 182.45 })

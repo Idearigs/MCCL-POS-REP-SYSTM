@@ -144,7 +144,9 @@ export class PettyCashController {
 
   @Post('transactions')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new petty cash transaction (expense request)' })
+  @ApiOperation({
+    summary: 'Create a new petty cash transaction (expense request)',
+  })
   @ApiResponse({
     status: 201,
     description: 'Transaction created successfully',

@@ -11,7 +11,10 @@ export class SubdomainService {
    * Provision a new subdomain for a customer
    * This creates the necessary database and configuration
    */
-  async provisionSubdomain(profileId: string, subdomain: string): Promise<void> {
+  async provisionSubdomain(
+    profileId: string,
+    subdomain: string,
+  ): Promise<void> {
     this.logger.log(`Provisioning subdomain: ${subdomain}.truedesk.co.uk`);
 
     try {
@@ -63,7 +66,10 @@ export class SubdomainService {
    * Create a new database for the customer
    * In production, this would use database-specific commands
    */
-  private async createCustomerDatabase(profileId: string, subdomain: string): Promise<void> {
+  private async createCustomerDatabase(
+    profileId: string,
+    subdomain: string,
+  ): Promise<void> {
     const databaseName = `truedesk_${subdomain.replace(/-/g, '_')}`;
 
     this.logger.log(`Creating database: ${databaseName}`);
@@ -103,7 +109,10 @@ export class SubdomainService {
   /**
    * Seed initial data for the customer
    */
-  private async seedInitialData(profileId: string, subdomain: string): Promise<void> {
+  private async seedInitialData(
+    profileId: string,
+    subdomain: string,
+  ): Promise<void> {
     this.logger.log(`Seeding initial data for ${subdomain}`);
 
     // In production, you would:
@@ -134,10 +143,28 @@ export class SubdomainService {
 
     // Check reserved subdomains
     const reserved = [
-      'www', 'api', 'admin', 'app', 'mail', 'smtp', 'ftp',
-      'dashboard', 'portal', 'help', 'support', 'docs',
-      'billing', 'payment', 'cdn', 'assets', 'static',
-      'mainframe', 'truedesk', 'login', 'auth', 'oauth',
+      'www',
+      'api',
+      'admin',
+      'app',
+      'mail',
+      'smtp',
+      'ftp',
+      'dashboard',
+      'portal',
+      'help',
+      'support',
+      'docs',
+      'billing',
+      'payment',
+      'cdn',
+      'assets',
+      'static',
+      'mainframe',
+      'truedesk',
+      'login',
+      'auth',
+      'oauth',
     ];
 
     if (reserved.includes(normalized)) {
@@ -155,7 +182,10 @@ export class SubdomainService {
   /**
    * Validate subdomain format
    */
-  validateSubdomainFormat(subdomain: string): { valid: boolean; error?: string } {
+  validateSubdomainFormat(subdomain: string): {
+    valid: boolean;
+    error?: string;
+  } {
     const normalized = subdomain.toLowerCase().trim();
 
     if (normalized.length < 3) {
@@ -168,11 +198,18 @@ export class SubdomainService {
 
     const regex = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
     if (!regex.test(normalized)) {
-      return { valid: false, error: 'Subdomain can only contain lowercase letters, numbers, and hyphens' };
+      return {
+        valid: false,
+        error:
+          'Subdomain can only contain lowercase letters, numbers, and hyphens',
+      };
     }
 
     if (normalized.includes('--')) {
-      return { valid: false, error: 'Subdomain cannot contain consecutive hyphens' };
+      return {
+        valid: false,
+        error: 'Subdomain cannot contain consecutive hyphens',
+      };
     }
 
     return { valid: true };

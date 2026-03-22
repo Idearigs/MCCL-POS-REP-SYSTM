@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsEnum, IsArray, IsDateString, MinLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsArray,
+  IsDateString,
+  MinLength,
+} from 'class-validator';
 
 export enum TaskPriority {
   LOW = 'LOW',
@@ -42,7 +49,7 @@ export class CreateTaskDto {
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true})
+  @IsString({ each: true })
   tags?: string[];
 }
 

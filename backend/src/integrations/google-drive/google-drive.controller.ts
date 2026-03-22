@@ -24,7 +24,11 @@ import { GoogleDriveService } from './google-drive.service';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
 import { TenantId } from '../../shared/decorators/tenant.decorator';
-import { GoogleDriveDto, CreateFolderDto, ListFilesDto } from './dto/google-drive.dto';
+import {
+  GoogleDriveDto,
+  CreateFolderDto,
+  ListFilesDto,
+} from './dto/google-drive.dto';
 
 @ApiTags('Google Drive')
 @Controller('drive')
@@ -59,7 +63,7 @@ export class GoogleDriveController {
     @Body('description') description?: string,
   ) {
     const fileName = `repair_${Date.now()}_${file.originalname}`;
-    
+
     return this.googleDriveService.uploadFile({
       fileName,
       mimeType: file.mimetype,
@@ -87,7 +91,7 @@ export class GoogleDriveController {
     @Body('description') description?: string,
   ) {
     const fileName = `invoice_${Date.now()}_${file.originalname}`;
-    
+
     return this.googleDriveService.uploadFile({
       fileName,
       mimeType: file.mimetype,
@@ -102,7 +106,8 @@ export class GoogleDriveController {
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Upload customer document',
-    description: 'Upload customer document to Google Drive customer-documents folder',
+    description:
+      'Upload customer document to Google Drive customer-documents folder',
   })
   @ApiResponse({
     status: 200,
@@ -116,7 +121,7 @@ export class GoogleDriveController {
     @Body('description') description?: string,
   ) {
     const fileName = `customer_${customerId}_${Date.now()}_${file.originalname}`;
-    
+
     return this.googleDriveService.uploadFile({
       fileName,
       mimeType: file.mimetype,
@@ -145,7 +150,7 @@ export class GoogleDriveController {
     @Body('description') description?: string,
   ) {
     const fileName = `receipt_${transactionId}_${Date.now()}_${file.originalname}`;
-    
+
     return this.googleDriveService.uploadFile({
       fileName,
       mimeType: file.mimetype,
@@ -174,7 +179,7 @@ export class GoogleDriveController {
     @Body('description') description?: string,
   ) {
     const fileName = `product_${productId}_${Date.now()}_${file.originalname}`;
-    
+
     return this.googleDriveService.uploadFile({
       fileName,
       mimeType: file.mimetype,
@@ -272,7 +277,8 @@ export class GoogleDriveController {
         receipts: this.folderStructure.receipts,
         productImages: this.folderStructure.productImages,
       },
-      description: 'Predefined folder structure for MPS Jewelry file organization',
+      description:
+        'Predefined folder structure for MPS Jewelry file organization',
     };
   }
 
@@ -289,8 +295,8 @@ export class GoogleDriveController {
     const isAvailable = this.googleDriveService.isAvailable();
     return {
       status: isAvailable ? 'connected' : 'disconnected',
-      message: isAvailable 
-        ? 'Google Drive service is running properly' 
+      message: isAvailable
+        ? 'Google Drive service is running properly'
         : 'Google Drive service is not configured or unavailable',
       timestamp: new Date().toISOString(),
     };

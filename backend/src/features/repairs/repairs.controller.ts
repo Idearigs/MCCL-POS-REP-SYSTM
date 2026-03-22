@@ -79,7 +79,8 @@ export class RepairsController {
   @Get()
   @ApiOperation({
     summary: 'Get all repairs',
-    description: 'Retrieve repairs with advanced filtering, search, and pagination',
+    description:
+      'Retrieve repairs with advanced filtering, search, and pagination',
   })
   @ApiResponse({
     status: 200,
@@ -88,17 +89,75 @@ export class RepairsController {
   })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
-  @ApiQuery({ name: 'search', required: false, type: String, example: 'RPR-2024-001' })
-  @ApiQuery({ name: 'status', required: false, enum: ['RECEIVED', 'QUOTED', 'APPROVED', 'IN_PROGRESS', 'COMPLETED', 'READY_FOR_COLLECTION', 'COLLECTED', 'CANCELLED'] })
-  @ApiQuery({ name: 'priority', required: false, enum: ['LOW', 'NORMAL', 'HIGH', 'URGENT'] })
-  @ApiQuery({ name: 'repairType', required: false, enum: ['CLEANING', 'POLISHING', 'SIZING', 'STONE_SETTING', 'PRONG_REPAIR', 'CHAIN_REPAIR', 'CLASP_REPAIR', 'ENGRAVING', 'RESTORATION', 'CUSTOM_WORK', 'OTHER'] })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    example: 'RPR-2024-001',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: [
+      'RECEIVED',
+      'QUOTED',
+      'APPROVED',
+      'IN_PROGRESS',
+      'COMPLETED',
+      'READY_FOR_COLLECTION',
+      'COLLECTED',
+      'CANCELLED',
+    ],
+  })
+  @ApiQuery({
+    name: 'priority',
+    required: false,
+    enum: ['LOW', 'NORMAL', 'HIGH', 'URGENT'],
+  })
+  @ApiQuery({
+    name: 'repairType',
+    required: false,
+    enum: [
+      'CLEANING',
+      'POLISHING',
+      'SIZING',
+      'STONE_SETTING',
+      'PRONG_REPAIR',
+      'CHAIN_REPAIR',
+      'CLASP_REPAIR',
+      'ENGRAVING',
+      'RESTORATION',
+      'CUSTOM_WORK',
+      'OTHER',
+    ],
+  })
   @ApiQuery({ name: 'customerId', required: false, type: String })
   @ApiQuery({ name: 'assignedTechnicianId', required: false, type: String })
-  @ApiQuery({ name: 'startDate', required: false, type: String, example: '2024-01-01' })
-  @ApiQuery({ name: 'endDate', required: false, type: String, example: '2024-12-31' })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    example: '2024-01-01',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    example: '2024-12-31',
+  })
   @ApiQuery({ name: 'overdue', required: false, type: Boolean, example: false })
-  @ApiQuery({ name: 'sortBy', required: false, type: String, example: 'createdAt' })
-  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'], example: 'desc' })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    type: String,
+    example: 'createdAt',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['asc', 'desc'],
+    example: 'desc',
+  })
   async findAll(
     @Query() query: RepairQueryDto,
     @TenantId() tenantId: string,
@@ -123,14 +182,17 @@ export class RepairsController {
   @Get('overdue')
   @ApiOperation({
     summary: 'Get overdue repairs',
-    description: 'Retrieve all repairs that are past their expected completion date',
+    description:
+      'Retrieve all repairs that are past their expected completion date',
   })
   @ApiResponse({
     status: 200,
     description: 'Overdue repairs retrieved successfully',
     type: [RepairResponseDto],
   })
-  async getOverdueRepairs(@TenantId() tenantId: string): Promise<RepairResponseDto[]> {
+  async getOverdueRepairs(
+    @TenantId() tenantId: string,
+  ): Promise<RepairResponseDto[]> {
     return this.repairsService.getOverdueRepairs(tenantId);
   }
 
@@ -152,14 +214,27 @@ export class RepairsController {
       ...query,
       status: undefined, // Remove status filter
     };
-    
+
     // Custom filter for active statuses
-    const activeRepairs = await this.repairsService.findAll(activeQuery, tenantId);
-    
+    const activeRepairs = await this.repairsService.findAll(
+      activeQuery,
+      tenantId,
+    );
+
     // Filter active repairs client-side for now (could be optimized in service)
-    const activeStatuses = ['PENDING', 'DIAGNOSED', 'QUOTE_SENT', 'APPROVED', 'IN_PROGRESS', 'WAITING_PARTS', 'READY_FOR_PICKUP'];
-    activeRepairs.data = activeRepairs.data.filter(repair => activeStatuses.includes(repair.status));
-    
+    const activeStatuses = [
+      'PENDING',
+      'DIAGNOSED',
+      'QUOTE_SENT',
+      'APPROVED',
+      'IN_PROGRESS',
+      'WAITING_PARTS',
+      'READY_FOR_PICKUP',
+    ];
+    activeRepairs.data = activeRepairs.data.filter((repair) =>
+      activeStatuses.includes(repair.status),
+    );
+
     return activeRepairs;
   }
 
@@ -193,7 +268,8 @@ export class RepairsController {
   @Get(':id')
   @ApiOperation({
     summary: 'Get repair by ID',
-    description: 'Retrieve a specific repair with full details including items and notes',
+    description:
+      'Retrieve a specific repair with full details including items and notes',
   })
   @ApiParam({
     name: 'id',
@@ -219,7 +295,8 @@ export class RepairsController {
   @Patch(':id')
   @ApiOperation({
     summary: 'Update repair',
-    description: 'Update repair information including status, priority, and costs',
+    description:
+      'Update repair information including status, priority, and costs',
   })
   @ApiParam({
     name: 'id',
@@ -247,7 +324,8 @@ export class RepairsController {
   @Delete(':id')
   @ApiOperation({
     summary: 'Delete repair',
-    description: 'Permanently delete a repair and all associated data (photos, history). This action cannot be undone.',
+    description:
+      'Permanently delete a repair and all associated data (photos, history). This action cannot be undone.',
   })
   @ApiParam({
     name: 'id',
@@ -261,7 +339,10 @@ export class RepairsController {
       type: 'object',
       properties: {
         success: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'Repair REP-202401-0001 deleted successfully' },
+        message: {
+          type: 'string',
+          example: 'Repair REP-202401-0001 deleted successfully',
+        },
       },
     },
   })
@@ -280,7 +361,8 @@ export class RepairsController {
   @Post(':id/notes')
   @ApiOperation({
     summary: 'Add note to repair',
-    description: 'Add a progress note to the repair with customer visibility control',
+    description:
+      'Add a progress note to the repair with customer visibility control',
   })
   @ApiParam({
     name: 'id',
@@ -352,7 +434,8 @@ export class RepairsController {
   @Post(':id/status')
   @ApiOperation({
     summary: 'Change repair status',
-    description: 'Update repair status and optionally send SMS notification to customer',
+    description:
+      'Update repair status and optionally send SMS notification to customer',
   })
   @ApiParam({
     name: 'id',
@@ -365,7 +448,18 @@ export class RepairsController {
       properties: {
         status: {
           type: 'string',
-          enum: ['RECEIVED', 'QUOTED', 'APPROVED', 'IN_PROGRESS', 'WAITING_PARTS', 'COMPLETED', 'READY_FOR_COLLECTION', 'COLLECTED', 'CANCELLED', 'DELAYED'],
+          enum: [
+            'RECEIVED',
+            'QUOTED',
+            'APPROVED',
+            'IN_PROGRESS',
+            'WAITING_PARTS',
+            'COMPLETED',
+            'READY_FOR_COLLECTION',
+            'COLLECTED',
+            'CANCELLED',
+            'DELAYED',
+          ],
           example: 'IN_PROGRESS',
         },
         notes: {
@@ -392,9 +486,10 @@ export class RepairsController {
   })
   async changeStatus(
     @Param('id') id: string,
-    @Body() body: { 
-      status: string; 
-      notes?: string; 
+    @Body()
+    body: {
+      status: string;
+      notes?: string;
       sendSMS?: boolean;
     },
     @TenantId() tenantId: string,
@@ -406,14 +501,15 @@ export class RepairsController {
       body.notes || '',
       tenantId,
       userId,
-      body.sendSMS !== false
+      body.sendSMS !== false,
     );
   }
 
   @Get(':id/timeline')
   @ApiOperation({
     summary: 'Get repair timeline',
-    description: 'Retrieve chronological timeline of repair status changes and notes',
+    description:
+      'Retrieve chronological timeline of repair status changes and notes',
   })
   @ApiParam({
     name: 'id',
@@ -428,15 +524,12 @@ export class RepairsController {
     status: 404,
     description: 'Repair not found',
   })
-  async getTimeline(
-    @Param('id') id: string,
-    @TenantId() tenantId: string,
-  ) {
+  async getTimeline(@Param('id') id: string, @TenantId() tenantId: string) {
     const repair = await this.repairsService.findOne(id, tenantId);
-    
+
     // Combine notes and status changes into timeline
     const timeline = [];
-    
+
     // Add creation event
     timeline.push({
       type: 'created',
@@ -448,7 +541,7 @@ export class RepairsController {
     });
 
     // Add notes
-    repair.notes.forEach(note => {
+    repair.notes.forEach((note) => {
       timeline.push({
         type: 'note',
         title: 'Progress Note',
@@ -460,7 +553,9 @@ export class RepairsController {
     });
 
     // Sort timeline by date
-    timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    timeline.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
 
     return {
       repairId: repair.id,
@@ -481,41 +576,51 @@ export class RepairsController {
   })
   async getWorkloadReport(@TenantId() tenantId: string) {
     const stats = await this.repairsService.getStats(tenantId);
-    
+
     // Get active repairs by technician
     const activeRepairs = await this.repairsService.findAll(
       { limit: 1000 }, // Get all active repairs
-      tenantId
+      tenantId,
     );
 
-    const workloadByTechnician = activeRepairs.data.reduce((acc, repair) => {
-      if (repair.assignedTechnicianId && repair.status !== 'COMPLETED' && repair.status !== 'COLLECTED' && repair.status !== 'CANCELLED') {
-        const techId = repair.assignedTechnicianId;
-        const techName = repair.assignedTechnicianName || 'Unknown';
-        
-        if (!acc[techId]) {
-          acc[techId] = {
-            technicianId: techId,
-            technicianName: techName,
-            activeRepairs: 0,
-            urgentRepairs: 0,
-            overdueRepairs: 0,
-            estimatedWorkload: 0,
-          };
+    const workloadByTechnician = activeRepairs.data.reduce(
+      (acc, repair) => {
+        if (
+          repair.assignedTechnicianId &&
+          repair.status !== 'COMPLETED' &&
+          repair.status !== 'COLLECTED' &&
+          repair.status !== 'CANCELLED'
+        ) {
+          const techId = repair.assignedTechnicianId;
+          const techName = repair.assignedTechnicianName || 'Unknown';
+
+          if (!acc[techId]) {
+            acc[techId] = {
+              technicianId: techId,
+              technicianName: techName,
+              activeRepairs: 0,
+              urgentRepairs: 0,
+              overdueRepairs: 0,
+              estimatedWorkload: 0,
+            };
+          }
+
+          acc[techId].activeRepairs++;
+          if (repair.priority === 'URGENT') acc[techId].urgentRepairs++;
+          if (repair.isOverdue) acc[techId].overdueRepairs++;
+          acc[techId].estimatedWorkload += repair.estimatedCost;
         }
-        
-        acc[techId].activeRepairs++;
-        if (repair.priority === 'URGENT') acc[techId].urgentRepairs++;
-        if (repair.isOverdue) acc[techId].overdueRepairs++;
-        acc[techId].estimatedWorkload += repair.estimatedCost;
-      }
-      return acc;
-    }, {} as Record<string, any>);
+        return acc;
+      },
+      {} as Record<string, any>,
+    );
 
     return {
       totalActiveRepairs: stats.activeRepairs,
       totalOverdueRepairs: stats.overdueRepairs,
-      unassignedRepairs: activeRepairs.data.filter(r => !r.assignedTechnicianId).length,
+      unassignedRepairs: activeRepairs.data.filter(
+        (r) => !r.assignedTechnicianId,
+      ).length,
       technicianWorkloads: Object.values(workloadByTechnician),
       averageRepairTime: stats.averageRepairTime,
     };
@@ -541,13 +646,23 @@ export class RepairsController {
   ) {
     const customerRepairs = await this.repairsService.findAll(
       { customerId, limit: 100, sortBy: 'createdAt', sortOrder: 'desc' },
-      tenantId
+      tenantId,
     );
 
-    const totalSpent = customerRepairs.data.reduce((sum, repair) => sum + repair.totalCost, 0);
-    const avgRepairCost = customerRepairs.data.length > 0 ? totalSpent / customerRepairs.data.length : 0;
-    const completedRepairs = customerRepairs.data.filter(r => r.status === 'COMPLETED' || r.status === 'COLLECTED');
-    const activeRepairs = customerRepairs.data.filter(r => !['COMPLETED', 'COLLECTED', 'CANCELLED'].includes(r.status));
+    const totalSpent = customerRepairs.data.reduce(
+      (sum, repair) => sum + repair.totalCost,
+      0,
+    );
+    const avgRepairCost =
+      customerRepairs.data.length > 0
+        ? totalSpent / customerRepairs.data.length
+        : 0;
+    const completedRepairs = customerRepairs.data.filter(
+      (r) => r.status === 'COMPLETED' || r.status === 'COLLECTED',
+    );
+    const activeRepairs = customerRepairs.data.filter(
+      (r) => !['COMPLETED', 'COLLECTED', 'CANCELLED'].includes(r.status),
+    );
 
     return {
       customerId,
@@ -564,7 +679,8 @@ export class RepairsController {
   @Post(':id/images')
   @ApiOperation({
     summary: 'Upload repair images',
-    description: 'Upload images for a repair job (before, during, or after photos)',
+    description:
+      'Upload images for a repair job (before, during, or after photos)',
   })
   @ApiConsumes('multipart/form-data')
   @ApiParam({
@@ -583,7 +699,13 @@ export class RepairsController {
   @UseInterceptors(FilesInterceptor('images', 10))
   async uploadImages(
     @Param('id') id: string,
-    @UploadedFiles() files: { buffer: Buffer; originalname: string; mimetype: string; size: number }[],
+    @UploadedFiles()
+    files: {
+      buffer: Buffer;
+      originalname: string;
+      mimetype: string;
+      size: number;
+    }[],
     @Body() metadata: any,
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
@@ -593,7 +715,13 @@ export class RepairsController {
       throw new BadRequestException('No files provided for upload');
     }
 
-    return this.repairsService.uploadImages(id, files, metadata || {}, tenantId, userId);
+    return this.repairsService.uploadImages(
+      id,
+      files,
+      metadata || {},
+      tenantId,
+      userId,
+    );
   }
 
   @Get(':id/images')
@@ -614,10 +742,7 @@ export class RepairsController {
     status: 404,
     description: 'Repair not found',
   })
-  async getRepairImages(
-    @Param('id') id: string,
-    @TenantId() tenantId: string,
-  ) {
+  async getRepairImages(@Param('id') id: string, @TenantId() tenantId: string) {
     return this.repairsService.getRepairImages(id, tenantId);
   }
 
@@ -650,17 +775,30 @@ export class RepairsController {
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
   ) {
-    const success = await this.repairsService.deleteRepairImage(id, imageId, tenantId, userId);
-    return { success, message: success ? 'Image deleted successfully' : 'Failed to delete image' };
+    const success = await this.repairsService.deleteRepairImage(
+      id,
+      imageId,
+      tenantId,
+      userId,
+    );
+    return {
+      success,
+      message: success
+        ? 'Image deleted successfully'
+        : 'Failed to delete image',
+    };
   }
 
   private getRepairTypeFrequency(repairs: RepairResponseDto[]) {
-    const typeCount = repairs.reduce((acc, repair) => {
-      repair.items.forEach(item => {
-        acc[item.repairType] = (acc[item.repairType] || 0) + 1;
-      });
-      return acc;
-    }, {} as Record<string, number>);
+    const typeCount = repairs.reduce(
+      (acc, repair) => {
+        repair.items.forEach((item) => {
+          acc[item.repairType] = (acc[item.repairType] || 0) + 1;
+        });
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
     return Object.entries(typeCount)
       .sort(([, a], [, b]) => b - a)

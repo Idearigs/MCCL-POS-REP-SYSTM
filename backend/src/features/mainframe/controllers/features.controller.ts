@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Put,
-  Body,
-  Param,
-  Query,
-} from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query } from '@nestjs/common';
 import { FeaturesService } from '../services/features.service';
 
 @Controller('mainframe/features')
@@ -14,15 +6,18 @@ export class FeaturesController {
   constructor(private readonly featuresService: FeaturesService) {}
 
   @Post()
-  async create(@Body() data: {
-    featureKey: string;
-    featureName: string;
-    description?: string;
-    category?: string;
-    isIncludedInBase?: boolean;
-    additionalCost?: number;
-    dependsOn?: string[];
-  }) {
+  async create(
+    @Body()
+    data: {
+      featureKey: string;
+      featureName: string;
+      description?: string;
+      category?: string;
+      isIncludedInBase?: boolean;
+      additionalCost?: number;
+      dependsOn?: string[];
+    },
+  ) {
     return this.featuresService.create(data);
   }
 
@@ -45,22 +40,27 @@ export class FeaturesController {
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() data: {
-    featureName?: string;
-    description?: string;
-    category?: string;
-    isIncludedInBase?: boolean;
-    additionalCost?: number;
-    status?: string;
-    isBeta?: boolean;
-  }) {
+  async update(
+    @Param('id') id: string,
+    @Body()
+    data: {
+      featureName?: string;
+      description?: string;
+      category?: string;
+      isIncludedInBase?: boolean;
+      additionalCost?: number;
+      status?: string;
+      isBeta?: boolean;
+    },
+  ) {
     return this.featuresService.update(id, data);
   }
 
   @Post(':id/versions')
   async createVersion(
     @Param('id') id: string,
-    @Body() data: {
+    @Body()
+    data: {
       version: string;
       versionType: string;
       releaseNotes?: string;

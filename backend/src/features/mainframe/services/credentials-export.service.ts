@@ -29,7 +29,9 @@ export class CredentialsExportService {
   /**
    * Generate credentials document for a customer
    */
-  async generateCredentialsDocument(profileId: string): Promise<CredentialsDocument> {
+  async generateCredentialsDocument(
+    profileId: string,
+  ): Promise<CredentialsDocument> {
     const profile = await this.prisma.mf_customer_profiles.findUnique({
       where: { id: profileId },
       include: {
@@ -46,7 +48,7 @@ export class CredentialsExportService {
     }
 
     // Get users with their temporary passwords
-    const usersWithPasswords = profile.customerUsers.map(user => ({
+    const usersWithPasswords = profile.customerUsers.map((user) => ({
       email: user.email,
       password: user.tempPassword || '[Password set by user]',
       role: user.role,
@@ -57,20 +59,26 @@ export class CredentialsExportService {
       subdomain: profile.subdomain,
       fullDomain: `${profile.subdomain}.truedesk.co.uk`,
       adminEmail: profile.contactEmail,
-      adminPassword: usersWithPasswords.find(u => u.role === 'OWNER')?.password || '[Not set]',
+      adminPassword:
+        usersWithPasswords.find((u) => u.role === 'OWNER')?.password ||
+        '[Not set]',
       users: usersWithPasswords,
       features: profile.enabledFeatures
-        .filter(cf => cf.isEnabled)
-        .map(cf => cf.feature.featureName),
-      subscription: profile.subscription ? {
-        plan: profile.subscription.plan,
-        billingCycle: profile.subscription.billingCycle,
-        nextBillingDate: profile.subscription.nextBillingDate.toISOString().split('T')[0],
-      } : {
-        plan: 'Not configured',
-        billingCycle: 'N/A',
-        nextBillingDate: 'N/A',
-      },
+        .filter((cf) => cf.isEnabled)
+        .map((cf) => cf.feature.featureName),
+      subscription: profile.subscription
+        ? {
+            plan: profile.subscription.plan,
+            billingCycle: profile.subscription.billingCycle,
+            nextBillingDate: profile.subscription.nextBillingDate
+              .toISOString()
+              .split('T')[0],
+          }
+        : {
+            plan: 'Not configured',
+            billingCycle: 'N/A',
+            nextBillingDate: 'N/A',
+          },
       createdAt: new Date().toISOString(),
     };
   }
@@ -236,10 +244,14 @@ export class CredentialsExportService {
     </div>
   </div>
 
-  ${creds.users.length > 1 ? `
+  ${
+    creds.users.length > 1
+      ? `
   <div class="section">
     <div class="section-title">User Accounts</div>
-    ${creds.users.map(user => `
+    ${creds.users
+      .map(
+        (user) => `
     <div class="user-card">
       <div class="info-row">
         <span class="info-label">Email</span>
@@ -254,14 +266,18 @@ export class CredentialsExportService {
         <span class="badge">${user.role}</span>
       </div>
     </div>
-    `).join('')}
+    `,
+      )
+      .join('')}
   </div>
-  ` : ''}
+  `
+      : ''
+  }
 
   <div class="section">
     <div class="section-title">Enabled Features</div>
     <div class="features-list">
-      ${creds.features.map(f => `<span class="feature-tag">${f}</span>`).join('')}
+      ${creds.features.map((f) => `<span class="feature-tag">${f}</span>`).join('')}
     </div>
   </div>
 
@@ -292,7 +308,7 @@ export class CredentialsExportService {
       month: 'long',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     })}</p>
     <p>TrueDesk &copy; ${new Date().getFullYear()} All rights reserved.</p>
   </div>
@@ -325,7 +341,10 @@ export class CredentialsExportService {
     }
 
     // Shuffle the password
-    return password.split('').sort(() => crypto.randomInt(3) - 1).join('');
+    return password
+      .split('')
+      .sort(() => crypto.randomInt(3) - 1)
+      .join('');
   }
 
   /**

@@ -45,26 +45,31 @@ export class CustomersService {
         });
 
         if (existingCustomer) {
-          throw new ConflictException('Customer already exists with this email');
+          throw new ConflictException(
+            'Customer already exists with this email',
+          );
         }
       }
 
       // Check if customer already exists with same phone in tenant
-      const existingPhoneCustomer = await this.prismaService.customers.findFirst({
-        where: {
-          phone: createCustomerDto.phone,
-          tenantId,
-        },
-      });
+      const existingPhoneCustomer =
+        await this.prismaService.customers.findFirst({
+          where: {
+            phone: createCustomerDto.phone,
+            tenantId,
+          },
+        });
 
       if (existingPhoneCustomer) {
-        throw new ConflictException('Customer already exists with this phone number');
+        throw new ConflictException(
+          'Customer already exists with this phone number',
+        );
       }
 
       // GDPR compliance check
       if (!createCustomerDto.dataProcessingConsent) {
         throw new BadRequestException(
-          'Data processing consent is required for GDPR compliance'
+          'Data processing consent is required for GDPR compliance',
         );
       }
 
@@ -74,8 +79,12 @@ export class CustomersService {
           ...createCustomerDto,
           tenantId,
           updatedAt: new Date(),
-          consentDate: createCustomerDto.dataProcessingConsent ? new Date() : null,
-          birthDate: createCustomerDto.birthDate ? new Date(createCustomerDto.birthDate) : null,
+          consentDate: createCustomerDto.dataProcessingConsent
+            ? new Date()
+            : null,
+          birthDate: createCustomerDto.birthDate
+            ? new Date(createCustomerDto.birthDate)
+            : null,
           anniversaryDate: createCustomerDto.anniversaryDate
             ? new Date(createCustomerDto.anniversaryDate)
             : null,
@@ -92,7 +101,10 @@ export class CustomersService {
     } catch (error) {
       this.logger.error('Failed to create customer:', error.message);
       this.logger.error('Error stack:', error.stack);
-      this.logger.error('Customer data that failed:', JSON.stringify(createCustomerDto, null, 2));
+      this.logger.error(
+        'Customer data that failed:',
+        JSON.stringify(createCustomerDto, null, 2),
+      );
       throw error;
     }
   }
@@ -136,14 +148,18 @@ export class CustomersService {
 
       // Check cache first (temporarily disabled for debugging - TODO: re-enable after fixing cache invalidation)
       const cacheKey = `customers:list:${JSON.stringify({ where, skip, limit, sortBy, sortOrder })}`;
-      let cachedResult = null; // Disabled: await this.cacheService.getTenantData<PaginatedResponseDto<CustomerResponseDto>>(tenantId, cacheKey);
+      const cachedResult = null; // Disabled: await this.cacheService.getTenantData<PaginatedResponseDto<CustomerResponseDto>>(tenantId, cacheKey);
 
       if (cachedResult) {
-        this.logger.debug(`📦 Returning cached customers for tenant ${tenantId}`);
+        this.logger.debug(
+          `📦 Returning cached customers for tenant ${tenantId}`,
+        );
         return cachedResult;
       }
 
-      this.logger.debug(`🔍 Fetching fresh customers from database for tenant ${tenantId}`);
+      this.logger.debug(
+        `🔍 Fetching fresh customers from database for tenant ${tenantId}`,
+      );
 
       // Get customers and total count
       const [customers, total] = await Promise.all([
@@ -157,7 +173,7 @@ export class CustomersService {
       ]);
 
       const result = new PaginatedResponseDto(
-        customers.map(customer => this.mapToResponseDto(customer)),
+        customers.map((customer) => this.mapToResponseDto(customer)),
         page,
         limit,
         total,
@@ -166,7 +182,9 @@ export class CustomersService {
       // Cache result for 5 minutes (temporarily disabled for debugging - TODO: re-enable)
       // await this.cacheService.setTenantData(tenantId, cacheKey, result, 300);
 
-      this.logger.debug(`✅ Returning ${customers.length} customers from database (total: ${total})`);
+      this.logger.debug(
+        `✅ Returning ${customers.length} customers from database (total: ${total})`,
+      );
 
       return result;
     } catch (error) {
@@ -182,10 +200,11 @@ export class CustomersService {
     try {
       // Check cache first
       const cacheKey = `customer:${id}`;
-      const cachedCustomer = await this.cacheService.getTenantData<CustomerResponseDto>(
-        tenantId,
-        cacheKey,
-      );
+      const cachedCustomer =
+        await this.cacheService.getTenantData<CustomerResponseDto>(
+          tenantId,
+          cacheKey,
+        );
 
       if (cachedCustomer) {
         return cachedCustomer;
@@ -207,7 +226,12 @@ export class CustomersService {
       const customerDto = this.mapToResponseDto(customer);
 
       // Cache customer for 10 minutes
-      await this.cacheService.setTenantData(tenantId, cacheKey, customerDto, 600);
+      await this.cacheService.setTenantData(
+        tenantId,
+        cacheKey,
+        customerDto,
+        600,
+      );
 
       return customerDto;
     } catch (error) {
@@ -235,7 +259,10 @@ export class CustomersService {
       }
 
       // If email is being updated, check for conflicts
-      if (updateCustomerDto.email && updateCustomerDto.email !== existingCustomer.email) {
+      if (
+        updateCustomerDto.email &&
+        updateCustomerDto.email !== existingCustomer.email
+      ) {
         const emailConflict = await this.prismaService.customers.findFirst({
           where: {
             email: updateCustomerDto.email,
@@ -245,12 +272,17 @@ export class CustomersService {
         });
 
         if (emailConflict) {
-          throw new ConflictException('Another customer already exists with this email');
+          throw new ConflictException(
+            'Another customer already exists with this email',
+          );
         }
       }
 
       // If phone is being updated, check for conflicts
-      if (updateCustomerDto.phone && updateCustomerDto.phone !== existingCustomer.phone) {
+      if (
+        updateCustomerDto.phone &&
+        updateCustomerDto.phone !== existingCustomer.phone
+      ) {
         const phoneConflict = await this.prismaService.customers.findFirst({
           where: {
             phone: updateCustomerDto.phone,
@@ -260,7 +292,9 @@ export class CustomersService {
         });
 
         if (phoneConflict) {
-          throw new ConflictException('Another customer already exists with this phone number');
+          throw new ConflictException(
+            'Another customer already exists with this phone number',
+          );
         }
       }
 
@@ -268,11 +302,11 @@ export class CustomersService {
         where: { id },
         data: {
           ...updateCustomerDto,
-          birthDate: updateCustomerDto.birthDate 
-            ? new Date(updateCustomerDto.birthDate) 
+          birthDate: updateCustomerDto.birthDate
+            ? new Date(updateCustomerDto.birthDate)
             : undefined,
-          anniversaryDate: updateCustomerDto.anniversaryDate 
-            ? new Date(updateCustomerDto.anniversaryDate) 
+          anniversaryDate: updateCustomerDto.anniversaryDate
+            ? new Date(updateCustomerDto.anniversaryDate)
             : undefined,
         },
       });
@@ -296,7 +330,9 @@ export class CustomersService {
    */
   async remove(id: string, tenantId: string): Promise<void> {
     try {
-      this.logger.log(`🗑️ PERMANENT DELETE requested for customer: ${id} in tenant ${tenantId}`);
+      this.logger.log(
+        `🗑️ PERMANENT DELETE requested for customer: ${id} in tenant ${tenantId}`,
+      );
 
       const customer = await this.prismaService.customers.findFirst({
         where: { id, tenantId },
@@ -307,7 +343,9 @@ export class CustomersService {
         throw new NotFoundException(`Customer with ID ${id} not found`);
       }
 
-      this.logger.log(`✅ Customer found: ${customer.firstName} ${customer.lastName} (${customer.email})`);
+      this.logger.log(
+        `✅ Customer found: ${customer.firstName} ${customer.lastName} (${customer.email})`,
+      );
 
       // Permanent delete - remove related records first to avoid constraint errors
       await this.prismaService.$transaction(async (prisma) => {
@@ -330,15 +368,23 @@ export class CustomersService {
         await prisma.customers.delete({ where: { id } });
       });
 
-      this.logger.log(`🗑️ Transaction completed - Customer ${id} permanently deleted from database`);
+      this.logger.log(
+        `🗑️ Transaction completed - Customer ${id} permanently deleted from database`,
+      );
 
       // Verify deletion
-      const deletedCheck = await this.prismaService.customers.findUnique({ where: { id } });
+      const deletedCheck = await this.prismaService.customers.findUnique({
+        where: { id },
+      });
       if (deletedCheck) {
-        this.logger.error(`❌ ERROR: Customer ${id} still exists in database after delete!`);
+        this.logger.error(
+          `❌ ERROR: Customer ${id} still exists in database after delete!`,
+        );
         throw new Error('Customer deletion failed - record still exists');
       }
-      this.logger.log(`✅ Verified: Customer ${id} no longer exists in database`);
+      this.logger.log(
+        `✅ Verified: Customer ${id} no longer exists in database`,
+      );
 
       // Clear ALL customer-related cache entries
       // Since cache keys include query parameters, we need to clear all variations
@@ -360,11 +406,16 @@ export class CustomersService {
           await this.cacheService.delTenantData(tenantId, `${key}:*`);
         } catch (error) {
           // Ignore errors for pattern deletion if not supported
-          this.logger.debug(`Cache key ${key} deletion skipped:`, error.message);
+          this.logger.debug(
+            `Cache key ${key} deletion skipped:`,
+            error.message,
+          );
         }
       }
 
-      this.logger.log(`Customer permanently deleted: ${id} in tenant ${tenantId}`);
+      this.logger.log(
+        `Customer permanently deleted: ${id} in tenant ${tenantId}`,
+      );
     } catch (error) {
       this.logger.error(`Failed to delete customer ${id}:`, error.message);
       this.logger.error(`Error stack:`, error.stack);
@@ -380,10 +431,11 @@ export class CustomersService {
     try {
       // Check cache first
       const cacheKey = 'customers:stats';
-      const cachedStats = await this.cacheService.getTenantData<CustomerStatsDto>(
-        tenantId,
-        cacheKey,
-      );
+      const cachedStats =
+        await this.cacheService.getTenantData<CustomerStatsDto>(
+          tenantId,
+          cacheKey,
+        );
 
       if (cachedStats) {
         return cachedStats;
@@ -399,20 +451,30 @@ export class CustomersService {
         smsConsentCount,
       ] = await Promise.all([
         this.prismaService.customers.count({ where: { tenantId } }),
-        this.prismaService.customers.count({ where: { tenantId, isActive: true } }),
-        this.prismaService.customers.count({ where: { tenantId, redFlag: true } }),
+        this.prismaService.customers.count({
+          where: { tenantId, isActive: true },
+        }),
+        this.prismaService.customers.count({
+          where: { tenantId, redFlag: true },
+        }),
         this.prismaService.customers.count({
           where: {
             tenantId,
-            createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
+            createdAt: {
+              gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+            },
           },
         }),
         this.prismaService.customers.aggregate({
           where: { tenantId },
           _sum: { totalSpent: true },
         }),
-        this.prismaService.customers.count({ where: { tenantId, marketingEmail: true } }),
-        this.prismaService.customers.count({ where: { tenantId, marketingSms: true } }),
+        this.prismaService.customers.count({
+          where: { tenantId, marketingEmail: true },
+        }),
+        this.prismaService.customers.count({
+          where: { tenantId, marketingSms: true },
+        }),
       ]);
 
       const stats: CustomerStatsDto = {
@@ -422,9 +484,10 @@ export class CustomersService {
         redFlaggedCustomers,
         newCustomersThisMonth,
         totalSpentAllTime: Number(totalSpent._sum.totalSpent || 0),
-        averageSpentPerCustomer: totalCustomers > 0 
-          ? Number(totalSpent._sum.totalSpent || 0) / totalCustomers 
-          : 0,
+        averageSpentPerCustomer:
+          totalCustomers > 0
+            ? Number(totalSpent._sum.totalSpent || 0) / totalCustomers
+            : 0,
         customersWithEmailConsent: emailConsentCount,
         customersWithSmsConsent: smsConsentCount,
       };
@@ -502,7 +565,7 @@ export class CustomersService {
         },
         transactionHistory: customer.sales,
         repairHistory: customer.repairs,
-        documents: customer.documents.map(doc => ({
+        documents: customer.documents.map((doc) => ({
           id: doc.id,
           fileName: doc.fileName,
           documentType: doc.documentType,
@@ -513,7 +576,10 @@ export class CustomersService {
         exportedBy: 'GDPR_REQUEST',
       };
     } catch (error) {
-      this.logger.error(`Failed to export customer data ${customerId}:`, error.message);
+      this.logger.error(
+        `Failed to export customer data ${customerId}:`,
+        error.message,
+      );
       throw error;
     }
   }
@@ -521,7 +587,10 @@ export class CustomersService {
   /**
    * GDPR: Delete customer data permanently
    */
-  async deleteCustomerDataPermanently(customerId: string, tenantId: string): Promise<void> {
+  async deleteCustomerDataPermanently(
+    customerId: string,
+    tenantId: string,
+  ): Promise<void> {
     try {
       const customer = await this.prismaService.customers.findFirst({
         where: { id: customerId, tenantId },
@@ -537,13 +606,13 @@ export class CustomersService {
         // Delete related records first
         await prisma.documents.deleteMany({ where: { customerId } });
         await prisma.repairs.deleteMany({ where: { customerId } });
-        
+
         // Update sales to remove customer reference
         await prisma.sales.updateMany({
           where: { customerId },
           data: { customerId: null },
         });
-        
+
         // Finally delete customer
         await prisma.customers.delete({ where: { id: customerId } });
       });
@@ -553,9 +622,14 @@ export class CustomersService {
       await this.cacheService.delTenantData(tenantId, 'customers:list');
       await this.cacheService.delTenantData(tenantId, 'customers:stats');
 
-      this.logger.warn(`GDPR: Customer data permanently deleted: ${customerId}`);
+      this.logger.warn(
+        `GDPR: Customer data permanently deleted: ${customerId}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to delete customer data ${customerId}:`, error.message);
+      this.logger.error(
+        `Failed to delete customer data ${customerId}:`,
+        error.message,
+      );
       throw error;
     }
   }

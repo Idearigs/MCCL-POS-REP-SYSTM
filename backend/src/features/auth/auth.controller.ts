@@ -24,7 +24,10 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from '../../shared/decorators/user.decorator';
-import { CurrentTenant, type TenantInfo } from '../../shared/decorators/tenant.decorator';
+import {
+  CurrentTenant,
+  type TenantInfo,
+} from '../../shared/decorators/tenant.decorator';
 import {
   LoginDto,
   RegisterDto,
@@ -153,7 +156,19 @@ export class AuthController {
     status: 401,
     description: 'Unauthorized',
   })
-  getMe(@CurrentUser() user: { id: string; email: string; firstName: string; lastName: string; role: string; tenantId: string; tenants: unknown; lastLogin?: Date }) {
+  getMe(
+    @CurrentUser()
+    user: {
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      role: string;
+      tenantId: string;
+      tenants: unknown;
+      lastLogin?: Date;
+    },
+  ) {
     return {
       id: user.id,
       email: user.email,

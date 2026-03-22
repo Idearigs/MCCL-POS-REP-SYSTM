@@ -47,14 +47,16 @@ export class OpenAIService {
     this.model = process.env.OPENAI_MODEL || 'gpt-4-turbo-preview'; // or 'gpt-4' or 'gpt-3.5-turbo'
 
     if (!this.apiKey) {
-      this.logger.warn('OPENAI_API_KEY not configured. AI features will be disabled.');
+      this.logger.warn(
+        'OPENAI_API_KEY not configured. AI features will be disabled.',
+      );
     }
 
     this.apiClient = axios.create({
       baseURL: 'https://api.openai.com/v1',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${this.apiKey}`,
       },
       timeout: 60000, // 60 seconds
     });
@@ -70,9 +72,13 @@ export class OpenAIService {
   /**
    * Generate financial insights from data
    */
-  async generateFinancialInsights(data: FinancialAnalysisRequest): Promise<string> {
+  async generateFinancialInsights(
+    data: FinancialAnalysisRequest,
+  ): Promise<string> {
     if (!this.isConfigured()) {
-      throw new BadRequestException('OpenAI API is not configured. Please set OPENAI_API_KEY environment variable.');
+      throw new BadRequestException(
+        'OpenAI API is not configured. Please set OPENAI_API_KEY environment variable.',
+      );
     }
 
     try {
@@ -112,12 +118,12 @@ COMMUNICATION STYLE:
 - Explain the 'why' behind every insight
 - End with clear, prioritized action steps
 
-Provide insights as if you're sitting across the desk from the owner, reviewing their monthly performance over coffee.`
+Provide insights as if you're sitting across the desk from the owner, reviewing their monthly performance over coffee.`,
         },
         {
           role: 'user',
-          content: prompt
-        }
+          content: prompt,
+        },
       ]);
 
       return response;
@@ -130,7 +136,9 @@ Provide insights as if you're sitting across the desk from the owner, reviewing 
   /**
    * Generate business recommendations
    */
-  async generateRecommendations(data: FinancialAnalysisRequest): Promise<any[]> {
+  async generateRecommendations(
+    data: FinancialAnalysisRequest,
+  ): Promise<any[]> {
     if (!this.isConfigured()) {
       throw new BadRequestException('OpenAI API is not configured.');
     }
@@ -181,18 +189,20 @@ CONFIDENCE SCORING (be realistic):
 - 70-79%: Good idea but needs validation
 - 60-69%: Worth exploring but higher risk
 
-Return ONLY valid JSON array. No markdown, no explanations, just pure JSON:`
+Return ONLY valid JSON array. No markdown, no explanations, just pure JSON:`,
         },
         {
           role: 'user',
-          content: prompt
-        }
+          content: prompt,
+        },
       ]);
 
       // Parse JSON response
       try {
         const recommendations = JSON.parse(response);
-        return Array.isArray(recommendations) ? recommendations : [recommendations];
+        return Array.isArray(recommendations)
+          ? recommendations
+          : [recommendations];
       } catch (parseError) {
         this.logger.error('Failed to parse recommendations JSON:', parseError);
         // Return structured fallback
@@ -207,7 +217,9 @@ Return ONLY valid JSON array. No markdown, no explanations, just pure JSON:`
   /**
    * Generate improvement areas
    */
-  async generateImprovementAreas(data: FinancialAnalysisRequest): Promise<any[]> {
+  async generateImprovementAreas(
+    data: FinancialAnalysisRequest,
+  ): Promise<any[]> {
     if (!this.isConfigured()) {
       return [];
     }
@@ -230,12 +242,13 @@ Return as JSON array with format: [{ area, issue, target, impact }]`;
       const response = await this.chatCompletion([
         {
           role: 'system',
-          content: 'You are a business improvement specialist. Identify key areas for improvement based on financial metrics. Be specific and quantitative.'
+          content:
+            'You are a business improvement specialist. Identify key areas for improvement based on financial metrics. Be specific and quantitative.',
         },
         {
           role: 'user',
-          content: prompt
-        }
+          content: prompt,
+        },
       ]);
 
       try {
@@ -266,7 +279,7 @@ Return as JSON array with format: [{ area, issue, target, impact }]`;
           severity: 'HIGH',
           title: 'Low Profit Margin',
           message: `Profit margin is ${data.profitMargin.toFixed(2)}%, below recommended 20% for jewelry retail`,
-          recommendation: 'Review pricing strategy and cost structure'
+          recommendation: 'Review pricing strategy and cost structure',
         });
       }
 
@@ -277,7 +290,7 @@ Return as JSON array with format: [{ area, issue, target, impact }]`;
           severity: 'MEDIUM',
           title: 'Low Average Transaction Value',
           message: `Average transaction is $${data.averageTransaction.toFixed(2)}`,
-          recommendation: 'Focus on upselling and cross-selling strategies'
+          recommendation: 'Focus on upselling and cross-selling strategies',
         });
       }
 
@@ -308,12 +321,13 @@ Identify 3-5 specific growth opportunities. Return JSON array: [{ opportunity, p
       const response = await this.chatCompletion([
         {
           role: 'system',
-          content: 'You are a growth strategist for jewelry retailers. Identify practical, achievable growth opportunities.'
+          content:
+            'You are a growth strategist for jewelry retailers. Identify practical, achievable growth opportunities.',
         },
         {
           role: 'user',
-          content: prompt
-        }
+          content: prompt,
+        },
       ]);
 
       try {
@@ -330,23 +344,32 @@ Identify 3-5 specific growth opportunities. Return JSON array: [{ opportunity, p
   /**
    * Public chat completion for chatbot use
    */
-  async chat(messages: ChatMessage[], options?: { temperature?: number; max_tokens?: number }): Promise<string> {
+  async chat(
+    messages: ChatMessage[],
+    options?: { temperature?: number; max_tokens?: number },
+  ): Promise<string> {
     return this.chatCompletion(messages, options);
   }
 
   /**
    * General chat completion
    */
-  private async chatCompletion(messages: ChatMessage[], options?: { temperature?: number; max_tokens?: number }): Promise<string> {
+  private async chatCompletion(
+    messages: ChatMessage[],
+    options?: { temperature?: number; max_tokens?: number },
+  ): Promise<string> {
     try {
-      const response = await this.apiClient.post<ChatCompletionResponse>('/chat/completions', {
-        model: this.model,
-        messages: messages,
-        temperature: options?.temperature ?? 0.8, // Higher for more creative, human-like responses
-        max_tokens: options?.max_tokens ?? 3000, // More tokens for detailed expert insights
-        presence_penalty: 0.1, // Slight penalty to reduce repetition
-        frequency_penalty: 0.1, // Encourage diverse language
-      });
+      const response = await this.apiClient.post<ChatCompletionResponse>(
+        '/chat/completions',
+        {
+          model: this.model,
+          messages: messages,
+          temperature: options?.temperature ?? 0.8, // Higher for more creative, human-like responses
+          max_tokens: options?.max_tokens ?? 3000, // More tokens for detailed expert insights
+          presence_penalty: 0.1, // Slight penalty to reduce repetition
+          frequency_penalty: 0.1, // Encourage diverse language
+        },
+      );
 
       if (response.data.choices && response.data.choices.length > 0) {
         return response.data.choices[0].message.content;
@@ -356,7 +379,9 @@ Identify 3-5 specific growth opportunities. Return JSON array: [{ opportunity, p
     } catch (error: any) {
       if (error.response) {
         this.logger.error('OpenAI API error:', error.response.data);
-        throw new BadRequestException(`OpenAI API error: ${error.response.data.error?.message || 'Unknown error'}`);
+        throw new BadRequestException(
+          `OpenAI API error: ${error.response.data.error?.message || 'Unknown error'}`,
+        );
       }
       throw error;
     }
@@ -366,8 +391,20 @@ Identify 3-5 specific growth opportunities. Return JSON array: [{ opportunity, p
    * Build financial analysis prompt
    */
   private buildFinancialAnalysisPrompt(data: FinancialAnalysisRequest): string {
-    const profitMarginStatus = data.profitMargin > 50 ? '✓ Excellent' : data.profitMargin > 40 ? '✓ Good' : data.profitMargin > 30 ? '⚠ Below Target' : '❗ Critical';
-    const avgTransactionStatus = data.averageTransaction > 1500 ? '✓ Strong' : data.averageTransaction > 800 ? '✓ Healthy' : '⚠ Below Average';
+    const profitMarginStatus =
+      data.profitMargin > 50
+        ? '✓ Excellent'
+        : data.profitMargin > 40
+          ? '✓ Good'
+          : data.profitMargin > 30
+            ? '⚠ Below Target'
+            : '❗ Critical';
+    const avgTransactionStatus =
+      data.averageTransaction > 1500
+        ? '✓ Strong'
+        : data.averageTransaction > 800
+          ? '✓ Healthy'
+          : '⚠ Below Average';
 
     return `I need your expert analysis on this jewelry retail business performance:
 
@@ -393,23 +430,40 @@ ${data.averageTransaction < 800 ? '  ⚠ Low AOV - opportunity for upselling' : 
 
 🏆 TOP 5 PERFORMING PRODUCTS:
 ─────────────────────────
-${data.topProducts.slice(0, 5).map((p, i) => {
-  const avgPrice = p.revenue / p.units;
-  return `${i + 1}. ${p.name || 'Product'}
+${data.topProducts
+  .slice(0, 5)
+  .map((p, i) => {
+    const avgPrice = p.revenue / p.units;
+    return `${i + 1}. ${p.name || 'Product'}
    → Revenue: £${p.revenue.toLocaleString()} | Units: ${p.units} | Avg Price: £${avgPrice.toFixed(2)}`;
-}).join('\n')}
+  })
+  .join('\n')}
 
 👥 TOP 5 CUSTOMERS:
 ─────────────────────────
-${data.topCustomers.slice(0, 5).map((c, i) => {
-  const avgSpend = c.totalSpent / c.transactions;
-  return `${i + 1}. ${c.name}
+${data.topCustomers
+  .slice(0, 5)
+  .map((c, i) => {
+    const avgSpend = c.totalSpent / c.transactions;
+    return `${i + 1}. ${c.name}
    → Total Spent: £${c.totalSpent.toLocaleString()} | Visits: ${c.transactions} | Avg per Visit: £${avgSpend.toFixed(2)}`;
-}).join('\n')}
+  })
+  .join('\n')}
 
 📈 SALES PATTERN ANALYSIS:
 ─────────────────────────
-${Object.keys(data.salesTrends || {}).length > 0 ? 'Daily revenue trends show: ' + Object.entries(data.salesTrends).slice(-7).map(([date, revenue]) => `\n  ${date}: £${Number(revenue).toLocaleString()}`).join('') : 'Limited trend data available'}
+${
+  Object.keys(data.salesTrends || {}).length > 0
+    ? 'Daily revenue trends show: ' +
+      Object.entries(data.salesTrends)
+        .slice(-7)
+        .map(
+          ([date, revenue]) =>
+            `\n  ${date}: £${Number(revenue).toLocaleString()}`,
+        )
+        .join('')
+    : 'Limited trend data available'
+}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -449,7 +503,11 @@ Write as if you're having a conversation with the business owner. Use "you" and 
    */
   private buildRecommendationsPrompt(data: FinancialAnalysisRequest): string {
     const topProduct = data.topProducts[0] || { name: 'Unknown', revenue: 0 };
-    const topCustomer = data.topCustomers[0] || { name: 'Unknown', totalSpent: 0, transactions: 0 };
+    const topCustomer = data.topCustomers[0] || {
+      name: 'Unknown',
+      totalSpent: 0,
+      transactions: 0,
+    };
 
     return `Dr. Chen, based on your analysis of this jewelry business for ${data.period}, I need your strategic recommendations:
 
@@ -521,7 +579,7 @@ NOW, RETURN YOUR RECOMMENDATIONS AS VALID JSON ARRAY (no markdown, no explanatio
           priority: 'MEDIUM',
           description: '',
           actionItems: [],
-          confidence: 70
+          confidence: 70,
         };
       } else if (current && line.trim()) {
         current.description += line.trim() + ' ';

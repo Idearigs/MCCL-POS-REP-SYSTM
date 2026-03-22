@@ -1,7 +1,20 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
-import { CreateSessionDto, ScanItemDto, UpdateSessionDto, ApproveSessionDto } from './dto';
-import { StockTakeStatus as PrismaStockTakeStatus, StockTakeItemStatus } from '@prisma/client';
+import {
+  CreateSessionDto,
+  ScanItemDto,
+  UpdateSessionDto,
+  ApproveSessionDto,
+} from './dto';
+import {
+  StockTakeStatus as PrismaStockTakeStatus,
+  StockTakeItemStatus,
+} from '@prisma/client';
 
 @Injectable()
 export class StockTakingService {
@@ -133,7 +146,12 @@ export class StockTakingService {
   }
 
   // Scan an item in a session
-  async scanItem(tenantId: string, sessionId: string, userId: string, dto: ScanItemDto) {
+  async scanItem(
+    tenantId: string,
+    sessionId: string,
+    userId: string,
+    dto: ScanItemDto,
+  ) {
     // Verify session exists and is in correct status
     const session = await this.prisma.stock_take_sessions.findFirst({
       where: {
@@ -146,8 +164,13 @@ export class StockTakingService {
       throw new NotFoundException('Stock take session not found');
     }
 
-    if (session.status !== PrismaStockTakeStatus.DRAFT && session.status !== PrismaStockTakeStatus.IN_PROGRESS) {
-      throw new BadRequestException('Cannot scan items in a completed, approved, or cancelled session');
+    if (
+      session.status !== PrismaStockTakeStatus.DRAFT &&
+      session.status !== PrismaStockTakeStatus.IN_PROGRESS
+    ) {
+      throw new BadRequestException(
+        'Cannot scan items in a completed, approved, or cancelled session',
+      );
     }
 
     // Try to find the product by QR code or barcode
@@ -180,7 +203,9 @@ export class StockTakingService {
           isActive: true,
         },
       });
-      status = product ? StockTakeItemStatus.VERIFIED : StockTakeItemStatus.MISSING;
+      status = product
+        ? StockTakeItemStatus.VERIFIED
+        : StockTakeItemStatus.MISSING;
     } else {
       // Unexpected item (not in system)
       status = StockTakeItemStatus.UNEXPECTED;
@@ -205,7 +230,9 @@ export class StockTakingService {
         data: {
           scannedQuantity: existingItem.scannedQuantity + dto.scannedQuantity,
           variance: product
-            ? (existingItem.scannedQuantity + dto.scannedQuantity) - (product.stockQuantity || 0)
+            ? existingItem.scannedQuantity +
+              dto.scannedQuantity -
+              (product.stockQuantity || 0)
             : null,
           notes: dto.notes || existingItem.notes,
           scannedAt: new Date(),
@@ -233,7 +260,9 @@ export class StockTakingService {
           expectedQuantity: product?.stockQuantity || null,
           scannedQuantity: dto.scannedQuantity,
           systemQuantity: product?.stockQuantity || null,
-          variance: product ? dto.scannedQuantity - (product.stockQuantity || 0) : null,
+          variance: product
+            ? dto.scannedQuantity - (product.stockQuantity || 0)
+            : null,
           status,
           notes: dto.notes,
           scannedBy: userId,
@@ -267,12 +296,18 @@ export class StockTakingService {
       item: stockTakeItem,
       product,
       isDuplicate: !!existingItem,
-      warning: existingItem ? 'This item was already scanned. Quantity has been updated.' : null,
+      warning: existingItem
+        ? 'This item was already scanned. Quantity has been updated.'
+        : null,
     };
   }
 
   // Update session details
-  async updateSession(tenantId: string, sessionId: string, dto: UpdateSessionDto) {
+  async updateSession(
+    tenantId: string,
+    sessionId: string,
+    dto: UpdateSessionDto,
+  ) {
     const session = await this.prisma.stock_take_sessions.findFirst({
       where: {
         id: sessionId,
@@ -328,11 +363,15 @@ export class StockTakingService {
     }
 
     if (session.status !== PrismaStockTakeStatus.IN_PROGRESS) {
-      throw new BadRequestException('Can only complete sessions that are in progress');
+      throw new BadRequestException(
+        'Can only complete sessions that are in progress',
+      );
     }
 
     if (session.stock_take_items.length === 0) {
-      throw new BadRequestException('Cannot complete a session with no scanned items');
+      throw new BadRequestException(
+        'Cannot complete a session with no scanned items',
+      );
     }
 
     const updated = await this.prisma.stock_take_sessions.update({
@@ -359,7 +398,12 @@ export class StockTakingService {
   }
 
   // Approve or reject a session (admin only)
-  async approveSession(tenantId: string, sessionId: string, userId: string, dto: ApproveSessionDto) {
+  async approveSession(
+    tenantId: string,
+    sessionId: string,
+    userId: string,
+    dto: ApproveSessionDto,
+  ) {
     const session = await this.prisma.stock_take_sessions.findFirst({
       where: {
         id: sessionId,
@@ -375,14 +419,19 @@ export class StockTakingService {
       throw new NotFoundException('Stock take session not found');
     }
 
-    if (session.status !== PrismaStockTakeStatus.PENDING_APPROVAL && session.status !== PrismaStockTakeStatus.COMPLETED) {
-      throw new BadRequestException('Can only approve sessions that are pending approval or completed');
+    if (
+      session.status !== PrismaStockTakeStatus.PENDING_APPROVAL &&
+      session.status !== PrismaStockTakeStatus.COMPLETED
+    ) {
+      throw new BadRequestException(
+        'Can only approve sessions that are pending approval or completed',
+      );
     }
 
     // CRITICAL SECURITY: Prevent self-approval
     if (session.createdBy === userId) {
       throw new ForbiddenException(
-        'You cannot approve your own stock take session. Another manager or owner must approve this session for security and accountability.'
+        'You cannot approve your own stock take session. Another manager or owner must approve this session for security and accountability.',
       );
     }
 
@@ -414,7 +463,9 @@ export class StockTakingService {
     } else {
       // Reject
       if (!dto.rejectionReason) {
-        throw new BadRequestException('Rejection reason is required when rejecting a session');
+        throw new BadRequestException(
+          'Rejection reason is required when rejecting a session',
+        );
       }
 
       const updated = await this.prisma.stock_take_sessions.update({
@@ -436,26 +487,36 @@ export class StockTakingService {
       if (!item.variance || !item.systemQuantity) return false;
 
       // Calculate variance percentage
-      const variancePercent = Math.abs((item.variance / item.systemQuantity) * 100);
+      const variancePercent = Math.abs(
+        (item.variance / item.systemQuantity) * 100,
+      );
 
       // Flag if variance is more than 20% OR absolute variance > 10 items
       return variancePercent > 20 || Math.abs(item.variance) > 10;
     });
 
     if (largeVariances.length > 0) {
-      const details = largeVariances.map((item) => {
-        const variancePercent = Math.abs((item.variance / item.systemQuantity) * 100).toFixed(1);
-        return `${item.productName} (SKU: ${item.productSku}): ${item.variance > 0 ? '+' : ''}${item.variance} units (${variancePercent}% variance)`;
-      }).join('; ');
+      const details = largeVariances
+        .map((item) => {
+          const variancePercent = Math.abs(
+            (item.variance / item.systemQuantity) * 100,
+          ).toFixed(1);
+          return `${item.productName} (SKU: ${item.productSku}): ${item.variance > 0 ? '+' : ''}${item.variance} units (${variancePercent}% variance)`;
+        })
+        .join('; ');
 
       throw new BadRequestException(
-        `Large inventory variances detected in ${largeVariances.length} product(s). Please review carefully: ${details}. If this is correct, contact your system administrator.`
+        `Large inventory variances detected in ${largeVariances.length} product(s). Please review carefully: ${details}. If this is correct, contact your system administrator.`,
       );
     }
   }
 
   // Apply stock take results to inventory (TRANSACTION-BASED for reliability)
-  private async applyToInventory(tenantId: string, session: any, userId: string) {
+  private async applyToInventory(
+    tenantId: string,
+    session: any,
+    userId: string,
+  ) {
     const items = session.stock_take_items;
 
     // Check for concurrent active stock takes
@@ -464,14 +525,17 @@ export class StockTakingService {
         tenantId,
         id: { not: session.id },
         status: {
-          in: [PrismaStockTakeStatus.IN_PROGRESS, PrismaStockTakeStatus.PENDING_APPROVAL],
+          in: [
+            PrismaStockTakeStatus.IN_PROGRESS,
+            PrismaStockTakeStatus.PENDING_APPROVAL,
+          ],
         },
       },
     });
 
     if (activeStockTakes > 0) {
       throw new BadRequestException(
-        'There are other active stock take sessions. Please complete or cancel them before applying this stock take to prevent inventory conflicts.'
+        'There are other active stock take sessions. Please complete or cancel them before applying this stock take to prevent inventory conflicts.',
       );
     }
 
@@ -490,7 +554,7 @@ export class StockTakingService {
 
             if (!currentProduct) {
               throw new BadRequestException(
-                `Product ${item.productName} (SKU: ${item.productSku}) no longer exists in the system. Cannot apply stock take.`
+                `Product ${item.productName} (SKU: ${item.productSku}) no longer exists in the system. Cannot apply stock take.`,
               );
             }
 
@@ -527,13 +591,15 @@ export class StockTakingService {
           }
         }
 
-        console.log(`✅ Stock take applied: ${updatedCount} products updated, ${adjustmentCount} adjustments made`);
+        console.log(
+          `✅ Stock take applied: ${updatedCount} products updated, ${adjustmentCount} adjustments made`,
+        );
       });
     } catch (error) {
       // Transaction failed - inventory remains unchanged
       console.error('❌ Stock take application failed:', error.message);
       throw new BadRequestException(
-        `Failed to apply stock take to inventory: ${error.message}. All changes have been rolled back.`
+        `Failed to apply stock take to inventory: ${error.message}. All changes have been rolled back.`,
       );
     }
   }
@@ -575,8 +641,13 @@ export class StockTakingService {
       throw new NotFoundException('Stock take session not found');
     }
 
-    if (session.status !== PrismaStockTakeStatus.DRAFT && session.status !== PrismaStockTakeStatus.IN_PROGRESS) {
-      throw new BadRequestException('Cannot delete items from a completed or approved session');
+    if (
+      session.status !== PrismaStockTakeStatus.DRAFT &&
+      session.status !== PrismaStockTakeStatus.IN_PROGRESS
+    ) {
+      throw new BadRequestException(
+        'Cannot delete items from a completed or approved session',
+      );
     }
 
     const item = await this.prisma.stock_take_items.findFirst({
@@ -600,10 +671,18 @@ export class StockTakingService {
   // Calculate summary statistics
   private calculateSummary(items: any[]) {
     const totalScanned = items.length;
-    const verified = items.filter((i) => i.status === StockTakeItemStatus.VERIFIED).length;
-    const missing = items.filter((i) => i.status === StockTakeItemStatus.MISSING).length;
-    const unexpected = items.filter((i) => i.status === StockTakeItemStatus.UNEXPECTED).length;
-    const damaged = items.filter((i) => i.status === StockTakeItemStatus.DAMAGED).length;
+    const verified = items.filter(
+      (i) => i.status === StockTakeItemStatus.VERIFIED,
+    ).length;
+    const missing = items.filter(
+      (i) => i.status === StockTakeItemStatus.MISSING,
+    ).length;
+    const unexpected = items.filter(
+      (i) => i.status === StockTakeItemStatus.UNEXPECTED,
+    ).length;
+    const damaged = items.filter(
+      (i) => i.status === StockTakeItemStatus.DAMAGED,
+    ).length;
     const totalVariance = items.reduce((sum, i) => sum + (i.variance || 0), 0);
 
     return {
@@ -613,7 +692,10 @@ export class StockTakingService {
       unexpected,
       damaged,
       totalVariance,
-      accuracy: totalScanned > 0 ? ((verified / totalScanned) * 100).toFixed(2) : '0.00',
+      accuracy:
+        totalScanned > 0
+          ? ((verified / totalScanned) * 100).toFixed(2)
+          : '0.00',
     };
   }
 
@@ -731,11 +813,12 @@ export class StockTakingService {
           items: minorVariances,
         },
       },
-      recommendation: criticalVariances.length > 0
-        ? 'REVIEW_REQUIRED: Critical variances detected. Please verify physical count before approving.'
-        : moderateVariances.length > 0
-        ? 'CAUTION: Moderate variances detected. Review recommended.'
-        : 'OK: Only minor variances detected.',
+      recommendation:
+        criticalVariances.length > 0
+          ? 'REVIEW_REQUIRED: Critical variances detected. Please verify physical count before approving.'
+          : moderateVariances.length > 0
+            ? 'CAUTION: Moderate variances detected. Review recommended.'
+            : 'OK: Only minor variances detected.',
     };
   }
 }

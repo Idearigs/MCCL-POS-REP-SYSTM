@@ -173,7 +173,7 @@ export class CreatePettyCashTransactionDto {
 
   @ApiProperty({
     description: 'Amount',
-    example: 25.50,
+    example: 25.5,
   })
   @IsNumber()
   @Min(0.01)

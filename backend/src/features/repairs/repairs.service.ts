@@ -7,8 +7,14 @@ import {
 import { RepairStatus } from '@prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CacheService } from '../../core/cache/cache.service';
-import { FileStorageService, FileUploadResult } from '../../integrations/file-storage/file-storage.service';
-import { SmsService, RepairStatusSMSData } from '../../integrations/sms/sms.service';
+import {
+  FileStorageService,
+  FileUploadResult,
+} from '../../integrations/file-storage/file-storage.service';
+import {
+  SmsService,
+  RepairStatusSMSData,
+} from '../../integrations/sms/sms.service';
 import { generateId } from '../../shared/utils/id-generator';
 import {
   CreateRepairDto,
@@ -54,13 +60,23 @@ export class RepairsService {
       let combinedNotes = createRepairDto.internalNotes || '';
 
       if (createRepairDto.items && createRepairDto.items.length > 0) {
-        const descriptions = createRepairDto.items.map(item => item.itemDescription);
+        const descriptions = createRepairDto.items.map(
+          (item) => item.itemDescription,
+        );
         itemDescription = descriptions.join(', ');
-        
-        totalEstimatedCost = createRepairDto.items.reduce((sum, item) => sum + (item.estimatedCost || 0), 0);
-        
-        const repairTypes = createRepairDto.items.map(item => `${item.itemDescription}: ${item.repairType} - ${item.repairDescription}`);
-        combinedNotes = combinedNotes ? `${combinedNotes}\n\nItems:\n${repairTypes.join('\n')}` : `Items:\n${repairTypes.join('\n')}`;
+
+        totalEstimatedCost = createRepairDto.items.reduce(
+          (sum, item) => sum + (item.estimatedCost || 0),
+          0,
+        );
+
+        const repairTypes = createRepairDto.items.map(
+          (item) =>
+            `${item.itemDescription}: ${item.repairType} - ${item.repairDescription}`,
+        );
+        combinedNotes = combinedNotes
+          ? `${combinedNotes}\n\nItems:\n${repairTypes.join('\n')}`
+          : `Items:\n${repairTypes.join('\n')}`;
       }
 
       const repair = await this.prismaService.repairs.create({
@@ -74,7 +90,8 @@ export class RepairsService {
           priority: createRepairDto.priority || 'NORMAL',
           itemDescription: itemDescription,
           issueDescription: createRepairDto.problemDescription,
-          estimatedCost: totalEstimatedCost || createRepairDto.estimatedCost || 0,
+          estimatedCost:
+            totalEstimatedCost || createRepairDto.estimatedCost || 0,
           estimatedDueDate: createRepairDto.expectedCompletionDate
             ? new Date(createRepairDto.expectedCompletionDate)
             : null,
@@ -122,7 +139,9 @@ export class RepairsService {
       where.OR = [
         { repairNumber: { contains: queryDto.search, mode: 'insensitive' } },
         { itemDescription: { contains: queryDto.search, mode: 'insensitive' } },
-        { issueDescription: { contains: queryDto.search, mode: 'insensitive' } },
+        {
+          issueDescription: { contains: queryDto.search, mode: 'insensitive' },
+        },
       ];
     }
 
@@ -133,7 +152,14 @@ export class RepairsService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          customers: { select: { firstName: true, lastName: true, phone: true, email: true } },
+          customers: {
+            select: {
+              firstName: true,
+              lastName: true,
+              phone: true,
+              email: true,
+            },
+          },
           users: { select: { firstName: true, lastName: true } },
         },
       }),
@@ -141,7 +167,7 @@ export class RepairsService {
     ]);
 
     return {
-      data: data.map(repair => this.mapToResponseDto(repair)),
+      data: data.map((repair) => this.mapToResponseDto(repair)),
       meta: {
         page,
         limit,
@@ -190,19 +216,36 @@ export class RepairsService {
       data: {
         status: updateRepairDto.status || existingRepair.status,
         priority: updateRepairDto.priority || existingRepair.priority,
-        itemDescription: updateRepairDto.itemDescription || existingRepair.itemDescription,
-        issueDescription: updateRepairDto.problemDescription || existingRepair.issueDescription,
-        estimatedCost: updateRepairDto.estimatedCost ?? existingRepair.estimatedCost,
+        itemDescription:
+          updateRepairDto.itemDescription || existingRepair.itemDescription,
+        issueDescription:
+          updateRepairDto.problemDescription || existingRepair.issueDescription,
+        estimatedCost:
+          updateRepairDto.estimatedCost ?? existingRepair.estimatedCost,
         finalCost: updateRepairDto.totalCost ?? existingRepair.finalCost,
         estimatedDueDate: updateRepairDto.expectedCompletionDate
           ? new Date(updateRepairDto.expectedCompletionDate)
           : existingRepair.estimatedDueDate,
-        completedDate: updateRepairDto.status === 'COMPLETED' ? new Date() : existingRepair.completedDate,
-        collectedDate: updateRepairDto.status === 'COLLECTED' ? new Date() : existingRepair.collectedDate,
-        customerNotes: updateRepairDto.customerInstructions || existingRepair.customerNotes,
-        internalNotes: updateRepairDto.internalNotes || existingRepair.internalNotes,
-        tagId: updateRepairDto.tagId !== undefined ? updateRepairDto.tagId : existingRepair.tagId,
-        rmaId: updateRepairDto.rmaId !== undefined ? updateRepairDto.rmaId : existingRepair.rmaId,
+        completedDate:
+          updateRepairDto.status === 'COMPLETED'
+            ? new Date()
+            : existingRepair.completedDate,
+        collectedDate:
+          updateRepairDto.status === 'COLLECTED'
+            ? new Date()
+            : existingRepair.collectedDate,
+        customerNotes:
+          updateRepairDto.customerInstructions || existingRepair.customerNotes,
+        internalNotes:
+          updateRepairDto.internalNotes || existingRepair.internalNotes,
+        tagId:
+          updateRepairDto.tagId !== undefined
+            ? updateRepairDto.tagId
+            : existingRepair.tagId,
+        rmaId:
+          updateRepairDto.rmaId !== undefined
+            ? updateRepairDto.rmaId
+            : existingRepair.rmaId,
         updatedAt: new Date(),
       },
       include: {
@@ -212,7 +255,10 @@ export class RepairsService {
     });
 
     // Add status history entry
-    if (updateRepairDto.status && updateRepairDto.status !== existingRepair.status) {
+    if (
+      updateRepairDto.status &&
+      updateRepairDto.status !== existingRepair.status
+    ) {
       await this.prismaService.repair_status_history.create({
         data: {
           id: generateId(),
@@ -220,7 +266,9 @@ export class RepairsService {
           oldStatus: existingRepair.status,
           newStatus: updateRepairDto.status as any,
           changedBy: userId,
-          notes: updateRepairDto.statusNotes || `Status changed to ${updateRepairDto.status}`,
+          notes:
+            updateRepairDto.statusNotes ||
+            `Status changed to ${updateRepairDto.status}`,
         } as any,
       });
     }
@@ -300,7 +348,8 @@ export class RepairsService {
       }
     });
 
-    const averageRepairCost = totalRepairs > 0 ? totalRevenue / totalRepairs : 0;
+    const averageRepairCost =
+      totalRepairs > 0 ? totalRevenue / totalRepairs : 0;
 
     // Initialize priority breakdown with all enum values
     const priorityBreakdown = {
@@ -387,7 +436,7 @@ export class RepairsService {
       },
     });
 
-    return repairs.map(repair => this.mapToResponseDto(repair));
+    return repairs.map((repair) => this.mapToResponseDto(repair));
   }
 
   async addNote(
@@ -454,7 +503,7 @@ export class RepairsService {
       include: {
         customers: true,
         users: true,
-      }
+      },
     });
 
     if (!existingRepair) {
@@ -468,8 +517,10 @@ export class RepairsService {
       where: { id },
       data: {
         status: newStatus,
-        completedDate: newStatus === 'COMPLETED' ? new Date() : existingRepair.completedDate,
-        collectedDate: newStatus === 'COLLECTED' ? new Date() : existingRepair.collectedDate,
+        completedDate:
+          newStatus === 'COMPLETED' ? new Date() : existingRepair.completedDate,
+        collectedDate:
+          newStatus === 'COLLECTED' ? new Date() : existingRepair.collectedDate,
       },
       include: {
         customers: true,
@@ -499,17 +550,20 @@ export class RepairsService {
           oldStatus: oldStatus,
           newStatus: newStatus,
           itemDescription: existingRepair.itemDescription || 'Jewelry repair',
-          estimatedCompletionDate: existingRepair.estimatedDueDate ? 
-            existingRepair.estimatedDueDate.toLocaleDateString('en-GB') : undefined,
+          estimatedCompletionDate: existingRepair.estimatedDueDate
+            ? existingRepair.estimatedDueDate.toLocaleDateString('en-GB')
+            : undefined,
           shopName: 'MPS Jewelry', // Could be made configurable
           shopPhone: '+44 1234 567890', // Could be made configurable
         };
 
         const smsResult = await this.smsService.sendRepairStatusSMS(smsData);
-        
+
         if (smsResult.success) {
-          this.logger.log(`✅ SMS notification sent to customer for repair ${existingRepair.repairNumber}`);
-          
+          this.logger.log(
+            `✅ SMS notification sent to customer for repair ${existingRepair.repairNumber}`,
+          );
+
           // Log SMS in status history
           await this.prismaService.repair_status_history.create({
             data: {
@@ -522,26 +576,40 @@ export class RepairsService {
             } as any,
           });
         } else {
-          this.logger.warn(`⚠️ Failed to send SMS for repair ${existingRepair.repairNumber}: ${smsResult.error}`);
+          this.logger.warn(
+            `⚠️ Failed to send SMS for repair ${existingRepair.repairNumber}: ${smsResult.error}`,
+          );
         }
       } catch (smsError) {
-        this.logger.error(`SMS sending error for repair ${existingRepair.repairNumber}:`, smsError.message);
+        this.logger.error(
+          `SMS sending error for repair ${existingRepair.repairNumber}:`,
+          smsError.message,
+        );
       }
     }
 
-    this.logger.log(`Repair ${existingRepair.repairNumber} status changed: ${oldStatus} → ${newStatus}`);
+    this.logger.log(
+      `Repair ${existingRepair.repairNumber} status changed: ${oldStatus} → ${newStatus}`,
+    );
     return this.mapToResponseDto(updatedRepair);
   }
 
   async uploadImages(
     repairId: string,
-    files: { buffer: Buffer; originalname: string; mimetype: string; size: number }[],
+    files: {
+      buffer: Buffer;
+      originalname: string;
+      mimetype: string;
+      size: number;
+    }[],
     metadata: any,
     tenantId: string,
     userId: string,
   ): Promise<{ results: FileUploadResult[]; summary: any }> {
     try {
-      this.logger.log(`Starting image upload for repair ${repairId}, ${files?.length || 0} files`);
+      this.logger.log(
+        `Starting image upload for repair ${repairId}, ${files?.length || 0} files`,
+      );
 
       // Verify repair exists and user has access
       const repair = await this.prismaService.repairs.findFirst({
@@ -555,76 +623,108 @@ export class RepairsService {
 
       if (!files || files.length === 0) {
         this.logger.warn('No files provided for upload');
-        return { results: [], summary: { totalFiles: 0, successful: 0, failed: 0, uploadMethods: {} } };
+        return {
+          results: [],
+          summary: {
+            totalFiles: 0,
+            successful: 0,
+            failed: 0,
+            uploadMethods: {},
+          },
+        };
       }
 
       const results: FileUploadResult[] = [];
-    
-    for (const file of files) {
-      try {
-        const uploadResult = await this.fileStorageService.uploadFile({
-          fileName: file.originalname,
-          buffer: file.buffer,
-          mimeType: file.mimetype,
-          category: 'repair-images',
-          metadata: {
-            repairId: repair.repairNumber,
-            repairInternalId: repairId,
-            description: metadata.description || `${repair.itemDescription} - repair image`,
-            uploadedBy: userId,
-            originalSize: file.size,
-            uploadType: metadata.uploadType || 'progress',
-          }
-        });
 
-        if (uploadResult.success) {
-          // Store image reference in database (repair_photos table)
-          await this.prismaService.repair_photos.create({
-            data: {
-              id: generateId(),
-              repairId: repairId,
-              fileName: uploadResult.fileName,
-              filePath: uploadResult.fileUrl,
-              driveFileId: uploadResult.uploadMethod === 'google-drive' ? uploadResult.fileName : null,
-              driveViewLink: uploadResult.uploadMethod === 'google-drive' ? uploadResult.fileUrl : null,
-              fileSize: uploadResult.size,
-              mimeType: file.mimetype,
-              description: metadata.description || `${repair.itemDescription} - repair image`,
-              stage: metadata.uploadType || 'progress',
-            } as any,
+      for (const file of files) {
+        try {
+          const uploadResult = await this.fileStorageService.uploadFile({
+            fileName: file.originalname,
+            buffer: file.buffer,
+            mimeType: file.mimetype,
+            category: 'repair-images',
+            metadata: {
+              repairId: repair.repairNumber,
+              repairInternalId: repairId,
+              description:
+                metadata.description ||
+                `${repair.itemDescription} - repair image`,
+              uploadedBy: userId,
+              originalSize: file.size,
+              uploadType: metadata.uploadType || 'progress',
+            },
+          });
+
+          if (uploadResult.success) {
+            // Store image reference in database (repair_photos table)
+            await this.prismaService.repair_photos.create({
+              data: {
+                id: generateId(),
+                repairId: repairId,
+                fileName: uploadResult.fileName,
+                filePath: uploadResult.fileUrl,
+                driveFileId:
+                  uploadResult.uploadMethod === 'google-drive'
+                    ? uploadResult.fileName
+                    : null,
+                driveViewLink:
+                  uploadResult.uploadMethod === 'google-drive'
+                    ? uploadResult.fileUrl
+                    : null,
+                fileSize: uploadResult.size,
+                mimeType: file.mimetype,
+                description:
+                  metadata.description ||
+                  `${repair.itemDescription} - repair image`,
+                stage: metadata.uploadType || 'progress',
+              } as any,
+            });
+          }
+
+          results.push(uploadResult);
+        } catch (error) {
+          this.logger.error(
+            `Failed to upload image for repair ${repairId}:`,
+            error.message,
+          );
+          results.push({
+            success: false,
+            fileUrl: '',
+            fileName: file.originalname,
+            size: file.size,
+            uploadMethod: 'error',
+            error: error.message,
           });
         }
-
-        results.push(uploadResult);
-      } catch (error) {
-        this.logger.error(`Failed to upload image for repair ${repairId}:`, error.message);
-        results.push({
-          success: false,
-          fileUrl: '',
-          fileName: file.originalname,
-          size: file.size,
-          uploadMethod: 'error',
-          error: error.message
-        });
       }
-    }
 
-    const summary = {
-      totalFiles: files.length,
-      successful: results.filter(r => r.success).length,
-      failed: results.filter(r => !r.success).length,
-      uploadMethods: results.reduce((acc, r) => {
-        acc[r.uploadMethod] = (acc[r.uploadMethod] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>)
-    };
+      const summary = {
+        totalFiles: files.length,
+        successful: results.filter((r) => r.success).length,
+        failed: results.filter((r) => !r.success).length,
+        uploadMethods: results.reduce(
+          (acc, r) => {
+            acc[r.uploadMethod] = (acc[r.uploadMethod] || 0) + 1;
+            return acc;
+          },
+          {} as Record<string, number>,
+        ),
+      };
 
-      this.logger.log(`Uploaded ${summary.successful}/${summary.totalFiles} images for repair ${repair.repairNumber}`);
+      this.logger.log(
+        `Uploaded ${summary.successful}/${summary.totalFiles} images for repair ${repair.repairNumber}`,
+      );
 
       return { results, summary };
     } catch (error) {
-      this.logger.error(`Error in uploadImages for repair ${repairId}:`, error.message, error.stack);
-      throw new BadRequestException(`Failed to upload images: ${error.message}`);
+      this.logger.error(
+        `Error in uploadImages for repair ${repairId}:`,
+        error.message,
+        error.stack,
+      );
+      throw new BadRequestException(
+        `Failed to upload images: ${error.message}`,
+      );
     }
   }
 
@@ -644,7 +744,7 @@ export class RepairsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return images.map(image => ({
+    return images.map((image) => ({
       id: image.id,
       imageUrl: image.filePath || image.driveViewLink,
       fileName: image.fileName,
@@ -682,12 +782,17 @@ export class RepairsService {
           try {
             // Delete from storage
             if (photo.driveFileId) {
-              await this.fileStorageService.deleteFile(photo.driveFileId, 'google-drive');
+              await this.fileStorageService.deleteFile(
+                photo.driveFileId,
+                'google-drive',
+              );
             } else if (photo.filePath) {
               await this.fileStorageService.deleteFile(photo.filePath, 'local');
             }
           } catch (fileError) {
-            this.logger.warn(`Failed to delete file for photo ${photo.id}: ${fileError.message}`);
+            this.logger.warn(
+              `Failed to delete file for photo ${photo.id}: ${fileError.message}`,
+            );
           }
         }
 
@@ -707,7 +812,9 @@ export class RepairsService {
         where: { id },
       });
 
-      this.logger.log(`✅ Deleted repair ${repair.repairNumber} and all related records`);
+      this.logger.log(
+        `✅ Deleted repair ${repair.repairNumber} and all related records`,
+      );
 
       return {
         success: true,
@@ -715,7 +822,9 @@ export class RepairsService {
       };
     } catch (error) {
       this.logger.error(`Failed to delete repair ${id}:`, error.message);
-      throw new BadRequestException(`Failed to delete repair: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to delete repair: ${error.message}`,
+      );
     }
   }
 
@@ -747,7 +856,10 @@ export class RepairsService {
       // Delete from storage system
       if (image.driveFileId) {
         // It's a Google Drive file
-        await this.fileStorageService.deleteFile(image.driveFileId, 'google-drive');
+        await this.fileStorageService.deleteFile(
+          image.driveFileId,
+          'google-drive',
+        );
       } else if (image.filePath) {
         // It's a local file
         await this.fileStorageService.deleteFile(image.filePath, 'local');
@@ -755,10 +867,12 @@ export class RepairsService {
 
       // Delete from database
       await this.prismaService.repair_photos.delete({
-        where: { id: imageId }
+        where: { id: imageId },
       });
 
-      this.logger.log(`Deleted image ${imageId} from repair ${repair.repairNumber}`);
+      this.logger.log(
+        `Deleted image ${imageId} from repair ${repair.repairNumber}`,
+      );
       return true;
     } catch (error) {
       this.logger.error(`Failed to delete image ${imageId}:`, error.message);
@@ -771,50 +885,93 @@ export class RepairsService {
       id: repair.id,
       repairNumber: repair.repairNumber,
       customerId: repair.customerId,
-      customerName: repair.customers ? `${repair.customers.firstName} ${repair.customers.lastName}` : 'Unknown',
+      customerName: repair.customers
+        ? `${repair.customers.firstName} ${repair.customers.lastName}`
+        : 'Unknown',
       status: repair.status,
       priority: repair.priority,
       itemDescription: repair.itemDescription,
       problemDescription: repair.issueDescription,
       estimatedCost: Number(repair.estimatedCost || 0),
       totalCost: Number(repair.finalCost || 0),
-      balanceDue: Math.max(0, Number(repair.finalCost || 0) - Number(repair.depositAmount || 0)),
+      balanceDue: Math.max(
+        0,
+        Number(repair.finalCost || 0) - Number(repair.depositAmount || 0),
+      ),
       depositAmount: Number(repair.depositAmount || 0),
       insuranceValue: Number(repair.insuranceValue || 0),
-      expectedCompletionDate: repair.estimatedDueDate ? (repair.estimatedDueDate instanceof Date ? repair.estimatedDueDate.toISOString() : new Date(repair.estimatedDueDate).toISOString()) : null,
-      actualCompletionDate: repair.completedDate ? (repair.completedDate instanceof Date ? repair.completedDate.toISOString() : new Date(repair.completedDate).toISOString()) : null,
+      expectedCompletionDate: repair.estimatedDueDate
+        ? repair.estimatedDueDate instanceof Date
+          ? repair.estimatedDueDate.toISOString()
+          : new Date(repair.estimatedDueDate).toISOString()
+        : null,
+      actualCompletionDate: repair.completedDate
+        ? repair.completedDate instanceof Date
+          ? repair.completedDate.toISOString()
+          : new Date(repair.completedDate).toISOString()
+        : null,
       customerInstructions: repair.customerNotes || '',
       internalNotes: repair.internalNotes || '',
       assignedTechnicianId: repair.assignedTechnicianId || null,
-      assignedTechnicianName: repair.assignedTechnician ? `${repair.assignedTechnician.firstName} ${repair.assignedTechnician.lastName}` : null,
-      isOverdue: repair.estimatedDueDate && repair.status !== 'COMPLETED' && repair.status !== 'COLLECTED' ? new Date() > repair.estimatedDueDate : false,
+      assignedTechnicianName: repair.assignedTechnician
+        ? `${repair.assignedTechnician.firstName} ${repair.assignedTechnician.lastName}`
+        : null,
+      isOverdue:
+        repair.estimatedDueDate &&
+        repair.status !== 'COMPLETED' &&
+        repair.status !== 'COLLECTED'
+          ? new Date() > repair.estimatedDueDate
+          : false,
       createdBy: repair.createdBy,
-      createdByName: repair.users ? `${repair.users.firstName} ${repair.users.lastName}` : 'Unknown',
-      createdAt: repair.createdAt instanceof Date ? repair.createdAt.toISOString() : repair.createdAt,
-      updatedAt: repair.updatedAt instanceof Date ? repair.updatedAt.toISOString() : repair.updatedAt,
+      createdByName: repair.users
+        ? `${repair.users.firstName} ${repair.users.lastName}`
+        : 'Unknown',
+      createdAt:
+        repair.createdAt instanceof Date
+          ? repair.createdAt.toISOString()
+          : repair.createdAt,
+      updatedAt:
+        repair.updatedAt instanceof Date
+          ? repair.updatedAt.toISOString()
+          : repair.updatedAt,
       items: items || this.parseItemsFromNotes(repair.internalNotes),
-      notes: repair.repair_status_history ? repair.repair_status_history.map((history: any) => {
-        const changedAt = history.changedAt instanceof Date ? history.changedAt : new Date(history.changedAt ?? Date.now());
-        return {
-          id: history.id,
-          note: history.notes,
-          isCustomerVisible: true,
-          createdBy: history.changedBy,
-          createdByName: 'System',
-          createdAt: changedAt.toISOString(),
-          updatedAt: changedAt.toISOString(),
-        };
-      }) : [],
-      images: repair.repair_photos ? repair.repair_photos.map((photo: any) => photo.filePath || photo.driveViewLink) : [],
-      beforeImages: repair.repair_photos ? repair.repair_photos
-        .filter((photo: any) => photo.stage === 'before')
-        .map((photo: any) => photo.filePath || photo.driveViewLink) : [],
-      afterImages: repair.repair_photos ? repair.repair_photos
-        .filter((photo: any) => photo.stage === 'after')
-        .map((photo: any) => photo.filePath || photo.driveViewLink) : [],
-      progressImages: repair.repair_photos ? repair.repair_photos
-        .filter((photo: any) => photo.stage === 'progress')
-        .map((photo: any) => photo.filePath || photo.driveViewLink) : [],
+      notes: repair.repair_status_history
+        ? repair.repair_status_history.map((history: any) => {
+            const changedAt =
+              history.changedAt instanceof Date
+                ? history.changedAt
+                : new Date(history.changedAt ?? Date.now());
+            return {
+              id: history.id,
+              note: history.notes,
+              isCustomerVisible: true,
+              createdBy: history.changedBy,
+              createdByName: 'System',
+              createdAt: changedAt.toISOString(),
+              updatedAt: changedAt.toISOString(),
+            };
+          })
+        : [],
+      images: repair.repair_photos
+        ? repair.repair_photos.map(
+            (photo: any) => photo.filePath || photo.driveViewLink,
+          )
+        : [],
+      beforeImages: repair.repair_photos
+        ? repair.repair_photos
+            .filter((photo: any) => photo.stage === 'before')
+            .map((photo: any) => photo.filePath || photo.driveViewLink)
+        : [],
+      afterImages: repair.repair_photos
+        ? repair.repair_photos
+            .filter((photo: any) => photo.stage === 'after')
+            .map((photo: any) => photo.filePath || photo.driveViewLink)
+        : [],
+      progressImages: repair.repair_photos
+        ? repair.repair_photos
+            .filter((photo: any) => photo.stage === 'progress')
+            .map((photo: any) => photo.filePath || photo.driveViewLink)
+        : [],
     };
 
     return response;
@@ -822,12 +979,12 @@ export class RepairsService {
 
   private parseItemsFromNotes(internalNotes: string): any[] {
     if (!internalNotes) return [];
-    
+
     // Try to extract items from internal notes if they were stored there
     const itemsSection = internalNotes.split('Items:\n')[1];
     if (!itemsSection) return [];
-    
-    const itemLines = itemsSection.split('\n').filter(line => line.trim());
+
+    const itemLines = itemsSection.split('\n').filter((line) => line.trim());
     return itemLines.map((line, index) => {
       const parts = line.split(': ');
       return {

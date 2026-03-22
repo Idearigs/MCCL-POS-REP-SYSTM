@@ -1,4 +1,11 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString, IsEnum, Min } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsEnum,
+  Min,
+} from 'class-validator';
 import { ShiftStatus } from '@prisma/client';
 
 export class StartShiftDto {

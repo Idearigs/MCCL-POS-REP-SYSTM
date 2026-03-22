@@ -81,7 +81,7 @@ export class CreateRepairItemDto {
 
   @ApiProperty({
     description: 'Estimated cost for this repair item',
-    example: 85.00,
+    example: 85.0,
     minimum: 0,
   })
   @IsNumber()
@@ -90,7 +90,7 @@ export class CreateRepairItemDto {
 
   @ApiPropertyOptional({
     description: 'Actual cost for this repair item',
-    example: 90.00,
+    example: 90.0,
     minimum: 0,
   })
   @IsOptional()
@@ -184,7 +184,7 @@ export class CreateRepairDto {
 
   @ApiPropertyOptional({
     description: 'Deposit amount paid',
-    example: 50.00,
+    example: 50.0,
     minimum: 0,
   })
   @IsOptional()
@@ -202,7 +202,7 @@ export class CreateRepairDto {
 
   @ApiPropertyOptional({
     description: 'Estimated cost of repair',
-    example: 125.00,
+    example: 125.0,
     minimum: 0,
   })
   @IsOptional()
@@ -220,7 +220,7 @@ export class CreateRepairDto {
 
   @ApiPropertyOptional({
     description: 'Insurance value of items',
-    example: 1500.00,
+    example: 1500.0,
     minimum: 0,
   })
   @IsOptional()
@@ -298,7 +298,7 @@ export class UpdateRepairDto {
 
   @ApiPropertyOptional({
     description: 'Estimated cost of repair',
-    example: 100.00,
+    example: 100.0,
     minimum: 0,
   })
   @IsOptional()
@@ -332,7 +332,7 @@ export class UpdateRepairDto {
 
   @ApiPropertyOptional({
     description: 'Total cost of the repair',
-    example: 125.00,
+    example: 125.0,
     minimum: 0,
   })
   @IsOptional()
@@ -342,7 +342,7 @@ export class UpdateRepairDto {
 
   @ApiPropertyOptional({
     description: 'Deposit amount paid',
-    example: 75.00,
+    example: 75.0,
     minimum: 0,
   })
   @IsOptional()
@@ -352,7 +352,7 @@ export class UpdateRepairDto {
 
   @ApiPropertyOptional({
     description: 'Insurance value of items',
-    example: 1800.00,
+    example: 1800.0,
     minimum: 0,
   })
   @IsOptional()
@@ -514,7 +514,13 @@ export class RepairQueryDto {
   @ApiPropertyOptional({
     description: 'Sort field',
     example: 'createdAt',
-    enum: ['createdAt', 'repairNumber', 'priority', 'status', 'expectedCompletionDate'],
+    enum: [
+      'createdAt',
+      'repairNumber',
+      'priority',
+      'status',
+      'expectedCompletionDate',
+    ],
   })
   @IsOptional()
   @IsString()
@@ -671,7 +677,8 @@ export class RepairResponseDto {
   updatedAt: string;
 
   @ApiProperty({
-    description: 'All repair images (deprecated - use beforeImages, afterImages, progressImages)',
+    description:
+      'All repair images (deprecated - use beforeImages, afterImages, progressImages)',
     type: [String],
   })
   images: string[];
@@ -748,13 +755,13 @@ export class RepairStatsDto {
 
   @ApiProperty({
     description: 'Total repair revenue',
-    example: 15750.00,
+    example: 15750.0,
   })
   totalRevenue: number;
 
   @ApiProperty({
     description: 'Average repair cost',
-    example: 125.50,
+    example: 125.5,
   })
   averageRepairCost: number;
 
@@ -766,7 +773,7 @@ export class RepairStatsDto {
 
   @ApiProperty({
     description: 'Revenue this month',
-    example: 3200.00,
+    example: 3200.0,
   })
   revenueThisMonth: number;
 
@@ -806,8 +813,16 @@ export class RepairStatsDto {
   @ApiProperty({
     description: 'Top technicians by completed repairs',
     example: [
-      { technicianId: 'abc123', technicianName: 'John Smith', completedRepairs: 45 },
-      { technicianId: 'def456', technicianName: 'Jane Doe', completedRepairs: 38 },
+      {
+        technicianId: 'abc123',
+        technicianName: 'John Smith',
+        completedRepairs: 45,
+      },
+      {
+        technicianId: 'def456',
+        technicianName: 'Jane Doe',
+        completedRepairs: 38,
+      },
     ],
   })
   topTechnicians: Array<{

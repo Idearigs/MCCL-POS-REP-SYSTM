@@ -16,13 +16,15 @@ export class GoogleDriveDto {
 
   @ApiProperty({
     description: 'Web view link for the file',
-    example: 'https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/view',
+    example:
+      'https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/view',
   })
   webViewLink: string;
 
   @ApiProperty({
     description: 'Web content link for direct download',
-    example: 'https://drive.google.com/uc?id=1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
+    example:
+      'https://drive.google.com/uc?id=1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
   })
   webContentLink: string;
 

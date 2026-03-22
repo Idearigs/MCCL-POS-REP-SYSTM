@@ -123,18 +123,20 @@ export class CreateProductDto {
 
   @ApiPropertyOptional({
     description: 'Cost price',
-    example: 1500.00,
+    example: 1500.0,
     minimum: 0,
   })
   @IsOptional()
-  @Transform(({ value }) => (value !== null && value !== undefined ? parseFloat(value) : value))
+  @Transform(({ value }) =>
+    value !== null && value !== undefined ? parseFloat(value) : value,
+  )
   @Type(() => Number)
   @Min(0, { message: 'Cost price must be positive' })
   costPrice?: number;
 
   @ApiProperty({
     description: 'Selling price',
-    example: 2500.00,
+    example: 2500.0,
     minimum: 0,
   })
   @Transform(({ value }) => parseFloat(value))
@@ -144,11 +146,13 @@ export class CreateProductDto {
 
   @ApiPropertyOptional({
     description: 'Discount price',
-    example: 2250.00,
+    example: 2250.0,
     minimum: 0,
   })
   @IsOptional()
-  @Transform(({ value }) => (value !== null && value !== undefined ? parseFloat(value) : value))
+  @Transform(({ value }) =>
+    value !== null && value !== undefined ? parseFloat(value) : value,
+  )
   @Type(() => Number)
   @Min(0, { message: 'Discount price must be positive' })
   discountPrice?: number;
@@ -210,7 +214,9 @@ export class CreateProductDto {
     minimum: 0,
   })
   @IsOptional()
-  @Transform(({ value }) => (value !== null && value !== undefined ? parseFloat(value) : value))
+  @Transform(({ value }) =>
+    value !== null && value !== undefined ? parseFloat(value) : value,
+  )
   @Type(() => Number)
   @Min(0, { message: 'Weight must be positive' })
   weight?: number;
@@ -570,13 +576,13 @@ export class ProductResponseDto {
   @ApiPropertyOptional({ example: 'ABC Gems Ltd' })
   supplierName?: string;
 
-  @ApiPropertyOptional({ example: 1500.00 })
+  @ApiPropertyOptional({ example: 1500.0 })
   costPrice?: number;
 
-  @ApiProperty({ example: 2500.00 })
+  @ApiProperty({ example: 2500.0 })
   sellingPrice: number;
 
-  @ApiPropertyOptional({ example: 2250.00 })
+  @ApiPropertyOptional({ example: 2250.0 })
   discountPrice?: number;
 
   @ApiProperty({ example: 5 })
@@ -591,7 +597,10 @@ export class ProductResponseDto {
   @ApiPropertyOptional({ enum: JewelryMaterial, example: JewelryMaterial.GOLD })
   material?: JewelryMaterial;
 
-  @ApiPropertyOptional({ enum: ProductCondition, example: ProductCondition.BRAND_NEW })
+  @ApiPropertyOptional({
+    enum: ProductCondition,
+    example: ProductCondition.BRAND_NEW,
+  })
   condition?: ProductCondition;
 
   @ApiPropertyOptional({ example: 5.5 })
@@ -714,6 +723,6 @@ export class LowStockReportDto {
   @ApiProperty({ example: 'Rings' })
   category?: string;
 
-  @ApiProperty({ example: 2500.00 })
+  @ApiProperty({ example: 2500.0 })
   sellingPrice: number;
 }

@@ -26,7 +26,7 @@ import { TenantGuard } from '../../shared/guards/tenant.guard';
 export class SmsController {
   constructor(
     private readonly smsService: SmsService,
-    private readonly smsProcessor: SmsProcessorService
+    private readonly smsProcessor: SmsProcessorService,
   ) {}
 
   @Post('test')
@@ -45,7 +45,7 @@ export class SmsController {
   })
   async testSMS(@Body() body: { phoneNumber: string }) {
     const result = await this.smsService.testSMS(body.phoneNumber);
-    
+
     if (result.success) {
       return {
         success: true,
@@ -74,7 +74,7 @@ export class SmsController {
   })
   async getBalance() {
     const result = await this.smsService.getBalance();
-    
+
     if (result.error) {
       return {
         success: false,
@@ -98,14 +98,17 @@ export class SmsController {
     status: 200,
     description: 'SMS sent successfully',
   })
-  async sendSMS(@Body() body: { 
-    to: string; 
-    message: string; 
-    reference?: string;
-    from?: string;
-  }) {
+  async sendSMS(
+    @Body()
+    body: {
+      to: string;
+      message: string;
+      reference?: string;
+      from?: string;
+    },
+  ) {
     const result = await this.smsService.sendSMS(body);
-    
+
     return {
       success: result.success,
       message: result.success ? 'SMS sent successfully' : 'SMS sending failed',

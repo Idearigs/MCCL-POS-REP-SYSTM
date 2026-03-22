@@ -50,7 +50,7 @@ export class ProductsService {
         where: {
           sku: createProductDto.sku,
           tenantId,
-          isActive: true,  // Only check active products for SKU conflicts
+          isActive: true, // Only check active products for SKU conflicts
         },
       });
 
@@ -64,12 +64,14 @@ export class ProductsService {
           where: {
             barcode: createProductDto.barcode,
             tenantId,
-            isActive: true,  // Only check active products for barcode conflicts
+            isActive: true, // Only check active products for barcode conflicts
           },
         });
 
         if (existingBarcode) {
-          throw new ConflictException('Product already exists with this barcode');
+          throw new ConflictException(
+            'Product already exists with this barcode',
+          );
         }
       }
 
@@ -79,8 +81,12 @@ export class ProductsService {
           where: { id: createProductDto.categoryId, tenantId },
         });
         if (!category) {
-          this.logger.warn(`Category not found: ${createProductDto.categoryId} for tenant ${tenantId}`);
-          throw new BadRequestException(`Category not found with ID: ${createProductDto.categoryId}. Please create the category first or leave it empty.`);
+          this.logger.warn(
+            `Category not found: ${createProductDto.categoryId} for tenant ${tenantId}`,
+          );
+          throw new BadRequestException(
+            `Category not found with ID: ${createProductDto.categoryId}. Please create the category first or leave it empty.`,
+          );
         }
       }
 
@@ -115,7 +121,7 @@ export class ProductsService {
         include: {
           categories: { select: { id: true, name: true } },
           suppliers: { select: { id: true, name: true } },
-        product_images: true,
+          product_images: true,
         },
       });
 
@@ -136,7 +142,9 @@ export class ProductsService {
       // Clear cache
       await this.clearProductCaches(tenantId);
 
-      this.logger.log(`Product created: ${product.id} (${product.sku}) in tenant ${tenantId}`);
+      this.logger.log(
+        `Product created: ${product.id} (${product.sku}) in tenant ${tenantId}`,
+      );
 
       return this.mapToResponseDto(product);
     } catch (error) {
@@ -168,7 +176,9 @@ export class ProductsService {
       } = query;
 
       // DEBUG: Log what we received
-      this.logger.debug(`📋 Query received: isActive=${isActive} (type: ${typeof isActive}), tenantId=${tenantId}`);
+      this.logger.debug(
+        `📋 Query received: isActive=${isActive} (type: ${typeof isActive}), tenantId=${tenantId}`,
+      );
 
       const skip = (page - 1) * limit;
 
@@ -220,10 +230,7 @@ export class ProductsService {
             categories: { select: { id: true, name: true } },
             suppliers: { select: { id: true, name: true } },
             product_images: {
-              orderBy: [
-                { isMain: 'desc' },
-                { createdAt: 'asc' },
-              ],
+              orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
               select: {
                 id: true,
                 fileName: true,
@@ -238,7 +245,7 @@ export class ProductsService {
       ]);
 
       const result = new PaginatedResponseDto(
-        products.map(product => this.mapToResponseDto(product)),
+        products.map((product) => this.mapToResponseDto(product)),
         page,
         limit,
         total,
@@ -261,10 +268,11 @@ export class ProductsService {
     try {
       // Check cache first
       const cacheKey = `product:${id}`;
-      const cachedProduct = await this.cacheService.getTenantData<ProductResponseDto>(
-        tenantId,
-        cacheKey,
-      );
+      const cachedProduct =
+        await this.cacheService.getTenantData<ProductResponseDto>(
+          tenantId,
+          cacheKey,
+        );
 
       if (cachedProduct) {
         return cachedProduct;
@@ -276,10 +284,7 @@ export class ProductsService {
           categories: { select: { id: true, name: true } },
           suppliers: { select: { id: true, name: true } },
           product_images: {
-            orderBy: [
-              { isMain: 'desc' },
-              { createdAt: 'asc' },
-            ],
+            orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
             select: {
               id: true,
               fileName: true,
@@ -298,7 +303,12 @@ export class ProductsService {
       const productDto = this.mapToResponseDto(product);
 
       // Cache product for 10 minutes
-      await this.cacheService.setTenantData(tenantId, cacheKey, productDto, 600);
+      await this.cacheService.setTenantData(
+        tenantId,
+        cacheKey,
+        productDto,
+        600,
+      );
 
       return productDto;
     } catch (error) {
@@ -327,41 +337,53 @@ export class ProductsService {
       }
 
       // Check SKU conflicts (if SKU is being updated) - only check active products
-      if (updateProductDto.sku && updateProductDto.sku !== existingProduct.sku) {
+      if (
+        updateProductDto.sku &&
+        updateProductDto.sku !== existingProduct.sku
+      ) {
         const skuConflict = await this.prismaService.products.findFirst({
           where: {
             sku: updateProductDto.sku,
             tenantId,
-            isActive: true,  // Only check active products for SKU conflicts
+            isActive: true, // Only check active products for SKU conflicts
             id: { not: id },
           },
         });
 
         if (skuConflict) {
-          throw new ConflictException('Another product already exists with this SKU');
+          throw new ConflictException(
+            'Another product already exists with this SKU',
+          );
         }
       }
 
       // Check barcode conflicts (if barcode is being updated) - only check active products
-      if (updateProductDto.barcode && updateProductDto.barcode !== existingProduct.barcode) {
+      if (
+        updateProductDto.barcode &&
+        updateProductDto.barcode !== existingProduct.barcode
+      ) {
         const barcodeConflict = await this.prismaService.products.findFirst({
           where: {
             barcode: updateProductDto.barcode,
             tenantId,
-            isActive: true,  // Only check active products for barcode conflicts
+            isActive: true, // Only check active products for barcode conflicts
             id: { not: id },
           },
         });
 
         if (barcodeConflict) {
-          throw new ConflictException('Another product already exists with this barcode');
+          throw new ConflictException(
+            'Another product already exists with this barcode',
+          );
         }
       }
 
       // Handle stock quantity changes
       let stockChanged = false;
-      if (updateProductDto.stockQuantity !== undefined && 
-          updateProductDto.stockQuantity !== existingProduct.stockQuantity) {
+      if (
+        updateProductDto.stockQuantity !== undefined &&
+        updateProductDto.stockQuantity !== existingProduct.stockQuantity
+      ) {
         stockChanged = true;
       }
 
@@ -369,23 +391,23 @@ export class ProductsService {
         where: { id },
         data: {
           ...updateProductDto,
-          sellingPrice: updateProductDto.sellingPrice 
-            ? new Prisma.Decimal(updateProductDto.sellingPrice) 
+          sellingPrice: updateProductDto.sellingPrice
+            ? new Prisma.Decimal(updateProductDto.sellingPrice)
             : undefined,
-          costPrice: updateProductDto.costPrice 
-            ? new Prisma.Decimal(updateProductDto.costPrice) 
+          costPrice: updateProductDto.costPrice
+            ? new Prisma.Decimal(updateProductDto.costPrice)
             : undefined,
-          discountPrice: updateProductDto.discountPrice 
-            ? new Prisma.Decimal(updateProductDto.discountPrice) 
+          discountPrice: updateProductDto.discountPrice
+            ? new Prisma.Decimal(updateProductDto.discountPrice)
             : undefined,
-          weight: updateProductDto.weight 
-            ? new Prisma.Decimal(updateProductDto.weight) 
+          weight: updateProductDto.weight
+            ? new Prisma.Decimal(updateProductDto.weight)
             : undefined,
         },
         include: {
           categories: { select: { id: true, name: true } },
           suppliers: { select: { id: true, name: true } },
-        product_images: true,
+          product_images: true,
         },
       });
 
@@ -483,7 +505,7 @@ export class ProductsService {
         include: {
           categories: { select: { id: true, name: true } },
           suppliers: { select: { id: true, name: true } },
-        product_images: true,
+          product_images: true,
         },
       });
 
@@ -504,12 +526,15 @@ export class ProductsService {
       await this.clearProductCaches(tenantId);
 
       this.logger.log(
-        `Stock adjusted for product ${id}: ${oldQuantity} -> ${newQuantity} (${stockAdjustmentDto.quantity > 0 ? '+' : ''}${stockAdjustmentDto.quantity})`
+        `Stock adjusted for product ${id}: ${oldQuantity} -> ${newQuantity} (${stockAdjustmentDto.quantity > 0 ? '+' : ''}${stockAdjustmentDto.quantity})`,
       );
 
       return this.mapToResponseDto(updatedProduct);
     } catch (error) {
-      this.logger.error(`Failed to adjust stock for product ${id}:`, error.message);
+      this.logger.error(
+        `Failed to adjust stock for product ${id}:`,
+        error.message,
+      );
       throw error;
     }
   }
@@ -520,14 +545,14 @@ export class ProductsService {
   async getLowStockReport(tenantId: string): Promise<any[]> {
     try {
       const products = await this.getLowStockProducts(tenantId);
-      return products.map(product => ({
+      return products.map((product) => ({
         id: product.id,
         name: product.name,
         sku: product.sku,
         currentStock: product.stockQuantity,
         minStockLevel: product.minStockLevel,
         category: product.category?.name,
-        sellingPrice: product.sellingPrice
+        sellingPrice: product.sellingPrice,
       }));
     } catch (error) {
       this.logger.error('Failed to get low stock report:', error.message);
@@ -538,12 +563,14 @@ export class ProductsService {
   /**
    * Get categories
    */
-  async getCategories(tenantId: string): Promise<Array<{ id: string; name: string }>> {
+  async getCategories(
+    tenantId: string,
+  ): Promise<Array<{ id: string; name: string }>> {
     try {
       const categories = await this.prismaService.categories.findMany({
         where: { tenantId, isActive: true },
         select: { id: true, name: true },
-        orderBy: { name: 'asc' }
+        orderBy: { name: 'asc' },
       });
       return categories;
     } catch (error) {
@@ -561,9 +588,9 @@ export class ProductsService {
         where: { tenantId, isActive: true, material: { not: null } },
         select: { material: true },
         distinct: ['material'],
-        orderBy: { material: 'asc' }
+        orderBy: { material: 'asc' },
       });
-      return materials.map(m => m.material).filter(Boolean) as string[];
+      return materials.map((m) => m.material).filter(Boolean) as string[];
     } catch (error) {
       this.logger.error('Failed to get materials:', error.message);
       throw error;
@@ -573,7 +600,10 @@ export class ProductsService {
   /**
    * Generate a unique SKU
    */
-  async generateUniqueSku(tenantId: string, prefix: string = 'JWL'): Promise<{ sku: string }> {
+  async generateUniqueSku(
+    tenantId: string,
+    prefix: string = 'JWL',
+  ): Promise<{ sku: string }> {
     try {
       // Format: PREFIX-YYYYMMDD-XXX (e.g., JWL-20251013-001)
       const today = new Date();
@@ -631,18 +661,22 @@ export class ProductsService {
   /**
    * Bulk update stock
    */
-  async bulkUpdateStock(bulkUpdateDto: any, tenantId: string, userId?: string): Promise<{ updated: number; errors: any[] }> {
+  async bulkUpdateStock(
+    bulkUpdateDto: any,
+    tenantId: string,
+    userId?: string,
+  ): Promise<{ updated: number; errors: any[] }> {
     try {
       const results = {
         updated: 0,
-        errors: []
+        errors: [],
       };
 
       for (const update of bulkUpdateDto.updates) {
         try {
           await this.prismaService.products.update({
             where: { id: update.productId, tenantId },
-            data: { stockQuantity: update.newStock }
+            data: { stockQuantity: update.newStock },
           });
 
           // Create inventory log
@@ -654,14 +688,14 @@ export class ProductsService {
             0, // We don't have the old quantity here
             update.newStock,
             update.reason,
-            'BULK_UPDATE'
+            'BULK_UPDATE',
           );
 
           results.updated++;
         } catch (error) {
           results.errors.push({
             productId: update.productId,
-            error: error.message
+            error: error.message,
           });
         }
       }
@@ -679,13 +713,13 @@ export class ProductsService {
   async bulkAssignRFID(
     assignments: Array<{ sku: string; rfidTag: string }>,
     tenantId: string,
-    userId?: string
+    userId?: string,
   ): Promise<{ success: number; failed: number; errors: any[] }> {
     try {
       const results = {
         success: 0,
         failed: 0,
-        errors: []
+        errors: [],
       };
 
       for (const assignment of assignments) {
@@ -750,7 +784,7 @@ export class ProductsService {
       // await this.cacheService.invalidateTenantData(tenantId, 'products:*');
 
       this.logger.log(
-        `Bulk RFID assignment completed: ${results.success} success, ${results.failed} failed`
+        `Bulk RFID assignment completed: ${results.success} success, ${results.failed} failed`,
       );
 
       return results;
@@ -767,10 +801,9 @@ export class ProductsService {
     try {
       // Check cache first
       const cacheKey = 'products:low_stock';
-      const cachedResult = await this.cacheService.getTenantData<ProductResponseDto[]>(
-        tenantId,
-        cacheKey,
-      );
+      const cachedResult = await this.cacheService.getTenantData<
+        ProductResponseDto[]
+      >(tenantId, cacheKey);
 
       if (cachedResult) {
         return cachedResult;
@@ -785,22 +818,20 @@ export class ProductsService {
           categories: { select: { id: true, name: true } },
           suppliers: { select: { id: true, name: true } },
           product_images: {
-            orderBy: [
-              { isMain: 'desc' },
-              { createdAt: 'asc' },
-            ],
+            orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
           },
         },
-        orderBy: [
-          { stockQuantity: 'asc' },
-          { name: 'asc' },
-        ],
+        orderBy: [{ stockQuantity: 'asc' }, { name: 'asc' }],
       });
 
       // Filter low stock products in JavaScript since Prisma doesn't support comparing fields directly
-      const lowStockProducts = products.filter(product => product.stockQuantity <= product.minStockLevel);
+      const lowStockProducts = products.filter(
+        (product) => product.stockQuantity <= product.minStockLevel,
+      );
 
-      const result = lowStockProducts.map(product => this.mapToResponseDto(product));
+      const result = lowStockProducts.map((product) =>
+        this.mapToResponseDto(product),
+      );
 
       // Cache for 5 minutes
       await this.cacheService.setTenantData(tenantId, cacheKey, result, 300);
@@ -819,10 +850,11 @@ export class ProductsService {
     try {
       // Check cache first
       const cacheKey = 'products:stats';
-      const cachedStats = await this.cacheService.getTenantData<InventoryStatsDto>(
-        tenantId,
-        cacheKey,
-      );
+      const cachedStats =
+        await this.cacheService.getTenantData<InventoryStatsDto>(
+          tenantId,
+          cacheKey,
+        );
 
       if (cachedStats) {
         return cachedStats;
@@ -839,8 +871,12 @@ export class ProductsService {
         categoryStats,
       ] = await Promise.all([
         this.prismaService.products.count({ where: { tenantId } }),
-        this.prismaService.products.count({ where: { tenantId, isActive: true } }),
-        this.prismaService.products.count({ where: { tenantId, isDamaged: true } }),
+        this.prismaService.products.count({
+          where: { tenantId, isActive: true },
+        }),
+        this.prismaService.products.count({
+          where: { tenantId, isDamaged: true },
+        }),
         // Low stock count - we'll calculate this differently
         0,
         this.prismaService.products.count({
@@ -859,9 +895,11 @@ export class ProductsService {
       // Calculate low stock products properly
       const allActiveProducts = await this.prismaService.products.findMany({
         where: { tenantId, isActive: true },
-        select: { stockQuantity: true, minStockLevel: true }
+        select: { stockQuantity: true, minStockLevel: true },
       });
-      const actualLowStockProducts = allActiveProducts.filter(p => p.stockQuantity <= p.minStockLevel).length;
+      const actualLowStockProducts = allActiveProducts.filter(
+        (p) => p.stockQuantity <= p.minStockLevel,
+      ).length;
 
       const stats: InventoryStatsDto = {
         totalProducts,
@@ -871,9 +909,10 @@ export class ProductsService {
         lowStockProducts: actualLowStockProducts,
         outOfStockProducts,
         totalStockValue: Number(stockValue._sum.sellingPrice || 0),
-        averageProductValue: totalProducts > 0 
-          ? Number(stockValue._sum.sellingPrice || 0) / totalProducts 
-          : 0,
+        averageProductValue:
+          totalProducts > 0
+            ? Number(stockValue._sum.sellingPrice || 0) / totalProducts
+            : 0,
         productsByMaterial: materialStats,
         productsByCategory: categoryStats,
       };
@@ -907,7 +946,9 @@ export class ProductsService {
 
       await this.clearProductCaches(tenantId);
 
-      this.logger.log(`Category created: ${category.id} (${category.name}) in tenant ${tenantId}`);
+      this.logger.log(
+        `Category created: ${category.id} (${category.name}) in tenant ${tenantId}`,
+      );
 
       return category;
     } catch (error) {
@@ -935,7 +976,9 @@ export class ProductsService {
 
       await this.clearProductCaches(tenantId);
 
-      this.logger.log(`Supplier created: ${supplier.id} (${supplier.name}) in tenant ${tenantId}`);
+      this.logger.log(
+        `Supplier created: ${supplier.id} (${supplier.name}) in tenant ${tenantId}`,
+      );
 
       return supplier;
     } catch (error) {
@@ -947,7 +990,10 @@ export class ProductsService {
   /**
    * Find product by barcode
    */
-  async findByBarcode(barcode: string, tenantId: string): Promise<ProductResponseDto> {
+  async findByBarcode(
+    barcode: string,
+    tenantId: string,
+  ): Promise<ProductResponseDto> {
     const product = await this.prismaService.products.findFirst({
       where: { barcode, tenantId, isActive: true },
       include: {
@@ -987,7 +1033,12 @@ export class ProductsService {
   /**
    * Upload product image with secure local storage
    */
-  async uploadImage(id: string, file: any, tenantId: string, userId?: string): Promise<{ imageUrl: string; imageId: string }> {
+  async uploadImage(
+    id: string,
+    file: any,
+    tenantId: string,
+    userId?: string,
+  ): Promise<{ imageUrl: string; imageId: string }> {
     try {
       // 1. Verify product exists
       const product = await this.prismaService.products.findFirst({
@@ -1003,7 +1054,9 @@ export class ProductsService {
         throw new BadRequestException('No file provided');
       }
 
-      this.logger.log(`📤 Uploading image for product ${id}: ${file.originalname} (${file.size} bytes)`);
+      this.logger.log(
+        `📤 Uploading image for product ${id}: ${file.originalname} (${file.size} bytes)`,
+      );
 
       // 3. Upload file using secure file storage service
       const uploadResult = await this.fileStorageService.uploadFile({
@@ -1017,11 +1070,13 @@ export class ProductsService {
           uploadedBy: userId || 'system',
           productName: product.name,
           productSku: product.sku,
-        }
+        },
       });
 
       if (!uploadResult.success) {
-        throw new BadRequestException(uploadResult.error || 'File upload failed');
+        throw new BadRequestException(
+          uploadResult.error || 'File upload failed',
+        );
       }
 
       // 4. Save image record to database
@@ -1031,8 +1086,11 @@ export class ProductsService {
           productId: id,
           fileName: uploadResult.fileName,
           filePath: uploadResult.fileUrl, // For local: http://localhost:3002/uploads/product-images/filename
-          driveFileId: uploadResult.fileId,  // For Google Drive (when enabled)
-          driveViewLink: uploadResult.uploadMethod === 'google-drive' ? uploadResult.fileUrl : null,
+          driveFileId: uploadResult.fileId, // For Google Drive (when enabled)
+          driveViewLink:
+            uploadResult.uploadMethod === 'google-drive'
+              ? uploadResult.fileUrl
+              : null,
           fileSize: uploadResult.size,
           mimeType: file.mimetype,
           isMain: false, // User can set this via another endpoint
@@ -1043,15 +1101,19 @@ export class ProductsService {
       await this.cacheService.delTenantData(tenantId, `product:${id}`);
       await this.clearProductCaches(tenantId);
 
-      this.logger.log(`✅ Image uploaded successfully for product ${id}: ${uploadResult.fileName} via ${uploadResult.uploadMethod}`);
+      this.logger.log(
+        `✅ Image uploaded successfully for product ${id}: ${uploadResult.fileName} via ${uploadResult.uploadMethod}`,
+      );
 
       return {
         imageUrl: uploadResult.fileUrl,
-        imageId: productImage.id
+        imageId: productImage.id,
       };
-
     } catch (error) {
-      this.logger.error(`❌ Failed to upload image for product ${id}:`, error.message);
+      this.logger.error(
+        `❌ Failed to upload image for product ${id}:`,
+        error.message,
+      );
       throw error;
     }
   }
@@ -1059,7 +1121,11 @@ export class ProductsService {
   /**
    * Restore product (undelete)
    */
-  async restore(id: string, tenantId: string, userId?: string): Promise<ProductResponseDto> {
+  async restore(
+    id: string,
+    tenantId: string,
+    userId?: string,
+  ): Promise<ProductResponseDto> {
     const product = await this.prismaService.products.update({
       where: { id, tenantId },
       data: { isActive: true },
@@ -1089,7 +1155,10 @@ export class ProductsService {
 
       return logs;
     } catch (error) {
-      this.logger.error(`Failed to get inventory logs for product ${productId}:`, error.message);
+      this.logger.error(
+        `Failed to get inventory logs for product ${productId}:`,
+        error.message,
+      );
       throw error;
     }
   }
@@ -1125,7 +1194,9 @@ export class ProductsService {
   /**
    * Private: Get products by material
    */
-  private async getProductsByMaterial(tenantId: string): Promise<Record<string, number>> {
+  private async getProductsByMaterial(
+    tenantId: string,
+  ): Promise<Record<string, number>> {
     const results = await this.prismaService.products.groupBy({
       by: ['material'],
       where: { tenantId, isActive: true },
@@ -1133,7 +1204,7 @@ export class ProductsService {
     });
 
     const stats: Record<string, number> = {};
-    results.forEach(result => {
+    results.forEach((result) => {
       if (result.material) {
         stats[result.material] = result._count.material;
       }
@@ -1145,7 +1216,9 @@ export class ProductsService {
   /**
    * Private: Get products by category
    */
-  private async getProductsByCategory(tenantId: string): Promise<Record<string, number>> {
+  private async getProductsByCategory(
+    tenantId: string,
+  ): Promise<Record<string, number>> {
     const results = await this.prismaService.products.findMany({
       where: { tenantId, isActive: true },
       include: {
@@ -1154,7 +1227,7 @@ export class ProductsService {
     });
 
     const stats: Record<string, number> = {};
-    results.forEach(product => {
+    results.forEach((product) => {
       const categoryName = product.categories?.name || 'Uncategorized';
       stats[categoryName] = (stats[categoryName] || 0) + 1;
     });
@@ -1198,7 +1271,9 @@ export class ProductsService {
       supplierName: product.supplierName || product.suppliers?.name,
       costPrice: product.costPrice ? Number(product.costPrice) : undefined,
       sellingPrice: Number(product.sellingPrice),
-      discountPrice: product.discountPrice ? Number(product.discountPrice) : undefined,
+      discountPrice: product.discountPrice
+        ? Number(product.discountPrice)
+        : undefined,
       stockQuantity: product.stockQuantity,
       minStockLevel: product.minStockLevel,
       maxStockLevel: product.maxStockLevel,

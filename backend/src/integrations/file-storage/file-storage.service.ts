@@ -19,7 +19,11 @@ export interface FileUploadOptions {
   fileName: string;
   buffer: Buffer;
   mimeType: string;
-  category: 'repair-images' | 'customer-documents' | 'product-images' | 'receipts';
+  category:
+    | 'repair-images'
+    | 'customer-documents'
+    | 'product-images'
+    | 'receipts';
   metadata?: Record<string, any>;
 }
 
@@ -38,7 +42,7 @@ export class FileStorageService {
   private async initializeStorageSystems() {
     // Initialize local storage directory
     this.ensureUploadDirectory();
-    
+
     // Try to initialize Google Drive
     await this.initializeGoogleDrive();
   }
@@ -48,29 +52,43 @@ export class FileStorageService {
       if (!fs.existsSync(this.uploadDirectory)) {
         fs.mkdirSync(this.uploadDirectory, { recursive: true });
       }
-      
+
       // Create category subdirectories
-      const categories = ['repair-images', 'customer-documents', 'product-images', 'receipts'];
-      categories.forEach(category => {
+      const categories = [
+        'repair-images',
+        'customer-documents',
+        'product-images',
+        'receipts',
+      ];
+      categories.forEach((category) => {
         const categoryPath = path.join(this.uploadDirectory, category);
         if (!fs.existsSync(categoryPath)) {
           fs.mkdirSync(categoryPath, { recursive: true });
         }
       });
-      
+
       this.logger.log('✅ Local upload directories initialized');
     } catch (error) {
-      this.logger.error('❌ Failed to initialize upload directories:', error.message);
+      this.logger.error(
+        '❌ Failed to initialize upload directories:',
+        error.message,
+      );
     }
   }
 
   private async initializeGoogleDrive() {
     // Google Drive temporarily disabled - waiting for client Shared Drive setup
-    this.logger.warn('⚠️ Google Drive integration temporarily disabled. Using local storage only.');
-    this.logger.log('📋 Reason: Waiting for client to complete Shared Drive setup');
-    this.logger.log('📁 All files will be stored locally until Google Drive is re-enabled');
+    this.logger.warn(
+      '⚠️ Google Drive integration temporarily disabled. Using local storage only.',
+    );
+    this.logger.log(
+      '📋 Reason: Waiting for client to complete Shared Drive setup',
+    );
+    this.logger.log(
+      '📁 All files will be stored locally until Google Drive is re-enabled',
+    );
     this.isGoogleDriveAvailable = false;
-    
+
     // Uncomment below code once Shared Drive is configured by client
     /*
     try {
@@ -116,7 +134,9 @@ export class FileStorageService {
   async uploadFile(options: FileUploadOptions): Promise<FileUploadResult> {
     const { fileName, buffer, mimeType, category, metadata } = options;
 
-    this.logger.debug(`📤 Starting file upload: ${fileName} (${buffer.length} bytes)`);
+    this.logger.debug(
+      `📤 Starting file upload: ${fileName} (${buffer.length} bytes)`,
+    );
 
     // Security: Validate file before upload
     this.validateFile(fileName, buffer, mimeType, category);
@@ -147,7 +167,7 @@ export class FileStorageService {
         fileName,
         size: buffer.length,
         uploadMethod: 'error',
-        error: `Upload failed: ${error.message}`
+        error: `Upload failed: ${error.message}`,
       };
     }
   }
@@ -155,15 +175,36 @@ export class FileStorageService {
   /**
    * Security: Validate file before upload
    */
-  private validateFile(fileName: string, buffer: Buffer, mimeType: string, category: string): void {
+  private validateFile(
+    fileName: string,
+    buffer: Buffer,
+    mimeType: string,
+    category: string,
+  ): void {
     // 1. Check file size (max 10MB for images, 5MB for documents)
-    const maxSize = category === 'product-images' || category === 'repair-images' ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
+    const maxSize =
+      category === 'product-images' || category === 'repair-images'
+        ? 10 * 1024 * 1024
+        : 5 * 1024 * 1024;
     if (buffer.length > maxSize) {
-      throw new BadRequestException(`File size exceeds maximum allowed size of ${maxSize / 1024 / 1024}MB`);
+      throw new BadRequestException(
+        `File size exceeds maximum allowed size of ${maxSize / 1024 / 1024}MB`,
+      );
     }
 
     // 2. Validate file extension (prevent executable files)
-    const dangerousExtensions = ['.exe', '.bat', '.cmd', '.sh', '.ps1', '.js', '.jar', '.app', '.deb', '.rpm'];
+    const dangerousExtensions = [
+      '.exe',
+      '.bat',
+      '.cmd',
+      '.sh',
+      '.ps1',
+      '.js',
+      '.jar',
+      '.app',
+      '.deb',
+      '.rpm',
+    ];
     const fileExt = path.extname(fileName).toLowerCase();
     if (dangerousExtensions.includes(fileExt)) {
       throw new BadRequestException('File type not allowed');
@@ -171,18 +212,46 @@ export class FileStorageService {
 
     // 3. Validate MIME type based on category
     const allowedMimeTypes: Record<string, string[]> = {
-      'product-images': ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'],
-      'repair-images': ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'],
-      'customer-documents': ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-      'receipts': ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']
+      'product-images': [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+        'image/gif',
+      ],
+      'repair-images': [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+        'image/gif',
+      ],
+      'customer-documents': [
+        'application/pdf',
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ],
+      receipts: ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'],
     };
 
-    if (!allowedMimeTypes[category] || !allowedMimeTypes[category].includes(mimeType)) {
-      throw new BadRequestException(`File type ${mimeType} not allowed for ${category}`);
+    if (
+      !allowedMimeTypes[category] ||
+      !allowedMimeTypes[category].includes(mimeType)
+    ) {
+      throw new BadRequestException(
+        `File type ${mimeType} not allowed for ${category}`,
+      );
     }
 
     // 4. Sanitize filename (remove path traversal attempts)
-    if (fileName.includes('..') || fileName.includes('/') || fileName.includes('\\')) {
+    if (
+      fileName.includes('..') ||
+      fileName.includes('/') ||
+      fileName.includes('\\')
+    ) {
       throw new BadRequestException('Invalid filename');
     }
 
@@ -190,8 +259,12 @@ export class FileStorageService {
     if (category === 'product-images' || category === 'repair-images') {
       const isValidImage = this.validateImageMagicBytes(buffer, mimeType);
       if (!isValidImage) {
-        this.logger.warn(`⚠️ Image magic bytes validation failed for ${fileName} (MIME: ${mimeType})`);
-        this.logger.warn(`   First 12 bytes: ${buffer.slice(0, 12).toString('hex')}`);
+        this.logger.warn(
+          `⚠️ Image magic bytes validation failed for ${fileName} (MIME: ${mimeType})`,
+        );
+        this.logger.warn(
+          `   First 12 bytes: ${buffer.slice(0, 12).toString('hex')}`,
+        );
         // TEMPORARY: Allow upload anyway but log the warning
         // TODO: Investigate why some valid images fail validation
         // throw new BadRequestException('File does not match declared image type');
@@ -211,24 +284,45 @@ export class FileStorageService {
 
     // JPEG: FF D8 FF
     if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
-      return header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF;
+      return header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff;
     }
 
     // PNG: 89 50 4E 47 0D 0A 1A 0A
     if (mimeType === 'image/png') {
-      return header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47 &&
-             header[4] === 0x0D && header[5] === 0x0A && header[6] === 0x1A && header[7] === 0x0A;
+      return (
+        header[0] === 0x89 &&
+        header[1] === 0x50 &&
+        header[2] === 0x4e &&
+        header[3] === 0x47 &&
+        header[4] === 0x0d &&
+        header[5] === 0x0a &&
+        header[6] === 0x1a &&
+        header[7] === 0x0a
+      );
     }
 
     // GIF: 47 49 46 38
     if (mimeType === 'image/gif') {
-      return header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x38;
+      return (
+        header[0] === 0x47 &&
+        header[1] === 0x49 &&
+        header[2] === 0x46 &&
+        header[3] === 0x38
+      );
     }
 
     // WebP: 52 49 46 46 ... 57 45 42 50
     if (mimeType === 'image/webp') {
-      return header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46 &&
-             header[8] === 0x57 && header[9] === 0x45 && header[10] === 0x42 && header[11] === 0x50;
+      return (
+        header[0] === 0x52 &&
+        header[1] === 0x49 &&
+        header[2] === 0x46 &&
+        header[3] === 0x46 &&
+        header[8] === 0x57 &&
+        header[9] === 0x45 &&
+        header[10] === 0x42 &&
+        header[11] === 0x50
+      );
     }
 
     return false;
@@ -237,14 +331,16 @@ export class FileStorageService {
   /**
    * Strategy 1: Upload to Google Shared Drive with proper support
    */
-  private async uploadToGoogleDrive(options: FileUploadOptions): Promise<FileUploadResult> {
+  private async uploadToGoogleDrive(
+    options: FileUploadOptions,
+  ): Promise<FileUploadResult> {
     const { fileName, buffer, mimeType, category, metadata } = options;
-    
+
     try {
       // Create a unique filename to avoid conflicts
       const timestamp = Date.now();
       const uniqueFileName = `${timestamp}-${fileName}`;
-      
+
       const fileMetadata: any = {
         name: uniqueFileName,
         description: `MPS Jewelry System - ${category} - ${metadata?.description || 'File upload'}`,
@@ -252,28 +348,36 @@ export class FileStorageService {
 
       // Get the appropriate folder ID based on category
       const folderId = this.getSharedDriveFolderId(category);
-      
+
       if (folderId) {
         try {
           // Test if we can access the Shared Drive folder
-          await this.driveClient.files.get({ 
+          await this.driveClient.files.get({
             fileId: folderId,
-            supportsAllDrives: true
+            supportsAllDrives: true,
           });
           fileMetadata.parents = [folderId];
-          this.logger.debug(`Uploading to Shared Drive folder: ${category} (${folderId})`);
+          this.logger.debug(
+            `Uploading to Shared Drive folder: ${category} (${folderId})`,
+          );
         } catch (folderError) {
-          this.logger.warn(`Cannot access Shared Drive folder ${category}: ${folderError.message}`);
+          this.logger.warn(
+            `Cannot access Shared Drive folder ${category}: ${folderError.message}`,
+          );
           throw new Error(`Shared Drive folder not accessible: ${category}`);
         }
       } else {
-        this.logger.warn(`No Shared Drive folder configured for category: ${category}`);
-        throw new Error(`No Shared Drive folder configured for category: ${category}`);
+        this.logger.warn(
+          `No Shared Drive folder configured for category: ${category}`,
+        );
+        throw new Error(
+          `No Shared Drive folder configured for category: ${category}`,
+        );
       }
 
       const media = {
         mimeType,
-        body: Readable.from(buffer)
+        body: Readable.from(buffer),
       };
 
       // Upload to Shared Drive with proper flags
@@ -283,17 +387,20 @@ export class FileStorageService {
         fields: 'id,name,webViewLink,webContentLink,size,parents,driveId',
         supportsAllDrives: true,
         // Note: supportsTeamDrives is deprecated but kept for compatibility
-        supportsTeamDrives: true
+        supportsTeamDrives: true,
       });
 
       const file = response.data;
 
       // For Shared Drives, files inherit permissions from the drive
       // No need to set individual permissions as they're managed at drive level
-      this.logger.debug(`File uploaded to Shared Drive: ${file.id} in drive ${file.driveId}`);
+      this.logger.debug(
+        `File uploaded to Shared Drive: ${file.id} in drive ${file.driveId}`,
+      );
 
       // Generate accessible URL - for Shared Drive files
-      const fileUrl = file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`;
+      const fileUrl =
+        file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`;
 
       return {
         success: true,
@@ -301,11 +408,12 @@ export class FileStorageService {
         fileId: file.id,
         fileName: file.name,
         size: parseInt(file.size) || buffer.length,
-        uploadMethod: 'google-drive'
+        uploadMethod: 'google-drive',
       };
-
     } catch (error) {
-      throw new Error(`Google Drive Shared Drive upload failed: ${error.message}`);
+      throw new Error(
+        `Google Drive Shared Drive upload failed: ${error.message}`,
+      );
     }
   }
 
@@ -314,10 +422,18 @@ export class FileStorageService {
    */
   private getSharedDriveFolderId(category: string): string | null {
     const folderMap = {
-      'repair-images': this.configService.get('GOOGLE_SHARED_DRIVE_REPAIRS_FOLDER_ID'),
-      'customer-documents': this.configService.get('GOOGLE_SHARED_DRIVE_CUSTOMERS_FOLDER_ID'),
-      'product-images': this.configService.get('GOOGLE_SHARED_DRIVE_PRODUCTS_FOLDER_ID'),
-      'receipts': this.configService.get('GOOGLE_SHARED_DRIVE_RECEIPTS_FOLDER_ID'),
+      'repair-images': this.configService.get(
+        'GOOGLE_SHARED_DRIVE_REPAIRS_FOLDER_ID',
+      ),
+      'customer-documents': this.configService.get(
+        'GOOGLE_SHARED_DRIVE_CUSTOMERS_FOLDER_ID',
+      ),
+      'product-images': this.configService.get(
+        'GOOGLE_SHARED_DRIVE_PRODUCTS_FOLDER_ID',
+      ),
+      receipts: this.configService.get(
+        'GOOGLE_SHARED_DRIVE_RECEIPTS_FOLDER_ID',
+      ),
     };
 
     return folderMap[category] || null;
@@ -326,9 +442,11 @@ export class FileStorageService {
   /**
    * Strategy 2: Upload to local storage
    */
-  private async uploadToLocal(options: FileUploadOptions): Promise<FileUploadResult> {
+  private async uploadToLocal(
+    options: FileUploadOptions,
+  ): Promise<FileUploadResult> {
     const { fileName, buffer, category, metadata } = options;
-    
+
     try {
       const timestamp = Date.now();
       const uniqueFileName = `${timestamp}-${fileName}`;
@@ -346,12 +464,15 @@ export class FileStorageService {
       // Save metadata if provided
       if (metadata) {
         const metadataPath = filePath + '.meta.json';
-        await fs.promises.writeFile(metadataPath, JSON.stringify({
-          ...metadata,
-          uploadedAt: new Date().toISOString(),
-          originalFileName: fileName,
-          fileSize: buffer.length
-        }));
+        await fs.promises.writeFile(
+          metadataPath,
+          JSON.stringify({
+            ...metadata,
+            uploadedAt: new Date().toISOString(),
+            originalFileName: fileName,
+            fileSize: buffer.length,
+          }),
+        );
       }
 
       return {
@@ -359,9 +480,8 @@ export class FileStorageService {
         fileUrl,
         fileName: uniqueFileName,
         size: buffer.length,
-        uploadMethod: 'local'
+        uploadMethod: 'local',
       };
-
     } catch (error) {
       throw new Error(`Local storage failed: ${error.message}`);
     }
@@ -374,20 +494,23 @@ export class FileStorageService {
     return {
       googleDriveAvailable: this.isGoogleDriveAvailable,
       localStorageAvailable: fs.existsSync(this.uploadDirectory),
-      preferredMethod: this.isGoogleDriveAvailable ? 'google-drive' : 'local'
+      preferredMethod: this.isGoogleDriveAvailable ? 'google-drive' : 'local',
     };
   }
 
   /**
    * Delete file from all storage locations
    */
-  async deleteFile(fileId: string, uploadMethod: 'google-drive' | 'local'): Promise<boolean> {
+  async deleteFile(
+    fileId: string,
+    uploadMethod: 'google-drive' | 'local',
+  ): Promise<boolean> {
     try {
       if (uploadMethod === 'google-drive' && this.isGoogleDriveAvailable) {
-        await this.driveClient.files.delete({ 
+        await this.driveClient.files.delete({
           fileId,
           supportsAllDrives: true,
-          supportsTeamDrives: true
+          supportsTeamDrives: true,
         });
         this.logger.log(`✅ File deleted from Google Shared Drive: ${fileId}`);
         return true;
@@ -415,7 +538,7 @@ export class FileStorageService {
   async testStorageMethods(): Promise<Record<string, any>> {
     const results = {
       googleDrive: { available: false, error: null },
-      localStorage: { available: false, error: null }
+      localStorage: { available: false, error: null },
     };
 
     // Test Google Drive
@@ -427,13 +550,13 @@ export class FileStorageService {
           buffer: testBuffer,
           mimeType: 'text/plain',
           category: 'repair-images',
-          metadata: { test: true }
+          metadata: { test: true },
         });
-        
+
         if (testResult.success) {
           results.googleDrive.available = true;
           // Clean up test file
-          await this.deleteFile(testResult.fileId!, 'google-drive');
+          await this.deleteFile(testResult.fileId, 'google-drive');
         }
       } catch (error) {
         results.googleDrive.error = error.message;
@@ -448,13 +571,17 @@ export class FileStorageService {
         buffer: testBuffer,
         mimeType: 'text/plain',
         category: 'repair-images',
-        metadata: { test: true }
+        metadata: { test: true },
       });
-      
+
       if (testResult.success) {
         results.localStorage.available = true;
         // Clean up test file
-        const filePath = path.join(this.uploadDirectory, 'repair-images', testResult.fileName);
+        const filePath = path.join(
+          this.uploadDirectory,
+          'repair-images',
+          testResult.fileName,
+        );
         if (fs.existsSync(filePath)) {
           await fs.promises.unlink(filePath);
         }

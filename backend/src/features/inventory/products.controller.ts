@@ -78,7 +78,8 @@ export class ProductsController {
   @Get()
   @ApiOperation({
     summary: 'Get all products',
-    description: 'Retrieve products with advanced filtering, search, and pagination',
+    description:
+      'Retrieve products with advanced filtering, search, and pagination',
   })
   @ApiResponse({
     status: 200,
@@ -87,15 +88,45 @@ export class ProductsController {
   })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
-  @ApiQuery({ name: 'search', required: false, type: String, example: 'Gold Ring' })
-  @ApiQuery({ name: 'category', required: false, type: String, example: 'RING' })
-  @ApiQuery({ name: 'material', required: false, type: String, example: 'GOLD' })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    example: 'Gold Ring',
+  })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    type: String,
+    example: 'RING',
+  })
+  @ApiQuery({
+    name: 'material',
+    required: false,
+    type: String,
+    example: 'GOLD',
+  })
   @ApiQuery({ name: 'isActive', required: false, type: Boolean, example: true })
-  @ApiQuery({ name: 'lowStock', required: false, type: Boolean, example: false })
+  @ApiQuery({
+    name: 'lowStock',
+    required: false,
+    type: Boolean,
+    example: false,
+  })
   @ApiQuery({ name: 'minPrice', required: false, type: Number, example: 100 })
   @ApiQuery({ name: 'maxPrice', required: false, type: Number, example: 5000 })
-  @ApiQuery({ name: 'sortBy', required: false, type: String, example: 'createdAt' })
-  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'], example: 'desc' })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    type: String,
+    example: 'createdAt',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['asc', 'desc'],
+    example: 'desc',
+  })
   async findAll(
     @Query() query: ProductQueryDto,
     @TenantId() tenantId: string,
@@ -230,10 +261,7 @@ export class ProductsController {
     status: 404,
     description: 'Product not found',
   })
-  async getStockHistory(
-    @Param('id') id: string,
-    @TenantId() tenantId: string,
-  ) {
+  async getStockHistory(@Param('id') id: string, @TenantId() tenantId: string) {
     return this.productsService.getStockHistory(id, tenantId);
   }
 
@@ -324,13 +352,18 @@ export class ProductsController {
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.productsService.bulkUpdateStock(bulkUpdateDto, tenantId, userId);
+    return this.productsService.bulkUpdateStock(
+      bulkUpdateDto,
+      tenantId,
+      userId,
+    );
   }
 
   @Post('bulk-assign-rfid')
   @ApiOperation({
     summary: 'Bulk assign RFID tags to products',
-    description: 'Assign RFID tags to multiple products at once using SKU mapping. Perfect for when you purchase RFID tags and need to assign them to existing inventory.',
+    description:
+      'Assign RFID tags to multiple products at once using SKU mapping. Perfect for when you purchase RFID tags and need to assign them to existing inventory.',
   })
   @ApiResponse({
     status: 200,
@@ -346,7 +379,10 @@ export class ProductsController {
             type: 'object',
             properties: {
               sku: { type: 'string', example: 'JWL-001' },
-              error: { type: 'string', example: 'Product not found with this SKU' },
+              error: {
+                type: 'string',
+                example: 'Product not found with this SKU',
+              },
             },
           },
         },
@@ -362,7 +398,11 @@ export class ProductsController {
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.productsService.bulkAssignRFID(body.assignments, tenantId, userId);
+    return this.productsService.bulkAssignRFID(
+      body.assignments,
+      tenantId,
+      userId,
+    );
   }
 
   @Post(':id/upload-image')

@@ -51,20 +51,25 @@ export class FeatureRequestsService {
   async findOne(id: string) {
     const request = await this.prisma.mf_feature_requests.findUnique({
       where: { id },
-      include: { customerProfile: { select: { businessName: true, subdomain: true } } },
+      include: {
+        customerProfile: { select: { businessName: true, subdomain: true } },
+      },
     });
     if (!request) throw new NotFoundException('Feature request not found');
     return request;
   }
 
-  async update(id: string, data: {
-    status?: string;
-    priority?: string;
-    assignedTo?: string;
-    estimatedEffort?: string;
-    targetVersion?: string;
-    rejectionReason?: string;
-  }) {
+  async update(
+    id: string,
+    data: {
+      status?: string;
+      priority?: string;
+      assignedTo?: string;
+      estimatedEffort?: string;
+      targetVersion?: string;
+      rejectionReason?: string;
+    },
+  ) {
     return this.prisma.mf_feature_requests.update({
       where: { id },
       data: {
@@ -80,7 +85,9 @@ export class FeatureRequestsService {
   }
 
   async vote(id: string, profileId: string) {
-    const request = await this.prisma.mf_feature_requests.findUnique({ where: { id } });
+    const request = await this.prisma.mf_feature_requests.findUnique({
+      where: { id },
+    });
     if (!request) throw new NotFoundException('Feature request not found');
 
     const votedBy = request.votedBy || [];

@@ -26,7 +26,9 @@ export class TenantGuard implements CanActivate {
       const tenantIdHeader = request.headers['x-tenant-id'];
       const host = request.headers.host || 'localhost';
 
-      this.logger.log(`Tenant lookup - Header: ${tenantIdHeader}, Host: ${host}`);
+      this.logger.log(
+        `Tenant lookup - Header: ${tenantIdHeader}, Host: ${host}`,
+      );
 
       let tenant = null;
 
@@ -36,9 +38,13 @@ export class TenantGuard implements CanActivate {
           tenant = await this.prismaService.tenants.findUnique({
             where: { id: tenantIdHeader },
           });
-          this.logger.log(`Tenant lookup by header ID: ${tenant ? tenant.name : 'not found'}`);
+          this.logger.log(
+            `Tenant lookup by header ID: ${tenant ? tenant.name : 'not found'}`,
+          );
         } catch (err) {
-          this.logger.error(`Error looking up tenant by header: ${err.message}`);
+          this.logger.error(
+            `Error looking up tenant by header: ${err.message}`,
+          );
         }
       }
 
@@ -50,10 +56,7 @@ export class TenantGuard implements CanActivate {
         try {
           tenant = await this.prismaService.tenants.findFirst({
             where: {
-              OR: [
-                { domain: domain },
-                { subdomain: domain.split('.')[0] },
-              ],
+              OR: [{ domain: domain }, { subdomain: domain.split('.')[0] }],
             },
           });
 
@@ -61,13 +64,17 @@ export class TenantGuard implements CanActivate {
             this.logger.log(`Tenant found by domain: ${tenant.name}`);
           }
         } catch (err) {
-          this.logger.error(`Error looking up tenant by domain: ${err.message}`);
+          this.logger.error(
+            `Error looking up tenant by domain: ${err.message}`,
+          );
         }
       }
 
       // Fallback to first active tenant
       if (!tenant) {
-        this.logger.log('No tenant found by domain, fetching first active tenant');
+        this.logger.log(
+          'No tenant found by domain, fetching first active tenant',
+        );
 
         try {
           tenant = await this.prismaService.tenants.findFirst({
@@ -76,7 +83,9 @@ export class TenantGuard implements CanActivate {
           });
 
           if (tenant) {
-            this.logger.log(`Using first active tenant: ${tenant.name} (${tenant.id})`);
+            this.logger.log(
+              `Using first active tenant: ${tenant.name} (${tenant.id})`,
+            );
           }
         } catch (err) {
           this.logger.error(`Error fetching active tenant: ${err.message}`);
@@ -85,13 +94,17 @@ export class TenantGuard implements CanActivate {
 
       // Final check
       if (!tenant) {
-        this.logger.error('No valid tenant found in database - all queries failed');
+        this.logger.error(
+          'No valid tenant found in database - all queries failed',
+        );
 
         // As a last resort, try to get ANY tenant
         try {
           const anyTenant = await this.prismaService.tenants.findFirst();
           if (anyTenant) {
-            this.logger.warn(`Using ANY tenant as emergency fallback: ${anyTenant.name}`);
+            this.logger.warn(
+              `Using ANY tenant as emergency fallback: ${anyTenant.name}`,
+            );
             tenant = anyTenant;
           }
         } catch (err) {
@@ -117,7 +130,9 @@ export class TenantGuard implements CanActivate {
       if (error.stack) {
         this.logger.error(error.stack);
       }
-      throw new UnauthorizedException(`No valid tenant found: ${error.message}`);
+      throw new UnauthorizedException(
+        `No valid tenant found: ${error.message}`,
+      );
     }
   }
 }

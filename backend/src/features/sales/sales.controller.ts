@@ -72,7 +72,8 @@ export class SalesController {
   @Get()
   @ApiOperation({
     summary: 'Get all sales',
-    description: 'Retrieve sales with advanced filtering, search, and pagination',
+    description:
+      'Retrieve sales with advanced filtering, search, and pagination',
   })
   @ApiResponse({
     status: 200,
@@ -81,16 +82,56 @@ export class SalesController {
   })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
-  @ApiQuery({ name: 'search', required: false, type: String, example: 'SALE-2024-001' })
-  @ApiQuery({ name: 'status', required: false, enum: ['DRAFT', 'COMPLETED', 'CANCELLED', 'REFUNDED'] })
-  @ApiQuery({ name: 'paymentMethod', required: false, enum: ['CASH', 'CARD', 'BANK_TRANSFER', 'CHEQUE', 'DIGITAL_WALLET', 'INSTALLMENT'] })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    example: 'SALE-2024-001',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['DRAFT', 'COMPLETED', 'CANCELLED', 'REFUNDED'],
+  })
+  @ApiQuery({
+    name: 'paymentMethod',
+    required: false,
+    enum: [
+      'CASH',
+      'CARD',
+      'BANK_TRANSFER',
+      'CHEQUE',
+      'DIGITAL_WALLET',
+      'INSTALLMENT',
+    ],
+  })
   @ApiQuery({ name: 'customerId', required: false, type: String })
-  @ApiQuery({ name: 'startDate', required: false, type: String, example: '2024-01-01' })
-  @ApiQuery({ name: 'endDate', required: false, type: String, example: '2024-12-31' })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    example: '2024-01-01',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    example: '2024-12-31',
+  })
   @ApiQuery({ name: 'minAmount', required: false, type: Number, example: 100 })
   @ApiQuery({ name: 'maxAmount', required: false, type: Number, example: 5000 })
-  @ApiQuery({ name: 'sortBy', required: false, type: String, example: 'createdAt' })
-  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'], example: 'desc' })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    type: String,
+    example: 'createdAt',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['asc', 'desc'],
+    example: 'desc',
+  })
   async findAll(
     @Query() query: SaleQueryDto,
     @TenantId() tenantId: string,
@@ -114,12 +155,12 @@ export class SalesController {
 
   @Get('today')
   @ApiOperation({
-    summary: 'Get today\'s sales',
+    summary: "Get today's sales",
     description: 'Retrieve all sales created today',
   })
   @ApiResponse({
     status: 200,
-    description: 'Today\'s sales retrieved successfully',
+    description: "Today's sales retrieved successfully",
     type: PaginatedResponseDto<SaleResponseDto>,
   })
   async getTodaysSales(
@@ -138,7 +179,8 @@ export class SalesController {
   @Get(':id')
   @ApiOperation({
     summary: 'Get sale by ID',
-    description: 'Retrieve a specific sale with full details including items and payments',
+    description:
+      'Retrieve a specific sale with full details including items and payments',
   })
   @ApiParam({
     name: 'id',
@@ -164,7 +206,8 @@ export class SalesController {
   @Patch(':id')
   @ApiOperation({
     summary: 'Update sale',
-    description: 'Update sale information (limited updates allowed for completed sales)',
+    description:
+      'Update sale information (limited updates allowed for completed sales)',
   })
   @ApiParam({
     name: 'id',
@@ -196,7 +239,8 @@ export class SalesController {
   @Post(':id/refund')
   @ApiOperation({
     summary: 'Process sale refund',
-    description: 'Create a refund for specific sale items with stock adjustment',
+    description:
+      'Create a refund for specific sale items with stock adjustment',
   })
   @ApiParam({
     name: 'id',
@@ -222,7 +266,12 @@ export class SalesController {
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
   ): Promise<SaleResponseDto> {
-    return this.salesService.createRefund(id, createRefundDto, tenantId, userId);
+    return this.salesService.createRefund(
+      id,
+      createRefundDto,
+      tenantId,
+      userId,
+    );
   }
 
   @Get(':id/receipt')
@@ -243,18 +292,16 @@ export class SalesController {
     status: 404,
     description: 'Sale not found',
   })
-  async getReceiptData(
-    @Param('id') id: string,
-    @TenantId() tenantId: string,
-  ) {
+  async getReceiptData(@Param('id') id: string, @TenantId() tenantId: string) {
     const sale = await this.salesService.findOne(id, tenantId);
-    
+
     // Format data for receipt printing
     return {
       saleNumber: sale.saleNumber,
       date: sale.createdAt,
-      customer: sale.customerName || sale.walkInCustomerName || 'Walk-in Customer',
-      items: sale.items.map(item => ({
+      customer:
+        sale.customerName || sale.walkInCustomerName || 'Walk-in Customer',
+      items: sale.items.map((item) => ({
         name: item.productName,
         sku: item.productSku,
         quantity: item.quantity,
@@ -266,7 +313,7 @@ export class SalesController {
       discount: sale.discountAmount,
       tax: sale.taxAmount,
       total: sale.totalAmount,
-      payments: sale.payments.map(payment => ({
+      payments: sale.payments.map((payment) => ({
         method: payment.method,
         amount: payment.amount,
         reference: payment.reference,
@@ -282,7 +329,12 @@ export class SalesController {
     summary: 'Get daily sales report',
     description: 'Retrieve daily sales summary and statistics',
   })
-  @ApiQuery({ name: 'date', required: false, type: String, example: '2024-01-15' })
+  @ApiQuery({
+    name: 'date',
+    required: false,
+    type: String,
+    example: '2024-01-15',
+  })
   @ApiResponse({
     status: 200,
     description: 'Daily report retrieved successfully',
@@ -297,23 +349,31 @@ export class SalesController {
       endDate: reportDate,
       limit: 1000, // Get all sales for the day
     };
-    
+
     const salesData = await this.salesService.findAll(query, tenantId);
     const stats = await this.salesService.getStats(tenantId);
-    
+
     return {
       date: reportDate,
       totalSales: salesData.data.length,
-      totalRevenue: salesData.data.reduce((sum, sale) => sum + sale.totalAmount, 0),
-      averageSaleAmount: salesData.data.length > 0 
-        ? salesData.data.reduce((sum, sale) => sum + sale.totalAmount, 0) / salesData.data.length 
-        : 0,
-      paymentBreakdown: salesData.data.reduce((acc, sale) => {
-        sale.payments.forEach(payment => {
-          acc[payment.method] = (acc[payment.method] || 0) + payment.amount;
-        });
-        return acc;
-      }, {} as Record<string, number>),
+      totalRevenue: salesData.data.reduce(
+        (sum, sale) => sum + sale.totalAmount,
+        0,
+      ),
+      averageSaleAmount:
+        salesData.data.length > 0
+          ? salesData.data.reduce((sum, sale) => sum + sale.totalAmount, 0) /
+            salesData.data.length
+          : 0,
+      paymentBreakdown: salesData.data.reduce(
+        (acc, sale) => {
+          sale.payments.forEach((payment) => {
+            acc[payment.method] = (acc[payment.method] || 0) + payment.amount;
+          });
+          return acc;
+        },
+        {} as Record<string, number>,
+      ),
       topSellingProducts: stats.topSellingProducts.slice(0, 5),
       salesByHour: stats.salesByHour,
       sales: salesData.data,
@@ -338,10 +398,14 @@ export class SalesController {
   ) {
     const currentDate = new Date();
     const reportYear = year || currentDate.getFullYear();
-    const reportMonth = month || (currentDate.getMonth() + 1);
+    const reportMonth = month || currentDate.getMonth() + 1;
 
-    const startDate = new Date(reportYear, reportMonth - 1, 1).toISOString().split('T')[0];
-    const endDate = new Date(reportYear, reportMonth, 0).toISOString().split('T')[0];
+    const startDate = new Date(reportYear, reportMonth - 1, 1)
+      .toISOString()
+      .split('T')[0];
+    const endDate = new Date(reportYear, reportMonth, 0)
+      .toISOString()
+      .split('T')[0];
 
     const query: SaleQueryDto = {
       startDate,
@@ -352,34 +416,46 @@ export class SalesController {
     const salesData = await this.salesService.findAll(query, tenantId);
 
     // Group sales by day
-    const dailySales = salesData.data.reduce((acc, sale) => {
-      const day = sale.createdAt.split('T')[0];
-      if (!acc[day]) {
-        acc[day] = { count: 0, revenue: 0 };
-      }
-      acc[day].count++;
-      acc[day].revenue += sale.totalAmount;
-      return acc;
-    }, {} as Record<string, { count: number; revenue: number }>);
+    const dailySales = salesData.data.reduce(
+      (acc, sale) => {
+        const day = sale.createdAt.split('T')[0];
+        if (!acc[day]) {
+          acc[day] = { count: 0, revenue: 0 };
+        }
+        acc[day].count++;
+        acc[day].revenue += sale.totalAmount;
+        return acc;
+      },
+      {} as Record<string, { count: number; revenue: number }>,
+    );
 
     return {
       year: reportYear,
       month: reportMonth,
       totalSales: salesData.data.length,
-      totalRevenue: salesData.data.reduce((sum, sale) => sum + sale.totalAmount, 0),
-      averageDailySales: Object.keys(dailySales).length > 0
-        ? salesData.data.length / Object.keys(dailySales).length
-        : 0,
-      averageDailyRevenue: Object.keys(dailySales).length > 0
-        ? salesData.data.reduce((sum, sale) => sum + sale.totalAmount, 0) / Object.keys(dailySales).length
-        : 0,
+      totalRevenue: salesData.data.reduce(
+        (sum, sale) => sum + sale.totalAmount,
+        0,
+      ),
+      averageDailySales:
+        Object.keys(dailySales).length > 0
+          ? salesData.data.length / Object.keys(dailySales).length
+          : 0,
+      averageDailyRevenue:
+        Object.keys(dailySales).length > 0
+          ? salesData.data.reduce((sum, sale) => sum + sale.totalAmount, 0) /
+            Object.keys(dailySales).length
+          : 0,
       dailyBreakdown: dailySales,
-      paymentMethodTrends: salesData.data.reduce((acc, sale) => {
-        sale.payments.forEach(payment => {
-          acc[payment.method] = (acc[payment.method] || 0) + payment.amount;
-        });
-        return acc;
-      }, {} as Record<string, number>),
+      paymentMethodTrends: salesData.data.reduce(
+        (acc, sale) => {
+          sale.payments.forEach((payment) => {
+            acc[payment.method] = (acc[payment.method] || 0) + payment.amount;
+          });
+          return acc;
+        },
+        {} as Record<string, number>,
+      ),
     };
   }
 
@@ -387,7 +463,8 @@ export class SalesController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Delete a sale',
-    description: 'Permanently delete a sale record. This will also adjust stock quantities for returned items.',
+    description:
+      'Permanently delete a sale record. This will also adjust stock quantities for returned items.',
   })
   @ApiParam({
     name: 'id',

@@ -14,7 +14,7 @@ import {
   CustomersModule,
   ProductsModule,
   SalesModule,
-  RepairsModule
+  RepairsModule,
 } from './features';
 import { CalendarEventsModule } from './features/calendar-events/calendar-events.module';
 import { StockTakingModule } from './features/stock-taking/stock-taking.module';
@@ -31,7 +31,7 @@ import { TasksModule } from './features/tasks/tasks.module';
 import {
   GoogleDriveModule,
   FileStorageModule,
-  SmsModule
+  SmsModule,
 } from './integrations';
 import { OpenAIModule } from './integrations/openai/openai.module';
 
@@ -65,14 +65,17 @@ import { OpenAIModule } from './integrations/openai/openai.module';
             password: process.env.REDIS_PASSWORD,
             database: parseInt(process.env.REDIS_DB || '0'),
           });
-          
+
           console.log('✅ Connected to Redis cache');
-          return { 
+          return {
             store: store as any,
             ttl: 300000, // 5 minutes in milliseconds
           };
         } catch (error) {
-          console.warn('⚠️  Redis connection failed, using in-memory cache:', (error as Error).message);
+          console.warn(
+            '⚠️  Redis connection failed, using in-memory cache:',
+            (error as Error).message,
+          );
           // Fallback to in-memory cache
           return {
             store: 'memory',
@@ -107,9 +110,6 @@ import { OpenAIModule } from './integrations/openai/openai.module';
     // ExternalRepairersModule, // TODO: Enable after running Prisma migrations
   ],
   controllers: [AppController],
-  providers: [
-    AppService,
-    CacheService,
-  ],
+  providers: [AppService, CacheService],
 })
 export class AppModule {}

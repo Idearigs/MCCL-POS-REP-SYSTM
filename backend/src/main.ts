@@ -18,37 +18,47 @@ async function bootstrap() {
   // ===================================
   // SECURITY MIDDLEWARE
   // ===================================
-  
-  app.use(helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
-        imgSrc: ["'self'", 'data:', 'https:', 'http://localhost:3002', 'http://localhost:3000'],
-        fontSrc: ["'self'", 'data:'],
-        connectSrc: ["'self'"],
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'"],
+          imgSrc: [
+            "'self'",
+            'data:',
+            'https:',
+            'http://localhost:3002',
+            'http://localhost:3000',
+          ],
+          fontSrc: ["'self'", 'data:'],
+          connectSrc: ["'self'"],
+        },
       },
-    },
-    crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: { policy: "cross-origin" },  // Allow cross-origin resource loading
-    hsts: {
-      maxAge: 31536000, // 1 year
-      includeSubDomains: true,
-      preload: true,
-    },
-  }));
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow cross-origin resource loading
+      hsts: {
+        maxAge: 31536000, // 1 year
+        includeSubDomains: true,
+        preload: true,
+      },
+    }),
+  );
 
   // Compression middleware
-  app.use(compression({
-    filter: (req, res) => {
-      if (req.headers['x-no-compression']) {
-        return false;
-      }
-      return compression.filter(req, res);
-    },
-    threshold: 1024,
-  }));
+  app.use(
+    compression({
+      filter: (req, res) => {
+        if (req.headers['x-no-compression']) {
+          return false;
+        }
+        return compression.filter(req, res);
+      },
+      threshold: 1024,
+    }),
+  );
 
   // ===================================
   // STATIC FILE SERVING
@@ -73,9 +83,12 @@ async function bootstrap() {
   // ===================================
   // CORS CONFIGURATION
   // ===================================
-  
+
   app.enableCors({
-    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
       const allowedOrigins = [
         configService.get('CORS_ORIGIN', 'http://localhost:3000'),
         // Production domains
@@ -106,29 +119,31 @@ async function bootstrap() {
   // ===================================
   // VALIDATION & TRANSFORMATION
   // ===================================
-  
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    forbidNonWhitelisted: true,
-    transform: true,
-    transformOptions: {
-      enableImplicitConversion: true,
-    },
-    disableErrorMessages: configService.get('NODE_ENV') === 'production',
-    exceptionFactory: (errors) => {
-      const result = errors.map((error) => ({
-        property: error.property,
-        value: error.value,
-        constraints: error.constraints,
-      }));
-      return new BadRequestException(result);
-    },
-  }));
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+      disableErrorMessages: configService.get('NODE_ENV') === 'production',
+      exceptionFactory: (errors) => {
+        const result = errors.map((error) => ({
+          property: error.property,
+          value: error.value,
+          constraints: error.constraints,
+        }));
+        return new BadRequestException(result);
+      },
+    }),
+  );
 
   // ===================================
   // API CONFIGURATION
   // ===================================
-  
+
   app.setGlobalPrefix('api/v1', {
     exclude: ['health', 'metrics'],
   });
@@ -136,7 +151,7 @@ async function bootstrap() {
   // ===================================
   // SWAGGER DOCUMENTATION
   // ===================================
-  
+
   if (configService.get('NODE_ENV') !== 'production') {
     const config = new DocumentBuilder()
       .setTitle('MPS Jewelry SaaS API')
@@ -145,7 +160,7 @@ async function bootstrap() {
       .setContact(
         'MPS Development Team',
         'https://github.com/yourorg/mps-jewelry-saas',
-        'dev@mpsjewelry.com'
+        'dev@mpsjewelry.com',
       )
       .setLicense('MIT', 'https://opensource.org/licenses/MIT')
       .addBearerAuth(
@@ -184,12 +199,12 @@ async function bootstrap() {
   // ===================================
   // APPLICATION STARTUP
   // ===================================
-  
+
   const port = configService.get('PORT', 3002);
   await app.listen(port, '0.0.0.0');
 
   const environment = configService.get('NODE_ENV', 'development');
-  
+
   console.log(`
 🚀 MPS Jewelry SaaS API started successfully!
 🌐 Environment: ${environment}
@@ -206,7 +221,7 @@ async function bootstrap() {
   }
 }
 
-bootstrap().catch(error => {
+bootstrap().catch((error) => {
   console.error('❌ Failed to start MPS Jewelry SaaS API:', error);
   process.exit(1);
 });

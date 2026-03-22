@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 
 @Injectable()
@@ -17,7 +21,10 @@ export class SubscriptionsService {
     return subscription;
   }
 
-  async updatePlan(profileId: string, data: { plan: string; billingCycle?: string }) {
+  async updatePlan(
+    profileId: string,
+    data: { plan: string; billingCycle?: string },
+  ) {
     const subscription = await this.prisma.mf_subscriptions.findUnique({
       where: { customerProfileId: profileId },
     });
@@ -28,7 +35,7 @@ export class SubscriptionsService {
       where: { id: subscription.id },
       data: {
         plan: data.plan as any,
-        billingCycle: data.billingCycle as any || subscription.billingCycle,
+        billingCycle: (data.billingCycle as any) || subscription.billingCycle,
         basePrice: planConfig.basePrice,
         perUserPrice: planConfig.perUserPrice,
         includedUsers: planConfig.includedUsers,
@@ -60,11 +67,15 @@ export class SubscriptionsService {
     });
     if (!subscription) throw new NotFoundException('Subscription not found');
 
-    const extraUsers = Math.max(0, subscription.currentUsers - subscription.includedUsers);
+    const extraUsers = Math.max(
+      0,
+      subscription.currentUsers - subscription.includedUsers,
+    );
     const userCharges = extraUsers * Number(subscription.perUserPrice);
     const subtotal = Number(subscription.basePrice) + userCharges;
-    const discount = subtotal * (Number(subscription.discountPercent || 0) / 100);
-    const tax = (subtotal - discount) * 0.20; // 20% VAT
+    const discount =
+      subtotal * (Number(subscription.discountPercent || 0) / 100);
+    const tax = (subtotal - discount) * 0.2; // 20% VAT
     const total = subtotal - discount + tax;
 
     const invoiceNumber = `INV-${Date.now()}`;
@@ -82,8 +93,18 @@ export class SubscriptionsService {
         periodEnd: subscription.currentPeriodEnd,
         dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
         lineItems: [
-          { description: `${subscription.plan} Plan`, amount: Number(subscription.basePrice) },
-          ...(extraUsers > 0 ? [{ description: `Additional Users (${extraUsers})`, amount: userCharges }] : []),
+          {
+            description: `${subscription.plan} Plan`,
+            amount: Number(subscription.basePrice),
+          },
+          ...(extraUsers > 0
+            ? [
+                {
+                  description: `Additional Users (${extraUsers})`,
+                  amount: userCharges,
+                },
+              ]
+            : []),
         ],
       },
     });
@@ -119,11 +140,36 @@ export class SubscriptionsService {
 
   private getPlanConfig(plan: string) {
     const configs: Record<string, any> = {
-      STARTER: { basePrice: 29, perUserPrice: 10, includedUsers: 1, maxUsers: 3 },
-      PROFESSIONAL: { basePrice: 79, perUserPrice: 8, includedUsers: 5, maxUsers: 15 },
-      BUSINESS: { basePrice: 199, perUserPrice: 6, includedUsers: 15, maxUsers: 50 },
-      ENTERPRISE: { basePrice: 499, perUserPrice: 5, includedUsers: 50, maxUsers: null },
-      CUSTOM: { basePrice: 0, perUserPrice: 0, includedUsers: 1, maxUsers: null },
+      STARTER: {
+        basePrice: 29,
+        perUserPrice: 10,
+        includedUsers: 1,
+        maxUsers: 3,
+      },
+      PROFESSIONAL: {
+        basePrice: 79,
+        perUserPrice: 8,
+        includedUsers: 5,
+        maxUsers: 15,
+      },
+      BUSINESS: {
+        basePrice: 199,
+        perUserPrice: 6,
+        includedUsers: 15,
+        maxUsers: 50,
+      },
+      ENTERPRISE: {
+        basePrice: 499,
+        perUserPrice: 5,
+        includedUsers: 50,
+        maxUsers: null,
+      },
+      CUSTOM: {
+        basePrice: 0,
+        perUserPrice: 0,
+        includedUsers: 1,
+        maxUsers: null,
+      },
     };
     return configs[plan] || configs.STARTER;
   }

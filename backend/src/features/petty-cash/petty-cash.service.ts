@@ -349,7 +349,9 @@ export class PettyCashService {
       },
     });
 
-    this.logger.log(`Transaction ${transactionNumber} created - PENDING approval`);
+    this.logger.log(
+      `Transaction ${transactionNumber} created - PENDING approval`,
+    );
 
     return this.transformTransaction(transaction);
   }
@@ -641,9 +643,7 @@ export class PettyCashService {
     }
 
     if (transaction.status !== PettyCashStatus.PENDING) {
-      throw new BadRequestException(
-        'Can only cancel pending transactions',
-      );
+      throw new BadRequestException('Can only cancel pending transactions');
     }
 
     if (transaction.requestedBy !== userId) {
@@ -676,7 +676,12 @@ export class PettyCashService {
   /**
    * Get petty cash summary report
    */
-  async getSummaryReport(tenantId: string, accountId?: string, startDate?: string, endDate?: string) {
+  async getSummaryReport(
+    tenantId: string,
+    accountId?: string,
+    startDate?: string,
+    endDate?: string,
+  ) {
     const where: any = { tenantId };
 
     if (accountId) {

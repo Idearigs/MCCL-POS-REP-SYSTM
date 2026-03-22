@@ -1,6 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
-import { CreateEventDto, UpdateEventDto, EventResponseDto, EventListResponseDto } from './dto/event.dto';
+import {
+  CreateEventDto,
+  UpdateEventDto,
+  EventResponseDto,
+  EventListResponseDto,
+} from './dto/event.dto';
 import { generateId } from '../../shared/utils/id-generator';
 
 @Injectable()
@@ -85,7 +90,10 @@ export class CalendarEventsService {
   /**
    * Get a single event by ID
    */
-  async getEventById(tenantId: string, eventId: string): Promise<EventResponseDto> {
+  async getEventById(
+    tenantId: string,
+    eventId: string,
+  ): Promise<EventResponseDto> {
     const event = await this.prisma.calendar_events.findFirst({
       where: { id: eventId, tenantId },
     });
@@ -136,7 +144,10 @@ export class CalendarEventsService {
   /**
    * Delete an event
    */
-  async deleteEvent(tenantId: string, eventId: string): Promise<{ message: string }> {
+  async deleteEvent(
+    tenantId: string,
+    eventId: string,
+  ): Promise<{ message: string }> {
     // Check if event exists
     const existingEvent = await this.prisma.calendar_events.findFirst({
       where: { id: eventId, tenantId },

@@ -10,7 +10,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { StockTakingService } from './stock-taking.service';
-import { CreateSessionDto, ScanItemDto, UpdateSessionDto, ApproveSessionDto } from './dto';
+import {
+  CreateSessionDto,
+  ScanItemDto,
+  UpdateSessionDto,
+  ApproveSessionDto,
+} from './dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
 import { CurrentUser } from '../../shared/decorators/user.decorator';
@@ -29,7 +34,11 @@ export class StockTakingController {
     @CurrentUser('id') userId: string,
     @Body() createSessionDto: CreateSessionDto,
   ) {
-    return this.stockTakingService.createSession(tenantId, userId, createSessionDto);
+    return this.stockTakingService.createSession(
+      tenantId,
+      userId,
+      createSessionDto,
+    );
   }
 
   // Get all sessions (with optional status filter)
@@ -43,10 +52,7 @@ export class StockTakingController {
 
   // Get a single session with all details
   @Get('sessions/:id')
-  async getSession(
-    @TenantId() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  async getSession(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.stockTakingService.getSession(tenantId, id);
   }
 
@@ -57,15 +63,16 @@ export class StockTakingController {
     @Param('id') id: string,
     @Body() updateSessionDto: UpdateSessionDto,
   ) {
-    return this.stockTakingService.updateSession(tenantId, id, updateSessionDto);
+    return this.stockTakingService.updateSession(
+      tenantId,
+      id,
+      updateSessionDto,
+    );
   }
 
   // Delete a session
   @Delete('sessions/:id')
-  async deleteSession(
-    @TenantId() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  async deleteSession(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.stockTakingService.deleteSession(tenantId, id);
   }
 
@@ -98,7 +105,12 @@ export class StockTakingController {
     @Param('id') id: string,
     @Body() approveSessionDto: ApproveSessionDto,
   ) {
-    return this.stockTakingService.approveSession(tenantId, id, userId, approveSessionDto);
+    return this.stockTakingService.approveSession(
+      tenantId,
+      id,
+      userId,
+      approveSessionDto,
+    );
   }
 
   // Delete a scanned item from a session

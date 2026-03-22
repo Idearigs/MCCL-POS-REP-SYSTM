@@ -14,7 +14,7 @@ import {
   endOfWeek,
   subMonths,
   subWeeks,
-  parseISO
+  parseISO,
 } from 'date-fns';
 
 @Injectable()
@@ -70,10 +70,7 @@ export class ChatbotService {
     history.push(assistantMessage);
 
     // Store updated history (keep last 20 messages)
-    this.conversationHistory.set(
-      convId,
-      history.slice(-20),
-    );
+    this.conversationHistory.set(convId, history.slice(-20));
 
     // Generate suggestions based on context
     const suggestions = this.generateSuggestions(message, context);
@@ -128,45 +125,59 @@ export class ChatbotService {
   /**
    * Parse natural language dates
    */
-  private parseDateRange(message: string): { startDate: Date; endDate: Date; period: string } | null {
+  private parseDateRange(
+    message: string,
+  ): { startDate: Date; endDate: Date; period: string } | null {
     const lowerMessage = message.toLowerCase();
     const now = new Date();
 
     // This month
-    if (lowerMessage.includes('this month') || lowerMessage.includes('current month')) {
+    if (
+      lowerMessage.includes('this month') ||
+      lowerMessage.includes('current month')
+    ) {
       return {
         startDate: startOfMonth(now),
         endDate: endOfMonth(now),
-        period: 'This Month'
+        period: 'This Month',
       };
     }
 
     // Last month
-    if (lowerMessage.includes('last month') || lowerMessage.includes('previous month')) {
+    if (
+      lowerMessage.includes('last month') ||
+      lowerMessage.includes('previous month')
+    ) {
       const lastMonth = subMonths(now, 1);
       return {
         startDate: startOfMonth(lastMonth),
         endDate: endOfMonth(lastMonth),
-        period: 'Last Month'
+        period: 'Last Month',
       };
     }
 
     // This week
-    if (lowerMessage.includes('this week') || lowerMessage.includes('current week')) {
+    if (
+      lowerMessage.includes('this week') ||
+      lowerMessage.includes('current week')
+    ) {
       return {
         startDate: startOfWeek(now, { weekStartsOn: 1 }),
         endDate: endOfWeek(now, { weekStartsOn: 1 }),
-        period: 'This Week'
+        period: 'This Week',
       };
     }
 
     // Last week
-    if (lowerMessage.includes('last week') || lowerMessage.includes('previous week')) {
+    if (
+      lowerMessage.includes('last week') ||
+      lowerMessage.includes('previous week')
+    ) {
       const lastWeek = subWeeks(now, 1);
       return {
         startDate: startOfWeek(lastWeek, { weekStartsOn: 1 }),
         endDate: endOfWeek(lastWeek, { weekStartsOn: 1 }),
-        period: 'Last Week'
+        period: 'Last Week',
       };
     }
 
@@ -176,7 +187,7 @@ export class ChatbotService {
       return {
         startDate: startOfDay(yesterday),
         endDate: endOfDay(yesterday),
-        period: 'Yesterday'
+        period: 'Yesterday',
       };
     }
 
@@ -185,25 +196,31 @@ export class ChatbotService {
       return {
         startDate: startOfDay(now),
         endDate: endOfDay(now),
-        period: 'Today'
+        period: 'Today',
       };
     }
 
     // Last 7 days
-    if (lowerMessage.includes('last 7 days') || lowerMessage.includes('past week')) {
+    if (
+      lowerMessage.includes('last 7 days') ||
+      lowerMessage.includes('past week')
+    ) {
       return {
         startDate: startOfDay(subDays(now, 7)),
         endDate: endOfDay(now),
-        period: 'Last 7 Days'
+        period: 'Last 7 Days',
       };
     }
 
     // Last 30 days
-    if (lowerMessage.includes('last 30 days') || lowerMessage.includes('past month')) {
+    if (
+      lowerMessage.includes('last 30 days') ||
+      lowerMessage.includes('past month')
+    ) {
       return {
         startDate: startOfDay(subDays(now, 30)),
         endDate: endOfDay(now),
-        period: 'Last 30 Days'
+        period: 'Last 30 Days',
       };
     }
 
@@ -213,7 +230,11 @@ export class ChatbotService {
   /**
    * Get sales data for any date range
    */
-  private async getSalesReport(tenantId: string, startDate: Date, endDate: Date) {
+  private async getSalesReport(
+    tenantId: string,
+    startDate: Date,
+    endDate: Date,
+  ) {
     const sales = await this.prisma.sales.findMany({
       where: {
         tenantId,
@@ -230,46 +251,59 @@ export class ChatbotService {
               select: {
                 name: true,
                 sku: true,
-              }
-            }
-          }
+              },
+            },
+          },
         },
       },
     });
 
-    const totalRevenue = sales.reduce((sum, sale) => sum + Number(sale.totalAmount), 0);
+    const totalRevenue = sales.reduce(
+      (sum, sale) => sum + Number(sale.totalAmount),
+      0,
+    );
     const totalCost = sales.reduce((sum, sale) => {
-      return sum + sale.sale_items.reduce((itemSum, item) => {
-        return itemSum + (Number(item.unitPrice) * item.quantity);
-      }, 0);
+      return (
+        sum +
+        sale.sale_items.reduce((itemSum, item) => {
+          return itemSum + Number(item.unitPrice) * item.quantity;
+        }, 0)
+      );
     }, 0);
     const totalProfit = totalRevenue - totalCost;
     const totalInvoices = sales.length;
 
     const cashPayments = sales
-      .filter(s => s.paymentMethod === 'CASH')
+      .filter((s) => s.paymentMethod === 'CASH')
       .reduce((sum, sale) => sum + Number(sale.totalAmount), 0);
 
     const cardPayments = sales
-      .filter(s => s.paymentMethod === 'CARD')
+      .filter((s) => s.paymentMethod === 'CARD')
       .reduce((sum, sale) => sum + Number(sale.totalAmount), 0);
 
-    const cardTransactions = sales.filter(s => s.paymentMethod === 'CARD').length;
-    const cashTransactions = sales.filter(s => s.paymentMethod === 'CASH').length;
+    const cardTransactions = sales.filter(
+      (s) => s.paymentMethod === 'CARD',
+    ).length;
+    const cashTransactions = sales.filter(
+      (s) => s.paymentMethod === 'CASH',
+    ).length;
 
     // Calculate product sales
-    const productSales = new Map<string, { name: string; quantity: number; revenue: number }>();
-    sales.forEach(sale => {
-      sale.sale_items.forEach(item => {
+    const productSales = new Map<
+      string,
+      { name: string; quantity: number; revenue: number }
+    >();
+    sales.forEach((sale) => {
+      sale.sale_items.forEach((item) => {
         const existing = productSales.get(item.productId) || {
           name: item.products?.name || 'Unknown',
           quantity: 0,
-          revenue: 0
+          revenue: 0,
         };
         productSales.set(item.productId, {
           name: existing.name,
           quantity: existing.quantity + item.quantity,
-          revenue: existing.revenue + (Number(item.unitPrice) * item.quantity),
+          revenue: existing.revenue + Number(item.unitPrice) * item.quantity,
         });
       });
     });
@@ -279,7 +313,8 @@ export class ChatbotService {
       .slice(0, 5);
 
     const bestSeller = topProducts[0];
-    const averageTransaction = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
+    const averageTransaction =
+      totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
 
     return {
       totalRevenue,
@@ -294,17 +329,17 @@ export class ChatbotService {
       averageTransaction,
       bestSeller: bestSeller?.name || 'N/A',
       topProducts,
-      salesData: sales.map(s => ({
+      salesData: sales.map((s) => ({
         saleNumber: s.saleNumber,
         date: s.createdAt,
         amount: Number(s.totalAmount),
         paymentMethod: s.paymentMethod,
-        items: s.sale_items.map(item => ({
+        items: s.sale_items.map((item) => ({
           product: item.products?.name || 'Unknown',
           quantity: item.quantity,
           price: Number(item.unitPrice),
-        }))
-      }))
+        })),
+      })),
     };
   }
 
@@ -330,18 +365,26 @@ export class ChatbotService {
       },
     });
 
-    const totalRevenue = sales.reduce((sum, sale) => sum + Number(sale.totalAmount), 0);
+    const totalRevenue = sales.reduce(
+      (sum, sale) => sum + Number(sale.totalAmount),
+      0,
+    );
     const totalInvoices = sales.length;
     const cashPayments = sales
-      .filter(s => s.paymentMethod === 'CASH')
+      .filter((s) => s.paymentMethod === 'CASH')
       .reduce((sum, sale) => sum + Number(sale.totalAmount), 0);
-    const cardTransactions = sales.filter(s => s.paymentMethod === 'CARD').length;
+    const cardTransactions = sales.filter(
+      (s) => s.paymentMethod === 'CARD',
+    ).length;
 
     // Find best seller
     const productSales = new Map<string, { name: string; quantity: number }>();
-    sales.forEach(sale => {
-      sale.sale_items.forEach(item => {
-        const existing = productSales.get(item.productId) || { name: '', quantity: 0 };
+    sales.forEach((sale) => {
+      sale.sale_items.forEach((item) => {
+        const existing = productSales.get(item.productId) || {
+          name: '',
+          quantity: 0,
+        };
         productSales.set(item.productId, {
           name: existing.name,
           quantity: existing.quantity + item.quantity,
@@ -349,8 +392,9 @@ export class ChatbotService {
       });
     });
 
-    const bestSeller = Array.from(productSales.values())
-      .sort((a, b) => b.quantity - a.quantity)[0];
+    const bestSeller = Array.from(productSales.values()).sort(
+      (a, b) => b.quantity - a.quantity,
+    )[0];
 
     return {
       totalRevenue,
@@ -387,7 +431,7 @@ export class ChatbotService {
     });
 
     const lowStockCount = products.filter(
-      p => p.stockQuantity <= (p.minStockLevel || 0),
+      (p) => p.stockQuantity <= (p.minStockLevel || 0),
     ).length;
 
     return {
@@ -433,7 +477,10 @@ export class ChatbotService {
       return { message: 'No active shift found for today' };
     }
 
-    const totalSales = shift.sales.reduce((sum, sale) => sum + Number(sale.totalAmount), 0);
+    const totalSales = shift.sales.reduce(
+      (sum, sale) => sum + Number(sale.totalAmount),
+      0,
+    );
 
     return {
       shiftNumber: shift.shiftNumber,
@@ -466,7 +513,7 @@ export class ChatbotService {
 
     // Filter products where stock is at or below minimum stock level
     const lowStockProducts = allProducts
-      .filter(p => p.stockQuantity <= (p.minStockLevel || 0))
+      .filter((p) => p.stockQuantity <= (p.minStockLevel || 0))
       .sort((a, b) => a.stockQuantity - b.stockQuantity)
       .slice(0, 20);
 
@@ -508,7 +555,7 @@ export class ChatbotService {
     });
 
     // Get product details
-    const productIds = topProducts.map(p => p.productId);
+    const productIds = topProducts.map((p) => p.productId);
     const products = await this.prisma.products.findMany({
       where: {
         id: {
@@ -523,9 +570,9 @@ export class ChatbotService {
       },
     });
 
-    const productMap = new Map(products.map(p => [p.id, p]));
+    const productMap = new Map(products.map((p) => [p.id, p]));
 
-    return topProducts.map(tp => ({
+    return topProducts.map((tp) => ({
       product: productMap.get(tp.productId),
       quantitySold: tp._sum.quantity,
       transactionCount: tp._count.id,
@@ -567,10 +614,18 @@ export class ChatbotService {
     const dateRange = this.parseDateRange(message);
 
     // Check what data might be needed based on keywords
-    if (lowerMessage.includes('sales') || lowerMessage.includes('revenue') || lowerMessage.includes('report')) {
+    if (
+      lowerMessage.includes('sales') ||
+      lowerMessage.includes('revenue') ||
+      lowerMessage.includes('report')
+    ) {
       if (dateRange) {
         // Use comprehensive sales report for the requested period
-        context.salesReport = await this.getSalesReport(tenantId, dateRange.startDate, dateRange.endDate);
+        context.salesReport = await this.getSalesReport(
+          tenantId,
+          dateRange.startDate,
+          dateRange.endDate,
+        );
         context.reportPeriod = dateRange.period;
         context.startDate = format(dateRange.startDate, 'yyyy-MM-dd');
         context.endDate = format(dateRange.endDate, 'yyyy-MM-dd');
@@ -587,7 +642,10 @@ export class ChatbotService {
       context.stockLevels = await this.getStockLevels(tenantId);
     }
 
-    if (lowerMessage.includes('low stock') || lowerMessage.includes('reorder')) {
+    if (
+      lowerMessage.includes('low stock') ||
+      lowerMessage.includes('reorder')
+    ) {
       context.lowStock = await this.getLowStock(tenantId);
     }
 
@@ -595,7 +653,11 @@ export class ChatbotService {
       context.shiftSummary = await this.getShiftSummary(tenantId);
     }
 
-    if (lowerMessage.includes('top') || lowerMessage.includes('best') || lowerMessage.includes('popular')) {
+    if (
+      lowerMessage.includes('top') ||
+      lowerMessage.includes('best') ||
+      lowerMessage.includes('popular')
+    ) {
       context.topProducts = await this.getTopProducts(tenantId);
     }
 
@@ -615,8 +677,11 @@ export class ChatbotService {
 
     const messages = [
       { role: 'system' as const, content: systemPrompt },
-      { role: 'system' as const, content: `Available Data Context:\n${contextString}` },
-      ...history.slice(-10).map(msg => ({
+      {
+        role: 'system' as const,
+        content: `Available Data Context:\n${contextString}`,
+      },
+      ...history.slice(-10).map((msg) => ({
         role: msg.role as 'system' | 'user' | 'assistant',
         content: msg.content,
       })),
@@ -631,7 +696,9 @@ export class ChatbotService {
   /**
    * Wrapper for OpenAI chat completion
    */
-  private async generateChatResponse(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>): Promise<string> {
+  private async generateChatResponse(
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  ): Promise<string> {
     if (!this.openAIService.isConfigured()) {
       return "I'm sorry, but the AI service is not configured. Please contact your administrator to set up the OpenAI API key.";
     }
@@ -654,14 +721,17 @@ export class ChatbotService {
   /**
    * Format messages for a simple response when AI is unavailable
    */
-  private formatMessagesForSimpleResponse(messages: Array<{ role: string; content: string }>): string {
+  private formatMessagesForSimpleResponse(
+    messages: Array<{ role: string; content: string }>,
+  ): string {
     // Get the user's last message
-    const userMessages = messages.filter(m => m.role === 'user');
+    const userMessages = messages.filter((m) => m.role === 'user');
     if (userMessages.length === 0) {
-      return "Hello! How can I help you today?";
+      return 'Hello! How can I help you today?';
     }
 
-    const lastMessage = userMessages[userMessages.length - 1].content.toLowerCase();
+    const lastMessage =
+      userMessages[userMessages.length - 1].content.toLowerCase();
 
     // Simple pattern matching for common queries
     if (lastMessage.includes('hello') || lastMessage.includes('hi')) {
@@ -682,7 +752,7 @@ export class ChatbotService {
     const suggestions = [];
 
     if (context.todaySales) {
-      suggestions.push('Show me yesterday\'s comparison');
+      suggestions.push("Show me yesterday's comparison");
       suggestions.push('What are the top products today?');
     }
 
@@ -851,7 +921,11 @@ Be helpful, be human, be brilliant.`;
         doc.moveDown();
 
         // Report Date
-        doc.fontSize(10).text(`Generated: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, { align: 'right' });
+        doc
+          .fontSize(10)
+          .text(`Generated: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, {
+            align: 'right',
+          });
         doc.moveDown();
 
         // Content based on report type
@@ -862,7 +936,9 @@ Be helpful, be human, be brilliant.`;
           doc.moveDown(0.5);
 
           doc.fontSize(11);
-          doc.text(`Total Revenue: £${sales.totalRevenue?.toFixed(2) || '0.00'}`);
+          doc.text(
+            `Total Revenue: £${sales.totalRevenue?.toFixed(2) || '0.00'}`,
+          );
           doc.text(`Total Invoices: ${sales.totalInvoices || 0}`);
 
           if (sales.totalProfit !== undefined) {
@@ -870,11 +946,17 @@ Be helpful, be human, be brilliant.`;
             doc.text(`Profit Margin: ${sales.profitMargin?.toFixed(2) || 0}%`);
           }
 
-          doc.text(`Cash Payments: £${sales.cashPayments?.toFixed(2) || '0.00'} (${sales.cashTransactions || 0} transactions)`);
-          doc.text(`Card Payments: £${sales.cardPayments?.toFixed(2) || '0.00'} (${sales.cardTransactions || 0} transactions)`);
+          doc.text(
+            `Cash Payments: £${sales.cashPayments?.toFixed(2) || '0.00'} (${sales.cashTransactions || 0} transactions)`,
+          );
+          doc.text(
+            `Card Payments: £${sales.cardPayments?.toFixed(2) || '0.00'} (${sales.cardTransactions || 0} transactions)`,
+          );
 
           if (sales.averageTransaction) {
-            doc.text(`Average Transaction: £${sales.averageTransaction.toFixed(2)}`);
+            doc.text(
+              `Average Transaction: £${sales.averageTransaction.toFixed(2)}`,
+            );
           }
 
           doc.text(`Best Seller: ${sales.bestSeller || 'N/A'}`);
@@ -887,19 +969,23 @@ Be helpful, be human, be brilliant.`;
             doc.fontSize(10);
 
             sales.topProducts.forEach((product, index) => {
-              doc.text(`${index + 1}. ${product.name} - £${product.revenue.toFixed(2)} (${product.quantity} units)`);
+              doc.text(
+                `${index + 1}. ${product.name} - £${product.revenue.toFixed(2)} (${product.quantity} units)`,
+              );
             });
             doc.moveDown();
           }
         }
 
         // Footer
-        doc.fontSize(8).text(
-          'Generated by TrueDesk AI Assistant | IdeaRigs',
-          50,
-          doc.page.height - 50,
-          { align: 'center' }
-        );
+        doc
+          .fontSize(8)
+          .text(
+            'Generated by TrueDesk AI Assistant | IdeaRigs',
+            50,
+            doc.page.height - 50,
+            { align: 'center' },
+          );
 
         doc.end();
       } catch (error) {
@@ -970,7 +1056,7 @@ Be helpful, be human, be brilliant.`;
         csvContent += `Detailed Transactions\n`;
         csvContent += `Sale Number,Date,Amount,Payment Method\n`;
 
-        sales.salesData.forEach(sale => {
+        sales.salesData.forEach((sale) => {
           csvContent += `${sale.saleNumber},${format(new Date(sale.date), 'dd/MM/yyyy HH:mm')},£${sale.amount.toFixed(2)},${sale.paymentMethod}\n`;
         });
       }

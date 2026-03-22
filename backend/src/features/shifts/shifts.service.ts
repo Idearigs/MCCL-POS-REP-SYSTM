@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { ShiftStatus } from '@prisma/client';
 import { StartShiftDto, CloseShiftDto } from './dto/shift.dto';
@@ -14,15 +18,23 @@ export class ShiftsService {
     const dateStr = now.toISOString().split('T')[0].replace(/-/g, '');
 
     // Create a new date object for start of day to avoid mutation
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const startOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0,
+      0,
+      0,
+      0,
+    );
 
     const todayShifts = await this.prisma.shifts.count({
       where: {
         userId,
         startTime: {
-          gte: startOfDay
-        }
-      }
+          gte: startOfDay,
+        },
+      },
     });
 
     // Include userId prefix for uniqueness across different users
@@ -43,12 +55,14 @@ export class ShiftsService {
     const existingShift = await this.prisma.shifts.findFirst({
       where: {
         userId: data.userId,
-        status: ShiftStatus.ACTIVE
-      }
+        status: ShiftStatus.ACTIVE,
+      },
     });
 
     if (existingShift) {
-      throw new BadRequestException('You already have an active shift. Please close it before starting a new one.');
+      throw new BadRequestException(
+        'You already have an active shift. Please close it before starting a new one.',
+      );
     }
 
     const shiftNumber = await this.generateShiftNumber(data.userId);
@@ -64,7 +78,7 @@ export class ShiftsService {
         ipAddress: data.ipAddress,
         openingNotes: data.openingNotes,
         status: ShiftStatus.ACTIVE,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       },
       include: {
         user: {
@@ -73,15 +87,15 @@ export class ShiftsService {
             firstName: true,
             lastName: true,
             email: true,
-            role: true
-          }
+            role: true,
+          },
         },
         _count: {
           select: {
-            sales: true
-          }
-        }
-      }
+            sales: true,
+          },
+        },
+      },
     });
   }
 
@@ -91,7 +105,7 @@ export class ShiftsService {
       where: {
         userId,
         tenantId,
-        status: ShiftStatus.ACTIVE
+        status: ShiftStatus.ACTIVE,
       },
       include: {
         user: {
@@ -99,34 +113,30 @@ export class ShiftsService {
             id: true,
             firstName: true,
             lastName: true,
-            role: true
-          }
+            role: true,
+          },
         },
         _count: {
           select: {
-            sales: true
-          }
-        }
-      }
+            sales: true,
+          },
+        },
+      },
     });
   }
 
   // Close a shift
-  async closeShift(
-    shiftId: string,
-    userId: string,
-    data: CloseShiftDto
-  ) {
+  async closeShift(shiftId: string, userId: string, data: CloseShiftDto) {
     const shift = await this.prisma.shifts.findUnique({
       where: { id: shiftId },
       include: {
         sales: {
           where: {
             status: 'COMPLETED',
-            paymentStatus: 'COMPLETED'
-          }
-        }
-      }
+            paymentStatus: 'COMPLETED',
+          },
+        },
+      },
     });
 
     if (!shift) {
@@ -143,15 +153,18 @@ export class ShiftsService {
     }
 
     // Calculate expected float from cash sales
-    const cashSales = shift.sales.filter(s => s.paymentMethod === 'CASH');
-    const totalCashSales = cashSales.reduce((sum, s) => sum + Number(s.totalAmount), 0);
+    const cashSales = shift.sales.filter((s) => s.paymentMethod === 'CASH');
+    const totalCashSales = cashSales.reduce(
+      (sum, s) => sum + Number(s.totalAmount),
+      0,
+    );
 
     const expectedFloat = Number(shift.openingFloat) + totalCashSales;
     const variance = data.closingFloat - expectedFloat;
 
     // Calculate shift duration in minutes
     const duration = Math.floor(
-      (new Date().getTime() - shift.startTime.getTime()) / 1000 / 60
+      (new Date().getTime() - shift.startTime.getTime()) / 1000 / 60,
     );
 
     return this.prisma.shifts.update({
@@ -164,17 +177,17 @@ export class ShiftsService {
         variance,
         closingNotes: data.closingNotes,
         status: ShiftStatus.CLOSED,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       },
       include: {
         user: {
           select: {
             id: true,
             firstName: true,
-            lastName: true
-          }
-        }
-      }
+            lastName: true,
+          },
+        },
+      },
     });
   }
 
@@ -184,7 +197,7 @@ export class ShiftsService {
     startDate: Date,
     endDate: Date,
     userId?: string,
-    status?: ShiftStatus
+    status?: ShiftStatus,
   ) {
     // Set end date to end of day
     const endOfDay = new Date(endDate);
@@ -195,10 +208,10 @@ export class ShiftsService {
         tenantId,
         startTime: {
           gte: startDate,
-          lte: endOfDay
+          lte: endOfDay,
         },
         ...(userId && { userId }),
-        ...(status && { status })
+        ...(status && { status }),
       },
       include: {
         user: {
@@ -206,18 +219,18 @@ export class ShiftsService {
             id: true,
             firstName: true,
             lastName: true,
-            role: true
-          }
+            role: true,
+          },
         },
         _count: {
           select: {
-            sales: true
-          }
-        }
+            sales: true,
+          },
+        },
       },
       orderBy: {
-        startTime: 'desc'
-      }
+        startTime: 'desc',
+      },
     });
   }
 
@@ -232,8 +245,8 @@ export class ShiftsService {
             firstName: true,
             lastName: true,
             email: true,
-            role: true
-          }
+            role: true,
+          },
         },
         sales: {
           include: {
@@ -242,24 +255,24 @@ export class ShiftsService {
                 products: {
                   select: {
                     name: true,
-                    sku: true
-                  }
-                }
-              }
+                    sku: true,
+                  },
+                },
+              },
             },
             customers: {
               select: {
                 firstName: true,
                 lastName: true,
-                phone: true
-              }
-            }
+                phone: true,
+              },
+            },
           },
           orderBy: {
-            createdAt: 'asc'
-          }
-        }
-      }
+            createdAt: 'asc',
+          },
+        },
+      },
     });
 
     if (!shift) {
@@ -267,30 +280,42 @@ export class ShiftsService {
     }
 
     // Filter completed sales
-    const completedSales = shift.sales.filter(s => s.status === 'COMPLETED');
-    const cancelledSales = shift.sales.filter(s => s.status === 'CANCELLED');
+    const completedSales = shift.sales.filter((s) => s.status === 'COMPLETED');
+    const cancelledSales = shift.sales.filter((s) => s.status === 'CANCELLED');
 
     const totalSales = completedSales.length;
-    const totalRevenue = completedSales.reduce((sum, s) => sum + Number(s.totalAmount), 0);
+    const totalRevenue = completedSales.reduce(
+      (sum, s) => sum + Number(s.totalAmount),
+      0,
+    );
     const averageSaleValue = totalSales > 0 ? totalRevenue / totalSales : 0;
 
     // Payment method breakdown
     const paymentBreakdown: Record<string, number> = {};
-    completedSales.forEach(sale => {
+    completedSales.forEach((sale) => {
       const method = sale.paymentMethod;
-      paymentBreakdown[method] = (paymentBreakdown[method] || 0) + Number(sale.totalAmount);
+      paymentBreakdown[method] =
+        (paymentBreakdown[method] || 0) + Number(sale.totalAmount);
     });
 
     // Calculate items sold
     const itemsSold = completedSales.reduce((sum, s) => {
-      return sum + s.sale_items.reduce((itemSum, item) => itemSum + item.quantity, 0);
+      return (
+        sum + s.sale_items.reduce((itemSum, item) => itemSum + item.quantity, 0)
+      );
     }, 0);
 
     // Calculate discount given
-    const totalDiscount = completedSales.reduce((sum, s) => sum + Number(s.discountAmount), 0);
+    const totalDiscount = completedSales.reduce(
+      (sum, s) => sum + Number(s.discountAmount),
+      0,
+    );
 
     // Calculate tax collected
-    const totalTax = completedSales.reduce((sum, s) => sum + Number(s.taxAmount), 0);
+    const totalTax = completedSales.reduce(
+      (sum, s) => sum + Number(s.taxAmount),
+      0,
+    );
 
     return {
       shift: {
@@ -298,7 +323,7 @@ export class ShiftsService {
         openingFloat: Number(shift.openingFloat),
         closingFloat: shift.closingFloat ? Number(shift.closingFloat) : null,
         expectedFloat: shift.expectedFloat ? Number(shift.expectedFloat) : null,
-        variance: shift.variance ? Number(shift.variance) : null
+        variance: shift.variance ? Number(shift.variance) : null,
       },
       metrics: {
         totalSales,
@@ -311,36 +336,50 @@ export class ShiftsService {
         paymentBreakdown,
         cashSales: paymentBreakdown['CASH'] || 0,
         cardSales: paymentBreakdown['CARD'] || 0,
-        floatVariance: shift.variance ? Number(shift.variance) : 0
+        floatVariance: shift.variance ? Number(shift.variance) : 0,
       },
-      sales: completedSales.map(sale => ({
+      sales: completedSales.map((sale) => ({
         ...sale,
         totalAmount: Number(sale.totalAmount),
         subtotal: Number(sale.subtotal),
         taxAmount: Number(sale.taxAmount),
-        discountAmount: Number(sale.discountAmount)
-      }))
+        discountAmount: Number(sale.discountAmount),
+      })),
     };
   }
 
   // Get shift summary statistics
   async getShiftStatistics(tenantId: string, startDate: Date, endDate: Date) {
-    const shifts = await this.getShiftsByDateRange(tenantId, startDate, endDate);
-
-    const totalShifts = shifts.length;
-    const activeShifts = shifts.filter(s => s.status === ShiftStatus.ACTIVE).length;
-    const closedShifts = shifts.filter(s => s.status === ShiftStatus.CLOSED).length;
-
-    const closedShiftsWithData = shifts.filter(s =>
-      s.status === ShiftStatus.CLOSED && s.variance !== null
+    const shifts = await this.getShiftsByDateRange(
+      tenantId,
+      startDate,
+      endDate,
     );
 
-    const averageVariance = closedShiftsWithData.length > 0
-      ? closedShiftsWithData.reduce((sum, s) => sum + Number(s.variance), 0) / closedShiftsWithData.length
-      : 0;
+    const totalShifts = shifts.length;
+    const activeShifts = shifts.filter(
+      (s) => s.status === ShiftStatus.ACTIVE,
+    ).length;
+    const closedShifts = shifts.filter(
+      (s) => s.status === ShiftStatus.CLOSED,
+    ).length;
 
-    const positiveVariances = closedShiftsWithData.filter(s => Number(s.variance) > 0).length;
-    const negativeVariances = closedShiftsWithData.filter(s => Number(s.variance) < 0).length;
+    const closedShiftsWithData = shifts.filter(
+      (s) => s.status === ShiftStatus.CLOSED && s.variance !== null,
+    );
+
+    const averageVariance =
+      closedShiftsWithData.length > 0
+        ? closedShiftsWithData.reduce((sum, s) => sum + Number(s.variance), 0) /
+          closedShiftsWithData.length
+        : 0;
+
+    const positiveVariances = closedShiftsWithData.filter(
+      (s) => Number(s.variance) > 0,
+    ).length;
+    const negativeVariances = closedShiftsWithData.filter(
+      (s) => Number(s.variance) < 0,
+    ).length;
 
     return {
       totalShifts,
@@ -348,7 +387,7 @@ export class ShiftsService {
       closedShifts,
       averageVariance,
       positiveVariances,
-      negativeVariances
+      negativeVariances,
     };
   }
 
@@ -364,8 +403,8 @@ export class ShiftsService {
         tenantId,
         startTime: {
           gte: startDate,
-          lte: endOfDay
-        }
+          lte: endOfDay,
+        },
       },
       include: {
         user: {
@@ -374,18 +413,18 @@ export class ShiftsService {
             firstName: true,
             lastName: true,
             email: true,
-            role: true
-          }
-        }
+            role: true,
+          },
+        },
       },
       orderBy: {
-        startTime: 'desc'
-      }
+        startTime: 'desc',
+      },
     });
 
     // Extract unique users
     const uniqueUsersMap = new Map();
-    shifts.forEach(shift => {
+    shifts.forEach((shift) => {
       if (shift.user && !uniqueUsersMap.has(shift.user.id)) {
         uniqueUsersMap.set(shift.user.id, shift.user);
       }
@@ -406,17 +445,17 @@ export class ShiftsService {
         tenantId,
         startTime: {
           gte: startDate,
-          lte: endOfDay
-        }
+          lte: endOfDay,
+        },
       },
       select: {
-        location: true
-      }
+        location: true,
+      },
     });
 
     // Extract unique locations/tills and filter out null/undefined
     const tillSet = new Set<string>();
-    shifts.forEach(shift => {
+    shifts.forEach((shift) => {
       if (shift.location && shift.location.trim() !== '') {
         tillSet.add(shift.location.trim());
       }

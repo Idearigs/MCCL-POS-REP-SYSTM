@@ -1,6 +1,16 @@
-import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../core/prisma/prisma.service';
-import { CreateCustomerProfileDto, UpdateCustomerProfileDto, SubscriptionPlan, BillingCycle } from '../dto/customer-profile.dto';
+import {
+  CreateCustomerProfileDto,
+  UpdateCustomerProfileDto,
+  SubscriptionPlan,
+  BillingCycle,
+} from '../dto/customer-profile.dto';
 import { SubdomainService } from './subdomain.service';
 import * as bcrypt from 'bcrypt';
 
@@ -15,13 +25,17 @@ export class CustomerProfilesService {
     // Validate subdomain format
     const subdomainRegex = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
     if (!subdomainRegex.test(dto.subdomain.toLowerCase())) {
-      throw new BadRequestException('Subdomain must contain only lowercase letters, numbers, and hyphens');
+      throw new BadRequestException(
+        'Subdomain must contain only lowercase letters, numbers, and hyphens',
+      );
     }
 
     // Check if subdomain is already taken
-    const existingSubdomain = await this.prisma.mf_customer_profiles.findUnique({
-      where: { subdomain: dto.subdomain.toLowerCase() },
-    });
+    const existingSubdomain = await this.prisma.mf_customer_profiles.findUnique(
+      {
+        where: { subdomain: dto.subdomain.toLowerCase() },
+      },
+    );
 
     if (existingSubdomain) {
       throw new ConflictException('Subdomain is already taken');
@@ -119,11 +133,17 @@ export class CustomerProfilesService {
     }
 
     // Log activity
-    await this.logActivity(profile.id, 'profile.created', 'Customer profile created', 'system');
+    await this.logActivity(
+      profile.id,
+      'profile.created',
+      'Customer profile created',
+      'system',
+    );
 
     // Provision subdomain (async - don't wait)
-    this.subdomainService.provisionSubdomain(profile.id, dto.subdomain.toLowerCase())
-      .catch(err => console.error('Subdomain provisioning failed:', err));
+    this.subdomainService
+      .provisionSubdomain(profile.id, dto.subdomain.toLowerCase())
+      .catch((err) => console.error('Subdomain provisioning failed:', err));
 
     return this.findOne(profile.id);
   }
@@ -263,7 +283,12 @@ export class CustomerProfilesService {
       },
     });
 
-    await this.logActivity(id, 'profile.updated', 'Customer profile updated', 'admin');
+    await this.logActivity(
+      id,
+      'profile.updated',
+      'Customer profile updated',
+      'admin',
+    );
 
     return this.formatProfileResponse(updated);
   }
@@ -277,7 +302,12 @@ export class CustomerProfilesService {
       },
     });
 
-    await this.logActivity(id, 'profile.status_changed', `Status changed to ${status}`, 'system');
+    await this.logActivity(
+      id,
+      'profile.status_changed',
+      `Status changed to ${status}`,
+      'system',
+    );
 
     return profile;
   }
@@ -353,8 +383,12 @@ export class CustomerProfilesService {
     ] = await Promise.all([
       this.prisma.mf_customer_profiles.count(),
       this.prisma.mf_customer_profiles.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.mf_customer_profiles.count({ where: { status: 'PENDING_SETUP' } }),
-      this.prisma.mf_customer_profiles.count({ where: { status: 'SUSPENDED' } }),
+      this.prisma.mf_customer_profiles.count({
+        where: { status: 'PENDING_SETUP' },
+      }),
+      this.prisma.mf_customer_profiles.count({
+        where: { status: 'SUSPENDED' },
+      }),
       this.prisma.mf_customer_users.count(),
       this.prisma.mf_customer_profiles.findMany({
         take: 5,
@@ -404,32 +438,37 @@ export class CustomerProfilesService {
         email: profile.contactEmail,
         phone: profile.contactPhone,
       },
-      subscription: profile.subscription ? {
-        id: profile.subscription.id,
-        plan: profile.subscription.plan,
-        billingCycle: profile.subscription.billingCycle,
-        basePrice: profile.subscription.basePrice,
-        perUserPrice: profile.subscription.perUserPrice,
-        includedUsers: profile.subscription.includedUsers,
-        maxUsers: profile.subscription.maxUsers,
-        currentUsers: profile.subscription.currentUsers,
-        isOnTrial: profile.subscription.isOnTrial,
-        trialEndsAt: profile.subscription.trialEndsAt,
-        nextBillingDate: profile.subscription.nextBillingDate,
-        isActive: profile.subscription.isActive,
-      } : null,
-      enabledFeatures: profile.enabledFeatures?.map((cf: any) => ({
-        featureKey: cf.feature.featureKey,
-        featureName: cf.feature.featureName,
-        isEnabled: cf.isEnabled,
-        version: cf.version || cf.feature.currentVersion,
-      })) || [],
+      subscription: profile.subscription
+        ? {
+            id: profile.subscription.id,
+            plan: profile.subscription.plan,
+            billingCycle: profile.subscription.billingCycle,
+            basePrice: profile.subscription.basePrice,
+            perUserPrice: profile.subscription.perUserPrice,
+            includedUsers: profile.subscription.includedUsers,
+            maxUsers: profile.subscription.maxUsers,
+            currentUsers: profile.subscription.currentUsers,
+            isOnTrial: profile.subscription.isOnTrial,
+            trialEndsAt: profile.subscription.trialEndsAt,
+            nextBillingDate: profile.subscription.nextBillingDate,
+            isActive: profile.subscription.isActive,
+          }
+        : null,
+      enabledFeatures:
+        profile.enabledFeatures?.map((cf: any) => ({
+          featureKey: cf.feature.featureKey,
+          featureName: cf.feature.featureName,
+          isEnabled: cf.isEnabled,
+          version: cf.version || cf.feature.currentVersion,
+        })) || [],
       users: profile.customerUsers || [],
-      stats: profile._count ? {
-        userCount: profile._count.customerUsers,
-        bugReportCount: profile._count.bugReports,
-        featureRequestCount: profile._count.featureRequests,
-      } : null,
+      stats: profile._count
+        ? {
+            userCount: profile._count.customerUsers,
+            bugReportCount: profile._count.bugReports,
+            featureRequestCount: profile._count.featureRequests,
+          }
+        : null,
       internalNotes: profile.internalNotes,
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
@@ -438,11 +477,36 @@ export class CustomerProfilesService {
 
   private getPlanConfig(plan: SubscriptionPlan) {
     const configs = {
-      STARTER: { basePrice: 29, perUserPrice: 10, includedUsers: 1, maxUsers: 3 },
-      PROFESSIONAL: { basePrice: 79, perUserPrice: 8, includedUsers: 5, maxUsers: 15 },
-      BUSINESS: { basePrice: 199, perUserPrice: 6, includedUsers: 15, maxUsers: 50 },
-      ENTERPRISE: { basePrice: 499, perUserPrice: 5, includedUsers: 50, maxUsers: null },
-      CUSTOM: { basePrice: 0, perUserPrice: 0, includedUsers: 1, maxUsers: null },
+      STARTER: {
+        basePrice: 29,
+        perUserPrice: 10,
+        includedUsers: 1,
+        maxUsers: 3,
+      },
+      PROFESSIONAL: {
+        basePrice: 79,
+        perUserPrice: 8,
+        includedUsers: 5,
+        maxUsers: 15,
+      },
+      BUSINESS: {
+        basePrice: 199,
+        perUserPrice: 6,
+        includedUsers: 15,
+        maxUsers: 50,
+      },
+      ENTERPRISE: {
+        basePrice: 499,
+        perUserPrice: 5,
+        includedUsers: 50,
+        maxUsers: null,
+      },
+      CUSTOM: {
+        basePrice: 0,
+        perUserPrice: 0,
+        includedUsers: 1,
+        maxUsers: null,
+      },
     };
     return configs[plan] || configs.STARTER;
   }

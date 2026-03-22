@@ -1,6 +1,15 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
-import { CreateTaskDto, UpdateTaskDto, AddCommentDto, TaskStatus } from './dto/task.dto';
+import {
+  CreateTaskDto,
+  UpdateTaskDto,
+  AddCommentDto,
+  TaskStatus,
+} from './dto/task.dto';
 
 @Injectable()
 export class TasksService {
@@ -168,7 +177,12 @@ export class TasksService {
     return task;
   }
 
-  async update(tenantId: string, taskId: string, userId: string, dto: UpdateTaskDto) {
+  async update(
+    tenantId: string,
+    taskId: string,
+    userId: string,
+    dto: UpdateTaskDto,
+  ) {
     const task = await this.prisma.tasks.findFirst({
       where: { id: taskId, tenantId },
     });
@@ -188,7 +202,8 @@ export class TasksService {
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         startDate: dto.startDate ? new Date(dto.startDate) : undefined,
         tags: dto.tags,
-        completedAt: dto.status === TaskStatus.COMPLETED ? new Date() : undefined,
+        completedAt:
+          dto.status === TaskStatus.COMPLETED ? new Date() : undefined,
       },
       include: {
         creator: {
@@ -216,7 +231,10 @@ export class TasksService {
     }
 
     // Log assignment changes
-    if (dto.assignedTo && JSON.stringify(dto.assignedTo) !== JSON.stringify(task.assignedTo)) {
+    if (
+      dto.assignedTo &&
+      JSON.stringify(dto.assignedTo) !== JSON.stringify(task.assignedTo)
+    ) {
       await this.prisma.task_activities.create({
         data: {
           taskId: task.id,
@@ -247,7 +265,12 @@ export class TasksService {
     return { message: 'Task deleted successfully' };
   }
 
-  async addComment(tenantId: string, taskId: string, userId: string, dto: AddCommentDto) {
+  async addComment(
+    tenantId: string,
+    taskId: string,
+    userId: string,
+    dto: AddCommentDto,
+  ) {
     const task = await this.prisma.tasks.findFirst({
       where: { id: taskId, tenantId },
     });

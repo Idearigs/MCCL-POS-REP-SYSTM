@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, IsDateString, IsNumber, IsArray, IsBoolean } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsDateString,
+  IsNumber,
+  IsArray,
+  IsBoolean,
+} from 'class-validator';
 
 export enum FinancialAnalysisType {
   DAILY = 'DAILY',
@@ -61,7 +69,10 @@ export class GenerateAnalysisDto {
   @IsDateString()
   endDate: string;
 
-  @ApiPropertyOptional({ description: 'Whether to use AI for insights generation', default: true })
+  @ApiPropertyOptional({
+    description: 'Whether to use AI for insights generation',
+    default: true,
+  })
   @IsOptional()
   @IsBoolean()
   useAI?: boolean;

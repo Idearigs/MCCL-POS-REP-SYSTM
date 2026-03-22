@@ -13,7 +13,19 @@ import {
   RecommendationStatus,
   RecommendationPriority,
 } from './dto/financial-intelligence.dto';
-import { startOfDay, endOfDay, subDays, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, format } from 'date-fns';
+import {
+  startOfDay,
+  endOfDay,
+  subDays,
+  subMonths,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  startOfYear,
+  endOfYear,
+  format,
+} from 'date-fns';
 
 @Injectable()
 export class FinancialIntelligenceService {
@@ -33,7 +45,9 @@ export class FinancialIntelligenceService {
     tenantId: string,
     userId: string,
   ): Promise<FinancialAnalysisResponseDto> {
-    this.logger.log(`Generating ${dto.analysisType} analysis for tenant ${tenantId}`);
+    this.logger.log(
+      `Generating ${dto.analysisType} analysis for tenant ${tenantId}`,
+    );
 
     const startDate = new Date(dto.startDate);
     const endDate = new Date(dto.endDate);
@@ -42,11 +56,15 @@ export class FinancialIntelligenceService {
     const reportPeriod = this.getReportPeriod(dto.analysisType, startDate);
 
     // Aggregate financial data
-    const financialData = await this.aggregateFinancialData(tenantId, startDate, endDate);
+    const financialData = await this.aggregateFinancialData(
+      tenantId,
+      startDate,
+      endDate,
+    );
 
     // Generate AI insights if enabled
     let aiInsights: string | null = null;
-    let aiRecommendations: string | null = null;
+    const aiRecommendations: string | null = null;
     let improvementAreas: any[] = [];
     let warnings: any[] = [];
     let opportunities: any[] = [];
@@ -61,11 +79,12 @@ export class FinancialIntelligenceService {
         });
 
         // Generate recommendations
-        const recommendations = await this.openAIService.generateRecommendations({
-          ...financialData,
-          period: reportPeriod,
-          analysisType: dto.analysisType,
-        });
+        const recommendations =
+          await this.openAIService.generateRecommendations({
+            ...financialData,
+            period: reportPeriod,
+            analysisType: dto.analysisType,
+          });
 
         // Save recommendations to database
         await this.saveRecommendations(recommendations, tenantId);
@@ -133,35 +152,53 @@ export class FinancialIntelligenceService {
    */
   async getDashboardSummary(tenantId: string): Promise<DashboardSummaryDto> {
     const cacheKey = `dashboard:summary:${tenantId}`;
-    const cached = await this.cacheService.getTenantData<DashboardSummaryDto>(tenantId, cacheKey);
+    const cached = await this.cacheService.getTenantData<DashboardSummaryDto>(
+      tenantId,
+      cacheKey,
+    );
     if (cached) return cached;
 
     // Current month
     const currentStart = startOfMonth(new Date());
     const currentEnd = endOfMonth(new Date());
-    const currentData = await this.aggregateFinancialData(tenantId, currentStart, currentEnd);
+    const currentData = await this.aggregateFinancialData(
+      tenantId,
+      currentStart,
+      currentEnd,
+    );
 
     // Previous month
     const previousStart = startOfMonth(subMonths(new Date(), 1));
     const previousEnd = endOfMonth(subMonths(new Date(), 1));
-    const previousData = await this.aggregateFinancialData(tenantId, previousStart, previousEnd);
+    const previousData = await this.aggregateFinancialData(
+      tenantId,
+      previousStart,
+      previousEnd,
+    );
 
     // Calculate changes
-    const revenueChange = this.calculatePercentageChange(previousData.totalRevenue, currentData.totalRevenue);
-    const profitChange = this.calculatePercentageChange(previousData.totalProfit, currentData.totalProfit);
-    const transactionsChange = this.calculatePercentageChange(previousData.totalTransactions, currentData.totalTransactions);
+    const revenueChange = this.calculatePercentageChange(
+      previousData.totalRevenue,
+      currentData.totalRevenue,
+    );
+    const profitChange = this.calculatePercentageChange(
+      previousData.totalProfit,
+      currentData.totalProfit,
+    );
+    const transactionsChange = this.calculatePercentageChange(
+      previousData.totalTransactions,
+      currentData.totalTransactions,
+    );
 
     // Get recent recommendations (all statuses, prioritize pending)
-    const recentRecommendations = await this.prismaService.ai_recommendations.findMany({
-      where: {
-        tenantId,
-      },
-      orderBy: [
-        { priority: 'desc' },
-        { createdAt: 'desc' },
-      ],
-      take: 10, // Show more recommendations
-    });
+    const recentRecommendations =
+      await this.prismaService.ai_recommendations.findMany({
+        where: {
+          tenantId,
+        },
+        orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+        take: 10, // Show more recommendations
+      });
 
     // Generate alerts
     const alerts = this.generateAlerts(currentData);
@@ -188,7 +225,9 @@ export class FinancialIntelligenceService {
       },
       topProducts: currentData.topProducts.slice(0, 5),
       topCustomers: currentData.topCustomers.slice(0, 5),
-      recentRecommendations: recentRecommendations.map(this.mapRecommendationToResponse),
+      recentRecommendations: recentRecommendations.map(
+        this.mapRecommendationToResponse,
+      ),
       alerts,
     };
 
@@ -201,7 +240,10 @@ export class FinancialIntelligenceService {
   /**
    * Get list of analyses
    */
-  async getAnalyses(tenantId: string, filters?: any): Promise<FinancialAnalysisResponseDto[]> {
+  async getAnalyses(
+    tenantId: string,
+    filters?: any,
+  ): Promise<FinancialAnalysisResponseDto[]> {
     const analyses = await this.prismaService.financial_analyses.findMany({
       where: {
         tenantId,
@@ -217,7 +259,10 @@ export class FinancialIntelligenceService {
   /**
    * Get specific analysis by ID
    */
-  async getAnalysisById(id: string, tenantId: string): Promise<FinancialAnalysisResponseDto> {
+  async getAnalysisById(
+    id: string,
+    tenantId: string,
+  ): Promise<FinancialAnalysisResponseDto> {
     const analysis = await this.prismaService.financial_analyses.findFirst({
       where: { id, tenantId },
     });
@@ -232,20 +277,21 @@ export class FinancialIntelligenceService {
   /**
    * Get recommendations
    */
-  async getRecommendations(tenantId: string, filters?: any): Promise<RecommendationResponseDto[]> {
-    const recommendations = await this.prismaService.ai_recommendations.findMany({
-      where: {
-        tenantId,
-        ...(filters?.status && { status: filters.status }),
-        ...(filters?.category && { category: filters.category }),
-        ...(filters?.priority && { priority: filters.priority }),
-      },
-      orderBy: [
-        { priority: 'desc' },
-        { createdAt: 'desc' },
-      ],
-      take: filters?.limit || 100,
-    });
+  async getRecommendations(
+    tenantId: string,
+    filters?: any,
+  ): Promise<RecommendationResponseDto[]> {
+    const recommendations =
+      await this.prismaService.ai_recommendations.findMany({
+        where: {
+          tenantId,
+          ...(filters?.status && { status: filters.status }),
+          ...(filters?.category && { category: filters.category }),
+          ...(filters?.priority && { priority: filters.priority }),
+        },
+        orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+        take: filters?.limit || 100,
+      });
 
     return recommendations.map(this.mapRecommendationToResponse);
   }
@@ -259,9 +305,10 @@ export class FinancialIntelligenceService {
     tenantId: string,
     userId: string,
   ): Promise<RecommendationResponseDto> {
-    const recommendation = await this.prismaService.ai_recommendations.findFirst({
-      where: { id, tenantId },
-    });
+    const recommendation =
+      await this.prismaService.ai_recommendations.findFirst({
+        where: { id, tenantId },
+      });
 
     if (!recommendation) {
       throw new NotFoundException('Recommendation not found');
@@ -272,8 +319,10 @@ export class FinancialIntelligenceService {
       data: {
         status: dto.status as any,
         notes: dto.notes,
-        implementedBy: dto.status === RecommendationStatus.IMPLEMENTED ? userId : null,
-        implementedDate: dto.status === RecommendationStatus.IMPLEMENTED ? new Date() : null,
+        implementedBy:
+          dto.status === RecommendationStatus.IMPLEMENTED ? userId : null,
+        implementedDate:
+          dto.status === RecommendationStatus.IMPLEMENTED ? new Date() : null,
         updatedAt: new Date(),
       },
     });
@@ -284,7 +333,11 @@ export class FinancialIntelligenceService {
   /**
    * Aggregate financial data from sales, products, customers
    */
-  private async aggregateFinancialData(tenantId: string, startDate: Date, endDate: Date) {
+  private async aggregateFinancialData(
+    tenantId: string,
+    startDate: Date,
+    endDate: Date,
+  ) {
     // Get all sales in period
     const sales = await this.prismaService.sales.findMany({
       where: {
@@ -306,22 +359,30 @@ export class FinancialIntelligenceService {
     });
 
     // Calculate metrics
-    const totalRevenue = sales.reduce((sum, sale) => sum + Number(sale.totalAmount), 0);
+    const totalRevenue = sales.reduce(
+      (sum, sale) => sum + Number(sale.totalAmount),
+      0,
+    );
     const totalCost = sales.reduce((sum, sale) => {
       const itemsCost = sale.sale_items.reduce((itemSum, item) => {
-        return itemSum + (Number(item.products?.costPrice || 0) * item.quantity);
+        return itemSum + Number(item.products?.costPrice || 0) * item.quantity;
       }, 0);
       return sum + itemsCost;
     }, 0);
     const totalProfit = totalRevenue - totalCost;
-    const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+    const profitMargin =
+      totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
     const totalTransactions = sales.length;
-    const averageTransaction = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
+    const averageTransaction =
+      totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
 
     // Top products
-    const productSales = new Map<string, { product: any; revenue: number; units: number }>();
-    sales.forEach(sale => {
-      sale.sale_items.forEach(item => {
+    const productSales = new Map<
+      string,
+      { product: any; revenue: number; units: number }
+    >();
+    sales.forEach((sale) => {
+      sale.sale_items.forEach((item) => {
         const key = item.productId;
         const existing = productSales.get(key);
         if (existing) {
@@ -340,7 +401,7 @@ export class FinancialIntelligenceService {
     const topProducts = Array.from(productSales.values())
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 10)
-      .map(p => ({
+      .map((p) => ({
         id: p.product?.id,
         name: p.product?.name || 'Unknown',
         sku: p.product?.sku,
@@ -349,8 +410,11 @@ export class FinancialIntelligenceService {
       }));
 
     // Top customers
-    const customerSales = new Map<string, { customer: any; totalSpent: number; transactions: number }>();
-    sales.forEach(sale => {
+    const customerSales = new Map<
+      string,
+      { customer: any; totalSpent: number; transactions: number }
+    >();
+    sales.forEach((sale) => {
       if (sale.customerId) {
         const existing = customerSales.get(sale.customerId);
         if (existing) {
@@ -369,9 +433,11 @@ export class FinancialIntelligenceService {
     const topCustomers = Array.from(customerSales.values())
       .sort((a, b) => b.totalSpent - a.totalSpent)
       .slice(0, 10)
-      .map(c => ({
+      .map((c) => ({
         id: c.customer?.id,
-        name: `${c.customer?.firstName || ''} ${c.customer?.lastName || ''}`.trim() || 'Walk-in Customer',
+        name:
+          `${c.customer?.firstName || ''} ${c.customer?.lastName || ''}`.trim() ||
+          'Walk-in Customer',
         totalSpent: c.totalSpent,
         transactions: c.transactions,
       }));
@@ -398,7 +464,7 @@ export class FinancialIntelligenceService {
   private calculateSalesTrends(sales: any[], startDate: Date, endDate: Date) {
     const trends: Record<string, number> = {};
 
-    sales.forEach(sale => {
+    sales.forEach((sale) => {
       const dateKey = format(new Date(sale.createdAt), 'yyyy-MM-dd');
       trends[dateKey] = (trends[dateKey] || 0) + Number(sale.totalAmount);
     });
@@ -465,7 +531,10 @@ export class FinancialIntelligenceService {
   /**
    * Calculate percentage change
    */
-  private calculatePercentageChange(oldValue: number, newValue: number): number {
+  private calculatePercentageChange(
+    oldValue: number,
+    newValue: number,
+  ): number {
     if (oldValue === 0) return newValue > 0 ? 100 : 0;
     return ((newValue - oldValue) / oldValue) * 100;
   }

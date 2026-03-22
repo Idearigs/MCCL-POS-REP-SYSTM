@@ -10,7 +10,7 @@ import {
   UseGuards,
   Req,
   HttpCode,
-  HttpStatus
+  HttpStatus,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { ShiftsService } from './shifts.service';
@@ -32,17 +32,14 @@ export class ShiftsController {
       openingFloat: body.openingFloat,
       deviceInfo: req.headers['user-agent'],
       ipAddress: req.ip || req.connection.remoteAddress,
-      openingNotes: body.openingNotes
+      openingNotes: body.openingNotes,
     });
   }
 
   // Get active shift for current user
   @Get('active')
   async getActiveShift(@Req() req) {
-    return this.shiftsService.getActiveShift(
-      req.user.id,
-      req.user.tenantId
-    );
+    return this.shiftsService.getActiveShift(req.user.id, req.user.tenantId);
   }
 
   // Close shift
@@ -50,7 +47,7 @@ export class ShiftsController {
   async closeShift(
     @Req() req,
     @Param('id') shiftId: string,
-    @Body() body: CloseShiftDto
+    @Body() body: CloseShiftDto,
   ) {
     return this.shiftsService.closeShift(shiftId, req.user.id, body);
   }
@@ -62,7 +59,7 @@ export class ShiftsController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
     @Query('userId') userId?: string,
-    @Query('status') status?: ShiftStatus
+    @Query('status') status?: ShiftStatus,
   ) {
     // Validate date parameters
     if (!startDate || !endDate) {
@@ -79,7 +76,9 @@ export class ShiftsController {
 
     // Validate date range
     if (start > end) {
-      throw new BadRequestException('Start date must be before or equal to end date');
+      throw new BadRequestException(
+        'Start date must be before or equal to end date',
+      );
     }
 
     return this.shiftsService.getShiftsByDateRange(
@@ -87,7 +86,7 @@ export class ShiftsController {
       start,
       end,
       userId,
-      status
+      status,
     );
   }
 
@@ -102,7 +101,7 @@ export class ShiftsController {
   async getShiftStatistics(
     @Req() req,
     @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string
+    @Query('endDate') endDate: string,
   ) {
     // Validate date parameters
     if (!startDate || !endDate) {
@@ -119,14 +118,12 @@ export class ShiftsController {
 
     // Validate date range
     if (start > end) {
-      throw new BadRequestException('Start date must be before or equal to end date');
+      throw new BadRequestException(
+        'Start date must be before or equal to end date',
+      );
     }
 
-    return this.shiftsService.getShiftStatistics(
-      req.user.tenantId,
-      start,
-      end
-    );
+    return this.shiftsService.getShiftStatistics(req.user.tenantId, start, end);
   }
 
   // Get users who worked in date range
@@ -134,7 +131,7 @@ export class ShiftsController {
   async getUsersByDateRange(
     @Req() req,
     @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string
+    @Query('endDate') endDate: string,
   ) {
     if (!startDate || !endDate) {
       throw new BadRequestException('Start date and end date are required');
@@ -148,13 +145,15 @@ export class ShiftsController {
     }
 
     if (start > end) {
-      throw new BadRequestException('Start date must be before or equal to end date');
+      throw new BadRequestException(
+        'Start date must be before or equal to end date',
+      );
     }
 
     return this.shiftsService.getUsersByDateRange(
       req.user.tenantId,
       start,
-      end
+      end,
     );
   }
 
@@ -163,7 +162,7 @@ export class ShiftsController {
   async getTillsByDateRange(
     @Req() req,
     @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string
+    @Query('endDate') endDate: string,
   ) {
     if (!startDate || !endDate) {
       throw new BadRequestException('Start date and end date are required');
@@ -177,13 +176,15 @@ export class ShiftsController {
     }
 
     if (start > end) {
-      throw new BadRequestException('Start date must be before or equal to end date');
+      throw new BadRequestException(
+        'Start date must be before or equal to end date',
+      );
     }
 
     return this.shiftsService.getTillsByDateRange(
       req.user.tenantId,
       start,
-      end
+      end,
     );
   }
 }

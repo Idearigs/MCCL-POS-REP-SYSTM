@@ -14,8 +14,14 @@ import {
 import type { Response } from 'express';
 import { CustomerProfilesService } from '../services/customer-profiles.service';
 import { SubdomainService } from '../services/subdomain.service';
-import { CredentialsExportService, CredentialsDocument } from '../services/credentials-export.service';
-import { CreateCustomerProfileDto, UpdateCustomerProfileDto } from '../dto/customer-profile.dto';
+import {
+  CredentialsExportService,
+  CredentialsDocument,
+} from '../services/credentials-export.service';
+import {
+  CreateCustomerProfileDto,
+  UpdateCustomerProfileDto,
+} from '../dto/customer-profile.dto';
 
 @Controller('mainframe/customer-profiles')
 export class CustomerProfilesController {
@@ -57,7 +63,8 @@ export class CustomerProfilesController {
       return { available: false, error: validation.error };
     }
 
-    const available = await this.subdomainService.isSubdomainAvailable(subdomain);
+    const available =
+      await this.subdomainService.isSubdomainAvailable(subdomain);
     return { available, subdomain: subdomain.toLowerCase() };
   }
 
@@ -66,7 +73,8 @@ export class CustomerProfilesController {
     if (!businessName) {
       return { suggestions: [] };
     }
-    const suggestions = await this.subdomainService.suggestSubdomains(businessName);
+    const suggestions =
+      await this.subdomainService.suggestSubdomains(businessName);
     return { suggestions };
   }
 
@@ -86,10 +94,7 @@ export class CustomerProfilesController {
   }
 
   @Patch(':id/status')
-  async updateStatus(
-    @Param('id') id: string,
-    @Body('status') status: string,
-  ) {
+  async updateStatus(@Param('id') id: string, @Body('status') status: string) {
     return this.customerProfilesService.updateStatus(id, status);
   }
 
@@ -126,13 +131,13 @@ export class CustomerProfilesController {
   }
 
   @Get(':id/credentials/html')
-  async getCredentialsHtml(
-    @Param('id') id: string,
-    @Res() res: Response,
-  ) {
+  async getCredentialsHtml(@Param('id') id: string, @Res() res: Response) {
     const html = await this.credentialsExportService.generateHtmlDocument(id);
     res.setHeader('Content-Type', 'text/html');
-    res.setHeader('Content-Disposition', `attachment; filename="credentials-${id}.html"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="credentials-${id}.html"`,
+    );
     res.send(html);
   }
 

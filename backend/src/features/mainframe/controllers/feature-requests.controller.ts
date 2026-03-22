@@ -3,16 +3,21 @@ import { FeatureRequestsService } from '../services/feature-requests.service';
 
 @Controller('mainframe/feature-requests')
 export class FeatureRequestsController {
-  constructor(private readonly featureRequestsService: FeatureRequestsService) {}
+  constructor(
+    private readonly featureRequestsService: FeatureRequestsService,
+  ) {}
 
   @Post()
-  async create(@Body() data: {
-    customerProfileId?: string;
-    title: string;
-    description: string;
-    priority?: string;
-    targetFeatureKey?: string;
-  }) {
+  async create(
+    @Body()
+    data: {
+      customerProfileId?: string;
+      title: string;
+      description: string;
+      priority?: string;
+      targetFeatureKey?: string;
+    },
+  ) {
     return this.featureRequestsService.create(data);
   }
 

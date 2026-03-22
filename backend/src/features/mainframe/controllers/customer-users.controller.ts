@@ -8,7 +8,10 @@ import {
   Param,
 } from '@nestjs/common';
 import { CustomerUsersService } from '../services/customer-users.service';
-import { CreateCustomerUserDto, UpdateCustomerUserDto } from '../dto/customer-profile.dto';
+import {
+  CreateCustomerUserDto,
+  UpdateCustomerUserDto,
+} from '../dto/customer-profile.dto';
 
 @Controller('mainframe/customer-users')
 export class CustomerUsersController {

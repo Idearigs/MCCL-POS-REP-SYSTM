@@ -25,17 +25,7 @@ import { CacheServiceModule } from '../../core/cache/cache.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [
-    AuthService,
-    JwtStrategy,
-    JwtRefreshStrategy,
-    JwtAuthGuard,
-  ],
-  exports: [
-    AuthService,
-    JwtAuthGuard,
-    PassportModule,
-    JwtModule,
-  ],
+  providers: [AuthService, JwtStrategy, JwtRefreshStrategy, JwtAuthGuard],
+  exports: [AuthService, JwtAuthGuard, PassportModule, JwtModule],
 })
 export class AuthModule {}

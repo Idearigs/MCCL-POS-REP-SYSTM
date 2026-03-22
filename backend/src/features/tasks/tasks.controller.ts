@@ -10,7 +10,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { TasksService } from './tasks.service';
-import { CreateTaskDto, UpdateTaskDto, AddCommentDto, TaskStatus } from './dto/task.dto';
+import {
+  CreateTaskDto,
+  UpdateTaskDto,
+  AddCommentDto,
+  TaskStatus,
+} from './dto/task.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
 import { CurrentUser } from '../../shared/decorators/user.decorator';
@@ -64,10 +69,7 @@ export class TasksController {
   }
 
   @Get(':id')
-  async findOne(
-    @TenantId() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  async findOne(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.tasksService.findOne(tenantId, id);
   }
 
@@ -82,10 +84,7 @@ export class TasksController {
   }
 
   @Delete(':id')
-  async delete(
-    @TenantId() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  async delete(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.tasksService.delete(tenantId, id);
   }
 

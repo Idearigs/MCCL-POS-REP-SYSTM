@@ -8,7 +8,12 @@ import {
   Body,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiResponse, ApiConsumes } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiConsumes,
+} from '@nestjs/swagger';
 import { FileStorageService, FileUploadResult } from './file-storage.service';
 
 interface UploadedFile {
@@ -32,14 +37,14 @@ export class FileStorageController {
   @UseInterceptors(FilesInterceptor('images', 10))
   async uploadRepairImages(
     @UploadedFiles() files: UploadedFile[],
-    @Body() metadata: any
+    @Body() metadata: any,
   ): Promise<{ results: FileUploadResult[]; summary: any }> {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files provided');
     }
 
     const results: FileUploadResult[] = [];
-    
+
     for (const file of files) {
       try {
         const result = await this.fileStorageService.uploadFile({
@@ -51,10 +56,10 @@ export class FileStorageController {
             repairId: metadata.repairId,
             description: metadata.description,
             uploadedBy: metadata.uploadedBy || 'system',
-            originalSize: file.size
-          }
+            originalSize: file.size,
+          },
         });
-        
+
         results.push(result);
       } catch (error) {
         results.push({
@@ -63,19 +68,22 @@ export class FileStorageController {
           fileName: file.originalname,
           size: file.size,
           uploadMethod: 'error',
-          error: error.message
+          error: error.message,
         });
       }
     }
 
     const summary = {
       totalFiles: files.length,
-      successful: results.filter(r => r.success).length,
-      failed: results.filter(r => !r.success).length,
-      uploadMethods: results.reduce((acc, r) => {
-        acc[r.uploadMethod] = (acc[r.uploadMethod] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>)
+      successful: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length,
+      uploadMethods: results.reduce(
+        (acc, r) => {
+          acc[r.uploadMethod] = (acc[r.uploadMethod] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>,
+      ),
     };
 
     return { results, summary };
@@ -87,14 +95,14 @@ export class FileStorageController {
   @UseInterceptors(FilesInterceptor('documents', 5))
   async uploadCustomerDocuments(
     @UploadedFiles() files: UploadedFile[],
-    @Body() metadata: any
+    @Body() metadata: any,
   ): Promise<{ results: FileUploadResult[] }> {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files provided');
     }
 
     const results: FileUploadResult[] = [];
-    
+
     for (const file of files) {
       const result = await this.fileStorageService.uploadFile({
         fileName: file.originalname,
@@ -104,10 +112,10 @@ export class FileStorageController {
         metadata: {
           customerId: metadata.customerId,
           documentType: metadata.documentType,
-          uploadedBy: metadata.uploadedBy || 'system'
-        }
+          uploadedBy: metadata.uploadedBy || 'system',
+        },
       });
-      
+
       results.push(result);
     }
 
@@ -120,14 +128,14 @@ export class FileStorageController {
   @UseInterceptors(FilesInterceptor('images', 10))
   async uploadProductImages(
     @UploadedFiles() files: UploadedFile[],
-    @Body() metadata: any
+    @Body() metadata: any,
   ): Promise<{ results: FileUploadResult[] }> {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files provided');
     }
 
     const results: FileUploadResult[] = [];
-    
+
     for (const file of files) {
       const result = await this.fileStorageService.uploadFile({
         fileName: file.originalname,
@@ -137,10 +145,10 @@ export class FileStorageController {
         metadata: {
           productId: metadata.productId,
           imageType: metadata.imageType || 'product',
-          uploadedBy: metadata.uploadedBy || 'system'
-        }
+          uploadedBy: metadata.uploadedBy || 'system',
+        },
       });
-      
+
       results.push(result);
     }
 

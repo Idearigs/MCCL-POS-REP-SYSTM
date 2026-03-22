@@ -56,7 +56,9 @@ export class CacheService {
   async reset(): Promise<void> {
     try {
       // Note: reset() method may not be available in all cache implementations
-      const manager = this.cacheManager as Cache & { reset?: () => Promise<void> };
+      const manager = this.cacheManager as Cache & {
+        reset?: () => Promise<void>;
+      };
       if (typeof manager.reset === 'function') {
         await manager.reset();
       } else {
@@ -79,14 +81,14 @@ export class CacheService {
     try {
       // Try to get from cache first
       let data = await this.get<T>(key);
-      
+
       if (data === null) {
         // Cache miss - fetch data and cache it
         this.logger.debug(`Cache MISS - Fetching data for key: ${key}`);
         data = await factory();
         await this.set(key, data, ttl);
       }
-      
+
       return data;
     } catch (error) {
       this.logger.error(`Cache getOrSet error for key ${key}:`, error);
@@ -177,15 +179,20 @@ export class CacheService {
     refreshThreshold: number = 0.8,
   ): Promise<T> {
     const data = await this.getOrSet(key, factory, ttl);
-    
+
     // Asynchronously refresh cache when approaching expiry
-    setTimeout(() => {
-      void factory()
-        .then((refreshedData) => this.set(key, refreshedData, ttl))
-        .then(() => this.logger.debug(`Cache REFRESH for key: ${key}`))
-        .catch((error: unknown) => this.logger.error(`Cache REFRESH error for key ${key}:`, error));
-    }, ttl * refreshThreshold * 1000);
-    
+    setTimeout(
+      () => {
+        void factory()
+          .then((refreshedData) => this.set(key, refreshedData, ttl))
+          .then(() => this.logger.debug(`Cache REFRESH for key: ${key}`))
+          .catch((error: unknown) =>
+            this.logger.error(`Cache REFRESH error for key ${key}:`, error),
+          );
+      },
+      ttl * refreshThreshold * 1000,
+    );
+
     return data;
   }
 }

@@ -41,7 +41,7 @@ export class GoogleDriveService {
 
       if (!clientEmail || !privateKey || !projectId) {
         this.logger.warn(
-          '⚠️  Google Drive credentials not configured. File upload will be disabled.'
+          '⚠️  Google Drive credentials not configured. File upload will be disabled.',
         );
         return;
       }
@@ -50,18 +50,17 @@ export class GoogleDriveService {
       const auth = new google.auth.JWT({
         email: clientEmail,
         key: privateKey.replace(/\\n/g, '\n'),
-        scopes: ['https://www.googleapis.com/auth/drive.file']
+        scopes: ['https://www.googleapis.com/auth/drive.file'],
       });
 
       // Initialize Drive API
       this.drive = google.drive({ version: 'v3', auth });
-      
+
       // Test connection
       await this.drive.about.get({ fields: 'user' });
-      
+
       this.isConfigured = true;
       this.logger.log('✅ Google Drive service initialized successfully');
-      
     } catch (error) {
       this.logger.error('❌ Failed to initialize Google Drive:', error.message);
       this.isConfigured = false;
@@ -101,7 +100,9 @@ export class GoogleDriveService {
       if (folderId) {
         fileMetadata.parents = [folderId];
       } else {
-        const parentFolderId = this.configService.get('GOOGLE_DRIVE_PARENT_FOLDER_ID');
+        const parentFolderId = this.configService.get(
+          'GOOGLE_DRIVE_PARENT_FOLDER_ID',
+        );
         if (parentFolderId) {
           fileMetadata.parents = [parentFolderId];
         }
@@ -117,7 +118,8 @@ export class GoogleDriveService {
       const response = await this.drive.files.create({
         requestBody: fileMetadata,
         media,
-        fields: 'id,name,webViewLink,webContentLink,mimeType,size,createdTime,modifiedTime',
+        fields:
+          'id,name,webViewLink,webContentLink,mimeType,size,createdTime,modifiedTime',
       });
 
       const file = response.data;
@@ -125,7 +127,9 @@ export class GoogleDriveService {
       // Make file accessible
       await this.makeFilePublic(file.id);
 
-      this.logger.log(`✅ File uploaded successfully: ${fileName} (ID: ${file.id})`);
+      this.logger.log(
+        `✅ File uploaded successfully: ${fileName} (ID: ${file.id})`,
+      );
 
       return {
         id: file.id,
@@ -137,9 +141,11 @@ export class GoogleDriveService {
         createdTime: file.createdTime,
         modifiedTime: file.modifiedTime,
       };
-
     } catch (error) {
-      this.logger.error(`Failed to upload file ${options.fileName}:`, error.message);
+      this.logger.error(
+        `Failed to upload file ${options.fileName}:`,
+        error.message,
+      );
       throw new BadRequestException(`File upload failed: ${error.message}`);
     }
   }
@@ -172,7 +178,8 @@ export class GoogleDriveService {
     try {
       const response = await this.drive.files.get({
         fileId,
-        fields: 'id,name,webViewLink,webContentLink,mimeType,size,createdTime,modifiedTime',
+        fields:
+          'id,name,webViewLink,webContentLink,mimeType,size,createdTime,modifiedTime',
       });
 
       return response.data;
@@ -205,9 +212,10 @@ export class GoogleDriveService {
         fields: 'id',
       });
 
-      this.logger.log(`✅ Folder created successfully: ${name} (ID: ${response.data.id})`);
+      this.logger.log(
+        `✅ Folder created successfully: ${name} (ID: ${response.data.id})`,
+      );
       return response.data.id;
-
     } catch (error) {
       this.logger.error(`Failed to create folder ${name}:`, error.message);
       throw new BadRequestException(`Folder creation failed: ${error.message}`);
@@ -217,7 +225,10 @@ export class GoogleDriveService {
   /**
    * List files in a folder
    */
-  async listFiles(folderId?: string, pageSize: number = 100): Promise<DriveFile[]> {
+  async listFiles(
+    folderId?: string,
+    pageSize: number = 100,
+  ): Promise<DriveFile[]> {
     if (!this.isConfigured) {
       throw new BadRequestException('Google Drive not configured');
     }
@@ -228,12 +239,12 @@ export class GoogleDriveService {
       const response = await this.drive.files.list({
         q: query,
         pageSize,
-        fields: 'files(id,name,webViewLink,webContentLink,mimeType,size,createdTime,modifiedTime)',
+        fields:
+          'files(id,name,webViewLink,webContentLink,mimeType,size,createdTime,modifiedTime)',
         orderBy: 'createdTime desc',
       });
 
       return response.data.files || [];
-
     } catch (error) {
       this.logger.error('Failed to list files:', error.message);
       throw new BadRequestException(`File listing failed: ${error.message}`);
@@ -260,7 +271,11 @@ export class GoogleDriveService {
   /**
    * Validate uploaded file
    */
-  private validateFile(fileName: string, buffer: Buffer, mimeType: string): void {
+  private validateFile(
+    fileName: string,
+    buffer: Buffer,
+    mimeType: string,
+  ): void {
     // Check file size (max 100MB)
     const maxSize = 100 * 1024 * 1024; // 100MB
     if (buffer.length > maxSize) {
@@ -268,9 +283,17 @@ export class GoogleDriveService {
     }
 
     // Check file extension
-    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.pdf', '.doc', '.docx', '.txt'];
+    const allowedExtensions = [
+      '.jpg',
+      '.jpeg',
+      '.png',
+      '.pdf',
+      '.doc',
+      '.docx',
+      '.txt',
+    ];
     const extension = path.extname(fileName).toLowerCase();
-    
+
     if (!allowedExtensions.includes(extension)) {
       throw new BadRequestException(`File type ${extension} not allowed`);
     }
@@ -302,7 +325,10 @@ export class GoogleDriveService {
       const file = await this.getFile(fileId);
       return file.webViewLink;
     } catch (error) {
-      this.logger.error(`Failed to generate shareable link for ${fileId}:`, error.message);
+      this.logger.error(
+        `Failed to generate shareable link for ${fileId}:`,
+        error.message,
+      );
       throw new BadRequestException(`Link generation failed: ${error.message}`);
     }
   }
@@ -310,7 +336,7 @@ export class GoogleDriveService {
   /**
    * Create tenant-specific folder structure
    */
-  async createTenantFolders(tenantId: string): Promise<{ 
+  async createTenantFolders(tenantId: string): Promise<{
     mainFolder: string;
     customersFolder: string;
     productsFolder: string;
@@ -324,7 +350,7 @@ export class GoogleDriveService {
     try {
       // Create main tenant folder
       const mainFolder = await this.createFolder(`Tenant_${tenantId}`);
-      
+
       // Create subfolders
       const customersFolder = await this.createFolder('Customers', mainFolder);
       const productsFolder = await this.createFolder('Products', mainFolder);
@@ -340,10 +366,14 @@ export class GoogleDriveService {
         repairsFolder,
         receiptsFolder,
       };
-
     } catch (error) {
-      this.logger.error(`Failed to create tenant folders for ${tenantId}:`, error.message);
-      throw new BadRequestException(`Tenant folder creation failed: ${error.message}`);
+      this.logger.error(
+        `Failed to create tenant folders for ${tenantId}:`,
+        error.message,
+      );
+      throw new BadRequestException(
+        `Tenant folder creation failed: ${error.message}`,
+      );
     }
   }
 }

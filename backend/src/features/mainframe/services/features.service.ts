@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 
 @Injectable()
@@ -84,15 +88,18 @@ export class FeaturesService {
     return feature;
   }
 
-  async update(id: string, data: {
-    featureName?: string;
-    description?: string;
-    category?: string;
-    isIncludedInBase?: boolean;
-    additionalCost?: number;
-    status?: string;
-    isBeta?: boolean;
-  }) {
+  async update(
+    id: string,
+    data: {
+      featureName?: string;
+      description?: string;
+      category?: string;
+      isIncludedInBase?: boolean;
+      additionalCost?: number;
+      status?: string;
+      isBeta?: boolean;
+    },
+  ) {
     return this.prisma.mf_features.update({
       where: { id },
       data: {
@@ -102,12 +109,15 @@ export class FeaturesService {
     });
   }
 
-  async createVersion(featureId: string, data: {
-    version: string;
-    versionType: string;
-    releaseNotes?: string;
-    changelog?: any;
-  }) {
+  async createVersion(
+    featureId: string,
+    data: {
+      version: string;
+      versionType: string;
+      releaseNotes?: string;
+      changelog?: any;
+    },
+  ) {
     const feature = await this.prisma.mf_features.findUnique({
       where: { id: featureId },
     });
@@ -193,22 +203,106 @@ export class FeaturesService {
 
   async seedDefaultFeatures() {
     const defaultFeatures = [
-      { featureKey: 'pos', featureName: 'Point of Sale', category: 'Core', description: 'Main POS terminal for sales' },
-      { featureKey: 'inventory', featureName: 'Inventory Management', category: 'Core', description: 'Product and stock management' },
-      { featureKey: 'customers', featureName: 'Customer Management', category: 'Core', description: 'Customer database and history' },
-      { featureKey: 'repairs', featureName: 'Repair Management', category: 'Services', description: 'Repair job tracking' },
-      { featureKey: 'sales-reports', featureName: 'Sales Reports', category: 'Reports', description: 'Sales analytics and reports' },
-      { featureKey: 'calendar', featureName: 'Calendar', category: 'Tools', description: 'Appointments and scheduling' },
-      { featureKey: 'dashboard', featureName: 'Dashboard', category: 'Core', description: 'Business overview dashboard' },
-      { featureKey: 'gold-rate', featureName: 'Gold Rate Tracker', category: 'Tools', description: 'Live gold price tracking' },
-      { featureKey: 'layaway', featureName: 'Layaway Plans', category: 'Sales', description: 'Payment plan management' },
-      { featureKey: 'trade-in', featureName: 'Trade-In', category: 'Sales', description: 'Trade-in value calculator' },
-      { featureKey: 'stock-take', featureName: 'Stock Taking', category: 'Inventory', description: 'Stock audit functionality' },
-      { featureKey: 'float-management', featureName: 'Float Management', category: 'Finance', description: 'Cash drawer management' },
-      { featureKey: 'shifts', featureName: 'Shift Management', category: 'Operations', description: 'Staff shift tracking' },
-      { featureKey: 'petty-cash', featureName: 'Petty Cash', category: 'Finance', description: 'Petty cash tracking' },
-      { featureKey: 'financial-reports', featureName: 'Financial Reports', category: 'Reports', description: 'Financial analytics', isIncludedInBase: false, additionalCost: 20 },
-      { featureKey: 'ai-insights', featureName: 'AI Business Insights', category: 'Premium', description: 'AI-powered recommendations', isIncludedInBase: false, additionalCost: 50 },
+      {
+        featureKey: 'pos',
+        featureName: 'Point of Sale',
+        category: 'Core',
+        description: 'Main POS terminal for sales',
+      },
+      {
+        featureKey: 'inventory',
+        featureName: 'Inventory Management',
+        category: 'Core',
+        description: 'Product and stock management',
+      },
+      {
+        featureKey: 'customers',
+        featureName: 'Customer Management',
+        category: 'Core',
+        description: 'Customer database and history',
+      },
+      {
+        featureKey: 'repairs',
+        featureName: 'Repair Management',
+        category: 'Services',
+        description: 'Repair job tracking',
+      },
+      {
+        featureKey: 'sales-reports',
+        featureName: 'Sales Reports',
+        category: 'Reports',
+        description: 'Sales analytics and reports',
+      },
+      {
+        featureKey: 'calendar',
+        featureName: 'Calendar',
+        category: 'Tools',
+        description: 'Appointments and scheduling',
+      },
+      {
+        featureKey: 'dashboard',
+        featureName: 'Dashboard',
+        category: 'Core',
+        description: 'Business overview dashboard',
+      },
+      {
+        featureKey: 'gold-rate',
+        featureName: 'Gold Rate Tracker',
+        category: 'Tools',
+        description: 'Live gold price tracking',
+      },
+      {
+        featureKey: 'layaway',
+        featureName: 'Layaway Plans',
+        category: 'Sales',
+        description: 'Payment plan management',
+      },
+      {
+        featureKey: 'trade-in',
+        featureName: 'Trade-In',
+        category: 'Sales',
+        description: 'Trade-in value calculator',
+      },
+      {
+        featureKey: 'stock-take',
+        featureName: 'Stock Taking',
+        category: 'Inventory',
+        description: 'Stock audit functionality',
+      },
+      {
+        featureKey: 'float-management',
+        featureName: 'Float Management',
+        category: 'Finance',
+        description: 'Cash drawer management',
+      },
+      {
+        featureKey: 'shifts',
+        featureName: 'Shift Management',
+        category: 'Operations',
+        description: 'Staff shift tracking',
+      },
+      {
+        featureKey: 'petty-cash',
+        featureName: 'Petty Cash',
+        category: 'Finance',
+        description: 'Petty cash tracking',
+      },
+      {
+        featureKey: 'financial-reports',
+        featureName: 'Financial Reports',
+        category: 'Reports',
+        description: 'Financial analytics',
+        isIncludedInBase: false,
+        additionalCost: 20,
+      },
+      {
+        featureKey: 'ai-insights',
+        featureName: 'AI Business Insights',
+        category: 'Premium',
+        description: 'AI-powered recommendations',
+        isIncludedInBase: false,
+        additionalCost: 50,
+      },
     ];
 
     for (const feature of defaultFeatures) {
