@@ -1,0 +1,143 @@
+import { Router } from 'express';
+import prisma from '../lib/prisma';
+import { requireAuth } from '../middleware/auth';
+
+const router = Router();
+
+// GET /mainframe/features
+router.get('/', requireAuth, async (req, res) => {
+  try {
+    const { category, status } = req.query as any;
+    const where: any = {};
+    if (category) where.category = category;
+    if (status) where.status = status;
+
+    const features = await prisma.mf_features.findMany({
+      where,
+      orderBy: [{ category: 'asc' }, { featureName: 'asc' }],
+      include: {
+        _count: { select: { customerFeatures: true, versions: true } },
+      },
+    });
+    return res.json(features);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// GET /mainframe/features/:id
+router.get('/:id', requireAuth, async (req, res) => {
+  try {
+    const feature = await prisma.mf_features.findUnique({
+      where: { id: req.params.id },
+      include: { versions: { orderBy: { createdAt: 'desc' } } },
+    });
+    if (!feature) return res.status(404).json({ message: 'Feature not found' });
+    return res.json(feature);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// POST /mainframe/features
+router.post('/', requireAuth, async (req, res) => {
+  try {
+    const { featureKey, featureName, description, category, isIncludedInBase, additionalCost, dependsOn } = req.body;
+
+    const existing = await prisma.mf_features.findUnique({ where: { featureKey } });
+    if (existing) return res.status(409).json({ message: 'Feature key already exists' });
+
+    const feature = await prisma.mf_features.create({
+      data: {
+        featureKey,
+        featureName,
+        description,
+        category,
+        isIncludedInBase: isIncludedInBase ?? true,
+        additionalCost: additionalCost || 0,
+        dependsOn: dependsOn || [],
+        status: 'STABLE',
+        currentVersion: '1.0.0',
+      },
+    });
+    return res.status(201).json(feature);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// PUT /mainframe/features/:id
+router.put('/:id', requireAuth, async (req, res) => {
+  try {
+    const feature = await prisma.mf_features.update({
+      where: { id: req.params.id },
+      data: req.body,
+    });
+    return res.json(feature);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// POST /mainframe/features/:id/versions
+router.post('/:id/versions', requireAuth, async (req, res) => {
+  try {
+    const { version, changelog, isStable } = req.body;
+    const featureVersion = await prisma.mf_feature_versions.create({
+      data: {
+        featureId: req.params.id,
+        version,
+        versionType: isStable ? 'STABLE' : 'BETA',
+        changelog,
+      },
+    });
+
+    if (isStable) {
+      await prisma.mf_features.update({
+        where: { id: req.params.id },
+        data: { currentVersion: version },
+      });
+    }
+
+    return res.status(201).json(featureVersion);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// POST /mainframe/features/seed-defaults
+router.post('/seed-defaults', requireAuth, async (_req, res) => {
+  try {
+    const defaults = [
+      { featureKey: 'pos', featureName: 'Point of Sale', category: 'core', isIncludedInBase: true },
+      { featureKey: 'inventory', featureName: 'Inventory Management', category: 'core', isIncludedInBase: true },
+      { featureKey: 'customers', featureName: 'Customer Management', category: 'core', isIncludedInBase: true },
+      { featureKey: 'repairs', featureName: 'Repair Management', category: 'core', isIncludedInBase: true },
+      { featureKey: 'sales_reports', featureName: 'Sales Reports', category: 'reporting', isIncludedInBase: true },
+      { featureKey: 'financial_intelligence', featureName: 'Financial Intelligence', category: 'analytics', isIncludedInBase: false },
+      { featureKey: 'chatbot', featureName: 'AI Chatbot', category: 'ai', isIncludedInBase: false },
+      { featureKey: 'google_drive', featureName: 'Google Drive Integration', category: 'integrations', isIncludedInBase: false },
+    ];
+
+    const results = [];
+    for (const d of defaults) {
+      const existing = await prisma.mf_features.findUnique({ where: { featureKey: d.featureKey } });
+      if (!existing) {
+        const created = await prisma.mf_features.create({ data: { ...d, status: 'STABLE', currentVersion: '1.0.0' } });
+        results.push(created);
+      }
+    }
+
+    return res.json({ seeded: results.length, features: results });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+export default router;
