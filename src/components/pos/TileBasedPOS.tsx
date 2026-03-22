@@ -99,7 +99,7 @@ interface TileBasedPOSProps {
 }
 
 const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
-  const { inventory } = useInventory();
+  const { inventory, refreshInventory } = useInventory();
   const { toast } = useToast();
 
   // Load cart from localStorage on mount
@@ -1072,18 +1072,23 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       return;
     }
 
+    // Ensure category is resolved before saving
+    const categoryMatch = backendCategories.find(
+      cat => cat.name.toLowerCase() === activeCategoryName.toLowerCase()
+    );
+
+    if (!categoryMatch) {
+      toast({ title: 'Category Error', description: `Could not find category "${activeCategoryName}". Please refresh and try again.`, variant: 'destructive' });
+      return;
+    }
+
     setIsAddingCatProduct(true);
 
     try {
-      // Find category ID from name
-      const categoryMatch = backendCategories.find(
-        cat => cat.name.toLowerCase() === activeCategoryName.toLowerCase()
-      );
-
       const productData: any = {
         name: catNewProduct.name.trim(),
         sku: catNewProduct.sku.trim(),
-        category: categoryMatch?.id || undefined,
+        category: categoryMatch.id,
         price,
         cost,
         stock: qty,
@@ -1978,13 +1983,22 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                         ? 'Try adjusting your search or filters'
                         : `No ${activeCategoryName.toLowerCase()} in inventory`}
                     </p>
-                    <Button
-                      onClick={() => setShowCategoryAddForm(true)}
-                      className="bg-orange-600 hover:bg-orange-700"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add New {activeCategoryName.slice(0, -1)}
-                    </Button>
+                    <div className="flex gap-2 justify-center">
+                      <Button
+                        variant="outline"
+                        onClick={() => refreshInventory()}
+                      >
+                        <Loader2 className="h-4 w-4 mr-2" />
+                        Refresh
+                      </Button>
+                      <Button
+                        onClick={() => setShowCategoryAddForm(true)}
+                        className="bg-orange-600 hover:bg-orange-700"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add New {activeCategoryName.slice(0, -1)}
+                      </Button>
+                    </div>
                   </div>
                 )}
 
