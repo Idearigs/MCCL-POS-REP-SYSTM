@@ -19,18 +19,20 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [enabledFeatures, setEnabledFeatures] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async () => {
     const token = localStorage.getItem('accessToken');
-    if (!token) { setLoaded(true); return; }
+    if (!token) { setLoaded(true); setLoadError(false); return; }
 
     setLoading(true);
     try {
       const data = await apiClient.get<{ features: string[] }>('/mainframe/features/tenant-features');
       setEnabledFeatures(data.features || []);
+      setLoadError(false);
     } catch {
-      // Fail open — empty list means hasFeature returns true for everything
-      setEnabledFeatures([]);
+      // Keep existing features on transient errors rather than clearing them
+      setLoadError(true);
     } finally {
       setLoading(false);
       setLoaded(true);
@@ -47,13 +49,13 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [load]);
 
   /** Returns true if a feature is enabled for this tenant.
-   *  - Always true while loading or if the list failed to load (fail-open).
-   *  - Always true if no featureKey is provided (item has no gate). */
+   *  - Always true while loading or if the request failed (fail-open).
+   *  - Always true if features have not yet been loaded. */
   const hasFeature = useCallback((key: string): boolean => {
-    if (!loaded || loading) return true;
-    if (enabledFeatures.length === 0) return true; // fail-open
+    if (!loaded || loading || loadError) return true;
+    if (enabledFeatures.length === 0) return true; // fail-open: no features assigned yet
     return enabledFeatures.includes(key);
-  }, [enabledFeatures, loaded, loading]);
+  }, [enabledFeatures, loaded, loading, loadError]);
 
   return (
     <FeatureContext.Provider value={{ enabledFeatures, hasFeature, loading, reload: load }}>

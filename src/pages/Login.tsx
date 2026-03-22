@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFeatures } from "@/contexts/FeatureContext";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import IntroAnimation from "@/components/ui/intro-animation";
@@ -33,6 +34,7 @@ const Login = () => {
   const location = useLocation();
   const { toast } = useToast();
   const { auth, login } = useAuth();
+  const { reload: reloadFeatures } = useFeatures();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showIntroAnimation, setShowIntroAnimation] = useState(false);
@@ -68,6 +70,7 @@ const Login = () => {
           title: "Login successful",
           description: "Welcome to TrueDesk",
         });
+        reloadFeatures();
         setShowIntroAnimation(true);
       } else {
         throw new Error("Invalid credentials");

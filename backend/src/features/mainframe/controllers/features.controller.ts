@@ -35,6 +35,15 @@ export class FeaturesController {
     return this.featuresService.getStats();
   }
 
+  /** Returns the enabled featureKeys for the currently authenticated tenant.
+   *  Called by the POS frontend immediately after login via GET /api/v1/mainframe/features/tenant-features */
+  @Get('tenant-features')
+  async getTenantFeatures(@Req() req: Request) {
+    const subdomain = (req.headers['x-tenant-id'] as string) || '';
+    if (!subdomain) return { features: [] };
+    return this.featuresService.getTenantFeatures(subdomain);
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.featuresService.findOne(id);
@@ -82,14 +91,5 @@ export class FeaturesController {
   @Post('seed-defaults')
   async seedDefaults() {
     return this.featuresService.seedDefaultFeatures();
-  }
-
-  /** Returns the enabled featureKeys for the currently authenticated tenant.
-   *  Called by the POS frontend immediately after login via GET /api/v1/mainframe/features/tenant-features */
-  @Get('tenant-features')
-  async getTenantFeatures(@Req() req: Request) {
-    const subdomain = (req.headers['x-tenant-id'] as string) || '';
-    if (!subdomain) return { features: [] };
-    return this.featuresService.getTenantFeatures(subdomain);
   }
 }
