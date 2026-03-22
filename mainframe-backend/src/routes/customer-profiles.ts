@@ -355,21 +355,13 @@ router.post('/', requireAuth, async (req, res) => {
       data: { customerProfileId: profile.id, action: 'profile.created', description: 'Customer profile created', actorType: 'admin' },
     });
 
-    // Provision the POS tenant so the customer gets their own empty POS system
+    // If this is an existing client whose POS is already set up, skip provisioning
+    // and mark them ACTIVE immediately.
+    const isExistingClient = !!dto.isExistingClient;
     const ownerPassword = dto.ownerPassword || generateTempPassword();
-    let posProvisioningError: string | null = null;
-    try {
-      await provisionPosTenant({
-        tenantId: dto.subdomain.toLowerCase(),
-        businessName: dto.businessName,
-        subdomain: dto.subdomain.toLowerCase(),
-        ownerEmail: dto.contactEmail.toLowerCase(),
-        ownerFirstName: dto.contactFirstName,
-        ownerLastName: dto.contactLastName,
-        ownerPassword,
-      });
+    let posProvisioning: { status: string; ownerEmail?: string; ownerPassword?: string; companyCode?: string; error?: string };
 
-      // Provisioning succeeded — automatically activate the tenant
+    if (isExistingClient) {
       await prisma.mf_customer_profiles.update({
         where: { id: profile.id },
         data: { status: 'ACTIVE' },
@@ -378,13 +370,41 @@ router.post('/', requireAuth, async (req, res) => {
         data: {
           customerProfileId: profile.id,
           action: 'profile.activated',
-          description: 'Tenant automatically activated after successful POS provisioning',
-          actorType: 'system',
+          description: 'Existing client profile created — POS provisioning skipped',
+          actorType: 'admin',
         },
       });
-    } catch (err: any) {
-      posProvisioningError = err.message;
-      console.error('POS provisioning failed (non-fatal):', err.message);
+      posProvisioning = { status: 'existing', companyCode: dto.subdomain.toLowerCase() };
+    } else {
+      // Provision the POS tenant so the customer gets their own empty POS system
+      try {
+        await provisionPosTenant({
+          tenantId: dto.subdomain.toLowerCase(),
+          businessName: dto.businessName,
+          subdomain: dto.subdomain.toLowerCase(),
+          ownerEmail: dto.contactEmail.toLowerCase(),
+          ownerFirstName: dto.contactFirstName,
+          ownerLastName: dto.contactLastName,
+          ownerPassword,
+        });
+
+        await prisma.mf_customer_profiles.update({
+          where: { id: profile.id },
+          data: { status: 'ACTIVE' },
+        });
+        await prisma.mf_activity_logs.create({
+          data: {
+            customerProfileId: profile.id,
+            action: 'profile.activated',
+            description: 'Tenant automatically activated after successful POS provisioning',
+            actorType: 'system',
+          },
+        });
+        posProvisioning = { status: 'success', ownerEmail: dto.contactEmail, ownerPassword, companyCode: dto.subdomain.toLowerCase() };
+      } catch (err: any) {
+        console.error('POS provisioning failed (non-fatal):', err.message);
+        posProvisioning = { status: 'failed', error: err.message };
+      }
     }
 
     const created = await prisma.mf_customer_profiles.findUnique({
@@ -394,9 +414,7 @@ router.post('/', requireAuth, async (req, res) => {
 
     return res.status(201).json({
       ...formatProfile(created),
-      posProvisioning: posProvisioningError
-        ? { status: 'failed', error: posProvisioningError }
-        : { status: 'success', ownerEmail: dto.contactEmail, ownerPassword, companyCode: dto.subdomain.toLowerCase() },
+      posProvisioning,
     });
   } catch (err) {
     console.error(err);

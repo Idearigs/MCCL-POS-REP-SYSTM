@@ -7,7 +7,7 @@ import {
   CheckCircle, AlertCircle, Search, Eye, ArrowUpRight, DollarSign,
   Bug, Lightbulb, RefreshCw, XCircle, Clock, LogOut, Trash2,
   Key, UserPlus, ToggleLeft, ToggleRight, FileText,
-  Check, X, ChevronLeft,
+  Check, X, ChevronLeft, Copy, Shield,
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import {
@@ -237,6 +237,7 @@ interface FeatureRequest {
 interface TenantUser {
   id: string; firstName: string; lastName: string; email: string;
   role: string; isActive: boolean; lastLoginAt?: string; createdAt: string;
+  tempPassword?: string | null; mustChangePassword?: boolean;
 }
 interface Invoice {
   id: string; invoiceNumber: string; amount: number; status: string;
@@ -278,7 +279,7 @@ const MainFrameDashboard: React.FC = () => {
   const [provisionResult, setProvisionResult] = useState<{ ownerEmail: string; ownerPassword: string; companyCode: string } | null>(null);
 
   // Forms
-  const [newTenant, setNewTenant] = useState({ businessName: '', businessEmail: '', subdomain: '', contactFirstName: '', contactLastName: '', contactEmail: '', contactPhone: '', plan: 'PROFESSIONAL' });
+  const [newTenant, setNewTenant] = useState({ businessName: '', businessEmail: '', subdomain: '', contactFirstName: '', contactLastName: '', contactEmail: '', contactPhone: '', plan: 'PROFESSIONAL', isExistingClient: false });
   const [subdomainValid, setSubdomainValid] = useState<boolean | null>(null);
   const [subdomainChecking, setSubdomainChecking] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -407,7 +408,10 @@ const MainFrameDashboard: React.FC = () => {
   const resetPw = async (u: TenantUser) => {
     try {
       const r = await customerUsersApi.resetPassword(u.id);
-      toast.success(`Temp password: ${r.data.tempPassword}`, { duration: 12000 });
+      const tmp = r.data.tempPassword;
+      // Update the user in state so credentials card shows the new password immediately
+      setTenantUsers(p => p.map(x => x.id === u.id ? { ...x, tempPassword: tmp, mustChangePassword: true } : x));
+      toast.success(`New temp password: ${tmp}`, { duration: 15000 });
     } catch { toast.error('Failed'); }
   };
 
@@ -471,11 +475,13 @@ const MainFrameDashboard: React.FC = () => {
       const r = await customerProfilesApi.create(newTenant);
       const { posProvisioning } = r.data;
       setPanel('none');
-      setNewTenant({ businessName: '', businessEmail: '', subdomain: '', contactFirstName: '', contactLastName: '', contactEmail: '', contactPhone: '', plan: 'PROFESSIONAL' });
+      setNewTenant({ businessName: '', businessEmail: '', subdomain: '', contactFirstName: '', contactLastName: '', contactEmail: '', contactPhone: '', plan: 'PROFESSIONAL', isExistingClient: false });
       setSubdomainValid(null);
       if (posProvisioning?.status === 'success') {
         setProvisionResult({ ownerEmail: posProvisioning.ownerEmail, ownerPassword: posProvisioning.ownerPassword, companyCode: posProvisioning.companyCode });
         setPanel('provisionResult');
+      } else if (posProvisioning?.status === 'existing') {
+        toast.success(`Profile created for existing client — Company Code: ${posProvisioning.companyCode}`);
       } else {
         toast.success('Profile created. POS: ' + (posProvisioning?.error || 'check backend'));
       }
@@ -791,37 +797,132 @@ const MainFrameDashboard: React.FC = () => {
                     >
                       {/* Info */}
                       {tenantTab === 'info' && (
-                        <div className="grid grid-cols-3 gap-5">
-                          <Card>
-                            <CardTitle>Business</CardTitle>
-                            <InfoRow label="Email" value={selectedTenant.businessEmail} />
-                            <InfoRow label="Phone" value={selectedTenant.businessPhone || '—'} />
-                            <InfoRow label="Company Code" value={selectedTenant.subdomain} mono />
-                            <InfoRow label="Created" value={new Date(selectedTenant.createdAt).toLocaleDateString()} />
-                          </Card>
-                          <Card>
-                            <CardTitle>Contact</CardTitle>
-                            {selectedTenant.contact ? <>
-                              <InfoRow label="Name" value={`${selectedTenant.contact.firstName} ${selectedTenant.contact.lastName}`} />
-                              <InfoRow label="Email" value={selectedTenant.contact.email} />
-                              <InfoRow label="Phone" value={selectedTenant.contact.phone || '—'} />
-                            </> : <p className="text-sm" style={{ color: '#8E8E93' }}>No contact info</p>}
-                          </Card>
-                          {selectedTenant.subscription && (
-                            <Card gradient>
-                              <CardTitle light>Subscription</CardTitle>
-                              <InfoRow label="Plan" value={selectedTenant.subscription.plan} light />
-                              <InfoRow label="Monthly" value={`£${selectedTenant.subscription.basePrice}`} light />
-                              <InfoRow label="Users" value={String(selectedTenant.subscription.currentUsers)} light />
-                              <InfoRow label="Next Bill" value={new Date(selectedTenant.subscription.nextBillingDate).toLocaleDateString()} light />
+                        <div className="space-y-5">
+                          <div className="grid grid-cols-3 gap-5">
+                            <Card>
+                              <CardTitle>Business</CardTitle>
+                              <InfoRow label="Email" value={selectedTenant.businessEmail} />
+                              <InfoRow label="Phone" value={selectedTenant.businessPhone || '—'} />
+                              <InfoRow label="Company Code" value={selectedTenant.subdomain} mono />
+                              <InfoRow label="Created" value={new Date(selectedTenant.createdAt).toLocaleDateString()} />
                             </Card>
-                          )}
+                            <Card>
+                              <CardTitle>Contact</CardTitle>
+                              {selectedTenant.contact ? <>
+                                <InfoRow label="Name" value={`${selectedTenant.contact.firstName} ${selectedTenant.contact.lastName}`} />
+                                <InfoRow label="Email" value={selectedTenant.contact.email} />
+                                <InfoRow label="Phone" value={selectedTenant.contact.phone || '—'} />
+                              </> : <p className="text-sm" style={{ color: '#8E8E93' }}>No contact info</p>}
+                            </Card>
+                            {selectedTenant.subscription && (
+                              <Card gradient>
+                                <CardTitle light>Subscription</CardTitle>
+                                <InfoRow label="Plan" value={selectedTenant.subscription.plan} light />
+                                <InfoRow label="Monthly" value={`£${selectedTenant.subscription.basePrice}`} light />
+                                <InfoRow label="Users" value={String(selectedTenant.subscription.currentUsers)} light />
+                                <InfoRow label="Next Bill" value={new Date(selectedTenant.subscription.nextBillingDate).toLocaleDateString()} light />
+                              </Card>
+                            )}
+                          </div>
+
+                          {/* POS Login Details — always visible */}
+                          <div className="rounded-2xl p-5"
+                            style={{ background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                            <div className="flex items-center gap-2 mb-4">
+                              <Shield className="w-4 h-4" style={{ color: '#5856D6' }} />
+                              <p className="text-sm font-bold" style={{ color: '#1D1D1F' }}>POS Login Details</p>
+                              <span className="text-[10px] font-semibold ml-auto" style={{ color: '#8E8E93' }}>
+                                Share these with the client
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              {[
+                                { l: 'Login URL', v: `https://${selectedTenant.subdomain}.truedesk.co.uk/login` },
+                                { l: 'Company Code', v: selectedTenant.subdomain },
+                                { l: 'Owner Email', v: selectedTenant.contact?.email || selectedTenant.businessEmail },
+                              ].map(({ l, v }) => (
+                                <div key={l} className="flex items-center justify-between px-3 py-2.5 rounded-xl gap-2"
+                                  style={{ background: 'rgba(118,118,128,0.06)' }}>
+                                  <div className="min-w-0">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#8E8E93' }}>{l}</p>
+                                    <p className="text-sm font-mono font-semibold truncate" style={{ color: '#1D1D1F' }}>{v}</p>
+                                  </div>
+                                  <button onClick={() => { navigator.clipboard.writeText(v); toast.success(`${l} copied`); }}
+                                    className="p-1.5 rounded-lg flex-shrink-0 hover:bg-black/5 transition-colors">
+                                    <Copy className="w-3.5 h-3.5" style={{ color: '#8E8E93' }} />
+                                  </button>
+                                </div>
+                              ))}
+                              <div className="flex items-center justify-between px-3 py-2.5 rounded-xl gap-2"
+                                style={{ background: 'rgba(118,118,128,0.06)' }}>
+                                <div className="min-w-0">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#8E8E93' }}>Password</p>
+                                  <p className="text-sm font-mono font-semibold" style={{ color: '#8E8E93' }}>
+                                    See Users tab
+                                  </p>
+                                </div>
+                                <button onClick={() => loadTenantTab('users')}
+                                  className="px-2.5 py-1 rounded-lg text-xs font-semibold flex-shrink-0 hover:bg-black/5 transition-colors"
+                                  style={{ color: '#007AFF' }}>
+                                  View
+                                </button>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       )}
 
                       {/* Users */}
                       {tenantTab === 'users' && (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
+                          {/* Login credentials card — shown when we have users with credentials */}
+                          {tenantUsers.some(u => u.tempPassword) && (
+                            <div className="rounded-2xl p-5 space-y-4"
+                              style={{ background: 'linear-gradient(135deg, rgba(0,122,255,0.05), rgba(88,86,214,0.05))', border: '1.5px solid rgba(0,122,255,0.18)' }}>
+                              <div className="flex items-center gap-2">
+                                <Shield className="w-4 h-4" style={{ color: '#007AFF' }} />
+                                <p className="text-sm font-bold" style={{ color: '#007AFF' }}>Login Credentials</p>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full ml-auto font-semibold" style={{ background: '#DBEAFE', color: '#1E40AF' }}>
+                                  Company Code: {selectedTenant?.subdomain}
+                                </span>
+                              </div>
+                              {tenantUsers.filter(u => u.tempPassword).map(u => (
+                                <div key={u.id} className="rounded-xl p-4 space-y-2.5" style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-[11px] flex-shrink-0"
+                                      style={{ background: 'linear-gradient(135deg, #007AFF, #5856D6)' }}>
+                                      {u.firstName[0]}{u.lastName[0]}
+                                    </div>
+                                    <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>{u.firstName} {u.lastName}</p>
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#F3F4F6', color: '#6E6E73' }}>{u.role}</span>
+                                    {u.mustChangePassword && (
+                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#FEF3C7', color: '#92400E' }}>Must change password</span>
+                                    )}
+                                  </div>
+                                  {[
+                                    { l: 'Email', v: u.email, mono: false },
+                                    { l: 'Company Code', v: selectedTenant?.subdomain || '', mono: true },
+                                    { l: 'Current Password', v: u.tempPassword || '', mono: true },
+                                  ].map(({ l, v, mono }) => (
+                                    <div key={l} className="flex items-center justify-between gap-2">
+                                      <p className="text-[11px] font-semibold uppercase tracking-wider w-28 flex-shrink-0" style={{ color: '#8E8E93' }}>{l}</p>
+                                      <p className={`text-sm flex-1 ${mono ? 'font-mono font-bold' : 'font-medium'}`} style={{ color: '#1D1D1F' }}>{v}</p>
+                                      <button
+                                        onClick={() => { navigator.clipboard.writeText(v); toast.success(`${l} copied`); }}
+                                        className="p-1.5 rounded-lg flex-shrink-0 hover:bg-black/5 transition-colors"
+                                        title={`Copy ${l}`}>
+                                        <Copy className="w-3.5 h-3.5" style={{ color: '#8E8E93' }} />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              ))}
+                              <p className="text-[11px]" style={{ color: '#8E8E93' }}>
+                                Password shown is the last admin-set password. If the user has changed their own password since, this may no longer be accurate — use "Reset Password" to generate a new one.
+                              </p>
+                            </div>
+                          )}
+
                           <div className="flex items-center justify-between">
                             <p className="text-sm font-medium" style={{ color: '#6E6E73' }}>{tenantUsers.length} users</p>
                             <AppleBtn variant="primary" size="sm" onClick={() => setPanel('addUser')}><UserPlus className="w-3.5 h-3.5" />Add User</AppleBtn>
@@ -838,7 +939,10 @@ const MainFrameDashboard: React.FC = () => {
                                 </div>
                                 <div>
                                   <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>{u.firstName} {u.lastName}</p>
-                                  <p className="text-xs" style={{ color: '#8E8E93' }}>{u.email} · {u.role}</p>
+                                  <p className="text-xs" style={{ color: '#8E8E93' }}>
+                                    {u.email} · {u.role}
+                                    {u.tempPassword && <span className="ml-1.5 font-mono text-[11px]" style={{ color: '#007AFF' }}>· pw: {u.tempPassword}</span>}
+                                  </p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
@@ -1552,8 +1656,8 @@ const MainFrameDashboard: React.FC = () => {
       <SidePanel
         open={panel === 'createTenant'}
         onClose={() => setPanel('none')}
-        title="Provision New Tenant"
-        subtitle="Create a new customer POS instance"
+        title={newTenant.isExistingClient ? 'Add Existing Client' : 'Provision New Tenant'}
+        subtitle={newTenant.isExistingClient ? 'Register an existing client — POS will not be re-provisioned' : 'Create a new customer POS instance'}
         width="w-[540px]"
         footer={
           <div className="flex justify-end gap-3">
@@ -1618,6 +1722,31 @@ const MainFrameDashboard: React.FC = () => {
               <option value="BUSINESS">Business — £199/month</option>
               <option value="ENTERPRISE">Enterprise — £499/month</option>
             </select>
+          </FormSection>
+
+          <FormSection title="Client Type">
+            <button
+              type="button"
+              onClick={() => setNewTenant(p => ({ ...p, isExistingClient: !p.isExistingClient }))}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors"
+              style={{
+                background: newTenant.isExistingClient ? 'rgba(52,199,89,0.08)' : 'rgba(118,118,128,0.08)',
+                border: newTenant.isExistingClient ? '1.5px solid rgba(52,199,89,0.3)' : '1.5px solid transparent',
+              }}>
+              <div className="text-left">
+                <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>Existing Client</p>
+                <p className="text-xs mt-0.5" style={{ color: '#8E8E93' }}>
+                  {newTenant.isExistingClient
+                    ? 'POS provisioning will be skipped — profile activated immediately'
+                    : 'New client — a fresh POS instance will be provisioned'}
+                </p>
+              </div>
+              <div className="flex-shrink-0 ml-3">
+                {newTenant.isExistingClient
+                  ? <ToggleRight className="w-6 h-6" style={{ color: '#34C759' }} />
+                  : <ToggleLeft className="w-6 h-6" style={{ color: '#C7C7CC' }} />}
+              </div>
+            </button>
           </FormSection>
         </div>
       </SidePanel>

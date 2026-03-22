@@ -24,6 +24,7 @@ router.get('/profile/:profileId', requireAuth, async (req, res) => {
       select: {
         id: true, firstName: true, lastName: true, email: true,
         role: true, isActive: true, lastLoginAt: true, createdAt: true,
+        tempPassword: true, mustChangePassword: true,
       },
       orderBy: { createdAt: 'desc' },
     });
