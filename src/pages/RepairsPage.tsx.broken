@@ -1,0 +1,439 @@
+
+import React, { useState, useEffect } from 'react';
+import MainLayout from '@/components/layout/MainLayout';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Search, Filter, Plus, Calendar } from 'lucide-react';
+import RepairJobCard from '@/components/repair/RepairJobCard';
+import RepairStatusBadge from '@/components/repair/RepairStatusBadge';
+import NewRepairJobForm from '@/components/repair/NewRepairJobForm';
+import RepairDetailModal from '@/components/repair/RepairDetailModal';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { repairService, Repair } from '@/services/repairService';
+import { customerService } from '@/services/customerService';
+import { googleDriveService } from '@/services/googleDriveService';
+
+// Type mappings between UI and backend
+type UIRepairStatus = 'received' | 'in-progress' | 'completed' | 'collected';
+type BackendRepairStatus = 'RECEIVED' | 'QUOTED' | 'APPROVED' | 'IN_PROGRESS' | 'COMPLETED' | 'READY_FOR_COLLECTION' | 'COLLECTED' | 'CANCELLED';
+
+const statusMapping: Record<BackendRepairStatus, UIRepairStatus> = {
+  'RECEIVED': 'received',
+  'QUOTED': 'received',
+  'APPROVED': 'received', 
+  'IN_PROGRESS': 'in-progress',
+  'COMPLETED': 'completed',
+  'READY_FOR_COLLECTION': 'completed',
+  'COLLECTED': 'collected',
+  'CANCELLED': 'received'
+};
+
+const reverseStatusMapping: Record<UIRepairStatus, BackendRepairStatus> = {
+  'received': 'RECEIVED',
+  'in-progress': 'IN_PROGRESS', 
+  'completed': 'COMPLETED',
+  'collected': 'COLLECTED'
+};
+
+interface UIRepairJob {
+  id: string;
+  customerName: string;
+  itemDescription: string;
+  status: UIRepairStatus;
+  dueDate: string;
+  estimatedPrice?: string;
+  phoneNumber?: string;
+  email?: string;
+  notes?: string;
+  createdAt: string;
+  images?: string[];
+}
+
+// Convert backend repair to UI format
+const convertRepairToUI = (repair: Repair): UIRepairJob => ({
+  id: repair.id,
+  customerName: repair.customerName,
+  itemDescription: repair.itemDescription || (repair.items && repair.items[0]?.itemDescription) || 'No description',
+  status: statusMapping[repair.status] || 'received',
+  dueDate: repair.estimatedCompletion || repair.expectedCompletionDate || repair.createdAt,
+  estimatedPrice: (repair.estimatedCost || repair.totalCost || 0).toString(),
+  phoneNumber: '', // Will be populated from customer data if needed
+  email: '', // Will be populated from customer data if needed
+  notes: repair.notes || repair.internalNotes || repair.customerInstructions || '',
+  createdAt: repair.createdAt,
+  images: repair.images || []
+});
+
+const RepairsPage: React.FC = () => {
+  const [repairJobs, setRepairJobs] = useState<UIRepairJob[]>([]);
+  const [filteredJobs, setFilteredJobs] = useState<UIRepairJob[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<UIRepairStatus | 'all'>('all');
+  const [selectedJob, setSelectedJob] = useState<UIRepairJob | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isNewJobDialogOpen, setIsNewJobDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Clear localStorage on component mount
+  useEffect(() => {
+    localStorage.removeItem('repairJobs');
+    localStorage.removeItem('repair_jobs');
+    localStorage.removeItem('repairs');
+    console.log('Cleared repair jobs localStorage');
+  }, []);
+
+  // Load repairs from backend
+  const loadRepairs = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await repairService.getRepairs(1, 50); // Get first 50 repairs
+      const uiRepairs = result.data.map(convertRepairToUI);
+      setRepairJobs(uiRepairs);
+      setFilteredJobs(uiRepairs);
+    } catch (err: any) {
+      console.error('Failed to load repairs:', err);
+      setError(err.message || 'Failed to load repairs');
+      // Don't fall back to mock data - show empty state
+      setRepairJobs([]);
+      setFilteredJobs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load repairs on component mount
+  useEffect(() => {
+    loadRepairs();
+  }, []);
+
+  // Filter jobs based on search term and selected status
+  useEffect(() => {
+    let result = repairJobs;
+    
+    if (searchTerm) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      result = result.filter(job => 
+        job.customerName.toLowerCase().includes(lowerSearchTerm) || 
+        job.itemDescription.toLowerCase().includes(lowerSearchTerm) ||
+        job.id.toLowerCase().includes(lowerSearchTerm)
+      );
+    }
+    
+    if (selectedStatus !== 'all') {
+      result = result.filter(job => job.status === selectedStatus);
+    }
+    
+    setFilteredJobs(result);
+  }, [searchTerm, selectedStatus, repairJobs]);
+
+  const handleJobClick = (id: string) => {
+    const job = repairJobs.find(job => job.id === id);
+    if (job) {
+      setSelectedJob(job);
+      setIsDetailOpen(true);
+    }
+  };
+
+  const handleStatusChange = async (status: UIRepairStatus) => {
+    if (selectedJob) {
+      try {
+        // Update status in backend
+        const backendStatus = reverseStatusMapping[status];
+        await repairService.updateRepair(selectedJob.id, { status: backendStatus });
+        
+        // Update local state
+        const updatedJob = { ...selectedJob, status };
+        const updatedJobs = repairJobs.map(job => 
+          job.id === selectedJob.id ? updatedJob : job
+        );
+        setRepairJobs(updatedJobs);
+        setSelectedJob(updatedJob);
+        toast.success(`Status updated to ${status}`);
+      } catch (error: any) {
+        console.error('Failed to update status:', error);
+        toast.error('Failed to update status. Please try again.');
+      }
+    }
+  };
+
+  const statusFilters: { label: string; value: UIRepairStatus | 'all'; count: number }[] = [
+    { label: 'All', value: 'all', count: repairJobs.length },
+    { label: 'Received', value: 'received', count: repairJobs.filter(job => job.status === 'received').length },
+    { label: 'In Progress', value: 'in-progress', count: repairJobs.filter(job => job.status === 'in-progress').length },
+    { label: 'Completed', value: 'completed', count: repairJobs.filter(job => job.status === 'completed').length },
+    { label: 'Collected', value: 'collected', count: repairJobs.filter(job => job.status === 'collected').length }
+  ];
+
+  return (
+    <MainLayout pageTitle="Repair Jobs">
+      <div className="flex flex-col h-full">
+        {/* Header with search and filters */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+            <Input 
+              placeholder="Search by customer name, item or ID..." 
+              className="pl-10 bg-white/80 border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-gray-200 focus:border-transparent" 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          
+          <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
+            <Button 
+              variant="outline" 
+              className={`rounded-full px-4 border border-gray-200 shadow-sm ${selectedStatus === 'all' ? 'bg-navy text-white' : 'bg-white/80 text-gray-800'}`}
+              onClick={() => setSelectedStatus('all')}
+            >
+              All <Badge className={`ml-1 rounded-full ${selectedStatus === 'all' ? 'bg-white text-navy' : 'bg-gray-100 text-gray-800'}`}>{repairJobs.length}</Badge>
+            </Button>
+            <Button 
+              variant="outline" 
+              className={`rounded-full px-4 border border-gray-200 shadow-sm ${selectedStatus === 'received' ? 'bg-blue-500 text-white' : 'bg-white/80 text-gray-800'}`}
+              onClick={() => setSelectedStatus('received')}
+            >
+              Received <Badge className={`ml-1 rounded-full ${selectedStatus === 'received' ? 'bg-white text-blue-500' : 'bg-gray-100 text-gray-800'}`}>{repairJobs.filter(job => job.status === 'received').length}</Badge>
+            </Button>
+            <Button 
+              variant="outline" 
+              className={`rounded-full px-4 border border-gray-200 shadow-sm ${selectedStatus === 'in-progress' ? 'bg-orange-500 text-white' : 'bg-white/80 text-gray-800'}`}
+              onClick={() => setSelectedStatus('in-progress')}
+            >
+              In Progress <Badge className={`ml-1 rounded-full ${selectedStatus === 'in-progress' ? 'bg-white text-orange-500' : 'bg-gray-100 text-gray-800'}`}>{repairJobs.filter(job => job.status === 'in-progress').length}</Badge>
+            </Button>
+            <Button 
+              variant="outline" 
+              className={`rounded-full px-4 border border-gray-200 shadow-sm ${selectedStatus === 'completed' ? 'bg-green-500 text-white' : 'bg-white/80 text-gray-800'}`}
+              onClick={() => setSelectedStatus('completed')}
+            >
+              Completed <Badge className={`ml-1 rounded-full ${selectedStatus === 'completed' ? 'bg-white text-green-500' : 'bg-gray-100 text-gray-800'}`}>{repairJobs.filter(job => job.status === 'completed').length}</Badge>
+            </Button>
+            <Button 
+              variant="outline" 
+              className={`rounded-full px-4 border border-gray-200 shadow-sm ${selectedStatus === 'collected' ? 'bg-gray-500 text-white' : 'bg-white/80 text-gray-800'}`}
+              onClick={() => setSelectedStatus('collected')}
+            >
+              Collected <Badge className={`ml-1 rounded-full ${selectedStatus === 'collected' ? 'bg-white text-gray-500' : 'bg-gray-100 text-gray-800'}`}>{repairJobs.filter(job => job.status === 'collected').length}</Badge>
+            </Button>
+            
+            <Button 
+              onClick={() => setIsNewJobDialogOpen(true)}
+              className="rounded-full bg-navy hover:bg-navy-dark text-white shadow-sm ml-2"
+            >
+              <Plus size={16} className="mr-1" />
+              New Repair Job
+            </Button>
+          </div>
+        </div>
+
+        {/* Main content - grid of repair job cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {loading ? (
+            <div className="col-span-full flex items-center justify-center h-40 border border-gray-100 rounded-xl bg-white/50 backdrop-blur-sm">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                <p className="text-gray-600">Loading repair jobs...</p>
+              </div>
+            </div>
+          ) : error ? (
+            <div className="col-span-full flex items-center justify-center h-40 border border-red-100 rounded-xl bg-red-50/50 backdrop-blur-sm">
+              <div className="text-center">
+                <p className="text-red-600 mb-2">Error loading repair jobs</p>
+                <Button 
+                  onClick={loadRepairs}
+                  variant="outline" 
+                  size="sm"
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                >
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          ) : filteredJobs.length > 0 ? (
+            filteredJobs.map(job => (
+              <RepairJobCard 
+                key={job.id}
+                id={job.id}
+                customerName={job.customerName}
+                itemDescription={job.itemDescription}
+                status={job.status}
+                dueDate={job.dueDate}
+                estimatedPrice={job.estimatedPrice}
+                onClick={handleJobClick}
+              />
+            ))
+          ) : (
+            <div className="col-span-full flex items-center justify-center h-40 border border-gray-100 rounded-xl bg-white/50 backdrop-blur-sm">
+              <p className="text-gray-400 flex flex-col items-center">
+                <Search size={24} className="mb-2 text-gray-300" />
+                No repair jobs found {searchTerm ? 'matching your search' : 'yet'}
+                {!searchTerm && !loading && (
+                  <Button 
+                    onClick={() => setIsNewJobDialogOpen(true)}
+                    className="mt-2"
+                    size="sm"
+                  >
+                    Add Your First Repair Job
+                  </Button>
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Enhanced Repair Detail Modal */}
+        <RepairDetailModal
+          repair={selectedJob}
+          isOpen={isDetailOpen}
+          onClose={() => setIsDetailOpen(false)}
+          onUpdate={async (repairId: string, updates: any) => {
+            try {
+              await repairService.updateRepair(repairId, updates);
+              await loadRepairs(); // Refresh the list
+              toast.success('Repair updated successfully');
+            } catch (error: any) {
+              toast.error(`Failed to update repair: ${error.message}`);
+            }
+          }}
+        />
+
+        {/* New Repair Job Dialog */
+        <Dialog open={isNewJobDialogOpen} onOpenChange={setIsNewJobDialogOpen}>
+          <NewRepairJobForm 
+            onSubmit={async (formData) => {
+              try {
+                setLoading(true);
+                
+                let customerId = '';
+                let customer;
+                
+                try {
+                  if (formData.selectedCustomer) {
+                    customer = formData.selectedCustomer;
+                    customerId = customer.id;
+                    console.log('Using existing customer:', customer);
+                  } else if (formData.customerName && (formData.phoneNumber || formData.email)) {
+                    const nameParts = formData.customerName.trim().split(' ');
+                    const firstName = nameParts[0] || '';
+                    const lastName = nameParts.slice(1).join(' ') || 'Customer';
+                    
+                    const customerData: any = {
+                      firstName,
+                      lastName,
+                      phone: formData.phoneNumber || '',
+                      email: formData.email || undefined,
+                      notes: 'Created for repair job',
+                      dataProcessingConsent: true,
+                      marketingEmail: false,
+                      marketingSms: false,
+                      marketingPhone: false
+                    };
+                    
+                    console.log('Creating new customer:', customerData);
+                    customer = await customerService.createCustomer(customerData);
+                    customerId = customer.id;
+                    console.log('New customer created:', customer);
+                    toast.success('Customer ' + formData.customerName + ' created');
+                  } else {
+                    throw new Error('Customer information is required for repair job');
+                  }
+                } catch (customerError: any) {
+                  console.error('Customer creation/lookup failed:', customerError);
+                  toast.error('Failed to handle customer: ' + customerError.message);
+                  return;
+                }
+
+                const repairData = {
+                  customerId: customerId,
+                  problemDescription: formData.notes || 'Repair required',
+                  priority: 'NORMAL' as const,
+                  expectedCompletionDate: formData.dueDate,
+                  customerInstructions: formData.notes || '',
+                  items: [
+                    {
+                      itemDescription: formData.itemDescription,
+                      repairType: 'OTHER' as const,
+                      repairDescription: formData.notes || 'General repair work required',
+                      estimatedCost: parseFloat(formData.estimatedPrice) || 0
+                    }
+                  ]
+                };
+
+                const newRepair = await repairService.createRepair(repairData);
+                
+                let imageUrls: string[] = [];
+                if (formData.images.length > 0) {
+                  try {
+                    const uploadResult = await googleDriveService.uploadRepairImages(
+                      formData.images, 
+                      { 
+                        repairId: newRepair.id, 
+                        description: 'Images for repair ' + newRepair.id + ' - ' + formData.itemDescription
+                      }
+                    );
+                    imageUrls = uploadResult.imageUrls;
+                    toast.success(formData.images.length + ' image(s) uploaded to Google Drive');
+                  } catch (uploadError) {
+                    console.error('Failed to upload images:', uploadError);
+                    toast.error('Repair created but failed to upload images');
+                  }
+                }
+
+                if (imageUrls.length > 0) {
+                  try {
+                    await repairService.updateRepair(newRepair.id, { 
+                      internalNotes: (newRepair.internalNotes || '') + '\n\nImages: ' + imageUrls.join(', ')
+                    });
+                  } catch (updateError) {
+                    console.warn('Failed to update repair with image URLs:', updateError);
+                  }
+                }
+
+                await loadRepairs();
+                setIsNewJobDialogOpen(false);
+                toast.success('Repair job created successfully');
+                
+              } catch (error: any) {
+                console.error('Failed to create repair job:', error);
+                toast.error(error.message || 'Failed to create repair job');
+              } finally {
+                setLoading(false);
+              }
+            }}
+            onCancel={() => setIsNewJobDialogOpen(false)}
+            onCreateCustomer={() => {
+              toast.info('Customer creation form activated - fill in the details below');
+            }}
+          />
+        </Dialog>
+      </div>
+    </MainLayout>
+  );
+};
+
+export default RepairsPage;

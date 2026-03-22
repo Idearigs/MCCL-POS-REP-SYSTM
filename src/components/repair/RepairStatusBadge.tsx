@@ -3,38 +3,75 @@ import React from 'react';
 import { Badge } from '@/components/ui/badge';
 
 interface RepairStatusBadgeProps {
-  status: 'received' | 'in-progress' | 'completed' | 'collected';
+  status: string;
   size?: 'sm' | 'md' | 'lg';
 }
 
 const RepairStatusBadge: React.FC<RepairStatusBadgeProps> = ({ status, size = 'md' }) => {
   const getStatusStyles = () => {
-    switch (status) {
-      case 'received':
-        return 'bg-blue-100 hover:bg-blue-200 text-blue-800 border-blue-200';
-      case 'in-progress':
-        return 'bg-orange-100 hover:bg-orange-200 text-orange-800 border-orange-200';
-      case 'completed':
-        return 'bg-green-100 hover:bg-green-200 text-green-800 border-green-200';
-      case 'collected':
-        return 'bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-200';
+    const upperStatus = status?.toUpperCase() || '';
+
+    switch (upperStatus) {
+      case 'RECEIVED':
+        return 'bg-blue-600 hover:bg-blue-700 text-white border-blue-700';
+      case 'QUOTED':
+      case 'AWAITING_APPROVAL':
+        return 'bg-yellow-400 hover:bg-yellow-500 text-gray-900 border-yellow-500';
+      case 'AWAITING_INSTRUCTIONS':
+      case 'ASSESSED':
+        return 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600';
+      case 'APPROVED':
+        return 'bg-green-600 hover:bg-green-700 text-white border-green-700';
+      case 'IN_PROGRESS':
+      case 'BOOKED_OUT':
+        return 'bg-cyan-500 hover:bg-cyan-600 text-white border-cyan-600';
+      case 'COMPLETED':
+      case 'READY_FOR_PICKUP':
+      case 'READY_FOR_COLLECTION':
+        return 'bg-green-500 hover:bg-green-600 text-white border-green-600';
+      case 'DELIVERED':
+      case 'COLLECTED':
+        return 'bg-gray-500 hover:bg-gray-600 text-white border-gray-600';
+      case 'CANCELLED':
+        return 'bg-red-600 hover:bg-red-700 text-white border-red-700';
       default:
-        return 'bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-200';
+        return 'bg-gray-400 hover:bg-gray-500 text-white border-gray-500';
     }
   };
 
   const getStatusLabel = () => {
-    switch (status) {
-      case 'received':
+    const upperStatus = status?.toUpperCase() || '';
+
+    switch (upperStatus) {
+      case 'RECEIVED':
         return 'Received';
-      case 'in-progress':
+      case 'QUOTED':
+        return 'Quoted';
+      case 'AWAITING_APPROVAL':
+        return 'Awaiting Approval';
+      case 'AWAITING_INSTRUCTIONS':
+        return 'Awaiting Instructions';
+      case 'ASSESSED':
+        return 'Assessed';
+      case 'APPROVED':
+        return 'Approved';
+      case 'IN_PROGRESS':
         return 'In Progress';
-      case 'completed':
+      case 'BOOKED_OUT':
+        return 'Booked Out';
+      case 'COMPLETED':
         return 'Completed';
-      case 'collected':
+      case 'READY_FOR_PICKUP':
+      case 'READY_FOR_COLLECTION':
+        return 'Ready for Collection';
+      case 'DELIVERED':
+        return 'Delivered';
+      case 'COLLECTED':
         return 'Collected';
+      case 'CANCELLED':
+        return 'Cancelled';
       default:
-        return 'Unknown';
+        return status || 'Unknown';
     }
   };
 

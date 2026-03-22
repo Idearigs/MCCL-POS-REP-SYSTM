@@ -5,6 +5,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -29,6 +36,8 @@ const AddCustomerForm: React.FC<AddCustomerFormProps> = ({
     phone: '',
     email: '',
     notes: '',
+    customerGroup: 'RETAIL' as string,
+    creditLimit: 0,
     marketingConsent: {
       email: false,
       sms: false,
@@ -38,72 +47,105 @@ const AddCustomerForm: React.FC<AddCustomerFormProps> = ({
   });
 
   // Handle creating a new customer
-  const handleCreateCustomer = () => {
-    // Validate required fields
-    if (!newCustomer.name || !newCustomer.phone) {
+  const handleCreateCustomer = async () => {
+    try {
+      // Validate required fields
+      if (!newCustomer.name || !newCustomer.phone) {
+        toast({
+          title: "Missing information",
+          description: "Please provide at least a name and phone number.",
+          variant: "destructive",
+          duration: 3000,
+        });
+        return;
+      }
+
+      // Validate data processing consent
+      if (!newCustomer.dataProcessingConsent) {
+        toast({
+          title: "Data processing consent required",
+          description: "You must consent to data processing to create an account.",
+          variant: "destructive",
+          duration: 3000,
+        });
+        return;
+      }
+
+      // Create a new customer in the context (this will call the backend)
+      const currentDate = new Date();
+      const formattedDate = `${currentDate.toLocaleString('default', { month: 'short' })} ${currentDate.getFullYear()}`;
+      
+      const createdCustomer = await addCustomer({
+        name: newCustomer.name,
+        phone: newCustomer.phone,
+        email: newCustomer.email,
+        notes: newCustomer.notes,
+        customerGroup: newCustomer.customerGroup,
+        creditLimit: newCustomer.creditLimit,
+        redFlag: false,
+        since: formattedDate,
+        marketingConsent: newCustomer.marketingConsent,
+        dataProcessingConsent: newCustomer.dataProcessingConsent,
+        totalSpent: 0,
+        purchaseHistory: [],
+        repairHistory: []
+      });
+
+      // Reset the form only on success
+      setNewCustomer({
+        name: '',
+        phone: '',
+        email: '',
+        notes: '',
+        customerGroup: 'RETAIL',
+        creditLimit: 0,
+        marketingConsent: {
+          email: false,
+          sms: false,
+          phone: false
+        },
+        dataProcessingConsent: false
+      });
+
       toast({
-        title: "Missing information",
-        description: "Please provide at least a name and phone number.",
-        variant: "destructive",
+        title: "Customer created",
+        description: `${newCustomer.name} has been added successfully.`,
         duration: 3000,
       });
-      return;
-    }
 
-    // Validate data processing consent
-    if (!newCustomer.dataProcessingConsent) {
+      // Close the dialog
+      onClose();
+      
+      // Call success callback if provided
+      if (onSuccess) {
+        onSuccess(createdCustomer);
+      }
+
+    } catch (error) {
+      console.error('Error creating customer:', error);
+
+      // Handle specific error types
+      let errorMessage = "Failed to create customer. Please try again.";
+      const errMsg = error instanceof Error ? error.message : '';
+
+      if (errMsg) {
+        if (errMsg.includes('phone') && errMsg.includes('already exists')) {
+          errorMessage = "A customer with this phone number already exists.";
+        } else if (errMsg.includes('email') && errMsg.includes('already exists')) {
+          errorMessage = "A customer with this email address already exists.";
+        } else if (errMsg.includes('duplicate') || errMsg.includes('unique constraint')) {
+          errorMessage = "A customer with this phone number or email already exists.";
+        } else {
+          errorMessage = errMsg;
+        }
+      }
+      
       toast({
-        title: "Data processing consent required",
-        description: "You must consent to data processing to create an account.",
+        title: "Error creating customer",
+        description: errorMessage,
         variant: "destructive",
-        duration: 3000,
+        duration: 5000,
       });
-      return;
-    }
-
-    // Create a new customer in the context
-    const currentDate = new Date();
-    const formattedDate = `${currentDate.toLocaleString('default', { month: 'short' })} ${currentDate.getFullYear()}`;
-    
-    const createdCustomer = addCustomer({
-      name: newCustomer.name,
-      phone: newCustomer.phone,
-      email: newCustomer.email,
-      notes: newCustomer.notes,
-      redFlag: false,
-      since: formattedDate,
-      marketingConsent: newCustomer.marketingConsent,
-      totalSpent: 0,
-      purchaseHistory: [],
-      repairHistory: []
-    });
-
-    // Reset the form
-    setNewCustomer({
-      name: '',
-      phone: '',
-      email: '',
-      notes: '',
-      marketingConsent: {
-        email: false,
-        sms: false,
-        phone: false
-      },
-      dataProcessingConsent: false
-    });
-
-    toast({
-      title: "Customer created",
-      description: `${newCustomer.name} has been added successfully.`,
-      duration: 3000,
-    });
-
-    // Close the dialog
-    onClose();
-    
-    // Call success callback if provided
-    if (onSuccess) {
-      onSuccess(createdCustomer);
     }
   };
 
@@ -149,15 +191,59 @@ const AddCustomerForm: React.FC<AddCustomerFormProps> = ({
         
         <div className="grid gap-2">
           <label htmlFor="notes" className="text-sm font-medium">Notes</label>
-          <Textarea 
-            id="notes" 
+          <Textarea
+            id="notes"
             value={newCustomer.notes}
             onChange={(e) => setNewCustomer({...newCustomer, notes: e.target.value})}
             placeholder="Additional information"
             rows={3}
           />
         </div>
-        
+
+        {/* Customer Group & Credit Management */}
+        <div className="space-y-4 border rounded-md p-4 mt-2">
+          <h3 className="font-medium mb-2">Customer Type & Credit</h3>
+
+          <div className="grid gap-2">
+            <label htmlFor="customerGroup" className="text-sm font-medium">Customer Group</label>
+            <Select
+              value={newCustomer.customerGroup}
+              onValueChange={(value) => setNewCustomer({...newCustomer, customerGroup: value})}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select customer group" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="RETAIL">Retail - Regular walk-in customers</SelectItem>
+                <SelectItem value="WHOLESALE">Wholesale - Bulk buyers, resellers</SelectItem>
+                <SelectItem value="VIP">VIP - High-value customers</SelectItem>
+                <SelectItem value="TRADE">Trade - Trade professionals</SelectItem>
+                <SelectItem value="CORPORATE">Corporate - Business accounts</SelectItem>
+                <SelectItem value="REGULAR">Regular - Frequent buyers</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Customer group determines pricing, discounts, and loyalty point rates
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <label htmlFor="creditLimit" className="text-sm font-medium">Credit Limit (£)</label>
+            <Input
+              id="creditLimit"
+              type="number"
+              min="0"
+              step="0.01"
+              value={newCustomer.creditLimit}
+              onChange={(e) => setNewCustomer({...newCustomer, creditLimit: parseFloat(e.target.value) || 0})}
+              placeholder="0.00"
+            />
+            <p className="text-xs text-muted-foreground">
+              Maximum credit allowed for this customer (0 = no credit)
+            </p>
+          </div>
+        </div>
+
         {/* Marketing & Data Processing Consent */}
         <div className="space-y-4 border rounded-md p-4 mt-2">
           <h3 className="font-medium mb-2">Marketing & Data Processing Consent</h3>

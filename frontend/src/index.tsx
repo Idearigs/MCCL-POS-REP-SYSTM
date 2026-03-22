@@ -1,8 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import App from './App';
-import { ToasterProvider } from './components/ui/toaster';
+import App from './App.tsx';
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
@@ -10,8 +9,6 @@ const root = ReactDOM.createRoot(
 
 root.render(
   <React.StrictMode>
-    <ToasterProvider>
-      <App />
-    </ToasterProvider>
+    <App />
   </React.StrictMode>
 );

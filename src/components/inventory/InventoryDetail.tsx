@@ -26,7 +26,9 @@ export interface InventoryItemDetails {
   id: string;
   name: string;
   category: string;
+  condition?: string;
   sku: string;
+  rfidTag?: string;
   description: string;
   price: number;
   cost: number;
@@ -45,7 +47,7 @@ export interface InventoryDetailProps {
   isOpen: boolean;
   isNew?: boolean; // Add the isNew prop
   onClose: () => void;
-  onSave: (item: InventoryItemDetails) => void;
+  onSave: (item: InventoryItemDetails, imageFiles?: File[]) => void;
 }
 
 const InventoryDetail: React.FC<InventoryDetailProps> = ({ 
@@ -60,7 +62,9 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
     id: '',
     name: '',
     category: '',
+    condition: 'BRAND_NEW',
     sku: '',
+    rfidTag: '',
     description: '',
     price: 0,
     cost: 0,
@@ -82,15 +86,25 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
 
   useEffect(() => {
     if (item) {
+      console.log('📦 InventoryDetail received item:', item);
+      console.log('🖼️  Images:', { imageUrl: item.imageUrl, additionalImages: item.additionalImages });
+      console.log('🏢 Supplier:', item.supplier);
+
       setEditedItem(item);
       // Reset preview URLs when item changes
       const urls: string[] = [];
       if (item.imageUrl) urls.push(item.imageUrl);
       if (item.additionalImages) urls.push(...item.additionalImages);
       setPreviewUrls(urls);
+
+      // IMPORTANT: Reset imageFiles when loading existing item (only URLs from DB, no File objects to upload)
+      setImageFiles([]);
+
+      console.log('✅ Preview URLs set:', urls);
     } else if (isNew) {
       setEditedItem(defaultItem);
       setPreviewUrls([]);
+      setImageFiles([]);  // Also reset for new items
     }
   }, [item, isNew]);
   
@@ -191,29 +205,17 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
     setImageFiles(newImageFiles);
   };
   
-  const handleSave = () => {
+  const handleSave = async () => {
     // Ensure at least one image is uploaded
-    if (previewUrls.length === 0) {
+    if (previewUrls.length === 0 && isNew) {
       alert('Please upload at least one image');
       return;
     }
-    
-    // Generate a random ID if this is a new item and doesn't have an ID
-    if (isNew && !editedItem.id) {
-      const newItem = {
-        ...editedItem,
-        id: Math.random().toString(36).substring(2, 9),
-        imageUrl: previewUrls[0],
-        additionalImages: previewUrls.slice(1)
-      };
-      onSave(newItem);
-    } else {
-      onSave({
-        ...editedItem,
-        imageUrl: previewUrls[0],
-        additionalImages: previewUrls.slice(1)
-      });
-    }
+
+    console.log('💾 Saving item with image files:', imageFiles);
+
+    // Call onSave and pass the actual image files for upload
+    onSave(editedItem, imageFiles);
   };
 
   return (
@@ -235,27 +237,45 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
             </div>
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
-              <Select 
-                value={editedItem.category} 
+              <Select
+                value={editedItem.category}
                 onValueChange={(value) => handleSelectChange('category', value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="rings">Rings</SelectItem>
-                  <SelectItem value="necklaces">Necklaces</SelectItem>
-                  <SelectItem value="earrings">Earrings</SelectItem>
-                  <SelectItem value="bracelets">Bracelets</SelectItem>
-                  <SelectItem value="watches">Watches</SelectItem>
-                  <SelectItem value="gemstones">Gemstones</SelectItem>
-                  <SelectItem value="tools">Tools</SelectItem>
-                  <SelectItem value="supplies">Supplies</SelectItem>
+                  <SelectItem value="cmgknthys0001o7w0l4bcd7qx">Rings</SelectItem>
+                  <SelectItem value="cmgkntibq0003o7w0os5kgyyj">Necklaces</SelectItem>
+                  <SelectItem value="cmgkntika0005o7w0j9h5c96x">Bracelets</SelectItem>
+                  <SelectItem value="cmgkntisx0007o7w0ym95j6p9">Earrings</SelectItem>
+                  <SelectItem value="cmgkntj1h0009o7w0cu72l9a2">Pendants</SelectItem>
+                  <SelectItem value="cmgkntja0000bo7w0g226zjiq">Watches</SelectItem>
+                  <SelectItem value="cmgkntjil000do7w0hnofge2u">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-          
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="condition">Product Condition</Label>
+              <Select
+                value={editedItem.condition || 'BRAND_NEW'}
+                onValueChange={(value) => handleSelectChange('condition', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select condition" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BRAND_NEW">Brand New</SelectItem>
+                  <SelectItem value="USED">Used</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2"></div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="sku">SKU</Label>
@@ -264,8 +284,24 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
                 name="sku"
                 value={editedItem.sku}
                 onChange={handleChange}
+                placeholder="e.g., JWL-RING-001"
+                required
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="rfidTag">RFID Tag</Label>
+              <Input
+                id="rfidTag"
+                name="rfidTag"
+                value={editedItem.rfidTag || ''}
+                onChange={handleChange}
+                placeholder="e.g., E2801170000002010DC90E8F"
+              />
+              <p className="text-xs text-gray-500">Optional: For fast inventory scanning</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="supplier">Supplier</Label>
               <Input
@@ -273,6 +309,17 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
                 name="supplier"
                 value={editedItem.supplier}
                 onChange={handleChange}
+                placeholder="e.g., ABC Gems Ltd"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="location">Location</Label>
+              <Input
+                id="location"
+                name="location"
+                value={editedItem.location}
+                onChange={handleChange}
+                placeholder="e.g., Shelf A1"
               />
             </div>
           </div>
@@ -334,7 +381,7 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
             <Textarea
               id="description"
               name="description"
-              value={editedItem.description}
+              value={editedItem.description || ''}
               onChange={handleChange}
               className="resize-none"
               rows={4}

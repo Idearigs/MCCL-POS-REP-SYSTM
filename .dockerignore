@@ -1,0 +1,15 @@
+node_modules
+dist
+dev-dist
+backend
+mainframe-admin
+coverage
+.env
+.env.*
+*.log
+.git
+.gitignore
+README.md
+OpenRMA*
+*.xlsx
+Google-Driver-Details

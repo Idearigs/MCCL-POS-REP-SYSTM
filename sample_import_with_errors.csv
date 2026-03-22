@@ -1,0 +1,14 @@
+name,sku,price,quantity,category
+Valid Gold Ring,VALID-001,599.99,10,Rings
+Missing Name Product,,MISSING-SKU,299.99,8,Necklaces
+,NO-NAME-001,199.99,5,Bracelets
+Invalid Price Item,BAD-PRICE-001,-50.00,10,Earrings
+Invalid Quantity,BAD-QTY-001,299.99,abc,Rings
+Negative Quantity,NEG-QTY-001,450.00,-5,Necklaces
+Valid Silver Chain,VALID-002,280.00,15,Necklaces
+Zero Price Item,ZERO-PRICE,0,10,Bracelets
+Valid Diamond Ring,VALID-003,1299.99,6,Rings
+Empty Row Below
+
+
+Valid After Empty,VALID-004,599.99,8,Earrings

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Token</title>
+</head>
+<body>
+    <h1>JWT Token Debug</h1>
+    <button onclick="checkToken()">Check Token</button>
+    <div id="result"></div>
+
+    <script>
+        function checkToken() {
+            const token = localStorage.getItem('accessToken');
+            const refreshToken = localStorage.getItem('refreshToken');
+            
+            document.getElementById('result').innerHTML = `
+                <h2>Access Token:</h2>
+                <p>${token ? token.substring(0, 50) + '...' : 'NOT FOUND'}</p>
+                <h2>Refresh Token:</h2>
+                <p>${refreshToken ? refreshToken.substring(0, 50) + '...' : 'NOT FOUND'}</p>
+                <h2>Token Valid:</h2>
+                <p>${token ? 'YES' : 'NO'}</p>
+            `;
+        }
+        
+        // Auto-check on load
+        checkToken();
+    </script>
+</body>
+</html>

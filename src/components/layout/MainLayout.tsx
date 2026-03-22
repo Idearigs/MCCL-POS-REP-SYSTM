@@ -6,6 +6,8 @@ import Header from './Header';
 import { useAuth } from '@/contexts/AuthContext';
 import NetworkStatus from '@/components/ui/network-status';
 import GlobalNotificationIndicator from '@/components/notifications/GlobalNotificationIndicator';
+import FloatingShiftButton from '@/components/shifts/FloatingShiftButton';
+import { ChatWidget } from '@/components/chatbot/ChatWidget';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -35,14 +37,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, pageTitle, hasPayment
   return (
     <NetworkStatus>
       <SidebarProvider>
-        <div className="flex h-screen w-full bg-gray-50 relative">
+        <div className="flex h-screen w-full bg-background relative transition-colors duration-200">
           {/* Add GlobalNotificationIndicator at the top level */}
           <GlobalNotificationIndicator />
-          
+
+          {/* Floating Shift Button - Visible throughout the system */}
+          <FloatingShiftButton />
+
+          {/* TrueDesk AI Assistant Chatbot */}
+          <ChatWidget />
+
           <Sidebar />
           <div className="flex-1 flex flex-col overflow-hidden">
             <Header pageTitle={pageTitle} hasPaymentWarning={showWarning} />
-            <main className="flex-1 overflow-y-auto p-4 bg-gradient-to-br from-gray-50 to-white">{children}</main>
+            <main className="flex-1 overflow-y-auto p-4 bg-background transition-colors duration-200">{children}</main>
           </div>
         </div>
       </SidebarProvider>

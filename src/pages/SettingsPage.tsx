@@ -1,10 +1,10 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSettings } from '@/contexts/SettingsContext';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Save, Lock, Eye, EyeOff } from 'lucide-react';
+import { Save, Lock, Eye, EyeOff, RotateCcw, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import MainLayout from '@/components/layout/MainLayout';
@@ -16,8 +16,9 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
+import RepairTagsSettings from '@/components/repair/RepairTagsSettings';
 
-// Form schema
+// Form schemas
 const generalFormSchema = z.object({
   storeName: z.string().min(2, {
     message: "Store name must be at least 2 characters.",
@@ -49,7 +50,6 @@ const appearanceFormSchema = z.object({
   }),
 });
 
-// Security settings form schema
 const securityFormSchema = z.object({
   currentPassword: z.string().min(1, {
     message: "Current password is required.",
@@ -73,15 +73,22 @@ type SecurityFormValues = z.infer<typeof securityFormSchema>;
 const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState("general");
   const { changePassword } = useAuth();
-  
+  const { settings, loading, updateGeneralSettings, updateNotificationSettings, updateAppearanceSettings, resetToDefaults, toggleDarkMode, toggleCompactView } = useSettings();
+
+  // Password visibility states
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
   // General settings form
   const generalForm = useForm<GeneralFormValues>({
     resolver: zodResolver(generalFormSchema),
     defaultValues: {
-      storeName: "MCCL POS System",
-      phone: "+1 (555) 123-4567",
-      email: "contact@mcclpos.com",
-      address: "123 Main St, London, UK",
+      storeName: settings.general.storeName,
+      phone: settings.general.phone,
+      email: settings.general.email,
+      address: settings.general.address,
     },
   });
 
@@ -89,11 +96,11 @@ const SettingsPage = () => {
   const notificationForm = useForm<NotificationFormValues>({
     resolver: zodResolver(notificationFormSchema),
     defaultValues: {
-      emailNotifications: true,
-      smsNotifications: false,
-      lowStockAlerts: true,
-      repairStatusUpdates: true,
-      dailySummary: false,
+      emailNotifications: settings.notifications.emailNotifications,
+      smsNotifications: settings.notifications.smsNotifications,
+      lowStockAlerts: settings.notifications.lowStockAlerts,
+      repairStatusUpdates: settings.notifications.repairStatusUpdates,
+      dailySummary: settings.notifications.dailySummary,
     },
   });
 
@@ -101,17 +108,13 @@ const SettingsPage = () => {
   const appearanceForm = useForm<AppearanceFormValues>({
     resolver: zodResolver(appearanceFormSchema),
     defaultValues: {
-      darkMode: false,
-      compactView: false,
-      receiptTemplate: "Thank you for shopping at MCCL POS System!\n\n{ITEMS}\n\nTotal: {TOTAL}\nDate: {DATE}\n\nWe appreciate your business!",
+      darkMode: settings.appearance.darkMode,
+      compactView: settings.appearance.compactView,
+      receiptTemplate: settings.appearance.receiptTemplate,
     },
   });
-  
+
   // Security settings form
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
   const securityForm = useForm<SecurityFormValues>({
     resolver: zodResolver(securityFormSchema),
     defaultValues: {
@@ -121,37 +124,85 @@ const SettingsPage = () => {
     },
   });
 
+  // Update forms when settings change
+  useEffect(() => {
+    generalForm.reset({
+      storeName: settings.general.storeName,
+      phone: settings.general.phone,
+      email: settings.general.email,
+      address: settings.general.address,
+    });
+  }, [settings.general, generalForm]);
+
+  useEffect(() => {
+    notificationForm.reset({
+      emailNotifications: settings.notifications.emailNotifications,
+      smsNotifications: settings.notifications.smsNotifications,
+      lowStockAlerts: settings.notifications.lowStockAlerts,
+      repairStatusUpdates: settings.notifications.repairStatusUpdates,
+      dailySummary: settings.notifications.dailySummary,
+    });
+  }, [settings.notifications, notificationForm]);
+
+  useEffect(() => {
+    appearanceForm.reset({
+      darkMode: settings.appearance.darkMode,
+      compactView: settings.appearance.compactView,
+      receiptTemplate: settings.appearance.receiptTemplate,
+    });
+  }, [settings.appearance, appearanceForm]);
+
   // Form submission handlers
-  const onSubmitGeneral = (data: GeneralFormValues) => {
-    console.log("General settings:", data);
-    toast.success("General settings saved successfully");
+  const onSubmitGeneral = async (data: GeneralFormValues) => {
+    await updateGeneralSettings({
+      ...settings.general,
+      storeName: data.storeName,
+      phone: data.phone,
+      email: data.email,
+      address: data.address,
+    });
   };
 
-  const onSubmitNotifications = (data: NotificationFormValues) => {
-    console.log("Notification settings:", data);
-    toast.success("Notification settings saved successfully");
+  const onSubmitNotifications = async (data: NotificationFormValues) => {
+    await updateNotificationSettings(data);
   };
 
-  const onSubmitAppearance = (data: AppearanceFormValues) => {
-    console.log("Appearance settings:", data);
-    toast.success("Appearance settings saved successfully");
+  const onSubmitAppearance = async (data: AppearanceFormValues) => {
+    await updateAppearanceSettings(data);
   };
-  
-  const onSubmitSecurity = (data: SecurityFormValues) => {
-    console.log("Security settings:", data);
-    
-    // Use the changePassword function from auth context
-    const success = changePassword(data.currentPassword, data.newPassword);
-    
-    if (success) {
-      toast.success("Password changed successfully");
-      securityForm.reset({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
+
+  const onSubmitSecurity = async (data: SecurityFormValues) => {
+    setIsChangingPassword(true);
+
+    try {
+      // Call changePassword with the correct ChangePasswordData object
+      const success = await changePassword({
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword,
+        confirmPassword: data.confirmPassword,
       });
-    } else {
-      toast.error("Current password is incorrect");
+
+      if (success) {
+        toast.success("Password changed successfully");
+        securityForm.reset({
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
+      } else {
+        toast.error("Current password is incorrect or password change failed");
+      }
+    } catch (error: any) {
+      console.error('Password change error:', error);
+      toast.error(error.message || "Failed to change password");
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  const handleResetToDefaults = () => {
+    if (window.confirm('Are you sure you want to reset all settings to defaults? This action cannot be undone.')) {
+      resetToDefaults();
     }
   };
 
@@ -165,18 +216,28 @@ const SettingsPage = () => {
               Manage your account settings and preferences.
             </p>
           </div>
+          <Button
+            variant="outline"
+            onClick={handleResetToDefaults}
+            className="flex items-center gap-2"
+          >
+            <RotateCcw size={16} />
+            Reset to Defaults
+          </Button>
         </div>
-        
+
         <Separator className="my-6" />
-        
+
         <Tabs defaultValue="general" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
+            <TabsTrigger value="repair-tags">Repair Tags</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
           </TabsList>
-          
+
+          {/* General Settings Tab */}
           <TabsContent value="general">
             <Card>
               <CardHeader>
@@ -204,7 +265,7 @@ const SettingsPage = () => {
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={generalForm.control}
                       name="phone"
@@ -221,7 +282,7 @@ const SettingsPage = () => {
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={generalForm.control}
                       name="email"
@@ -238,7 +299,7 @@ const SettingsPage = () => {
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={generalForm.control}
                       name="address"
@@ -255,9 +316,9 @@ const SettingsPage = () => {
                         </FormItem>
                       )}
                     />
-                    
-                    <Button type="submit" className="flex items-center gap-2">
-                      <Save size={16} />
+
+                    <Button type="submit" className="flex items-center gap-2" disabled={loading}>
+                      {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                       Save General Settings
                     </Button>
                   </form>
@@ -265,7 +326,8 @@ const SettingsPage = () => {
               </CardContent>
             </Card>
           </TabsContent>
-          
+
+          {/* Notifications Settings Tab */}
           <TabsContent value="notifications">
             <Card>
               <CardHeader>
@@ -297,7 +359,7 @@ const SettingsPage = () => {
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={notificationForm.control}
                       name="smsNotifications"
@@ -318,7 +380,7 @@ const SettingsPage = () => {
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={notificationForm.control}
                       name="lowStockAlerts"
@@ -339,7 +401,7 @@ const SettingsPage = () => {
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={notificationForm.control}
                       name="repairStatusUpdates"
@@ -360,7 +422,7 @@ const SettingsPage = () => {
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={notificationForm.control}
                       name="dailySummary"
@@ -381,9 +443,9 @@ const SettingsPage = () => {
                         </FormItem>
                       )}
                     />
-                    
-                    <Button type="submit" className="flex items-center gap-2">
-                      <Save size={16} />
+
+                    <Button type="submit" className="flex items-center gap-2" disabled={loading}>
+                      {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                       Save Notification Settings
                     </Button>
                   </form>
@@ -391,7 +453,8 @@ const SettingsPage = () => {
               </CardContent>
             </Card>
           </TabsContent>
-          
+
+          {/* Appearance Settings Tab */}
           <TabsContent value="appearance">
             <Card>
               <CardHeader>
@@ -403,48 +466,40 @@ const SettingsPage = () => {
               <CardContent className="space-y-6">
                 <Form {...appearanceForm}>
                   <form onSubmit={appearanceForm.handleSubmit(onSubmitAppearance)} className="space-y-6">
-                    <FormField
-                      control={appearanceForm.control}
-                      name="darkMode"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Dark Mode</FormLabel>
-                            <FormDescription>
-                              Enable dark mode for the application.
-                            </FormDescription>
-                          </div>
-                          <FormControl>
-                            <Switch
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={appearanceForm.control}
-                      name="compactView"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Compact View</FormLabel>
-                            <FormDescription>
-                              Show more items per page with a compact layout.
-                            </FormDescription>
-                          </div>
-                          <FormControl>
-                            <Switch
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    
+                    {/* Dark Mode - applies immediately */}
+                    <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <label className="text-base font-medium">Dark Mode</label>
+                        <p className="text-sm text-muted-foreground">
+                          Enable dark mode for the application.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={settings.appearance.darkMode}
+                        onCheckedChange={() => {
+                          toggleDarkMode();
+                          appearanceForm.setValue('darkMode', !settings.appearance.darkMode);
+                        }}
+                      />
+                    </div>
+
+                    {/* Compact View - applies immediately */}
+                    <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <label className="text-base font-medium">Compact View</label>
+                        <p className="text-sm text-muted-foreground">
+                          Show more items per page with a compact layout.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={settings.appearance.compactView}
+                        onCheckedChange={() => {
+                          toggleCompactView();
+                          appearanceForm.setValue('compactView', !settings.appearance.compactView);
+                        }}
+                      />
+                    </div>
+
                     <FormField
                       control={appearanceForm.control}
                       name="receiptTemplate"
@@ -461,9 +516,9 @@ const SettingsPage = () => {
                         </FormItem>
                       )}
                     />
-                    
-                    <Button type="submit" className="flex items-center gap-2">
-                      <Save size={16} />
+
+                    <Button type="submit" className="flex items-center gap-2" disabled={loading}>
+                      {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                       Save Appearance Settings
                     </Button>
                   </form>
@@ -471,7 +526,13 @@ const SettingsPage = () => {
               </CardContent>
             </Card>
           </TabsContent>
-          
+
+          {/* Repair Tags Tab */}
+          <TabsContent value="repair-tags">
+            <RepairTagsSettings />
+          </TabsContent>
+
+          {/* Security Settings Tab */}
           <TabsContent value="security">
             <Card>
               <CardHeader>
@@ -494,10 +555,10 @@ const SettingsPage = () => {
                           <FormLabel>Current Password</FormLabel>
                           <div className="relative">
                             <FormControl>
-                              <Input 
+                              <Input
                                 type={showCurrentPassword ? "text" : "password"}
                                 placeholder="Enter your current password"
-                                {...field} 
+                                {...field}
                               />
                             </FormControl>
                             <button
@@ -520,9 +581,9 @@ const SettingsPage = () => {
                         </FormItem>
                       )}
                     />
-                    
+
                     <Separator />
-                    
+
                     <FormField
                       control={securityForm.control}
                       name="newPassword"
@@ -531,10 +592,10 @@ const SettingsPage = () => {
                           <FormLabel>New Password</FormLabel>
                           <div className="relative">
                             <FormControl>
-                              <Input 
+                              <Input
                                 type={showNewPassword ? "text" : "password"}
                                 placeholder="Enter your new password"
-                                {...field} 
+                                {...field}
                               />
                             </FormControl>
                             <button
@@ -557,7 +618,7 @@ const SettingsPage = () => {
                         </FormItem>
                       )}
                     />
-                    
+
                     <FormField
                       control={securityForm.control}
                       name="confirmPassword"
@@ -566,10 +627,10 @@ const SettingsPage = () => {
                           <FormLabel>Confirm New Password</FormLabel>
                           <div className="relative">
                             <FormControl>
-                              <Input 
+                              <Input
                                 type={showConfirmPassword ? "text" : "password"}
                                 placeholder="Confirm your new password"
-                                {...field} 
+                                {...field}
                               />
                             </FormControl>
                             <button
@@ -592,9 +653,9 @@ const SettingsPage = () => {
                         </FormItem>
                       )}
                     />
-                    
-                    <Button type="submit" className="flex items-center gap-2">
-                      <Save size={16} />
+
+                    <Button type="submit" className="flex items-center gap-2" disabled={isChangingPassword}>
+                      {isChangingPassword ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                       Change Password
                     </Button>
                   </form>

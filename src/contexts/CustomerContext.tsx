@@ -1,29 +1,28 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { customerService, Customer as ServiceCustomer, CreateCustomerData } from '../services/customerService';
+import { useAuth } from './AuthContext';
 
-// Define the Customer interface
-export interface Customer {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  notes: string;
-  redFlag: boolean;
+// Extended Customer interface that includes backend fields plus legacy UI fields
+export interface Customer extends Omit<ServiceCustomer, 'phone' | 'email' | 'notes'> {
+  phone: string;  // Make required for UI
+  email: string;  // Make required for UI  
+  notes: string;  // Make required for UI
+  redFlag?: boolean;
   redFlagReason?: string;
-  since: string;
-  address?: string;
-  marketingConsent: {
+  since?: string;
+  marketingConsent?: {
     email: boolean;
     sms: boolean;
     phone: boolean;
   };
-  totalSpent: number;
-  purchaseHistory: {
+  totalSpent?: number;
+  purchaseHistory?: {
     id: string;
     date: string;
     items: string[];
     amount: number;
   }[];
-  repairHistory: {
+  repairHistory?: {
     id: string;
     status: string;
     item: string;
@@ -33,111 +32,57 @@ export interface Customer {
   }[];
 }
 
-// Mock data for initial customers
-const initialCustomers: Customer[] = [
-  {
-    id: 'CS001', 
-    name: 'John Smith', 
-    phone: '+44 123 456 7890', 
-    email: 'john.smith@example.com',
-    notes: 'Regular customer, prefers to be contacted by email.',
-    redFlag: false,
-    since: 'Jan 2022',
-    address: '123 Main Street, London',
-    marketingConsent: { email: true, sms: true, phone: false },
-    totalSpent: 1250,
-    purchaseHistory: [
-      { id: 'SALE001', date: '2025-05-22', items: ['Diamond Solitaire Ring', 'Gold Chain Bracelet'], amount: 1799.98 },
-      { id: 'SALE005', date: '2025-04-15', items: ['Silver Watch'], amount: 899.99 }
-    ],
-    repairHistory: [
-      { id: 'REP001', status: 'completed', item: 'Gold Ring', description: 'Resize and polish', completedDate: '2023-01-20' }
-    ]
+// Convert backend customer to UI customer format
+const convertBackendCustomer = (customer: ServiceCustomer): Customer => ({
+  ...customer,
+  name: customer.name || `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
+  phone: customer.phone || '',
+  email: customer.email || '',
+  notes: customer.notes || '',
+  // Legacy UI fields with defaults
+  redFlag: false,
+  since: new Date(customer.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+  marketingConsent: { 
+    email: customer.marketingEmail || false, 
+    sms: customer.marketingSms || false, 
+    phone: customer.marketingPhone || false 
   },
-  {
-    id: 'CS002', 
-    name: 'Emily Johnson', 
-    phone: '+44 234 567 8901', 
-    email: 'emily.j@example.com',
-    notes: 'VIP customer, interested in high-end watches.',
-    redFlag: false,
-    since: 'Mar 2021',
-    address: '456 Park Avenue, Manchester',
-    marketingConsent: { email: true, sms: false, phone: false },
-    totalSpent: 3200,
-    purchaseHistory: [
-      { id: 'SALE002', date: '2025-05-21', items: ['Pearl Stud Earrings'], amount: 249.99 }
-    ],
-    repairHistory: [
-      { id: 'REP002', status: 'in-progress', item: 'Diamond Earrings', description: 'Replace missing stone and clean', startDate: '2023-04-10' }
-    ]
-  },
-  {
-    id: 'CS003', 
-    name: 'Michael Chen', 
-    phone: '+44 345 678 9012', 
-    email: 'mchen@example.com',
-    notes: 'Has outstanding balance from previous purchase.',
-    redFlag: true,
-    redFlagReason: 'Outstanding balance: £250',
-    since: 'Nov 2022',
-    address: '789 Oak Street, Birmingham',
-    marketingConsent: { email: false, sms: true, phone: true },
-    totalSpent: 750,
-    purchaseHistory: [
-      { id: 'SALE003', date: '2025-05-20', items: ['Silver Watch', 'Emerald Pendant'], amount: 1549.98 }
-    ],
-    repairHistory: [
-      { id: 'REP003', status: 'completed', item: 'Silver Watch', description: 'Battery replacement and band adjustment', completedDate: '2022-12-10' }
-    ]
-  },
-  {
-    id: 'CS004',
-    name: 'Sarah Williams',
-    email: 'sarah.w@example.com',
-    phone: '(555) 876-5432',
-    notes: 'Prefers gold jewelry',
-    redFlag: false,
-    since: 'Aug 2021',
-    address: '202 Elm Court, Leeds',
-    marketingConsent: { email: false, sms: false, phone: false },
-    totalSpent: 2100,
-    purchaseHistory: [
-      { id: 'SALE008', date: '2022-01-23', items: ['Sapphire Ring', 'Cleaning Kit'], amount: 2100 }
-    ],
-    repairHistory: [
-      { id: 'REP006', status: 'waiting', item: 'Sapphire Ring', description: 'Stone tightening', startDate: '2023-04-01' }
-    ]
-  },
-  {
-    id: 'CS005',
-    name: 'Michael Brown',
-    email: 'michael.brown@example.com',
-    phone: '(555) 234-5678',
-    notes: 'Interested in high-end watches',
-    redFlag: false,
-    since: 'May 2020',
-    address: '101 Pine Road, Glasgow',
-    marketingConsent: { email: true, sms: true, phone: true },
-    totalSpent: 4500,
-    purchaseHistory: [
-      { id: 'SALE006', date: '2021-06-30', items: ['Gold Chain'], amount: 1500 },
-      { id: 'SALE007', date: '2022-03-15', items: ['Diamond Necklace'], amount: 3000 }
-    ],
-    repairHistory: [
-      { id: 'REP004', status: 'completed', item: 'Gold Chain', description: 'Link repair', completedDate: '2022-04-05' },
-      { id: 'REP005', status: 'cancelled', item: 'Watch', description: 'Face replacement', startDate: '2022-08-12' }
-    ]
-  }
-];
+  totalSpent: 0,
+  purchaseHistory: [],
+  repairHistory: []
+});
+
+// Convert UI customer to backend format
+const convertToBackendCustomer = (customer: any): any => {
+  return {
+    name: customer.name,
+    email: customer.email || undefined,
+    phone: customer.phone || undefined,
+    address: customer.address,
+    city: customer.city,
+    state: customer.state,
+    zipCode: customer.zipCode,
+    country: customer.country,
+    dateOfBirth: customer.dateOfBirth,
+    notes: customer.notes || undefined,
+    // Marketing consent fields mapped to backend format
+    marketingEmail: customer.marketingConsent?.email || false,
+    marketingSms: customer.marketingConsent?.sms || false,
+    marketingPhone: customer.marketingConsent?.phone || false,
+    dataProcessingConsent: customer.dataProcessingConsent
+  };
+};
 
 // Define the context interface
 interface CustomerContextType {
   customers: Customer[];
+  loading: boolean;
+  error: string | null;
   getCustomerById: (id: string) => Customer | undefined;
-  addCustomer: (customer: Omit<Customer, 'id'>) => Customer;
-  updateCustomer: (id: string, updates: Partial<Customer>) => void;
-  deleteCustomer: (id: string) => void;
+  addCustomer: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'tenantId' | 'isActive'>) => Promise<Customer>;
+  updateCustomer: (id: string, updates: Partial<Customer>) => Promise<Customer>;
+  deleteCustomer: (id: string) => Promise<void>;
+  refreshCustomers: () => Promise<void>;
 }
 
 // Create the context
@@ -145,25 +90,62 @@ const CustomerContext = createContext<CustomerContextType | undefined>(undefined
 
 // Create a provider component
 export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { auth } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load customers from localStorage on initial render
-  useEffect(() => {
-    const storedCustomers = localStorage.getItem('customers');
-    if (storedCustomers) {
-      setCustomers(JSON.parse(storedCustomers));
-    } else {
-      setCustomers(initialCustomers);
-      localStorage.setItem('customers', JSON.stringify(initialCustomers));
+  // Load customers from backend on initial render
+  const loadCustomers = useCallback(async () => {
+    // Only load if user is authenticated
+    if (!auth.isAuthenticated) {
+      console.log('⚠️ User not authenticated, skipping customers load');
+      return;
     }
-  }, []);
 
-  // Save customers to localStorage whenever they change
-  useEffect(() => {
-    if (customers.length > 0) {
-      localStorage.setItem('customers', JSON.stringify(customers));
+    setLoading(true);
+    setError(null);
+    try {
+      console.log('📦 Loading customers for authenticated user...');
+      // Fetch first page to get total count, then fetch remaining pages in parallel
+      const firstResult = await customerService.getCustomers(undefined, 1, 1000);
+      const firstPage = Array.isArray(firstResult) ? firstResult : firstResult.data;
+      const meta = Array.isArray(firstResult) ? null : (firstResult as any).meta;
+      const totalPages = meta?.totalPages || 1;
+
+      const allBackendCustomers = [...firstPage];
+      if (totalPages > 1) {
+        const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+        const results = await Promise.all(
+          remainingPages.map(p => customerService.getCustomers(undefined, p, 1000))
+        );
+        for (const res of results) {
+          const pageData = Array.isArray(res) ? res : res.data;
+          allBackendCustomers.push(...pageData);
+        }
+      }
+      const uiCustomers = allBackendCustomers.map(convertBackendCustomer);
+      setCustomers(uiCustomers);
+      console.log(`✅ Loaded ${uiCustomers.length} customers from database`);
+    } catch (err: any) {
+      console.error('❌ Failed to load customers:', err);
+      setError(err.message || 'Failed to load customers');
+      // Fall back to empty array instead of localStorage
+      setCustomers([]);
+    } finally {
+      setLoading(false);
     }
-  }, [customers]);
+  }, [auth.isAuthenticated]); // Depend on auth status
+
+  // Load customers when user logs in
+  useEffect(() => {
+    if (auth.isAuthenticated && !auth.loading) {
+      loadCustomers();
+    } else if (!auth.isAuthenticated) {
+      // Clear customers when user logs out
+      setCustomers([]);
+    }
+  }, [auth.isAuthenticated, auth.loading, loadCustomers]);
 
   // Get a customer by ID
   const getCustomerById = (id: string) => {
@@ -171,45 +153,130 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   // Add a new customer
-  const addCustomer = (customerData: Omit<Customer, 'id'>) => {
-    // Generate a new customer ID
-    const newCustomerId = `CS${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
-    
-    // Create the new customer object
-    const newCustomer: Customer = {
-      id: newCustomerId,
-      ...customerData
-    };
-    
-    // Add the new customer to the state
-    setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
-    
-    return newCustomer;
+  const addCustomer = async (customerData: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'tenantId' | 'isActive'>) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const backendData = convertToBackendCustomer(customerData);
+      const newBackendCustomer = await customerService.createCustomer(backendData);
+      const newCustomer = convertBackendCustomer(newBackendCustomer);
+      
+      setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
+      return newCustomer;
+    } catch (err: any) {
+      console.error('Failed to create customer:', err);
+      setError(err.message || 'Failed to create customer');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Update an existing customer
-  const updateCustomer = (id: string, updates: Partial<Customer>) => {
-    setCustomers(prevCustomers => 
-      prevCustomers.map(customer => 
-        customer.id === id ? { ...customer, ...updates } : customer
-      )
-    );
+  const updateCustomer = async (id: string, updates: Partial<Customer>): Promise<Customer> => {
+    console.log('CustomerContext: Starting customer update', { id, updates });
+    setLoading(true);
+    setError(null);
+    try {
+      // Convert UI updates to backend format
+      const backendUpdates: any = {};
+      if (updates.name) backendUpdates.name = updates.name;
+      if (updates.email !== undefined) backendUpdates.email = updates.email || undefined;
+      if (updates.phone !== undefined) backendUpdates.phone = updates.phone || undefined;
+      if (updates.address !== undefined) backendUpdates.address = updates.address;
+      if (updates.city !== undefined) backendUpdates.city = updates.city;
+      if (updates.state !== undefined) backendUpdates.state = updates.state;
+      if (updates.zipCode !== undefined) backendUpdates.zipCode = updates.zipCode;
+      if (updates.country !== undefined) backendUpdates.country = updates.country;
+      if (updates.dateOfBirth !== undefined) backendUpdates.dateOfBirth = updates.dateOfBirth;
+      if (updates.notes !== undefined) backendUpdates.notes = updates.notes || undefined;
+
+      // Handle marketing consent updates
+      if (updates.marketingConsent) {
+        backendUpdates.marketingEmail = updates.marketingConsent.email;
+        backendUpdates.marketingSms = updates.marketingConsent.sms;
+        backendUpdates.marketingPhone = updates.marketingConsent.phone;
+      }
+
+      console.log('CustomerContext: Sending to backend', backendUpdates);
+      const updatedBackendCustomer = await customerService.updateCustomer(id, backendUpdates);
+      console.log('CustomerContext: Backend response', updatedBackendCustomer);
+
+      const updatedCustomer = convertBackendCustomer(updatedBackendCustomer);
+      console.log('CustomerContext: Converted customer', updatedCustomer);
+
+      setCustomers(prevCustomers =>
+        prevCustomers.map(customer =>
+          customer.id === id ? updatedCustomer : customer
+        )
+      );
+      console.log('CustomerContext: Customer update completed successfully');
+
+      return updatedCustomer;
+    } catch (err: any) {
+      console.error('CustomerContext: Failed to update customer:', err);
+      setError(err.message || 'Failed to update customer');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Delete a customer
-  const deleteCustomer = (id: string) => {
-    setCustomers(prevCustomers => 
-      prevCustomers.filter(customer => customer.id !== id)
-    );
+  const deleteCustomer = async (id: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log('🗑️ CustomerContext: Deleting customer:', id);
+
+      // Call backend to delete customer
+      const deleteResult = await customerService.deleteCustomer(id);
+      console.log('✅ CustomerContext: Backend delete successful:', deleteResult);
+
+      // Remove from local state immediately for responsive UI
+      setCustomers(prevCustomers => {
+        const filtered = prevCustomers.filter(customer => customer.id !== id);
+        console.log(`📊 Customers before: ${prevCustomers.length}, after: ${filtered.length}`);
+        return filtered;
+      });
+
+      // Refresh from backend to ensure deletion persisted
+      console.log('🔄 CustomerContext: Refreshing customer list from backend...');
+      await loadCustomers();
+      console.log('✅ CustomerContext: Customer list refreshed from backend');
+
+    } catch (err: any) {
+      console.error('❌ CustomerContext: Failed to delete customer:', err);
+      console.error('Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
+      setError(err.message || 'Failed to delete customer');
+
+      // Refresh from backend even on error to ensure UI is in sync
+      await loadCustomers();
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // Refresh customers from backend - memoized to prevent infinite loops
+  const refreshCustomers = useCallback(async () => {
+    await loadCustomers();
+  }, [loadCustomers]);
 
   // Context value
   const value = {
     customers,
+    loading,
+    error,
     getCustomerById,
     addCustomer,
     updateCustomer,
-    deleteCustomer
+    deleteCustomer,
+    refreshCustomers
   };
 
   return (

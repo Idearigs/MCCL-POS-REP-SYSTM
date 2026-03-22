@@ -1,0 +1,1255 @@
+{
+	"info": {
+		"_postman_id": "mccl-pos-api-collection",
+		"name": "MCCL POS & Repair System API",
+		"description": "Complete API collection for MCCL POS & Repair System including Calendar, Inventory, Customers, and Repair Jobs",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3002",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refresh_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "tenant_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "customer_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "product_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "repair_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "event_id",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200 || pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('access_token', jsonData.accessToken);",
+									"    pm.collectionVariables.set('refresh_token', jsonData.refreshToken);",
+									"    console.log('Access token saved:', jsonData.accessToken);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						},
+						"description": "Login to get access token"
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('access_token', jsonData.accessToken);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{refresh_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "refresh"]
+						},
+						"description": "Refresh access token"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Calendar Events",
+			"item": [
+				{
+					"name": "Create Event",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('event_id', jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Customer Appointment - Ring Sizing\",\n  \"description\": \"Customer appointment for ring sizing consultation\",\n  \"eventDate\": \"2025-10-21\",\n  \"startTime\": \"10:00\",\n  \"endTime\": \"11:00\",\n  \"eventType\": \"APPOINTMENT\",\n  \"isAllDay\": false,\n  \"location\": \"Store\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/calendar-events",
+							"host": ["{{base_url}}"],
+							"path": ["calendar-events"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Events",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/calendar-events?page=1&limit=50",
+							"host": ["{{base_url}}"],
+							"path": ["calendar-events"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								},
+								{
+									"key": "startDate",
+									"value": "2025-10-01",
+									"disabled": true
+								},
+								{
+									"key": "endDate",
+									"value": "2025-10-31",
+									"disabled": true
+								},
+								{
+									"key": "eventType",
+									"value": "appointment",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Events by Month",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/calendar-events/month/2025/10",
+							"host": ["{{base_url}}"],
+							"path": ["calendar-events", "month", "2025", "10"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Event by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/calendar-events/{{event_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["calendar-events", "{{event_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Event",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Updated Event Title\",\n  \"description\": \"Updated description\",\n  \"eventDate\": \"2025-10-21\",\n  \"startTime\": \"14:00\",\n  \"endTime\": \"15:00\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/calendar-events/{{event_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["calendar-events", "{{event_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Event",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/calendar-events/{{event_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["calendar-events", "{{event_id}}"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Products (Inventory)",
+			"item": [
+				{
+					"name": "Create Product",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('product_id', jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"18K Gold Diamond Ring\",\n  \"description\": \"Beautiful 18K gold ring with 0.5ct diamond\",\n  \"sku\": \"JWL-RING-001\",\n  \"barcode\": \"1234567890123\",\n  \"material\": \"GOLD\",\n  \"weight\": 5.5,\n  \"purity\": \"18K\",\n  \"gemstone\": \"Diamond\",\n  \"certification\": \"GIA Certified\",\n  \"size\": \"7\",\n  \"color\": \"Yellow Gold\",\n  \"costPrice\": 500,\n  \"sellingPrice\": 1200,\n  \"stockQuantity\": 10,\n  \"minStockLevel\": 3,\n  \"location\": \"Display Case A1\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/products",
+							"host": ["{{base_url}}"],
+							"path": ["products"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Products",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["products"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "search",
+									"value": "ring",
+									"disabled": true
+								},
+								{
+									"key": "category",
+									"value": "RING",
+									"disabled": true
+								},
+								{
+									"key": "material",
+									"value": "GOLD",
+									"disabled": true
+								},
+								{
+									"key": "isActive",
+									"value": "true",
+									"disabled": true
+								},
+								{
+									"key": "lowStock",
+									"value": "false",
+									"disabled": true
+								},
+								{
+									"key": "minPrice",
+									"value": "100",
+									"disabled": true
+								},
+								{
+									"key": "maxPrice",
+									"value": "5000",
+									"disabled": true
+								},
+								{
+									"key": "sortBy",
+									"value": "createdAt",
+									"disabled": true
+								},
+								{
+									"key": "sortOrder",
+									"value": "desc",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Product Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/stats",
+							"host": ["{{base_url}}"],
+							"path": ["products", "stats"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Low Stock Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/low-stock",
+							"host": ["{{base_url}}"],
+							"path": ["products", "low-stock"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Categories",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/categories",
+							"host": ["{{base_url}}"],
+							"path": ["products", "categories"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Materials",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/materials",
+							"host": ["{{base_url}}"],
+							"path": ["products", "materials"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Generate SKU",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/generate-sku?prefix=JWL",
+							"host": ["{{base_url}}"],
+							"path": ["products", "generate-sku"],
+							"query": [
+								{
+									"key": "prefix",
+									"value": "JWL"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Product by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/{{product_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["products", "{{product_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Product by Barcode",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/barcode/1234567890123",
+							"host": ["{{base_url}}"],
+							"path": ["products", "barcode", "1234567890123"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Product by SKU",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/sku/JWL-RING-001",
+							"host": ["{{base_url}}"],
+							"path": ["products", "sku", "JWL-RING-001"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Stock History",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/{{product_id}}/stock-history",
+							"host": ["{{base_url}}"],
+							"path": ["products", "{{product_id}}", "stock-history"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Product",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Product Name\",\n  \"sellingPrice\": 1500,\n  \"description\": \"Updated description\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/products/{{product_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["products", "{{product_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Adjust Stock",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"PURCHASE\",\n  \"quantity\": 5,\n  \"reason\": \"New stock received from supplier\",\n  \"reference\": \"PO-12345\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/products/{{product_id}}/adjust-stock",
+							"host": ["{{base_url}}"],
+							"path": ["products", "{{product_id}}", "adjust-stock"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Bulk Update Stock",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"updates\": [\n    {\n      \"productId\": \"{{product_id}}\",\n      \"newStock\": 15,\n      \"reason\": \"Inventory count adjustment\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/products/bulk-update-stock",
+							"host": ["{{base_url}}"],
+							"path": ["products", "bulk-update-stock"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Product Image",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "image",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/products/{{product_id}}/upload-image",
+							"host": ["{{base_url}}"],
+							"path": ["products", "{{product_id}}", "upload-image"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Product (Soft Delete)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/{{product_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["products", "{{product_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Restore Product",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/{{product_id}}/restore",
+							"host": ["{{base_url}}"],
+							"path": ["products", "{{product_id}}", "restore"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Customers",
+			"item": [
+				{
+					"name": "Create Customer",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('customer_id', jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"firstName\": \"Sarah\",\n  \"lastName\": \"Johnson\",\n  \"email\": \"sarah.johnson@example.com\",\n  \"phone\": \"+44 7700 900000\",\n  \"address\": \"123 High Street, London\",\n  \"city\": \"London\",\n  \"postalCode\": \"SW1A 1AA\",\n  \"country\": \"UK\",\n  \"birthDate\": \"1990-05-15\",\n  \"notes\": \"VIP customer, prefers email communication\",\n  \"preferredContact\": \"EMAIL\",\n  \"marketingEmail\": false,\n  \"marketingSms\": false,\n  \"marketingPhone\": false,\n  \"dataProcessingConsent\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/customers",
+							"host": ["{{base_url}}"],
+							"path": ["customers"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Customers",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/customers?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["customers"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "search",
+									"value": "Sarah",
+									"disabled": true
+								},
+								{
+									"key": "isActive",
+									"value": "true",
+									"disabled": true
+								},
+								{
+									"key": "redFlag",
+									"value": "false",
+									"disabled": true
+								},
+								{
+									"key": "sortBy",
+									"value": "createdAt",
+									"disabled": true
+								},
+								{
+									"key": "sortOrder",
+									"value": "desc",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Customer Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/customers/stats",
+							"host": ["{{base_url}}"],
+							"path": ["customers", "stats"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Customer by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/customers/{{customer_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["customers", "{{customer_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Customer",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phone\": \"+44 7700 900001\",\n  \"notes\": \"Updated customer notes\",\n  \"address\": \"456 New Street, London\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/customers/{{customer_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["customers", "{{customer_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Customer (Soft Delete)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/customers/{{customer_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["customers", "{{customer_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GDPR Export Customer Data",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"customerId\": \"{{customer_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/customers/gdpr/export",
+							"host": ["{{base_url}}"],
+							"path": ["customers", "gdpr", "export"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GDPR Delete Customer Data (DANGEROUS)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"customerId\": \"{{customer_id}}\",\n  \"confirmDelete\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/customers/gdpr/delete",
+							"host": ["{{base_url}}"],
+							"path": ["customers", "gdpr", "delete"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Customer Sales History",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/customers/{{customer_id}}/sales-history",
+							"host": ["{{base_url}}"],
+							"path": ["customers", "{{customer_id}}", "sales-history"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Customer Repair History",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/customers/{{customer_id}}/repair-history",
+							"host": ["{{base_url}}"],
+							"path": ["customers", "{{customer_id}}", "repair-history"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Repairs",
+			"item": [
+				{
+					"name": "Create Repair",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('repair_id', jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"customerId\": \"{{customer_id}}\",\n  \"items\": [\n    {\n      \"itemDescription\": \"Gold ring with diamond\",\n      \"repairType\": \"SIZING\",\n      \"repairDescription\": \"Resize ring from size 7 to size 6.5\",\n      \"estimatedCost\": 85.00\n    }\n  ],\n  \"problemDescription\": \"Ring is too small, customer needs it resized\",\n  \"priority\": \"NORMAL\",\n  \"expectedCompletionDate\": \"2025-10-28\",\n  \"depositAmount\": 50.00,\n  \"customerInstructions\": \"Handle with care, sentimental value\",\n  \"internalNotes\": \"Check for other damage during sizing\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/repairs",
+							"host": ["{{base_url}}"],
+							"path": ["repairs"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Repairs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/repairs?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["repairs"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "search",
+									"value": "RPR",
+									"disabled": true
+								},
+								{
+									"key": "status",
+									"value": "IN_PROGRESS",
+									"disabled": true
+								},
+								{
+									"key": "priority",
+									"value": "HIGH",
+									"disabled": true
+								},
+								{
+									"key": "repairType",
+									"value": "SIZING",
+									"disabled": true
+								},
+								{
+									"key": "customerId",
+									"value": "{{customer_id}}",
+									"disabled": true
+								},
+								{
+									"key": "overdue",
+									"value": "false",
+									"disabled": true
+								},
+								{
+									"key": "sortBy",
+									"value": "createdAt",
+									"disabled": true
+								},
+								{
+									"key": "sortOrder",
+									"value": "desc",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Repair Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/repairs/stats",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "stats"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Overdue Repairs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/repairs/overdue",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "overdue"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Active Repairs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/repairs/active?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "active"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Repair by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/repairs/{{repair_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "{{repair_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Repair",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"priority\": \"HIGH\",\n  \"estimatedCost\": 200.00,\n  \"internalNotes\": \"Updated notes - requires more work than expected\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/repairs/{{repair_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "{{repair_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Change Repair Status",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"IN_PROGRESS\",\n  \"notes\": \"Started working on the repair\",\n  \"sendSMS\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/repairs/{{repair_id}}/status",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "{{repair_id}}", "status"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Note to Repair",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"note\": \"Progress update: Sizing completed, polishing next\",\n  \"isCustomerVisible\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/repairs/{{repair_id}}/notes",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "{{repair_id}}", "notes"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Cancel Repair",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"reason\": \"Customer requested cancellation\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/repairs/{{repair_id}}/cancel",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "{{repair_id}}", "cancel"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Repair Timeline",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/repairs/{{repair_id}}/timeline",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "{{repair_id}}", "timeline"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Repair Images",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "images",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "images",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "stage",
+									"value": "before",
+									"type": "text",
+									"description": "Stage: before, after, or progress"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/repairs/{{repair_id}}/images",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "{{repair_id}}", "images"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Repair Images",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/repairs/{{repair_id}}/images",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "{{repair_id}}", "images"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Repair Image",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/repairs/{{repair_id}}/images/:imageId",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "{{repair_id}}", "images", ":imageId"],
+							"variable": [
+								{
+									"key": "imageId",
+									"value": ""
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Repair",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/repairs/{{repair_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "{{repair_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Technician Workload Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/repairs/reports/workload",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "reports", "workload"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Customer Repair History Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/repairs/reports/customer/{{customer_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "reports", "customer", "{{customer_id}}"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Repairs by Technician",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/repairs/technician/:technicianId?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["repairs", "technician", ":technicianId"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							],
+							"variable": [
+								{
+									"key": "technicianId",
+									"value": ""
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

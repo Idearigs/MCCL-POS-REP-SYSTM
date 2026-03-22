@@ -3,18 +3,25 @@ import React, { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { 
-  Search, 
-  Plus, 
-  Package, 
-  ArrowDownUp, 
-  AlertTriangle, 
+import {
+  Search,
+  Plus,
+  Package,
+  ArrowDownUp,
+  AlertTriangle,
   Printer,
   Upload,
-  Download 
+  Download,
+  LayoutGrid,
+  List,
+  Eye,
+  Edit,
+  Trash2,
+  Nfc
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useInventory, InventoryItem } from '@/contexts/InventoryContext';
+import { productService } from '@/services/productService';
 import { 
   Select,
   SelectContent,
@@ -33,14 +40,35 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  downloadInventoryReport,
+  InventoryReportData,
+  InventoryReportItem
+} from '@/utils/inventoryReportGenerator';
+import {
+  parseCSV,
+  ParsedCSVData,
+  ValidatedInventoryItem,
+  generateCSVTemplate
+} from '@/utils/intelligentCSVParser';
+import CSVImportDialog from '@/components/inventory/CSVImportDialog';
+import BulkRFIDAssignment from '@/components/inventory/BulkRFIDAssignment';
 
-import InventoryItemComponent, { InventoryItemProps } from '@/components/inventory/InventoryItem';
+import InventoryItemComponent, { InventoryItemProps} from '@/components/inventory/InventoryItem';
 import InventoryDetail from '@/components/inventory/InventoryDetail';
 import InventoryFilter from '@/components/inventory/InventoryFilter';
 
 const InventoryPage = () => {
-  const { inventory, updateItem, addItem, deleteItem } = useInventory();
-  const availableCategories = Array.from(new Set(inventory.map(item => item.category)));
+  const { inventory, updateItem, addItem, deleteItem, refreshInventory } = useInventory();
+  const availableCategories = Array.from(new Set(inventory.map(item => (item as any).categoryName || item.category).filter(Boolean)));
 
   const [filteredInventory, setFilteredInventory] = useState<InventoryItem[]>(inventory);
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,6 +80,11 @@ const InventoryPage = () => {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null);
+  const [parsedCSVData, setParsedCSVData] = useState<ParsedCSVData | null>(null);
+  const [isCSVImportDialogOpen, setIsCSVImportDialogOpen] = useState(false);
+  const [isBulkRFIDDialogOpen, setIsBulkRFIDDialogOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [quickFilter, setQuickFilter] = useState<'lowStock' | 'outOfStock' | null>(null);
   const { toast } = useToast();
   
   // Set isLoaded to true after component mounts to prevent initial render issues
@@ -61,27 +94,35 @@ const InventoryPage = () => {
   }, []);
 
   // Apply search and filters to inventory
-  const applyFilters = (searchTerm: string, filters?: any) => {
+  const applyFilters = (searchTerm: string, filters?: any, activeQuickFilter?: 'lowStock' | 'outOfStock' | null) => {
     let result = [...inventory];
-    
+
     // Apply search
     if (searchTerm) {
       const lowercaseQuery = searchTerm.toLowerCase();
-      result = result.filter(item => 
-        item.name.toLowerCase().includes(lowercaseQuery) || 
-        item.sku.toLowerCase().includes(lowercaseQuery) || 
-        item.category.toLowerCase().includes(lowercaseQuery) ||
+      result = result.filter(item =>
+        item.name.toLowerCase().includes(lowercaseQuery) ||
+        item.sku.toLowerCase().includes(lowercaseQuery) ||
+        ((item as any).categoryName || item.category).toLowerCase().includes(lowercaseQuery) ||
         (item.description && item.description.toLowerCase().includes(lowercaseQuery))
       );
     }
-    
+
+    // Apply quick filter (Low Stock or Out of Stock button clicks)
+    const currentQuickFilter = activeQuickFilter !== undefined ? activeQuickFilter : quickFilter;
+    if (currentQuickFilter === 'lowStock') {
+      result = result.filter(item => item.quantity > 0 && item.quantity <= item.threshold);
+    } else if (currentQuickFilter === 'outOfStock') {
+      result = result.filter(item => item.quantity <= 0);
+    }
+
     // Apply filters if provided
     if (filters) {
       // Filter by categories
       if (filters.categories.length > 0) {
-        result = result.filter(item => filters.categories.includes(item.category));
+        result = result.filter(item => filters.categories.includes((item as any).categoryName || item.category));
       }
-      
+
       // Filter by price range
       if (filters.minPrice !== null) {
         result = result.filter(item => item.price >= filters.minPrice);
@@ -89,31 +130,33 @@ const InventoryPage = () => {
       if (filters.maxPrice !== null) {
         result = result.filter(item => item.price <= filters.maxPrice);
       }
-      
-      // Filter by stock status
-      result = result.filter(item => {
-        if (item.quantity <= 0 && !filters.stockStatus.outOfStock) return false;
-        if (item.quantity <= item.threshold && item.quantity > 0 && !filters.stockStatus.lowStock) return false;
-        if (item.quantity > item.threshold && !filters.stockStatus.inStock) return false;
-        return true;
-      });
+
+      // Filter by stock status (only if quick filter is not active)
+      if (!currentQuickFilter) {
+        result = result.filter(item => {
+          if (item.quantity <= 0 && !filters.stockStatus.outOfStock) return false;
+          if (item.quantity <= item.threshold && item.quantity > 0 && !filters.stockStatus.lowStock) return false;
+          if (item.quantity > item.threshold && !filters.stockStatus.inStock) return false;
+          return true;
+        });
+      }
     }
-    
+
     // Apply sorting
     result.sort((a, b) => {
       let valueA: any = a[sortBy as keyof InventoryItem];
       let valueB: any = b[sortBy as keyof InventoryItem];
-      
+
       if (typeof valueA === 'string') {
         valueA = valueA.toLowerCase();
         valueB = valueB.toLowerCase();
       }
-      
+
       if (valueA < valueB) return sortOrder === 'asc' ? -1 : 1;
       if (valueA > valueB) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-    
+
     setFilteredInventory(result);
   };
   
@@ -121,25 +164,32 @@ const InventoryPage = () => {
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
     setSearchQuery(query);
-    applyFilters(query);
+    applyFilters(query, undefined, quickFilter);
+  };
+
+  // Handle quick filter toggle (Low Stock / Out of Stock buttons)
+  const handleQuickFilter = (filterType: 'lowStock' | 'outOfStock') => {
+    const newFilter = quickFilter === filterType ? null : filterType;
+    setQuickFilter(newFilter);
+    applyFilters(searchQuery, undefined, newFilter);
   };
   
   // Handle sorting changes
   const handleSortChange = (value: string) => {
     setSortBy(value);
-    applyFilters(searchQuery);
+    applyFilters(searchQuery, undefined, quickFilter);
   };
-  
+
   // Toggle sort order
   const toggleSortOrder = () => {
     const newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
     setSortOrder(newOrder);
-    applyFilters(searchQuery);
+    applyFilters(searchQuery, undefined, quickFilter);
   };
-  
+
   // Handle filter changes
   const handleFilterChange = (filters: any) => {
-    applyFilters(searchQuery, filters);
+    applyFilters(searchQuery, filters, quickFilter);
   };
   
   // Open the detail dialog for editing an item
@@ -178,242 +228,345 @@ const InventoryPage = () => {
     setIsDetailOpen(true);
   };
   
-  // Print inventory list
+  // Print inventory list as professional PDF
   const handlePrint = () => {
-    // Create a printable version of the inventory
-    const printContent = document.createElement('div');
-    printContent.innerHTML = `
-      <h1 style="text-align: center; margin-bottom: 20px;">Inventory Report</h1>
-      <p style="text-align: center; margin-bottom: 30px;">Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
-      <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-          <tr style="background-color: #f3f4f6;">
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: left;">Name</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: left;">SKU</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: left;">Category</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">Price</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">Cost</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">Quantity</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${filteredInventory.map(item => `
-            <tr>
-              <td style="padding: 10px; border: 1px solid #e5e7eb;">${item.name}</td>
-              <td style="padding: 10px; border: 1px solid #e5e7eb;">${item.sku}</td>
-              <td style="padding: 10px; border: 1px solid #e5e7eb;">${item.category}</td>
-              <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">£${item.price.toFixed(2)}</td>
-              <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">£${item.cost.toFixed(2)}</td>
-              <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">${item.quantity}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-      <div style="margin-top: 30px; text-align: right;">
-        <p><strong>Total Items:</strong> ${filteredInventory.length}</p>
-        <p><strong>Total Value:</strong> £${filteredInventory.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}</p>
-      </div>
-    `;
-    
-    // Create a new window for printing
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Inventory Report</title>
-            <style>
-              body { font-family: Arial, sans-serif; padding: 20px; }
-              @media print {
-                body { padding: 0; }
-              }
-            </style>
-          </head>
-          <body>
-            ${printContent.innerHTML}
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      
-      // Wait for content to load before printing
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
-      
+    try {
+      // Convert inventory items to report format
+      const reportItems: InventoryReportItem[] = filteredInventory.map(item => ({
+        id: item.id,
+        name: item.name,
+        sku: item.sku,
+        category: item.category,
+        categoryName: (item as any).categoryName || item.category,
+        supplier: item.supplier || '',
+        supplierName: (item as any).supplierName || item.supplier || '',
+        material: (item as any).material || '',
+        purity: (item as any).purity || '',
+        weight: (item as any).weight,
+        price: item.price,
+        cost: item.cost,
+        quantity: item.quantity,
+        threshold: item.threshold,
+        description: item.description || '',
+        location: item.location || '',
+        dateAdded: item.dateAdded,
+        lastRestocked: item.lastRestocked
+      }));
+
+      // Calculate statistics
+      const totalValue = filteredInventory.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const lowStockItems = filteredInventory.filter(item =>
+        item.quantity > 0 && item.quantity <= item.threshold
+      ).length;
+      const outOfStockItems = filteredInventory.filter(item => item.quantity <= 0).length;
+
+      // Prepare report data
+      const reportData: InventoryReportData = {
+        items: reportItems,
+        generatedDate: new Date().toLocaleString('en-GB', {
+          day: '2-digit',
+          month: 'long',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+        totalItems: filteredInventory.length,
+        totalValue: totalValue,
+        lowStockItems: lowStockItems,
+        outOfStockItems: outOfStockItems
+      };
+
+      // Generate and download professional PDF
+      downloadInventoryReport(reportData);
+
       toast({
-        title: "Print prepared",
-        description: "Inventory report has been sent to your printer.",
+        title: "Report Generated",
+        description: "Professional inventory report has been downloaded as PDF.",
+      });
+    } catch (error) {
+      console.error('Error generating inventory report:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate inventory report. Please try again.",
+        variant: "destructive",
       });
     }
   };
   
-  // Download inventory as CSV
+  // Download inventory as comprehensive CSV
   const handleDownload = () => {
-    // Create CSV content
-    const headers = ['Name', 'SKU', 'Category', 'Price', 'Cost', 'Quantity', 'Threshold'];
-    const csvRows = [
-      headers.join(','),
-      ...filteredInventory.map(item => [
-        `"${item.name.replace(/"/g, '""')}"`, // Escape quotes in name
-        item.sku,
-        item.category,
-        item.price.toFixed(2),
-        item.cost.toFixed(2),
-        item.quantity,
-        item.threshold
-      ].join(','))
-    ];
-    
-    const csvContent = csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-    saveAs(blob, `inventory_${new Date().toISOString().slice(0, 10)}.csv`);
-    
-    toast({
-      title: "Download complete",
-      description: "Inventory data has been downloaded as CSV.",
-    });
+    try {
+      // Create comprehensive CSV with all fields
+      const headers = [
+        'name',
+        'sku',
+        'category',
+        'supplier',
+        'material',
+        'purity',
+        'weight',
+        'price',
+        'cost',
+        'quantity',
+        'threshold',
+        'description',
+        'location',
+        'barcode'
+      ];
+
+      const csvRows = [
+        headers.join(','),
+        ...filteredInventory.map(item => [
+          `"${(item.name || '').replace(/"/g, '""')}"`, // Escape quotes
+          item.sku || '',
+          (item as any).categoryName || item.category || '',
+          (item as any).supplierName || item.supplier || '',
+          (item as any).material || '',
+          (item as any).purity || '',
+          (item as any).weight || '',
+          item.price?.toFixed(2) || '0.00',
+          item.cost?.toFixed(2) || '0.00',
+          item.quantity || 0,
+          item.threshold || 5,
+          `"${(item.description || '').replace(/"/g, '""')}"`,
+          item.location || '',
+          (item as any).barcode || ''
+        ].join(','))
+      ];
+
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+      saveAs(blob, `inventory_export_${new Date().toISOString().slice(0, 10)}.csv`);
+
+      toast({
+        title: "Export complete",
+        description: `${filteredInventory.length} items exported to CSV with all fields.`,
+      });
+    } catch (error) {
+      console.error('CSV export error:', error);
+      toast({
+        title: "Export failed",
+        description: "Failed to export inventory data.",
+        variant: "destructive",
+      });
+    }
   };
   
-  // Handle file upload
+  // Handle intelligent CSV upload
   const handleUpload = () => {
-    // Create a file input element if it doesn't exist
-    if (!fileInput) {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.csv';
-      input.style.display = 'none';
-      input.onchange = (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            try {
-              const csvData = event.target?.result as string;
-              const rows = csvData.split('\n');
-              
-              // Skip header row
-              const header = rows[0].split(',');
-              const nameIndex = header.findIndex(h => h.trim().toLowerCase() === 'name');
-              const skuIndex = header.findIndex(h => h.trim().toLowerCase() === 'sku');
-              const categoryIndex = header.findIndex(h => h.trim().toLowerCase() === 'category');
-              const priceIndex = header.findIndex(h => h.trim().toLowerCase() === 'price');
-              const costIndex = header.findIndex(h => h.trim().toLowerCase() === 'cost');
-              const quantityIndex = header.findIndex(h => h.trim().toLowerCase() === 'quantity');
-              const thresholdIndex = header.findIndex(h => h.trim().toLowerCase() === 'threshold');
-              
-              if (nameIndex === -1 || skuIndex === -1 || priceIndex === -1) {
-                throw new Error('CSV file must contain at least Name, SKU, and Price columns');
-              }
-              
-              // Process data rows
-              const newItems: Omit<InventoryItem, 'id'>[] = [];
-              for (let i = 1; i < rows.length; i++) {
-                if (!rows[i].trim()) continue; // Skip empty rows
-                
-                // Handle quoted fields (simple approach)
-                let inQuote = false;
-                let currentField = '';
-                const fields: string[] = [];
-                
-                for (let j = 0; j < rows[i].length; j++) {
-                  const char = rows[i][j];
-                  if (char === '"') {
-                    inQuote = !inQuote;
-                  } else if (char === ',' && !inQuote) {
-                    fields.push(currentField);
-                    currentField = '';
-                  } else {
-                    currentField += char;
-                  }
-                }
-                fields.push(currentField); // Add the last field
-                
-                const newItem: Omit<InventoryItem, 'id'> = {
-                  name: fields[nameIndex]?.replace(/^"|"$/g, '') || 'Unknown',
-                  sku: fields[skuIndex] || `SKU-${Date.now()}`,
-                  category: fields[categoryIndex] || 'Uncategorized',
-                  price: parseFloat(fields[priceIndex]) || 0,
-                  cost: costIndex > -1 ? parseFloat(fields[costIndex]) || 0 : 0,
-                  quantity: quantityIndex > -1 ? parseInt(fields[quantityIndex]) || 0 : 0,
-                  threshold: thresholdIndex > -1 ? parseInt(fields[thresholdIndex]) || 5 : 5,
-                  description: '',
-                  supplier: '',
-                  location: '',
-                  dateAdded: new Date().toISOString(),
-                  lastRestocked: new Date().toISOString(),
-                  imageUrl: '',
-                  additionalImages: []
-                };
-                
-                newItems.push(newItem);
-              }
-              
-              // Add items to inventory
-              if (newItems.length > 0) {
-                newItems.forEach(item => addItem(item));
-                
-                toast({
-                  title: "Upload successful",
-                  description: `${newItems.length} items have been added to inventory.`,
-                });
-              } else {
-                toast({
-                  title: "No items found",
-                  description: "The CSV file did not contain any valid inventory items.",
-                  variant: "destructive",
-                });
-              }
-              
-            } catch (error) {
-              toast({
-                title: "Upload failed",
-                description: error instanceof Error ? error.message : "Failed to process CSV file.",
-                variant: "destructive",
-              });
-            }
-          };
-          reader.readAsText(file);
+    // Create file input for CSV upload
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv';
+    input.style.display = 'none';
+
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const csvContent = event.target?.result as string;
+
+          // Parse CSV intelligently
+          const parsed = parseCSV(csvContent);
+
+          // Set parsed data and open preview dialog
+          setParsedCSVData(parsed);
+          setIsCSVImportDialogOpen(true);
+
+        } catch (error) {
+          console.error('CSV parsing error:', error);
+          toast({
+            title: "Failed to read CSV",
+            description: error instanceof Error ? error.message : "Invalid CSV file format.",
+            variant: "destructive",
+          });
         }
       };
-      document.body.appendChild(input);
-      setFileInput(input);
-    }
-    
-    // Trigger file selection
-    fileInput?.click();
+
+      reader.onerror = () => {
+        toast({
+          title: "File read error",
+          description: "Failed to read the CSV file. Please try again.",
+          variant: "destructive",
+        });
+      };
+
+      reader.readAsText(file);
+    };
+
+    document.body.appendChild(input);
+    input.click();
+    document.body.removeChild(input);
   };
-  
+
+  // Handle confirmed CSV import
+  const handleConfirmCSVImport = async (items: ValidatedInventoryItem[]) => {
+    try {
+      let successCount = 0;
+      let failureCount = 0;
+
+      // Import items one by one
+      for (const item of items) {
+        try {
+          await addItem({
+            name: item.name,
+            sku: item.sku,
+            category: item.category || '', // Leave empty if no category provided
+            supplier: item.supplier || '',
+            price: item.price,
+            cost: item.cost || 0,
+            quantity: item.quantity,
+            threshold: item.threshold || 5,
+            description: item.description || '',
+            location: item.location || '',
+            dateAdded: new Date().toISOString(),
+            lastRestocked: new Date().toISOString(),
+            imageUrl: '',
+            additionalImages: []
+          });
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to import item ${item.sku}:`, error);
+          failureCount++;
+        }
+      }
+
+      // Show results
+      if (successCount > 0) {
+        toast({
+          title: "Import successful",
+          description: `Successfully imported ${successCount} of ${items.length} items.${failureCount > 0 ? ` ${failureCount} items failed.` : ''}`,
+        });
+      } else {
+        toast({
+          title: "Import failed",
+          description: "No items were imported. Please check the CSV format.",
+          variant: "destructive",
+        });
+      }
+
+      // Refresh inventory
+      await refreshInventory();
+
+      // Close dialog
+      setIsCSVImportDialogOpen(false);
+      setParsedCSVData(null);
+
+    } catch (error) {
+      console.error('CSV import error:', error);
+      toast({
+        title: "Import error",
+        description: "An error occurred while importing items.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle bulk RFID assignment
+  const handleBulkRFIDAssign = async (assignments: Array<{ sku: string; rfidTag: string }>) => {
+    try {
+      const result = await productService.bulkAssignRFID(assignments);
+
+      // Show success toast
+      if (result.success > 0) {
+        toast({
+          title: "RFID Assignment Complete",
+          description: `Successfully assigned RFID tags to ${result.success} product${result.success !== 1 ? 's' : ''}.${result.failed > 0 ? ` ${result.failed} failed.` : ''}`,
+        });
+      }
+
+      // Show errors if any
+      if (result.failed > 0 && result.errors.length > 0) {
+        console.error('RFID assignment errors:', result.errors);
+      }
+
+      // Refresh inventory to show updated RFID tags
+      await refreshInventory();
+
+      return result;
+    } catch (error) {
+      console.error('Bulk RFID assignment error:', error);
+      toast({
+        title: "Assignment Failed",
+        description: "An error occurred while assigning RFID tags.",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
   // Save new or updated item
-  const handleSaveItem = (item: InventoryItem) => {
+  const handleSaveItem = async (item: InventoryItem, imageFiles?: File[]) => {
+    console.log('📥 handleSaveItem called with imageFiles:', imageFiles);
+
     // Ensure the item has the additionalImages property
     const updatedItem = {
       ...item,
       additionalImages: item.additionalImages || []
     };
-    
-    if (isNewItem) {
-      // Add new item to inventory
-      addItem(updatedItem);
-      
+
+    try {
+      let productId: string;
+
+      if (isNewItem) {
+        // Add new item to inventory
+        const newItem = await addItem(updatedItem);
+        productId = newItem.id;
+
+        console.log('✅ Product created with ID:', productId);
+      } else {
+        // Update existing item
+        await updateItem(updatedItem.id, updatedItem);
+        productId = updatedItem.id;
+
+        console.log('✅ Product updated with ID:', productId);
+      }
+
+      // Upload images if provided
+      if (imageFiles && imageFiles.length > 0) {
+        console.log(`📤 Uploading ${imageFiles.length} images for product ${productId}`);
+
+        const uploadPromises = imageFiles.map((file, index) => {
+          console.log(`  - Uploading image ${index + 1}/${imageFiles.length}: ${file.name}`);
+          return productService.uploadProductImage(productId, file);
+        });
+
+        const uploadResults = await Promise.all(uploadPromises);
+        console.log('✅ All images uploaded successfully:', uploadResults);
+      }
+
+      // Refresh inventory to get updated product data with images from database
+      console.log('🔄 Refreshing inventory from database...');
+      await refreshInventory();
+      console.log('✅ Inventory refreshed with latest data including images');
+
+      // Show success message
+      if (isNewItem) {
+        toast({
+          title: "Item Added",
+          description: `${updatedItem.name} has been added to inventory${imageFiles && imageFiles.length > 0 ? ` with ${imageFiles.length} image(s)` : ''}.`,
+        });
+      } else {
+        toast({
+          title: "Item Updated",
+          description: `${updatedItem.name} has been updated${imageFiles && imageFiles.length > 0 ? ` with ${imageFiles.length} new image(s)` : ''}.`,
+        });
+      }
+
+      setIsDetailOpen(false);
+      setSelectedItem(null);
+      setIsNewItem(false);
+    } catch (error) {
+      console.error('❌ Failed to save item:', error);
       toast({
-        title: "Item Added",
-        description: `${updatedItem.name} has been added to inventory.`,
-      });
-    } else {
-      // Update existing item
-      updateItem(updatedItem.id, updatedItem);
-      
-      toast({
-        title: "Item Updated",
-        description: `${updatedItem.name} has been updated.`,
+        title: "Error",
+        description: `Failed to ${isNewItem ? 'add' : 'update'} item: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
       });
     }
-    
-    setIsDetailOpen(false);
-    setSelectedItem(null);
-    setIsNewItem(false);
   };
 
   // Calculate inventory stats
@@ -424,8 +577,8 @@ const InventoryPage = () => {
   
   // Update filtered inventory when inventory changes
   useEffect(() => {
-    applyFilters(searchQuery);
-  }, [inventory]);
+    applyFilters(searchQuery, undefined, quickFilter);
+  }, [inventory, quickFilter]);
 
   // Don't render until component is fully loaded to prevent initialization errors
   if (!isLoaded) {
@@ -455,25 +608,55 @@ const InventoryPage = () => {
             </div>
           </div>
           
-          <div className="bg-card p-4 rounded-lg shadow-sm border">
+          <button
+            onClick={() => handleQuickFilter('lowStock')}
+            className={`bg-card p-4 rounded-lg shadow-sm border transition-all hover:shadow-md cursor-pointer ${
+              quickFilter === 'lowStock'
+                ? 'ring-2 ring-amber-500 bg-amber-50 border-amber-500'
+                : 'hover:border-amber-300'
+            }`}
+          >
             <div className="flex justify-between items-center">
               <div>
-                <p className="text-sm text-muted-foreground">Low Stock</p>
+                <p className={`text-sm ${quickFilter === 'lowStock' ? 'text-amber-700 font-medium' : 'text-muted-foreground'}`}>
+                  Low Stock {quickFilter === 'lowStock' && '(Filtered)'}
+                </p>
                 <h3 className="text-2xl font-bold">{lowStockItems}</h3>
               </div>
-              <AlertTriangle className={`h-8 w-8 ${lowStockItems > 0 ? 'text-amber-500' : 'text-muted-foreground/70'}`} />
+              <AlertTriangle className={`h-8 w-8 ${
+                quickFilter === 'lowStock'
+                  ? 'text-amber-600'
+                  : lowStockItems > 0
+                    ? 'text-amber-500'
+                    : 'text-muted-foreground/70'
+              }`} />
             </div>
-          </div>
-          
-          <div className="bg-card p-4 rounded-lg shadow-sm border">
+          </button>
+
+          <button
+            onClick={() => handleQuickFilter('outOfStock')}
+            className={`bg-card p-4 rounded-lg shadow-sm border transition-all hover:shadow-md cursor-pointer ${
+              quickFilter === 'outOfStock'
+                ? 'ring-2 ring-red-500 bg-red-50 border-red-500'
+                : 'hover:border-red-300'
+            }`}
+          >
             <div className="flex justify-between items-center">
               <div>
-                <p className="text-sm text-muted-foreground">Out of Stock</p>
+                <p className={`text-sm ${quickFilter === 'outOfStock' ? 'text-red-700 font-medium' : 'text-muted-foreground'}`}>
+                  Out of Stock {quickFilter === 'outOfStock' && '(Filtered)'}
+                </p>
                 <h3 className="text-2xl font-bold">{outOfStockItems}</h3>
               </div>
-              <AlertTriangle className={`h-8 w-8 ${outOfStockItems > 0 ? 'text-destructive' : 'text-muted-foreground/70'}`} />
+              <AlertTriangle className={`h-8 w-8 ${
+                quickFilter === 'outOfStock'
+                  ? 'text-red-600'
+                  : outOfStockItems > 0
+                    ? 'text-destructive'
+                    : 'text-muted-foreground/70'
+              }`} />
             </div>
-          </div>
+          </button>
           
           <div className="bg-card p-4 rounded-lg shadow-sm border">
             <div className="flex justify-between items-center">
@@ -499,6 +682,27 @@ const InventoryPage = () => {
             />
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center bg-white/90 rounded-full border border-navy/10 shadow-sm">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+                className={`rounded-l-full ${viewMode === 'grid' ? 'bg-navy text-white hover:bg-navy-dark' : 'text-navy hover:bg-navy/5'}`}
+              >
+                <LayoutGrid size={16} className="mr-2" />
+                Grid
+              </Button>
+              <Button
+                variant={viewMode === 'table' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('table')}
+                className={`rounded-r-full ${viewMode === 'table' ? 'bg-navy text-white hover:bg-navy-dark' : 'text-navy hover:bg-navy/5'}`}
+              >
+                <List size={16} className="mr-2" />
+                Table
+              </Button>
+            </div>
+
             <div className="flex items-center gap-2">
               <Select value={sortBy} onValueChange={handleSortChange}>
                 <SelectTrigger className="w-[130px] h-8 bg-white/90 backdrop-blur-sm border border-navy/10 rounded-xl shadow-sm hover:border-navy/20 text-navy">
@@ -545,14 +749,24 @@ const InventoryPage = () => {
                 <Download size={16} />
               </Button>
               
-              <Button 
-                variant="outline" 
-                size="icon" 
+              <Button
+                variant="outline"
+                size="icon"
                 className="h-8 w-8 rounded-full bg-white/90 border-navy/10 hover:bg-navy/5 text-navy hover:text-navy"
                 onClick={handleUpload}
                 title="Upload CSV file"
               >
                 <Upload size={16} />
+              </Button>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-full bg-white/90 border-navy/10 hover:bg-navy/5 text-navy hover:text-navy"
+                onClick={() => setIsBulkRFIDDialogOpen(true)}
+                title="Bulk assign RFID tags"
+              >
+                <Nfc size={16} />
               </Button>
             </div>
             
@@ -568,27 +782,122 @@ const InventoryPage = () => {
           </div>
         </div>
 
-        {/* Inventory grid */}
+        {/* Inventory grid/table */}
         {filteredInventory.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredInventory.map((item) => (
-              <InventoryItemComponent
-                key={item.id}
-                id={item.id}
-                name={item.name}
-                sku={item.sku}
-                category={item.category}
-                price={item.price}
-                cost={item.cost}
-                quantity={item.quantity}
-                threshold={item.threshold}
-                imageUrl={item.imageUrl}
-                onEdit={handleEditItem}
-                onDelete={handleDeleteItem}
-                className="bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-all duration-200"
-              />
-            ))}
-          </div>
+          viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredInventory.map((item) => (
+                <InventoryItemComponent
+                  key={item.id}
+                  id={item.id}
+                  name={item.name}
+                  sku={item.sku}
+                  category={(item as any).categoryName || item.category}
+                  price={item.price}
+                  cost={item.cost}
+                  quantity={item.quantity}
+                  threshold={item.threshold}
+                  imageUrl={item.imageUrl}
+                  onEdit={handleEditItem}
+                  onDelete={handleDeleteItem}
+                  className="bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-all duration-200"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-sm border border-navy/10 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-navy/5">
+                    <TableHead className="font-semibold text-navy">Name</TableHead>
+                    <TableHead className="font-semibold text-navy">SKU</TableHead>
+                    <TableHead className="font-semibold text-navy">Category</TableHead>
+                    <TableHead className="font-semibold text-navy">Price</TableHead>
+                    <TableHead className="font-semibold text-navy">Cost</TableHead>
+                    <TableHead className="font-semibold text-navy">Quantity</TableHead>
+                    <TableHead className="font-semibold text-navy">Status</TableHead>
+                    <TableHead className="font-semibold text-navy text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredInventory.map((item) => {
+                    const stockStatus = item.quantity <= 0
+                      ? 'Out of Stock'
+                      : item.quantity <= item.threshold
+                      ? 'Low Stock'
+                      : 'In Stock';
+                    const statusColor = item.quantity <= 0
+                      ? 'text-red-600'
+                      : item.quantity <= item.threshold
+                      ? 'text-amber-600'
+                      : 'text-green-600';
+
+                    return (
+                      <TableRow
+                        key={item.id}
+                        className="cursor-pointer hover:bg-navy/5 transition-colors"
+                        onClick={() => handleEditItem(item.id)}
+                      >
+                        <TableCell className="font-medium text-navy">{item.name}</TableCell>
+                        <TableCell className="text-sm text-gray-600">{item.sku}</TableCell>
+                        <TableCell className="text-sm text-gray-600">{(item as any).categoryName || item.category}</TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          £{item.price.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          £{item.cost?.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600">{item.quantity}</TableCell>
+                        <TableCell className={`text-sm font-medium ${statusColor}`}>
+                          {stockStatus}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditItem(item.id);
+                              }}
+                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              title="View Details"
+                            >
+                              <Eye size={16} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditItem(item.id);
+                              }}
+                              className="text-navy hover:text-navy-dark hover:bg-navy/10"
+                              title="Edit Product"
+                            >
+                              <Edit size={16} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteItem(item.id);
+                              }}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              title="Delete Product"
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )
         ) : (
           <div className="text-center py-10 bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg border border-navy/10 rounded-xl shadow-sm p-8">
             <Package size={32} className="mx-auto text-navy/30 mb-2" />
@@ -622,6 +931,23 @@ const InventoryPage = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* CSV Import Preview Dialog */}
+        <CSVImportDialog
+          isOpen={isCSVImportDialogOpen}
+          onClose={() => {
+            setIsCSVImportDialogOpen(false);
+            setParsedCSVData(null);
+          }}
+          parsedData={parsedCSVData}
+          onConfirmImport={handleConfirmCSVImport}
+        />
+
+        <BulkRFIDAssignment
+          isOpen={isBulkRFIDDialogOpen}
+          onClose={() => setIsBulkRFIDDialogOpen(false)}
+          onAssign={handleBulkRFIDAssign}
+        />
       </div>
     </MainLayout>
   );
