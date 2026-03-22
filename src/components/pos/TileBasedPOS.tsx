@@ -325,10 +325,16 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const categoryViewProducts = useMemo(() => {
     if (!activeCategoryName) return [];
 
+    // Resolve category UUID for the active category name
+    const categoryId = backendCategories.find(
+      cat => cat.name.toLowerCase() === activeCategoryName.toLowerCase()
+    )?.id;
+
     let products = inventory.filter(item => {
       const matchesCategory =
         item.categoryName?.toLowerCase() === activeCategoryName.toLowerCase() ||
-        item.category?.toLowerCase() === activeCategoryName.toLowerCase();
+        item.category?.toLowerCase() === activeCategoryName.toLowerCase() ||
+        (categoryId && item.category === categoryId);
       return matchesCategory && item.quantity > 0;
     });
 
@@ -370,7 +376,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     }
 
     return products;
-  }, [inventory, activeCategoryName, categorySearchQuery, categoryConditionFilter, categorySortBy]);
+  }, [inventory, activeCategoryName, categorySearchQuery, categoryConditionFilter, categorySortBy, backendCategories]);
 
   // Pagination for category view
   const CATEGORY_ITEMS_PER_PAGE = 8;
