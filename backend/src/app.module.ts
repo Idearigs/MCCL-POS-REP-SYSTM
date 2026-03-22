@@ -47,7 +47,7 @@ import { OpenAIModule } from './integrations/openai/openai.module';
     ThrottlerModule.forRoot([
       {
         ttl: 60000, // 60 seconds
-        limit: 100, // 100 requests per minute per IP
+        limit: 500, // 500 requests per minute per IP
       },
     ]),
 
