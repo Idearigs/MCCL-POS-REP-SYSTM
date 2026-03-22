@@ -54,6 +54,7 @@ export const customerProfilesApi = {
   batchUpdateFeatures: (id: string, features: { featureId: string; isEnabled: boolean }[]) =>
     apiClient.put(`/mainframe/customer-profiles/${id}/features/batch`, { features }),
   delete: (id: string) => apiClient.delete(`/mainframe/customer-profiles/${id}`),
+  reprovision: (id: string) => apiClient.post(`/mainframe/customer-profiles/${id}/reprovision`),
 };
 
 // ── Customer Users ───────────────────────────────────────────────────────────

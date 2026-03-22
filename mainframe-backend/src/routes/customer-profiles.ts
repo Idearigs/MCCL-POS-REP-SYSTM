@@ -404,6 +404,62 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
+// POST /mainframe/customer-profiles/:id/reprovision
+// Re-runs POS provisioning for a tenant whose initial provisioning failed.
+// Generates a fresh temp password and returns the credentials on success.
+router.post('/:id/reprovision', requireAuth, async (req, res) => {
+  try {
+    const profile = await prisma.mf_customer_profiles.findUnique({
+      where: { id: req.params.id },
+    });
+    if (!profile) return res.status(404).json({ message: 'Customer profile not found' });
+
+    const ownerPassword = generateTempPassword();
+
+    try {
+      await provisionPosTenant({
+        tenantId: profile.subdomain,
+        businessName: profile.businessName,
+        subdomain: profile.subdomain,
+        ownerEmail: profile.contactEmail,
+        ownerFirstName: profile.contactFirstName,
+        ownerLastName: profile.contactLastName,
+        ownerPassword,
+      });
+
+      await prisma.mf_customer_profiles.update({
+        where: { id: profile.id },
+        data: { status: 'ACTIVE' },
+      });
+
+      await prisma.mf_activity_logs.create({
+        data: {
+          customerProfileId: profile.id,
+          action: 'profile.reprovisioned',
+          description: 'Tenant re-provisioned in POS backend successfully',
+          actorType: 'admin',
+        },
+      });
+
+      return res.json({
+        success: true,
+        ownerEmail: profile.contactEmail,
+        ownerPassword,
+        companyCode: profile.subdomain,
+      });
+    } catch (err: any) {
+      return res.status(502).json({
+        success: false,
+        error: err.message,
+        hint: 'Check POS_BACKEND_URL and INTERNAL_API_KEY environment variables on the mainframe-backend server',
+      });
+    }
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 // DELETE /mainframe/customer-profiles/:id
 router.delete('/:id', requireAuth, async (req, res) => {
   try {

@@ -372,6 +372,22 @@ const MainFrameDashboard: React.FC = () => {
     } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to delete'); }
   };
 
+  const reprovision = async (id: string, name: string) => {
+    if (!confirm(`Re-provision "${name}"? This will generate new login credentials.`)) return;
+    try {
+      const r = await customerProfilesApi.reprovision(id);
+      const { ownerEmail, ownerPassword, companyCode } = r.data;
+      setProvisionResult({ ownerEmail, ownerPassword, companyCode });
+      setPanel('provisionResult');
+      setSelectedTenant(prev => prev ? { ...prev, status: 'ACTIVE' } : null);
+      setTenants(prev => prev.map(t => t.id === id ? { ...t, status: 'ACTIVE' } : t));
+    } catch (e: any) {
+      const msg = e.response?.data?.error || e.response?.data?.message || 'Re-provision failed';
+      const hint = e.response?.data?.hint || '';
+      toast.error(msg + (hint ? ` — ${hint}` : ''));
+    }
+  };
+
   // ── Users ───────────────────────────────────────────────────────────────────
   const addUser = async () => {
     if (!selectedTenant) return;
@@ -727,6 +743,11 @@ const MainFrameDashboard: React.FC = () => {
                     </div>
                   </div>
                   <div className="ml-auto flex gap-2">
+                    {selectedTenant.status === 'PENDING_SETUP' && (
+                      <AppleBtn variant="primary" size="sm" onClick={() => reprovision(selectedTenant.id, selectedTenant.businessName)}>
+                        <RefreshCw className="w-3.5 h-3.5" />Re-provision
+                      </AppleBtn>
+                    )}
                     {selectedTenant.status !== 'ACTIVE'
                       ? <AppleBtn variant="primary" size="sm" onClick={() => changeStatus(selectedTenant.id, 'ACTIVE', selectedTenant.businessName)}><CheckCircle className="w-3.5 h-3.5" />Activate</AppleBtn>
                       : <AppleBtn variant="danger" size="sm" onClick={() => changeStatus(selectedTenant.id, 'SUSPENDED', selectedTenant.businessName)}><XCircle className="w-3.5 h-3.5" />Suspend</AppleBtn>
