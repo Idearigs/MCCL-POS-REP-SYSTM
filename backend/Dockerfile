@@ -32,13 +32,13 @@ ENV NODE_ENV=production
 RUN apk add --no-cache dumb-init
 
 # Copy built artifacts and production dependencies
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/package*.json ./
+COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/prisma ./prisma
+COPY --from=builder --chown=node:node /app/package*.json ./
 
-# Create uploads directory
-RUN mkdir -p /app/uploads && chown -R node:node /app
+# Create uploads directory owned by node user
+RUN mkdir -p /app/uploads && chown node:node /app/uploads
 
 USER node
 
