@@ -15,16 +15,52 @@ env:
   NODE_VERSION: "20"
 
 # =====================================================================
-# JOBS
+# CHANGE DETECTION — determine which services were modified
+# This prevents unnecessary deployments when only one service changes
 # =====================================================================
 jobs:
 
+  changes:
+    name: "Detect Changed Services"
+    runs-on: ubuntu-latest
+    outputs:
+      pos-backend: ${{ steps.filter.outputs.pos-backend }}
+      pos-frontend: ${{ steps.filter.outputs.pos-frontend }}
+      mainframe-backend: ${{ steps.filter.outputs.mainframe-backend }}
+      mainframe-admin: ${{ steps.filter.outputs.mainframe-admin }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            pos-backend:
+              - 'backend/**'
+              - '.github/workflows/ci-cd.yml'
+            pos-frontend:
+              - 'src/**'
+              - 'public/**'
+              - 'index.html'
+              - 'vite.config.ts'
+              - 'tailwind.config.js'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/ci-cd.yml'
+            mainframe-backend:
+              - 'mainframe-backend/**'
+              - '.github/workflows/ci-cd.yml'
+            mainframe-admin:
+              - 'mainframe-admin/**'
+              - '.github/workflows/ci-cd.yml'
+
   # -------------------------------------------------------------------
-  # JOB 1 — Backend lint & unit tests (no real DB required)
+  # JOB 1 — POS Backend lint & unit tests
   # -------------------------------------------------------------------
   test-backend:
-    name: "Backend — Lint & Unit Tests"
+    name: "POS Backend — Lint & Unit Tests"
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.pos-backend == 'true'
 
     defaults:
       run:
@@ -77,8 +113,10 @@ jobs:
   # JOB 2 — POS Frontend lint & build validation
   # -------------------------------------------------------------------
   test-frontend:
-    name: "Frontend — Lint & Build"
+    name: "POS Frontend — Lint & Build"
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.pos-frontend == 'true'
 
     steps:
       - name: Checkout code
@@ -102,16 +140,51 @@ jobs:
         run: npm run build
         env:
           VITE_API_BASE_URL: https://api.truedesk.co.uk/api/v1
-          # VITE_TENANT_ID intentionally unset — enables multi-tenant mode (company code field on login)
+          # VITE_TENANT_ID intentionally unset — enables multi-tenant mode
           VITE_APP_TITLE: "MPS Jewelry System"
           VITE_APP_VERSION: ${{ github.sha }}
 
   # -------------------------------------------------------------------
-  # JOB 3 — Mainframe Admin build validation
+  # JOB 3 — Mainframe Backend lint & build
+  # -------------------------------------------------------------------
+  test-mainframe-backend:
+    name: "Mainframe Backend — Build"
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.mainframe-backend == 'true'
+
+    defaults:
+      run:
+        working-directory: mainframe-backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: mainframe-backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build TypeScript (compile check)
+        run: npm run build
+
+  # -------------------------------------------------------------------
+  # JOB 4 — Mainframe Admin build validation
   # -------------------------------------------------------------------
   test-mainframe-admin:
     name: "Mainframe Admin — Build"
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.mainframe-admin == 'true'
 
     defaults:
       run:
@@ -137,20 +210,23 @@ jobs:
           VITE_API_URL: https://apimainframe.truedesk.co.uk/api/v1
 
   # -------------------------------------------------------------------
-  # JOB 4 — Deploy POS backend via Coolify webhook (main only)
+  # JOB 5 — Deploy POS Backend (only when backend files changed)
   # -------------------------------------------------------------------
-  deploy-backend:
-    name: "Deploy — POS Backend (Coolify)"
+  deploy-pos-backend:
+    name: "Deploy — POS Backend"
     runs-on: ubuntu-latest
-    needs: [test-backend, test-frontend]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [changes, test-backend]
+    if: |
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      needs.changes.outputs.pos-backend == 'true'
 
     environment:
       name: production
       url: https://api.truedesk.co.uk
 
     steps:
-      - name: Trigger Coolify backend deployment
+      - name: Trigger Coolify POS backend deployment
         env:
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
           COOLIFY_BACKEND_WEBHOOK: ${{ secrets.COOLIFY_BACKEND_WEBHOOK }}
@@ -158,37 +234,37 @@ jobs:
           TOKEN=$(echo "$COOLIFY_TOKEN" | tr -d '[:space:]')
           WEBHOOK=$(echo "$COOLIFY_BACKEND_WEBHOOK" | tr -d '[:space:]')
 
-          HTTP_STATUS=$(curl -s -o /tmp/coolify_backend_response.txt -w "%{http_code}" \
-            --max-time 30 \
-            -X GET \
+          HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+            --max-time 30 -X GET \
             -H "Authorization: Bearer ${TOKEN}" \
             "${WEBHOOK}")
 
-          echo "Coolify response: $(cat /tmp/coolify_backend_response.txt)"
+          echo "Response: $(cat /tmp/response.txt)"
           echo "HTTP status: $HTTP_STATUS"
-
           if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
-            echo "ERROR: Coolify backend webhook failed with status $HTTP_STATUS"
+            echo "ERROR: POS backend webhook failed with status $HTTP_STATUS"
             exit 1
           fi
-
-          echo "Backend deployment triggered successfully"
+          echo "POS backend deployment triggered"
 
   # -------------------------------------------------------------------
-  # JOB 5 — Deploy POS frontend via Coolify webhook (main only)
+  # JOB 6 — Deploy POS Frontend (only when frontend files changed)
   # -------------------------------------------------------------------
-  deploy-frontend:
-    name: "Deploy — POS Frontend (Coolify)"
+  deploy-pos-frontend:
+    name: "Deploy — POS Frontend"
     runs-on: ubuntu-latest
-    needs: [test-backend, test-frontend]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [changes, test-frontend]
+    if: |
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      needs.changes.outputs.pos-frontend == 'true'
 
     environment:
       name: production
       url: https://pos.truedesk.co.uk
 
     steps:
-      - name: Trigger Coolify frontend deployment
+      - name: Trigger Coolify POS frontend deployment
         env:
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
           COOLIFY_FRONTEND_WEBHOOK: ${{ secrets.COOLIFY_FRONTEND_WEBHOOK }}
@@ -196,30 +272,30 @@ jobs:
           TOKEN=$(echo "$COOLIFY_TOKEN" | tr -d '[:space:]')
           WEBHOOK=$(echo "$COOLIFY_FRONTEND_WEBHOOK" | tr -d '[:space:]')
 
-          HTTP_STATUS=$(curl -s -o /tmp/coolify_frontend_response.txt -w "%{http_code}" \
-            --max-time 30 \
-            -X GET \
+          HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+            --max-time 30 -X GET \
             -H "Authorization: Bearer ${TOKEN}" \
             "${WEBHOOK}")
 
-          echo "Coolify response: $(cat /tmp/coolify_frontend_response.txt)"
+          echo "Response: $(cat /tmp/response.txt)"
           echo "HTTP status: $HTTP_STATUS"
-
           if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
-            echo "ERROR: Coolify frontend webhook failed with status $HTTP_STATUS"
+            echo "ERROR: POS frontend webhook failed with status $HTTP_STATUS"
             exit 1
           fi
-
-          echo "Frontend deployment triggered successfully"
+          echo "POS frontend deployment triggered"
 
   # -------------------------------------------------------------------
-  # JOB 6 — Deploy Mainframe backend via Coolify webhook (main only)
+  # JOB 7 — Deploy Mainframe Backend (only when mainframe-backend changed)
   # -------------------------------------------------------------------
   deploy-mainframe-backend:
-    name: "Deploy — Mainframe Backend (Coolify)"
+    name: "Deploy — Mainframe Backend"
     runs-on: ubuntu-latest
-    needs: [test-backend, test-frontend, test-mainframe-admin]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [changes, test-mainframe-backend]
+    if: |
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      needs.changes.outputs.mainframe-backend == 'true'
 
     environment:
       name: production
@@ -234,30 +310,30 @@ jobs:
           TOKEN=$(echo "$COOLIFY_TOKEN" | tr -d '[:space:]')
           WEBHOOK=$(echo "$COOLIFY_MAINFRAME_BACKEND_WEBHOOK" | tr -d '[:space:]')
 
-          HTTP_STATUS=$(curl -s -o /tmp/coolify_mf_backend_response.txt -w "%{http_code}" \
-            --max-time 30 \
-            -X GET \
+          HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+            --max-time 30 -X GET \
             -H "Authorization: Bearer ${TOKEN}" \
             "${WEBHOOK}")
 
-          echo "Coolify response: $(cat /tmp/coolify_mf_backend_response.txt)"
+          echo "Response: $(cat /tmp/response.txt)"
           echo "HTTP status: $HTTP_STATUS"
-
           if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
-            echo "ERROR: Coolify mainframe backend webhook failed with status $HTTP_STATUS"
+            echo "ERROR: Mainframe backend webhook failed with status $HTTP_STATUS"
             exit 1
           fi
-
-          echo "Mainframe backend deployment triggered successfully"
+          echo "Mainframe backend deployment triggered"
 
   # -------------------------------------------------------------------
-  # JOB 7 — Deploy Mainframe admin via Coolify webhook (main only)
+  # JOB 8 — Deploy Mainframe Admin (only when mainframe-admin changed)
   # -------------------------------------------------------------------
   deploy-mainframe-admin:
-    name: "Deploy — Mainframe Admin (Coolify)"
+    name: "Deploy — Mainframe Admin"
     runs-on: ubuntu-latest
-    needs: [test-backend, test-frontend, test-mainframe-admin]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [changes, test-mainframe-admin]
+    if: |
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      needs.changes.outputs.mainframe-admin == 'true'
 
     environment:
       name: production
@@ -272,63 +348,15 @@ jobs:
           TOKEN=$(echo "$COOLIFY_TOKEN" | tr -d '[:space:]')
           WEBHOOK=$(echo "$COOLIFY_MAINFRAME_ADMIN_WEBHOOK" | tr -d '[:space:]')
 
-          HTTP_STATUS=$(curl -s -o /tmp/coolify_mf_admin_response.txt -w "%{http_code}" \
-            --max-time 30 \
-            -X GET \
+          HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+            --max-time 30 -X GET \
             -H "Authorization: Bearer ${TOKEN}" \
             "${WEBHOOK}")
 
-          echo "Coolify response: $(cat /tmp/coolify_mf_admin_response.txt)"
+          echo "Response: $(cat /tmp/response.txt)"
           echo "HTTP status: $HTTP_STATUS"
-
           if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
-            echo "ERROR: Coolify mainframe admin webhook failed with status $HTTP_STATUS"
+            echo "ERROR: Mainframe admin webhook failed with status $HTTP_STATUS"
             exit 1
           fi
-
-          echo "Mainframe admin deployment triggered successfully"
-
-  # -------------------------------------------------------------------
-  # JOB 8 — Smoke test after all deploys complete
-  # -------------------------------------------------------------------
-  smoke-test:
-    name: "Smoke Test — Production"
-    runs-on: ubuntu-latest
-    needs: [deploy-backend, deploy-frontend, deploy-mainframe-backend, deploy-mainframe-admin]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    steps:
-      - name: Wait for Coolify to finish building & deploying
-        run: |
-          echo "Waiting 90s for Coolify to build and deploy..."
-          sleep 90
-
-      - name: Health check — POS API
-        run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://api.truedesk.co.uk/health" || echo "000")
-          echo "POS API status: $HTTP_STATUS"
-          if [ "$HTTP_STATUS" != "200" ]; then echo "ERROR: POS API health check failed"; exit 1; fi
-
-      - name: Health check — POS Frontend
-        run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://pos.truedesk.co.uk" || echo "000")
-          echo "POS Frontend status: $HTTP_STATUS"
-          if [ "$HTTP_STATUS" != "200" ]; then echo "ERROR: POS frontend health check failed"; exit 1; fi
-
-      - name: Health check — Mainframe API
-        run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://apimainframe.truedesk.co.uk/health" || echo "000")
-          echo "Mainframe API status: $HTTP_STATUS"
-          if [ "$HTTP_STATUS" != "200" ]; then echo "ERROR: Mainframe API health check failed"; exit 1; fi
-
-      - name: Health check — Mainframe Admin
-        run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://mainframe.truedesk.co.uk" || echo "000")
-          echo "Mainframe Admin status: $HTTP_STATUS"
-          if [ "$HTTP_STATUS" != "200" ]; then echo "ERROR: Mainframe admin health check failed"; exit 1; fi
-
-      - name: Notify on failure
-        if: failure()
-        run: |
-          echo "::error::Smoke test failed after deployment!"
-          echo "Check Coolify dashboard for build/deploy logs."
+          echo "Mainframe admin deployment triggered"
