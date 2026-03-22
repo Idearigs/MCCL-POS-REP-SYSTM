@@ -1,779 +1,1735 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  LayoutDashboard, Building2, Package, CreditCard, Activity, Settings,
-  Plus, TrendingUp, Users, Globe, ExternalLink, ChevronRight,
-  Server, Zap, CheckCircle, AlertCircle, Clock, Search,
-  Eye, MoreHorizontal, ArrowUpRight, DollarSign
+  LayoutDashboard, Building2, Package, CreditCard, Settings,
+  Plus, TrendingUp, Users, ChevronRight, Server, Zap,
+  CheckCircle, AlertCircle, Search, Eye, ArrowUpRight, DollarSign,
+  Bug, Lightbulb, RefreshCw, XCircle, Clock, LogOut, Trash2,
+  Key, UserPlus, ToggleLeft, ToggleRight, FileText,
+  Check, X, ChevronLeft,
 } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Badge } from '../components/ui/badge';
 import { Toaster, toast } from 'sonner';
 import {
-  customerProfilesApi,
-  subscriptionsApi,
-  subdomainApi
+  customerProfilesApi, customerUsersApi, subscriptionsApi, featuresApi,
+  bugReportsApi, featureRequestsApi, subdomainApi,
 } from '../services/api';
 
-// Types
-interface CustomerProfile {
-  id: string;
-  businessName: string;
-  businessEmail: string;
-  subdomain: string;
-  status: string;
-  createdAt: string;
-  subscription?: {
-    plan: string;
-    status: string;
+// ─── Feature types ─────────────────────────────────────────────────────────────
+interface TenantFeature {
+  featureId: string; featureKey: string; featureName: string;
+  category: string; description?: string;
+  isIncludedInBase: boolean; additionalCost: any;
+  status: string; isEnabled: boolean;
+}
+
+// ─── Design tokens ────────────────────────────────────────────────────────────
+// Apple-style spring
+const spring = { type: 'spring', damping: 26, stiffness: 280 } as const;
+const springFast = { type: 'spring', damping: 30, stiffness: 350 } as const;
+
+// ─── Status helpers ───────────────────────────────────────────────────────────
+const STATUS_META: Record<string, { label: string; dot: string; bg: string; text: string }> = {
+  ACTIVE:       { label: 'Active',      dot: '#34C759', bg: '#D1FAE5', text: '#065F46' },
+  PENDING_SETUP:{ label: 'Pending',     dot: '#FF9F0A', bg: '#FEF3C7', text: '#92400E' },
+  SUSPENDED:    { label: 'Suspended',   dot: '#FF3B30', bg: '#FEE2E2', text: '#991B1B' },
+  CANCELLED:    { label: 'Cancelled',   dot: '#8E8E93', bg: '#F3F4F6', text: '#374151' },
+  OPEN:         { label: 'Open',        dot: '#007AFF', bg: '#DBEAFE', text: '#1E40AF' },
+  IN_PROGRESS:  { label: 'In Progress', dot: '#AF52DE', bg: '#EDE9FE', text: '#5B21B6' },
+  RESOLVED:     { label: 'Resolved',    dot: '#34C759', bg: '#D1FAE5', text: '#065F46' },
+  CLOSED:       { label: 'Closed',      dot: '#8E8E93', bg: '#F3F4F6', text: '#374151' },
+  SUBMITTED:    { label: 'Submitted',   dot: '#5AC8FA', bg: '#E0F2FE', text: '#0C4A6E' },
+  UNDER_REVIEW: { label: 'In Review',   dot: '#AF52DE', bg: '#EDE9FE', text: '#5B21B6' },
+  PLANNED:      { label: 'Planned',     dot: '#5856D6', bg: '#EEF2FF', text: '#3730A3' },
+  RELEASED:     { label: 'Released',    dot: '#34C759', bg: '#D1FAE5', text: '#065F46' },
+  REJECTED:     { label: 'Rejected',    dot: '#FF3B30', bg: '#FEE2E2', text: '#991B1B' },
+  STABLE:       { label: 'Stable',      dot: '#34C759', bg: '#D1FAE5', text: '#065F46' },
+  BETA:         { label: 'Beta',        dot: '#FF9F0A', bg: '#FEF3C7', text: '#92400E' },
+  DEPRECATED:   { label: 'Deprecated',  dot: '#8E8E93', bg: '#F3F4F6', text: '#374151' },
+};
+
+const StatusPill: React.FC<{ status: string }> = ({ status }) => {
+  const m = STATUS_META[status] || { label: status, dot: '#8E8E93', bg: '#F3F4F6', text: '#374151' };
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full"
+      style={{ backgroundColor: m.bg, color: m.text }}>
+      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: m.dot }} />
+      {m.label}
+    </span>
+  );
+};
+
+const PriorityPill: React.FC<{ priority: string }> = ({ priority }) => {
+  const map: Record<string, { bg: string; text: string }> = {
+    LOW:      { bg: '#F3F4F6', text: '#374151' },
+    MEDIUM:   { bg: '#DBEAFE', text: '#1E40AF' },
+    HIGH:     { bg: '#FFEDD5', text: '#9A3412' },
+    CRITICAL: { bg: '#FEE2E2', text: '#991B1B' },
   };
-  _count?: {
-    customerUsers: number;
+  const c = map[priority] || map.MEDIUM;
+  return (
+    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full"
+      style={{ backgroundColor: c.bg, color: c.text }}>{priority}</span>
+  );
+};
+
+function av(name: string) { return name ? name[0].toUpperCase() : '?'; }
+
+// ─── Side Panel ───────────────────────────────────────────────────────────────
+// Replaces all Dialog/popup usage with an Apple-style slide-in sheet
+const SidePanel: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  subtitle?: string;
+  width?: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+}> = ({ open, onClose, title, subtitle, width = 'w-[520px]', children, footer }) => (
+  <AnimatePresence>
+    {open && (
+      <>
+        {/* Backdrop */}
+        <motion.div
+          key="backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          onClick={onClose}
+          className="fixed inset-0 z-40"
+          style={{ background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)' }}
+        />
+
+        {/* Panel */}
+        <motion.div
+          key="panel"
+          initial={{ x: '100%', opacity: 0.5 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: '100%', opacity: 0 }}
+          transition={spring}
+          className={`fixed right-0 top-0 h-full ${width} z-50 flex flex-col`}
+          style={{
+            background: 'rgba(255,255,255,0.92)',
+            backdropFilter: 'saturate(180%) blur(40px)',
+            boxShadow: '-20px 0 60px rgba(0,0,0,0.15)',
+          }}
+        >
+          {/* Handle bar */}
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 rounded-full bg-gray-300/60" />
+          </div>
+
+          {/* Header */}
+          <div className="flex items-start justify-between px-7 py-5">
+            <div>
+              <h2 className="text-xl font-semibold tracking-tight" style={{ color: '#1D1D1F' }}>{title}</h2>
+              {subtitle && <p className="text-sm mt-0.5" style={{ color: '#6E6E73' }}>{subtitle}</p>}
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={onClose}
+              className="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+              style={{ background: '#E5E5EA' }}
+            >
+              <X className="w-4 h-4" style={{ color: '#3C3C43' }} />
+            </motion.button>
+          </div>
+
+          {/* Divider */}
+          <div className="mx-7 h-px" style={{ background: 'rgba(60,60,67,0.1)' }} />
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto px-7 py-6">{children}</div>
+
+          {/* Footer */}
+          {footer && (
+            <>
+              <div className="mx-7 h-px" style={{ background: 'rgba(60,60,67,0.1)' }} />
+              <div className="px-7 py-5">{footer}</div>
+            </>
+          )}
+        </motion.div>
+      </>
+    )}
+  </AnimatePresence>
+);
+
+// ─── Apple button ─────────────────────────────────────────────────────────────
+const AppleBtn: React.FC<{
+  onClick?: () => void;
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  size?: 'sm' | 'md' | 'lg';
+  disabled?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}> = ({ onClick, variant = 'secondary', size = 'md', disabled, className = '', children }) => {
+  const styles = {
+    primary: { bg: '#007AFF', text: '#FFFFFF', hover: '#0066CC' },
+    secondary: { bg: 'rgba(120,120,128,0.12)', text: '#1D1D1F', hover: 'rgba(120,120,128,0.2)' },
+    danger: { bg: '#FF3B30', text: '#FFFFFF', hover: '#D70015' },
+    ghost: { bg: 'transparent', text: '#007AFF', hover: 'rgba(0,122,255,0.08)' },
   };
+  const sizes = { sm: 'px-3 py-1.5 text-xs', md: 'px-4 py-2 text-sm', lg: 'px-5 py-2.5 text-sm' };
+  const s = styles[variant];
+  return (
+    <motion.button
+      whileHover={{ scale: disabled ? 1 : 1.02 }}
+      whileTap={{ scale: disabled ? 1 : 0.97 }}
+      onClick={onClick}
+      disabled={disabled}
+      className={`${sizes[size]} rounded-xl font-medium transition-colors inline-flex items-center gap-2 ${className}`}
+      style={{ background: s.bg, color: s.text, opacity: disabled ? 0.5 : 1 }}
+    >
+      {children}
+    </motion.button>
+  );
+};
+
+// ─── Field ────────────────────────────────────────────────────────────────────
+const Field: React.FC<{ label: string; required?: boolean; hint?: string; children: React.ReactNode }> = ({ label, required, hint, children }) => (
+  <div className="space-y-1.5">
+    <label className="text-sm font-medium" style={{ color: '#1D1D1F' }}>
+      {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+    </label>
+    {hint && <p className="text-xs" style={{ color: '#8E8E93' }}>{hint}</p>}
+    {children}
+  </div>
+);
+
+const AppleInput: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { status?: 'ok' | 'error' }> = ({ status, className = '', ...props }) => (
+  <input
+    {...props}
+    className={`w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all outline-none ${className}`}
+    style={{
+      background: 'rgba(118,118,128,0.08)',
+      color: '#1D1D1F',
+      border: `1.5px solid ${status === 'error' ? '#FF3B30' : status === 'ok' ? '#34C759' : 'transparent'}`,
+      // @ts-ignore
+      '--tw-ring-color': '#007AFF',
+    }}
+  />
+);
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface Tenant {
+  id: string; businessName: string; businessEmail: string; businessPhone?: string;
+  subdomain: string; status: string; createdAt: string;
+  contact?: { firstName: string; lastName: string; email: string; phone?: string };
+  subscription?: { plan: string; basePrice: number; currentUsers: number; nextBillingDate: string };
+  users?: any[]; _count?: { customerUsers: number };
+}
+interface Feature {
+  id: string; featureKey: string; featureName: string; description?: string;
+  category: string; isIncludedInBase: boolean; additionalCost: number;
+  status: string; currentVersion?: string; _count?: { customerFeatures: number };
+}
+interface BugReport {
+  id: string; title: string; description: string; priority: string; status: string;
+  createdAt: string; customerProfile?: { businessName: string };
+}
+interface FeatureRequest {
+  id: string; title: string; description: string; status: string;
+  votes: number; createdAt: string; customerProfile?: { businessName: string };
+}
+interface TenantUser {
+  id: string; firstName: string; lastName: string; email: string;
+  role: string; isActive: boolean; lastLoginAt?: string; createdAt: string;
+}
+interface Invoice {
+  id: string; invoiceNumber: string; amount: number; status: string;
+  dueDate: string; paidAt?: string;
 }
 
-interface DashboardStats {
-  totalTenants: number;
-  activeTenants: number;
-  weeklyGrowth: number;
-  mrr: number;
-  systemStatus: 'healthy' | 'warning' | 'critical';
-  uptime: number;
-}
+type View = 'overview' | 'tenants' | 'features' | 'bugs' | 'requests' | 'billing' | 'settings';
 
-interface ActivityLog {
-  id: string;
-  tenant: string;
-  action: string;
-  timestamp: Date;
-}
-
+// ─── Main Component ───────────────────────────────────────────────────────────
 const MainFrameDashboard: React.FC = () => {
   const { admin, logout } = useAuth();
-  const [activeView, setActiveView] = useState<'overview' | 'tenants' | 'features' | 'billing' | 'health' | 'settings'>('overview');
-  const [tenants, setTenants] = useState<CustomerProfile[]>([]);
-  const [stats, setStats] = useState<DashboardStats>({
-    totalTenants: 0,
-    activeTenants: 0,
-    weeklyGrowth: 0,
-    mrr: 0,
-    systemStatus: 'healthy',
-    uptime: 99.9
-  });
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState<View>('overview');
+  const [prevView, setPrevView] = useState<View>('overview');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showCreateTenant, setShowCreateTenant] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Create Tenant Form State
-  const [newTenant, setNewTenant] = useState({
-    businessName: '',
-    businessEmail: '',
-    subdomain: '',
-    contactFirstName: '',
-    contactLastName: '',
-    contactEmail: '',
-    contactPhone: '',
-    plan: 'PROFESSIONAL'
-  });
+  // Data
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [features, setFeatures] = useState<Feature[]>([]);
+  const [bugReports, setBugReports] = useState<BugReport[]>([]);
+  const [featureRequests, setFeatureRequests] = useState<FeatureRequest[]>([]);
+  const [stats, setStats] = useState({ totalTenants: 0, activeTenants: 0, weeklyGrowth: 0, mrr: 0 });
+  const [bugStats, setBugStats] = useState<any>({});
+
+  // Tenant detail (full slide-in state)
+  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const [tenantTab, setTenantTab] = useState<'info' | 'users' | 'billing' | 'activity' | 'features'>('info');
+  const [tenantUsers, setTenantUsers] = useState<TenantUser[]>([]);
+  const [tenantInvoices, setTenantInvoices] = useState<Invoice[]>([]);
+  const [tenantActivity, setTenantActivity] = useState<any[]>([]);
+  const [tenantFeatures, setTenantFeatures] = useState<TenantFeature[]>([]);
+  const [savingFeatures, setSavingFeatures] = useState(false);
+  const dragFeatureId = React.useRef<string | null>(null);
+
+  // Panel states
+  const [panel, setPanel] = useState<'none' | 'createTenant' | 'createBug' | 'createRequest' | 'createFeature' | 'addUser' | 'provisionResult'>('none');
+
+  // Provisioning result
+  const [provisionResult, setProvisionResult] = useState<{ ownerEmail: string; ownerPassword: string; companyCode: string } | null>(null);
+
+  // Forms
+  const [newTenant, setNewTenant] = useState({ businessName: '', businessEmail: '', subdomain: '', contactFirstName: '', contactLastName: '', contactEmail: '', contactPhone: '', plan: 'PROFESSIONAL' });
   const [subdomainValid, setSubdomainValid] = useState<boolean | null>(null);
   const [subdomainChecking, setSubdomainChecking] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newBug, setNewBug] = useState({ title: '', description: '', priority: 'MEDIUM', customerProfileId: '' });
+  const [newRequest, setNewRequest] = useState({ title: '', description: '', customerProfileId: '' });
+  const [newFeature, setNewFeature] = useState({ featureKey: '', featureName: '', description: '', category: 'core', isIncludedInBase: true, additionalCost: 0 });
+  const [newUser, setNewUser] = useState({ firstName: '', lastName: '', email: '', role: 'STAFF', password: '' });
+  const [savingUser, setSavingUser] = useState(false);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  const loadDashboardData = async () => {
+  // ── Load ────────────────────────────────────────────────────────────────────
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [tenantsResponse, statsResponse] = await Promise.all([
-        customerProfilesApi.getAll().then(r => r.data.data || r.data || []),
-        customerProfilesApi.getStats().then(r => r.data).catch(() => ({}))
+      const [tr, sr, fr, br, rr, bsr] = await Promise.all([
+        customerProfilesApi.getAll().then(r => r.data.data || r.data || []).catch(() => []),
+        subscriptionsApi.getStats().then(r => r.data).catch(() => ({})),
+        featuresApi.getAll().then(r => Array.isArray(r.data) ? r.data : r.data.data || []).catch(() => []),
+        bugReportsApi.getAll().then(r => r.data.data || r.data || []).catch(() => []),
+        featureRequestsApi.getAll().then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
+        bugReportsApi.getStats().then(r => r.data).catch(() => ({})),
       ]);
-
-      setTenants(tenantsResponse);
-
-      // Calculate stats
-      const activeTenants = tenantsResponse.filter((t: CustomerProfile) => t.status === 'ACTIVE').length;
-      const weekOld = new Date();
-      weekOld.setDate(weekOld.getDate() - 7);
-      const weeklyNew = tenantsResponse.filter((t: CustomerProfile) =>
-        new Date(t.createdAt) > weekOld
-      ).length;
-
+      setTenants(tr);
+      setFeatures(fr);
+      setBugReports(Array.isArray(br) ? br : []);
+      setFeatureRequests(Array.isArray(rr) ? rr : []);
+      setBugStats(bsr);
+      const weekOld = new Date(); weekOld.setDate(weekOld.getDate() - 7);
       setStats({
-        totalTenants: tenantsResponse.length,
-        activeTenants,
-        weeklyGrowth: weeklyNew,
-        mrr: statsResponse.mrr || 0,
-        systemStatus: 'healthy',
-        uptime: 99.9
+        totalTenants: tr.length,
+        activeTenants: tr.filter((t: Tenant) => t.status === 'ACTIVE').length,
+        weeklyGrowth: tr.filter((t: Tenant) => new Date(t.createdAt) > weekOld).length,
+        mrr: sr.totalRevenue || 0,
       });
+    } catch { toast.error('Failed to load data'); }
+    finally { setLoading(false); }
+  }, []);
 
-      // Generate activity logs
-      const logs: ActivityLog[] = tenantsResponse.slice(0, 5).map((t: CustomerProfile, i: number) => ({
-        id: t.id,
-        tenant: t.businessName,
-        action: i % 3 === 0 ? 'logged in' : i % 3 === 1 ? 'added user' : 'processed sale',
-        timestamp: new Date(Date.now() - Math.random() * 3600000)
-      }));
-      setActivityLogs(logs);
+  useEffect(() => { loadAll(); }, [loadAll]);
 
-    } catch (error) {
-      console.error('Error loading dashboard:', error);
-      toast.error('Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-    }
+  // ── Navigation ──────────────────────────────────────────────────────────────
+  const navigate = (view: View) => {
+    setPrevView(activeView);
+    setActiveView(view);
+    setSearchQuery('');
   };
 
-  const validateSubdomain = async (subdomain: string) => {
-    if (!subdomain || subdomain.length < 3) {
-      setSubdomainValid(null);
-      return;
-    }
-    setSubdomainChecking(true);
+  // ── Tenant detail ───────────────────────────────────────────────────────────
+  const openTenant = async (t: Tenant) => {
     try {
-      const result = await subdomainApi.validate(subdomain);
-      setSubdomainValid(result.data.available);
-    } catch {
-      setSubdomainValid(false);
-    } finally {
-      setSubdomainChecking(false);
+      const r = await customerProfilesApi.getById(t.id);
+      setSelectedTenant(r.data);
+      setTenantTab('info');
+      setTenantUsers([]); setTenantInvoices([]); setTenantActivity([]); setTenantFeatures([]);
+    } catch { toast.error('Failed to load tenant'); }
+  };
+
+  const closeTenant = () => setSelectedTenant(null);
+
+  const loadTenantTab = async (tab: typeof tenantTab) => {
+    setTenantTab(tab);
+    if (!selectedTenant) return;
+    if (tab === 'users' && !tenantUsers.length) {
+      customerUsersApi.getByProfile(selectedTenant.id).then(r => setTenantUsers(r.data || [])).catch(() => {});
+    }
+    if (tab === 'billing' && !tenantInvoices.length) {
+      subscriptionsApi.getInvoices(selectedTenant.id).then(r => setTenantInvoices(r.data || [])).catch(() => {});
+    }
+    if (tab === 'activity' && !tenantActivity.length) {
+      customerProfilesApi.getActivity(selectedTenant.id).then(r => setTenantActivity(r.data || [])).catch(() => {});
+    }
+    if (tab === 'features' && !tenantFeatures.length) {
+      customerProfilesApi.getFeatures(selectedTenant.id).then(r => setTenantFeatures(r.data || [])).catch(() => {});
     }
   };
 
-  const handleSubdomainChange = (value: string) => {
-    const sanitized = value.toLowerCase().replace(/[^a-z0-9-]/g, '');
-    setNewTenant({ ...newTenant, subdomain: sanitized });
-    validateSubdomain(sanitized);
+  const changeStatus = async (id: string, status: string, name: string) => {
+    try {
+      await customerProfilesApi.updateStatus(id, status);
+      toast.success(`${name} → ${STATUS_META[status]?.label || status}`);
+      setSelectedTenant(prev => prev ? { ...prev, status } : null);
+      setTenants(prev => prev.map(t => t.id === id ? { ...t, status } : t));
+    } catch { toast.error('Failed to update'); }
+  };
+
+  const deleteTenant = async (id: string, name: string) => {
+    if (!confirm(`Permanently delete "${name}"? This cannot be undone.`)) return;
+    try {
+      await customerProfilesApi.delete(id);
+      toast.success(`${name} deleted`);
+      setTenants(prev => prev.filter(t => t.id !== id));
+      if (selectedTenant?.id === id) setSelectedTenant(null);
+    } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to delete'); }
+  };
+
+  // ── Users ───────────────────────────────────────────────────────────────────
+  const addUser = async () => {
+    if (!selectedTenant) return;
+    if (!newUser.firstName || !newUser.email || !newUser.password) { toast.error('Fill required fields'); return; }
+    setSavingUser(true);
+    try {
+      const r = await customerUsersApi.create({ ...newUser, customerProfileId: selectedTenant.id });
+      setTenantUsers(p => [r.data, ...p]);
+      setNewUser({ firstName: '', lastName: '', email: '', role: 'STAFF', password: '' });
+      setPanel('none');
+      toast.success('User added');
+    } catch (e: any) { toast.error(e.response?.data?.message || 'Failed'); }
+    finally { setSavingUser(false); }
+  };
+
+  const resetPw = async (u: TenantUser) => {
+    try {
+      const r = await customerUsersApi.resetPassword(u.id);
+      toast.success(`Temp password: ${r.data.tempPassword}`, { duration: 12000 });
+    } catch { toast.error('Failed'); }
+  };
+
+  const toggleUser = async (u: TenantUser) => {
+    try {
+      await customerUsersApi.update(u.id, { isActive: !u.isActive });
+      setTenantUsers(p => p.map(x => x.id === u.id ? { ...x, isActive: !x.isActive } : x));
+      toast.success(`${u.firstName} ${u.isActive ? 'deactivated' : 'activated'}`);
+    } catch { toast.error('Failed'); }
+  };
+
+  const deleteUser = async (u: TenantUser) => {
+    if (!confirm(`Delete ${u.firstName} ${u.lastName}?`)) return;
+    try {
+      await customerUsersApi.delete(u.id);
+      setTenantUsers(p => p.filter(x => x.id !== u.id));
+      toast.success('User deleted');
+    } catch { toast.error('Failed'); }
+  };
+
+  // ── Billing ─────────────────────────────────────────────────────────────────
+  const generateInvoice = async () => {
+    if (!selectedTenant) return;
+    try {
+      await subscriptionsApi.generateInvoice(selectedTenant.id);
+      const r = await subscriptionsApi.getInvoices(selectedTenant.id);
+      setTenantInvoices(r.data || []);
+      toast.success('Invoice generated');
+    } catch { toast.error('Failed'); }
+  };
+
+  const markPaid = async (id: string) => {
+    try {
+      await subscriptionsApi.markInvoicePaid(id);
+      setTenantInvoices(p => p.map(i => i.id === id ? { ...i, status: 'PAID' } : i));
+      toast.success('Marked as paid');
+    } catch { toast.error('Failed'); }
+  };
+
+  // ── Create tenant ───────────────────────────────────────────────────────────
+  const validateSubdomain = async (v: string) => {
+    if (!v || v.length < 3) { setSubdomainValid(null); return; }
+    setSubdomainChecking(true);
+    try { const r = await subdomainApi.validate(v); setSubdomainValid(r.data.available); }
+    catch { setSubdomainValid(false); }
+    finally { setSubdomainChecking(false); }
+  };
+
+  const onSubdomainChange = (v: string) => {
+    const s = v.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    setNewTenant(p => ({ ...p, subdomain: s }));
+    validateSubdomain(s);
   };
 
   const createTenant = async () => {
-    if (!newTenant.businessName || !newTenant.subdomain || !newTenant.businessEmail) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-    if (!newTenant.contactFirstName || !newTenant.contactLastName || !newTenant.contactEmail) {
-      toast.error('Please fill in contact information');
-      return;
-    }
-    if (!subdomainValid) {
-      toast.error('Please enter a valid subdomain');
-      return;
-    }
-
+    if (!newTenant.businessName || !newTenant.subdomain || !newTenant.businessEmail) { toast.error('Fill required fields'); return; }
+    if (!newTenant.contactFirstName || !newTenant.contactLastName || !newTenant.contactEmail) { toast.error('Fill contact information'); return; }
+    if (!subdomainValid) { toast.error('Choose a valid company code'); return; }
+    setCreating(true);
     try {
-      await customerProfilesApi.create(newTenant);
-      toast.success('Tenant created successfully');
-      setShowCreateTenant(false);
-      setNewTenant({
-        businessName: '',
-        businessEmail: '',
-        subdomain: '',
-        contactFirstName: '',
-        contactLastName: '',
-        contactEmail: '',
-        contactPhone: '',
-        plan: 'PROFESSIONAL'
-      });
+      const r = await customerProfilesApi.create(newTenant);
+      const { posProvisioning } = r.data;
+      setPanel('none');
+      setNewTenant({ businessName: '', businessEmail: '', subdomain: '', contactFirstName: '', contactLastName: '', contactEmail: '', contactPhone: '', plan: 'PROFESSIONAL' });
       setSubdomainValid(null);
-      loadDashboardData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to create tenant');
-    }
+      if (posProvisioning?.status === 'success') {
+        setProvisionResult({ ownerEmail: posProvisioning.ownerEmail, ownerPassword: posProvisioning.ownerPassword, companyCode: posProvisioning.companyCode });
+        setPanel('provisionResult');
+      } else {
+        toast.success('Profile created. POS: ' + (posProvisioning?.error || 'check backend'));
+      }
+      loadAll();
+    } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to create'); }
+    finally { setCreating(false); }
   };
 
-  const filteredTenants = tenants.filter(t =>
-    t.businessName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.subdomain.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.businessEmail.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // ── Bugs ────────────────────────────────────────────────────────────────────
+  const createBug = async () => {
+    if (!newBug.title || !newBug.description) { toast.error('Fill required fields'); return; }
+    try {
+      await bugReportsApi.create(newBug);
+      toast.success('Bug reported');
+      setPanel('none');
+      setNewBug({ title: '', description: '', priority: 'MEDIUM', customerProfileId: '' });
+      loadAll();
+    } catch { toast.error('Failed'); }
+  };
 
-  const navigationItems = [
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'tenants', label: 'Tenants', icon: Building2 },
-    { id: 'features', label: 'Features', icon: Package },
-    { id: 'billing', label: 'Billing', icon: CreditCard },
-    { id: 'health', label: 'System Health', icon: Activity },
-    { id: 'settings', label: 'Settings', icon: Settings },
+  const updateBugStatus = async (id: string, status: string) => {
+    try {
+      await bugReportsApi.updateStatus(id, status);
+      setBugReports(p => p.map(b => b.id === id ? { ...b, status } : b));
+      toast.success('Updated');
+    } catch { toast.error('Failed'); }
+  };
+
+  // ── Requests ────────────────────────────────────────────────────────────────
+  const createRequest = async () => {
+    if (!newRequest.title || !newRequest.description) { toast.error('Fill required fields'); return; }
+    try {
+      await featureRequestsApi.create(newRequest);
+      toast.success('Request submitted');
+      setPanel('none');
+      setNewRequest({ title: '', description: '', customerProfileId: '' });
+      loadAll();
+    } catch { toast.error('Failed'); }
+  };
+
+  const updateRequestStatus = async (id: string, status: string) => {
+    try {
+      await featureRequestsApi.updateStatus(id, status);
+      setFeatureRequests(p => p.map(r => r.id === id ? { ...r, status } : r));
+    } catch { toast.error('Failed'); }
+  };
+
+  // ── Features ────────────────────────────────────────────────────────────────
+  const createFeature = async () => {
+    if (!newFeature.featureKey || !newFeature.featureName) { toast.error('Fill required fields'); return; }
+    try {
+      await featuresApi.create(newFeature);
+      toast.success('Feature created');
+      setPanel('none');
+      setNewFeature({ featureKey: '', featureName: '', description: '', category: 'core', isIncludedInBase: true, additionalCost: 0 });
+      loadAll();
+    } catch (e: any) { toast.error(e.response?.data?.message || 'Failed'); }
+  };
+
+  // ── Tenant feature toggle (drag-and-drop save) ───────────────────────────────
+  const saveFeatures = async () => {
+    if (!selectedTenant || !tenantFeatures.length) return;
+    setSavingFeatures(true);
+    try {
+      await customerProfilesApi.batchUpdateFeatures(
+        selectedTenant.id,
+        tenantFeatures.map(f => ({ featureId: f.featureId, isEnabled: f.isEnabled })),
+      );
+      toast.success('Feature configuration saved');
+    } catch { toast.error('Failed to save features'); }
+    finally { setSavingFeatures(false); }
+  };
+
+  const seedFeatures = async () => {
+    try {
+      const r = await featuresApi.seedDefaults();
+      toast.success(r.data.seeded > 0 ? `${r.data.seeded} features added` : 'Already up to date');
+      loadAll();
+    } catch { toast.error('Failed'); }
+  };
+
+  // ── Filtered ────────────────────────────────────────────────────────────────
+  const q = searchQuery.toLowerCase();
+  const filtTenants  = tenants.filter(t => t.businessName.toLowerCase().includes(q) || t.subdomain.toLowerCase().includes(q) || t.businessEmail.toLowerCase().includes(q));
+  const filtBugs     = bugReports.filter(b => b.title.toLowerCase().includes(q));
+  const filtRequests = featureRequests.filter(r => r.title.toLowerCase().includes(q));
+  const filtFeatures = features.filter(f => f.featureName.toLowerCase().includes(q) || f.featureKey.toLowerCase().includes(q));
+
+  // ── Nav items ───────────────────────────────────────────────────────────────
+  const navItems: { id: View; label: string; icon: React.FC<any>; badge?: number }[] = [
+    { id: 'overview',  label: 'Overview',          icon: LayoutDashboard },
+    { id: 'tenants',   label: 'Tenants',            icon: Building2,  badge: stats.totalTenants || undefined },
+    { id: 'features',  label: 'Features',           icon: Package,    badge: features.length || undefined },
+    { id: 'bugs',      label: 'Bug Reports',        icon: Bug,        badge: bugStats.open || undefined },
+    { id: 'requests',  label: 'Feature Requests',   icon: Lightbulb,  badge: featureRequests.length || undefined },
+    { id: 'billing',   label: 'Billing',            icon: CreditCard },
+    { id: 'settings',  label: 'Settings',           icon: Settings },
   ];
 
-  return (
-    <div className="flex h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 overflow-hidden">
-      <Toaster position="top-right" />
+  // Determine slide direction based on nav order
+  const viewOrder: View[] = ['overview', 'tenants', 'features', 'bugs', 'requests', 'billing', 'settings'];
+  const direction = viewOrder.indexOf(activeView) >= viewOrder.indexOf(prevView) ? 1 : -1;
 
-      {/* Glassmorphic Sidebar */}
-      <aside className="w-64 backdrop-blur-xl bg-white/70 border-r border-gray-200/50 flex flex-col">
+  // ─── RENDER ─────────────────────────────────────────────────────────────────
+  return (
+    <div className="flex h-screen overflow-hidden" style={{ background: '#F2F2F7', fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif' }}>
+      <Toaster position="top-center" toastOptions={{
+        style: { borderRadius: 14, background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.08)', fontFamily: 'inherit' },
+      }} />
+
+      {/* ── Sidebar ───────────────────────────────────────────────────────── */}
+      <aside className="w-60 flex flex-col flex-shrink-0" style={{ background: 'rgba(255,255,255,0.75)', backdropFilter: 'saturate(180%) blur(20px)', borderRight: '1px solid rgba(0,0,0,0.08)' }}>
         {/* Logo */}
-        <div className="p-6 border-b border-gray-200/50">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
-              <Server className="w-5 h-5 text-white" />
+        <div className="px-5 pt-7 pb-5">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg"
+              style={{ background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)' }}>
+              <Server className="w-4.5 h-4.5 text-white" style={{ width: 18, height: 18 }} />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-gray-900">TruedeskPOS</h1>
-              <p className="text-[10px] text-gray-400 tracking-wide">MAINFRAME</p>
+              <p className="text-sm font-bold tracking-tight" style={{ color: '#1D1D1F' }}>TruedeskPOS</p>
+              <p className="text-[9px] font-semibold tracking-[0.15em] uppercase" style={{ color: '#8E8E93' }}>Mainframe</p>
             </div>
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1">
-          {navigationItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeView === item.id;
+        {/* Nav */}
+        <nav className="flex-1 px-3 space-y-0.5">
+          {navItems.map(({ id, label, icon: Icon, badge }) => {
+            const active = activeView === id;
             return (
               <motion.button
-                key={item.id}
-                whileHover={{ x: 4 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setActiveView(item.id as any)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                  isActive
-                    ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
-                    : 'text-gray-600 hover:bg-gray-100/50'
-                }`}
+                key={id}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => navigate(id)}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors"
+                style={{
+                  background: active ? 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)' : 'transparent',
+                  boxShadow: active ? '0 4px 12px rgba(0,122,255,0.3)' : 'none',
+                }}
               >
-                <Icon className="w-4 h-4" />
-                {item.label}
+                <span className="flex items-center gap-2.5 text-sm font-medium" style={{ color: active ? '#fff' : '#3C3C43' }}>
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  {label}
+                </span>
+                {badge !== undefined && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center"
+                    style={{ background: active ? 'rgba(255,255,255,0.25)' : 'rgba(120,120,128,0.12)', color: active ? '#fff' : '#6E6E73' }}>
+                    {badge}
+                  </span>
+                )}
               </motion.button>
             );
           })}
         </nav>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-200/50">
-          <div className="flex items-center gap-3 px-3 py-2 mb-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
-              <span className="text-xs font-bold text-gray-600">
-                {admin?.firstName?.[0]}{admin?.lastName?.[0]}
-              </span>
+        {/* User */}
+        <div className="p-4 mt-2" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+          <div className="flex items-center gap-2.5 mb-2 px-1">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)' }}>
+              {admin?.firstName?.[0]}{admin?.lastName?.[0]}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-gray-900 truncate">
-                {admin?.firstName} {admin?.lastName}
-              </p>
-              <p className="text-[10px] text-gray-500">{admin?.role}</p>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold truncate" style={{ color: '#1D1D1F' }}>{admin?.firstName} {admin?.lastName}</p>
+              <p className="text-[10px]" style={{ color: '#8E8E93' }}>{admin?.role}</p>
             </div>
           </div>
-          <Button
+          <motion.button
+            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
             onClick={logout}
-            variant="ghost"
-            size="sm"
-            className="w-full text-xs text-red-600 hover:bg-red-50"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-colors"
+            style={{ color: '#FF3B30', background: 'rgba(255,59,48,0.06)' }}
           >
-            Sign Out
-          </Button>
-          <p className="text-[10px] text-gray-400 text-center mt-3">Powered by MCCL</p>
+            <LogOut className="w-3.5 h-3.5" /> Sign Out
+          </motion.button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto p-8">
-          {/* Overview Section */}
-          {activeView === 'overview' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
+      {/* ── Main ──────────────────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top bar */}
+        <div className="px-8 pt-6 pb-4 flex items-center justify-between flex-shrink-0"
+          style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+          <AnimatePresence mode="wait">
+            <motion.h1 key={activeView}
+              initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
-            >
-              {/* Page Header */}
-              <div>
-                <h2 className="text-3xl font-bold text-gray-900 mb-1">Overview</h2>
-                <p className="text-sm text-gray-500">Monitor and manage all tenant instances</p>
+              exit={{ opacity: 0, y: 8 }}
+              transition={springFast}
+              className="text-2xl font-bold tracking-tight" style={{ color: '#1D1D1F' }}>
+              {navItems.find(n => n.id === activeView)?.label}
+            </motion.h1>
+          </AnimatePresence>
+
+          <div className="flex items-center gap-3">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: '#8E8E93' }} />
+              <input
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search..."
+                className="pl-9 pr-4 py-2 rounded-xl text-sm outline-none transition-all w-48 focus:w-64"
+                style={{ background: 'rgba(118,118,128,0.12)', color: '#1D1D1F', border: 'none' }}
+              />
+            </div>
+
+            {/* Context actions */}
+            {activeView === 'tenants' && (
+              <AppleBtn variant="primary" onClick={() => setPanel('createTenant')}><Plus className="w-3.5 h-3.5" />New Tenant</AppleBtn>
+            )}
+            {activeView === 'bugs' && (
+              <AppleBtn variant="primary" onClick={() => setPanel('createBug')}><Plus className="w-3.5 h-3.5" />Report Bug</AppleBtn>
+            )}
+            {activeView === 'requests' && (
+              <AppleBtn variant="primary" onClick={() => setPanel('createRequest')}><Plus className="w-3.5 h-3.5" />New Request</AppleBtn>
+            )}
+            {activeView === 'features' && (
+              <div className="flex gap-2">
+                <AppleBtn variant="secondary" onClick={seedFeatures}><Zap className="w-3.5 h-3.5" />Seed Defaults</AppleBtn>
+                <AppleBtn variant="primary" onClick={() => setPanel('createFeature')}><Plus className="w-3.5 h-3.5" />New Feature</AppleBtn>
               </div>
+            )}
+            <AppleBtn variant="secondary" onClick={loadAll}><RefreshCw className="w-3.5 h-3.5" /></AppleBtn>
+          </div>
+        </div>
 
-              {/* Bento Grid - Row 1: Stats */}
-              <div className="grid grid-cols-3 gap-6">
-                {/* Total Tenants */}
-                <motion.div
-                  whileHover={{ scale: 1.02, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
-                  className="bg-white rounded-3xl p-6 border border-gray-200/50 transition-all"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-blue-100 flex items-center justify-center">
-                      <Building2 className="w-6 h-6 text-blue-600" />
+        {/* Content area */}
+        <div className="flex-1 overflow-hidden relative">
+          {/* Tenant detail overlay */}
+          <AnimatePresence>
+            {selectedTenant && (
+              <motion.div
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={spring}
+                className="absolute inset-0 z-20 flex flex-col"
+                style={{ background: '#F2F2F7' }}
+              >
+                {/* Tenant header */}
+                <div className="px-8 py-5 flex items-center gap-4 flex-shrink-0"
+                  style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    onClick={closeTenant}
+                    className="flex items-center gap-1 text-sm font-medium"
+                    style={{ color: '#007AFF' }}
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Tenants
+                  </motion.button>
+                  <div className="w-px h-5" style={{ background: 'rgba(0,0,0,0.12)' }} />
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg"
+                      style={{ background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)' }}>
+                      {av(selectedTenant.businessName)}
                     </div>
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-green-100">
-                      <TrendingUp className="w-3 h-3 text-green-600" />
-                      <span className="text-xs font-semibold text-green-600">+{stats.weeklyGrowth}</span>
+                    <div>
+                      <p className="text-base font-bold" style={{ color: '#1D1D1F' }}>{selectedTenant.businessName}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="font-mono text-xs px-2 py-0.5 rounded-md" style={{ background: '#EEF2FF', color: '#5856D6' }}>{selectedTenant.subdomain}</span>
+                        <StatusPill status={selectedTenant.status} />
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <p className="text-4xl font-bold text-gray-900 mb-1">{stats.totalTenants}</p>
-                    <p className="text-sm font-medium text-gray-500">Total Tenants</p>
-                    <p className="text-xs text-gray-400 mt-2">{stats.activeTenants} active this week</p>
+                  <div className="ml-auto flex gap-2">
+                    {selectedTenant.status !== 'ACTIVE'
+                      ? <AppleBtn variant="primary" size="sm" onClick={() => changeStatus(selectedTenant.id, 'ACTIVE', selectedTenant.businessName)}><CheckCircle className="w-3.5 h-3.5" />Activate</AppleBtn>
+                      : <AppleBtn variant="danger" size="sm" onClick={() => changeStatus(selectedTenant.id, 'SUSPENDED', selectedTenant.businessName)}><XCircle className="w-3.5 h-3.5" />Suspend</AppleBtn>
+                    }
+                    <IconBtn icon={<Trash2 className="w-4 h-4" style={{ color: '#FF3B30' }} />} label="Delete tenant" onClick={() => deleteTenant(selectedTenant.id, selectedTenant.businessName)} />
                   </div>
-                </motion.div>
+                </div>
 
-                {/* MRR */}
-                <motion.div
-                  whileHover={{ scale: 1.02, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
-                  className="bg-white rounded-3xl p-6 border border-gray-200/50 transition-all"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-green-100 flex items-center justify-center">
-                      <DollarSign className="w-6 h-6 text-green-600" />
-                    </div>
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100">
-                      <ArrowUpRight className="w-3 h-3 text-blue-600" />
-                      <span className="text-xs font-semibold text-blue-600">12%</span>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-4xl font-bold text-gray-900 mb-1">£{stats.mrr.toLocaleString()}</p>
-                    <p className="text-sm font-medium text-gray-500">Monthly Revenue</p>
-                    <p className="text-xs text-gray-400 mt-2">MRR across all tenants</p>
-                  </div>
-                </motion.div>
+                {/* Tabs */}
+                <div className="flex px-8 gap-1 pt-4 flex-shrink-0">
+                  {(['info', 'users', 'billing', 'activity', 'features'] as const).map(tab => (
+                    <motion.button
+                      key={tab}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => loadTenantTab(tab)}
+                      className="px-4 py-1.5 rounded-xl text-sm font-medium capitalize transition-all"
+                      style={{
+                        background: tenantTab === tab ? 'rgba(0,122,255,0.1)' : 'transparent',
+                        color: tenantTab === tab ? '#007AFF' : '#6E6E73',
+                      }}
+                    >
+                      {tab}
+                    </motion.button>
+                  ))}
+                </div>
 
-                {/* System Status */}
-                <motion.div
-                  whileHover={{ scale: 1.02, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
-                  className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-3xl p-6 text-white transition-all"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                      <Zap className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                      <span className="text-xs font-semibold">Live</span>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-4xl font-bold mb-1">{stats.uptime}%</p>
-                    <p className="text-sm font-medium text-white/90">System Uptime</p>
-                    <p className="text-xs text-white/70 mt-2">All systems operational</p>
-                  </div>
-                </motion.div>
-              </div>
-
-              {/* Bento Grid - Row 2: Activity & Provision */}
-              <div className="grid grid-cols-3 gap-6">
-                {/* Activity Stream (2/3 width) */}
-                <motion.div
-                  whileHover={{ boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
-                  className="col-span-2 bg-white rounded-3xl p-6 border border-gray-200/50"
-                >
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-bold text-gray-900">Recent Activity</h3>
-                    <Button variant="ghost" size="sm" className="text-xs">
-                      View All
-                      <ChevronRight className="w-3 h-3 ml-1" />
-                    </Button>
-                  </div>
-                  <div className="space-y-3">
-                    {activityLogs.map((log) => (
-                      <div
-                        key={log.id}
-                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
-                          <Building2 className="w-5 h-5 text-blue-600" />
+                {/* Tenant tab content */}
+                <div className="flex-1 overflow-y-auto px-8 py-6">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={tenantTab}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={springFast}
+                    >
+                      {/* Info */}
+                      {tenantTab === 'info' && (
+                        <div className="grid grid-cols-3 gap-5">
+                          <Card>
+                            <CardTitle>Business</CardTitle>
+                            <InfoRow label="Email" value={selectedTenant.businessEmail} />
+                            <InfoRow label="Phone" value={selectedTenant.businessPhone || '—'} />
+                            <InfoRow label="Company Code" value={selectedTenant.subdomain} mono />
+                            <InfoRow label="Created" value={new Date(selectedTenant.createdAt).toLocaleDateString()} />
+                          </Card>
+                          <Card>
+                            <CardTitle>Contact</CardTitle>
+                            {selectedTenant.contact ? <>
+                              <InfoRow label="Name" value={`${selectedTenant.contact.firstName} ${selectedTenant.contact.lastName}`} />
+                              <InfoRow label="Email" value={selectedTenant.contact.email} />
+                              <InfoRow label="Phone" value={selectedTenant.contact.phone || '—'} />
+                            </> : <p className="text-sm" style={{ color: '#8E8E93' }}>No contact info</p>}
+                          </Card>
+                          {selectedTenant.subscription && (
+                            <Card gradient>
+                              <CardTitle light>Subscription</CardTitle>
+                              <InfoRow label="Plan" value={selectedTenant.subscription.plan} light />
+                              <InfoRow label="Monthly" value={`£${selectedTenant.subscription.basePrice}`} light />
+                              <InfoRow label="Users" value={String(selectedTenant.subscription.currentUsers)} light />
+                              <InfoRow label="Next Bill" value={new Date(selectedTenant.subscription.nextBillingDate).toLocaleDateString()} light />
+                            </Card>
+                          )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">
-                            <span className="font-bold">{log.tenant}</span> {log.action}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            {log.timestamp.toLocaleTimeString()} • Just now
-                          </p>
+                      )}
+
+                      {/* Users */}
+                      {tenantTab === 'users' && (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium" style={{ color: '#6E6E73' }}>{tenantUsers.length} users</p>
+                            <AppleBtn variant="primary" size="sm" onClick={() => setPanel('addUser')}><UserPlus className="w-3.5 h-3.5" />Add User</AppleBtn>
+                          </div>
+                          {tenantUsers.length === 0 && <EmptyState icon={<Users />} label="No users yet" />}
+                          {tenantUsers.map(u => (
+                            <motion.div key={u.id} whileHover={{ scale: 1.005 }}
+                              className="flex items-center justify-between p-4 rounded-2xl"
+                              style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-xs"
+                                  style={{ background: u.isActive ? 'linear-gradient(135deg, #007AFF,#5856D6)' : '#C7C7CC' }}>
+                                  {u.firstName[0]}{u.lastName[0]}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>{u.firstName} {u.lastName}</p>
+                                  <p className="text-xs" style={{ color: '#8E8E93' }}>{u.email} · {u.role}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <StatusPill status={u.isActive ? 'ACTIVE' : 'SUSPENDED'} />
+                                <IconBtn icon={<Key className="w-3.5 h-3.5" />} label="Reset password" onClick={() => resetPw(u)} />
+                                <IconBtn icon={u.isActive ? <ToggleRight className="w-4 h-4" style={{ color: '#34C759' }} /> : <ToggleLeft className="w-4 h-4" />} label="Toggle" onClick={() => toggleUser(u)} />
+                                <IconBtn icon={<Trash2 className="w-3.5 h-3.5" style={{ color: '#FF3B30' }} />} label="Delete" onClick={() => deleteUser(u)} />
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Billing */}
+                      {tenantTab === 'billing' && (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium" style={{ color: '#6E6E73' }}>{tenantInvoices.length} invoices</p>
+                            <AppleBtn variant="secondary" size="sm" onClick={generateInvoice}><FileText className="w-3.5 h-3.5" />Generate Invoice</AppleBtn>
+                          </div>
+                          {tenantInvoices.length === 0 && <EmptyState icon={<FileText />} label="No invoices yet" />}
+                          {tenantInvoices.map(inv => (
+                            <div key={inv.id} className="flex items-center justify-between p-4 rounded-2xl"
+                              style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                              <div>
+                                <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>{inv.invoiceNumber}</p>
+                                <p className="text-xs mt-0.5" style={{ color: '#8E8E93' }}>Due {new Date(inv.dueDate).toLocaleDateString()}</p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <p className="text-sm font-bold" style={{ color: '#1D1D1F' }}>£{inv.amount}</p>
+                                <StatusPill status={inv.status} />
+                                {inv.status !== 'PAID' && (
+                                  <AppleBtn size="sm" variant="ghost" onClick={() => markPaid(inv.id)}>Mark Paid</AppleBtn>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Activity */}
+                      {tenantTab === 'activity' && (
+                        <div className="space-y-2">
+                          {tenantActivity.length === 0 && <EmptyState icon={<Clock />} label="No activity yet" />}
+                          {tenantActivity.map((log: any) => (
+                            <div key={log.id} className="flex items-start gap-3 p-3.5 rounded-xl"
+                              style={{ background: 'rgba(255,255,255,0.7)' }}>
+                              <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: '#007AFF' }} />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium" style={{ color: '#1D1D1F' }}>{log.action}</p>
+                                {log.description && <p className="text-xs mt-0.5" style={{ color: '#8E8E93' }}>{log.description}</p>}
+                              </div>
+                              <p className="text-[11px] flex-shrink-0" style={{ color: '#C7C7CC' }}>{new Date(log.createdAt).toLocaleString()}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Features */}
+                      {tenantTab === 'features' && (() => {
+                        const enabled   = tenantFeatures.filter(f => f.isEnabled);
+                        const available = tenantFeatures.filter(f => !f.isEnabled);
+
+                        const CAT_COLORS: Record<string, { bg: string; text: string }> = {
+                          core:         { bg: '#DBEAFE', text: '#1E40AF' },
+                          operations:   { bg: '#FEF3C7', text: '#92400E' },
+                          finance:      { bg: '#D1FAE5', text: '#065F46' },
+                          reporting:    { bg: '#EDE9FE', text: '#5B21B6' },
+                          tools:        { bg: '#E0F2FE', text: '#0C4A6E' },
+                          analytics:    { bg: '#FEE2E2', text: '#991B1B' },
+                          ai:           { bg: '#FDF4FF', text: '#701A75' },
+                          integrations: { bg: '#F0FDF4', text: '#14532D' },
+                        };
+
+                        const FeatureCard = ({ f, zone }: { f: TenantFeature; zone: 'enabled' | 'available' }) => {
+                          const cc = CAT_COLORS[f.category ?? ''] ?? { bg: '#F3F4F6', text: '#374151' };
+                          return (
+                            <motion.div
+                              key={f.featureId}
+                              layout
+                              initial={{ opacity: 0, scale: 0.97 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              draggable
+                              onDragStart={() => { dragFeatureId.current = f.featureId; }}
+                              onDragEnd={() => { dragFeatureId.current = null; }}
+                              className="flex items-center justify-between px-3 py-2.5 rounded-xl select-none"
+                              style={{
+                                background: 'rgba(255,255,255,0.9)',
+                                boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
+                                cursor: 'grab',
+                                border: zone === 'enabled' ? '1px solid rgba(52,199,89,0.2)' : '1px solid rgba(0,0,0,0.06)',
+                              }}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: zone === 'enabled' ? '#34C759' : '#C7C7CC' }} />
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold truncate" style={{ color: '#1D1D1F' }}>{f.featureName}</p>
+                                  <p className="text-[11px] font-mono" style={{ color: '#8E8E93' }}>{f.featureKey}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                                {f.isIncludedInBase && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#DBEAFE', color: '#1E40AF' }}>BASE</span>
+                                )}
+                                {Number(f.additionalCost) > 0 && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#FEF3C7', color: '#92400E' }}>+£{Number(f.additionalCost)}/mo</span>
+                                )}
+                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full capitalize"
+                                  style={{ backgroundColor: cc.bg, color: cc.text }}>{f.category}</span>
+                              </div>
+                            </motion.div>
+                          );
+                        };
+
+                        const handleDrop = (toEnabled: boolean) => {
+                          const id = dragFeatureId.current;
+                          if (!id) return;
+                          setTenantFeatures(prev =>
+                            prev.map(f => f.featureId === id ? { ...f, isEnabled: toEnabled } : f)
+                          );
+                        };
+
+                        return (
+                          <div className="space-y-4">
+                            {/* Header */}
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium" style={{ color: '#1D1D1F' }}>
+                                  Drag features between columns to enable or disable them for this tenant.
+                                </p>
+                                <p className="text-xs mt-0.5" style={{ color: '#8E8E93' }}>
+                                  Changes apply immediately to the POS after saving.
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <AppleBtn variant="secondary" size="sm" onClick={() =>
+                                  customerProfilesApi.getFeatures(selectedTenant!.id)
+                                    .then(r => setTenantFeatures(r.data || []))
+                                    .catch(() => toast.error('Failed to reload'))
+                                }>
+                                  <RefreshCw className="w-3.5 h-3.5" /> Reload
+                                </AppleBtn>
+                                <AppleBtn variant="primary" disabled={savingFeatures} onClick={saveFeatures}>
+                                  <CheckCircle className="w-3.5 h-3.5" />
+                                  {savingFeatures ? 'Saving…' : `Save & Activate (${enabled.length} features)`}
+                                </AppleBtn>
+                              </div>
+                            </div>
+
+                            {tenantFeatures.length === 0
+                              ? <EmptyState icon={<Package />} label="No features found — click 'Seed Defaults' in the Features menu first" />
+                              : (
+                                <div className="grid grid-cols-2 gap-4">
+                                  {/* Enabled zone */}
+                                  <div
+                                    className="rounded-2xl p-4 space-y-2 min-h-[320px]"
+                                    style={{
+                                      background: 'rgba(52,199,89,0.05)',
+                                      border: '2px dashed rgba(52,199,89,0.35)',
+                                      transition: 'border-color 0.15s',
+                                    }}
+                                    onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = '#34C759'; }}
+                                    onDragLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(52,199,89,0.35)'; }}
+                                    onDrop={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(52,199,89,0.35)'; handleDrop(true); }}
+                                  >
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <div className="w-2 h-2 rounded-full" style={{ background: '#34C759' }} />
+                                      <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#34C759' }}>
+                                        Active — {enabled.length}
+                                      </p>
+                                    </div>
+                                    {enabled.length === 0 && (
+                                      <p className="text-xs text-center py-8" style={{ color: 'rgba(52,199,89,0.5)' }}>
+                                        Drop features here to enable them
+                                      </p>
+                                    )}
+                                    {enabled.map(f => <FeatureCard key={f.featureId} f={f} zone="enabled" />)}
+                                  </div>
+
+                                  {/* Disabled zone */}
+                                  <div
+                                    className="rounded-2xl p-4 space-y-2 min-h-[320px]"
+                                    style={{
+                                      background: 'rgba(120,120,128,0.05)',
+                                      border: '2px dashed rgba(120,120,128,0.25)',
+                                      transition: 'border-color 0.15s',
+                                    }}
+                                    onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = '#8E8E93'; }}
+                                    onDragLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(120,120,128,0.25)'; }}
+                                    onDrop={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(120,120,128,0.25)'; handleDrop(false); }}
+                                  >
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <div className="w-2 h-2 rounded-full" style={{ background: '#C7C7CC' }} />
+                                      <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#8E8E93' }}>
+                                        Disabled — {available.length}
+                                      </p>
+                                    </div>
+                                    {available.length === 0 && (
+                                      <p className="text-xs text-center py-8" style={{ color: 'rgba(120,120,128,0.4)' }}>
+                                        Drop features here to disable them
+                                      </p>
+                                    )}
+                                    {available.map(f => <FeatureCard key={f.featureId} f={f} zone="available" />)}
+                                  </div>
+                                </div>
+                              )
+                            }
+                          </div>
+                        );
+                      })()}
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Main view content */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeView}
+              initial={{ opacity: 0, x: direction * 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -direction * 30 }}
+              transition={spring}
+              className="absolute inset-0 overflow-y-auto px-8 py-6"
+            >
+
+              {/* ── Overview ────────────────────────────────────────────── */}
+              {activeView === 'overview' && (
+                <div className="space-y-6">
+                  {/* Stat cards */}
+                  <div className="grid grid-cols-4 gap-4">
+                    {[
+                      { label: 'Total Tenants', value: stats.totalTenants, sub: `+${stats.weeklyGrowth} this week`, icon: <Building2 />, gradient: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)', onClick: () => navigate('tenants') },
+                      { label: 'Monthly Revenue', value: `£${stats.mrr.toLocaleString()}`, sub: 'MRR', icon: <DollarSign />, gradient: 'linear-gradient(135deg, #34C759 0%, #30D158 100%)', onClick: () => navigate('billing') },
+                      { label: 'Open Bugs', value: bugStats.open || 0, sub: `${bugStats.critical || 0} critical`, icon: <Bug />, gradient: 'linear-gradient(135deg, #FF3B30 0%, #FF6B6B 100%)', onClick: () => navigate('bugs') },
+                      { label: 'Feature Requests', value: featureRequests.length, sub: `${featureRequests.filter(r => r.status === 'PLANNED').length} planned`, icon: <Lightbulb />, gradient: 'linear-gradient(135deg, #FF9F0A 0%, #FF6B35 100%)', onClick: () => navigate('requests') },
+                    ].map(({ label, value, sub, icon, gradient, onClick }) => (
+                      <motion.button
+                        key={label}
+                        whileHover={{ scale: 1.03, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={onClick}
+                        className="rounded-2xl p-5 text-left shadow-sm"
+                        style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.6)' }}
+                      >
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white mb-4 shadow-lg"
+                          style={{ background: gradient }}>
+                          {React.cloneElement(icon as React.ReactElement, { className: 'w-5 h-5' })}
+                        </div>
+                        <p className="text-2xl font-bold tracking-tight" style={{ color: '#1D1D1F' }}>{value}</p>
+                        <p className="text-sm font-medium mt-0.5" style={{ color: '#3C3C43' }}>{label}</p>
+                        <p className="text-xs mt-1" style={{ color: '#8E8E93' }}>{sub}</p>
+                      </motion.button>
+                    ))}
+                  </div>
+
+                  {/* Recent + Provision */}
+                  <div className="grid grid-cols-3 gap-5">
+                    <div className="col-span-2 rounded-2xl p-5"
+                      style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                      <div className="flex items-center justify-between mb-4">
+                        <p className="text-base font-bold" style={{ color: '#1D1D1F' }}>Recent Tenants</p>
+                        <motion.button whileHover={{ x: 2 }} onClick={() => navigate('tenants')}
+                          className="flex items-center gap-0.5 text-sm font-medium" style={{ color: '#007AFF' }}>
+                          View all <ChevronRight className="w-3.5 h-3.5" />
+                        </motion.button>
+                      </div>
+                      <div className="space-y-1">
+                        {tenants.slice(0, 6).map(t => (
+                          <motion.div key={t.id} whileHover={{ scale: 1.01, x: 4 }}
+                            className="flex items-center justify-between p-2.5 rounded-xl cursor-pointer group"
+                            style={{ background: 'rgba(0,0,0,0.02)' }}
+                            onClick={() => openTenant(t)}>
+                            <div className="flex items-center gap-3">
+                              <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow"
+                                style={{ background: 'linear-gradient(135deg, #007AFF, #5856D6)' }}>{av(t.businessName)}</div>
+                              <div>
+                                <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>{t.businessName}</p>
+                                <p className="text-[11px] font-mono" style={{ color: '#8E8E93' }}>{t.subdomain}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <StatusPill status={t.status} />
+                              <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: '#007AFF' }} />
+                            </div>
+                          </motion.div>
+                        ))}
+                        {tenants.length === 0 && <p className="text-sm text-center py-5" style={{ color: '#8E8E93' }}>{loading ? 'Loading…' : 'No tenants yet'}</p>}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {/* Provision card */}
+                      <motion.button
+                        whileHover={{ scale: 1.03, y: -2 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => setPanel('createTenant')}
+                        className="w-full rounded-2xl p-5 flex flex-col items-center justify-center gap-3 shadow-xl text-white"
+                        style={{ background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)', minHeight: 160 }}
+                      >
+                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                          <Plus className="w-6 h-6" />
+                        </div>
+                        <div className="text-center">
+                          <p className="font-bold text-base">New Tenant</p>
+                          <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>Provision an instance</p>
+                        </div>
+                      </motion.button>
+
+                      {/* System mini card */}
+                      <div className="rounded-2xl p-4 space-y-2"
+                        style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                        <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: '#8E8E93' }}>System</p>
+                        {[
+                          { l: 'Uptime', v: '99.9%', ok: true },
+                          { l: 'Features', v: features.length, ok: true },
+                          { l: 'In-progress bugs', v: bugStats.inProgress || 0, ok: !bugStats.inProgress },
+                        ].map(({ l, v, ok }) => (
+                          <div key={l} className="flex items-center justify-between">
+                            <p className="text-xs" style={{ color: '#6E6E73' }}>{l}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-bold" style={{ color: '#1D1D1F' }}>{v}</p>
+                              <div className="w-1.5 h-1.5 rounded-full" style={{ background: ok ? '#34C759' : '#FF9F0A' }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Tenants ──────────────────────────────────────────────── */}
+              {activeView === 'tenants' && (
+                <div className="space-y-4">
+                  <p className="text-sm" style={{ color: '#6E6E73' }}>{filtTenants.length} results</p>
+                  <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                          {['Business', 'Code', 'Plan', 'Users', 'Status', 'Created', ''].map((h, i) => (
+                            <th key={i} className={`px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider ${i === 6 ? 'text-right' : ''}`}
+                              style={{ color: '#6E6E73' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtTenants.map((t, idx) => (
+                          <motion.tr key={t.id}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.03 }}
+                            whileHover={{ backgroundColor: 'rgba(0,122,255,0.03)' }}
+                            className="cursor-pointer transition-colors"
+                            style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}
+                            onClick={() => openTenant(t)}
+                          >
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs shadow-md flex-shrink-0"
+                                  style={{ background: 'linear-gradient(135deg, #007AFF, #5856D6)' }}>{av(t.businessName)}</div>
+                                <div>
+                                  <p className="font-semibold" style={{ color: '#1D1D1F' }}>{t.businessName}</p>
+                                  <p className="text-xs" style={{ color: '#8E8E93' }}>{t.businessEmail}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3.5"><span className="font-mono text-xs px-2 py-0.5 rounded-lg" style={{ background: '#EEF2FF', color: '#5856D6' }}>{t.subdomain}</span></td>
+                            <td className="px-5 py-3.5 text-sm" style={{ color: '#3C3C43' }}>{t.subscription?.plan || '—'}</td>
+                            <td className="px-5 py-3.5">
+                              <span className="flex items-center gap-1 text-sm" style={{ color: '#6E6E73' }}>
+                                <Users className="w-3.5 h-3.5" />{t._count?.customerUsers ?? t.users?.length ?? 0}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5"><StatusPill status={t.status} /></td>
+                            <td className="px-5 py-3.5 text-xs" style={{ color: '#8E8E93' }}>{new Date(t.createdAt).toLocaleDateString()}</td>
+                            <td className="px-5 py-3.5 text-right" onClick={e => e.stopPropagation()}>
+                              <div className="flex justify-end gap-1">
+                                <IconBtn icon={<Eye className="w-4 h-4" />} label="View" onClick={() => openTenant(t)} />
+                                {t.status === 'ACTIVE'
+                                  ? <IconBtn icon={<XCircle className="w-4 h-4" style={{ color: '#FF3B30' }} />} label="Suspend" onClick={() => changeStatus(t.id, 'SUSPENDED', t.businessName)} />
+                                  : <IconBtn icon={<CheckCircle className="w-4 h-4" style={{ color: '#34C759' }} />} label="Activate" onClick={() => changeStatus(t.id, 'ACTIVE', t.businessName)} />
+                                }
+                                <IconBtn icon={<Trash2 className="w-4 h-4" style={{ color: '#FF3B30' }} />} label="Delete" onClick={() => deleteTenant(t.id, t.businessName)} />
+                              </div>
+                            </td>
+                          </motion.tr>
+                        ))}
+                        {filtTenants.length === 0 && (
+                          <tr><td colSpan={7}><div className="py-16"><EmptyState icon={<Building2 />} label={loading ? 'Loading…' : 'No tenants found'} /></div></td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Features ─────────────────────────────────────────────── */}
+              {activeView === 'features' && (
+                <div className="space-y-4">
+                  {filtFeatures.length === 0
+                    ? <div className="rounded-2xl p-16" style={{ background: 'rgba(255,255,255,0.8)' }}><EmptyState icon={<Package />} label={loading ? 'Loading…' : 'No features — click Seed Defaults'} /></div>
+                    : (
+                      <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                              {['Feature', 'Key', 'Category', 'Tenants', 'Cost', 'Version', 'Status'].map(h => (
+                                <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#6E6E73' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filtFeatures.map((f, idx) => (
+                              <motion.tr key={f.id}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: idx * 0.03 }}
+                                style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                                <td className="px-5 py-3.5">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-semibold" style={{ color: '#1D1D1F' }}>{f.featureName}</p>
+                                    {f.isIncludedInBase && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#DBEAFE', color: '#1E40AF' }}>BASE</span>}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3.5"><span className="font-mono text-xs" style={{ color: '#8E8E93' }}>{f.featureKey}</span></td>
+                                <td className="px-5 py-3.5"><span className="text-xs px-2 py-0.5 rounded-lg capitalize font-medium" style={{ background: 'rgba(0,0,0,0.06)', color: '#3C3C43' }}>{f.category}</span></td>
+                                <td className="px-5 py-3.5 text-sm" style={{ color: '#6E6E73' }}>{f._count?.customerFeatures ?? 0}</td>
+                                <td className="px-5 py-3.5 text-sm">{f.additionalCost > 0 ? <span style={{ color: '#1D1D1F' }}>£{f.additionalCost}/mo</span> : <span style={{ color: '#34C759' }}>Free</span>}</td>
+                                <td className="px-5 py-3.5"><span className="font-mono text-xs" style={{ color: '#8E8E93' }}>{f.currentVersion || '1.0.0'}</span></td>
+                                <td className="px-5 py-3.5"><StatusPill status={f.status} /></td>
+                              </motion.tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )
+                  }
+                </div>
+              )}
+
+              {/* ── Bugs ─────────────────────────────────────────────────── */}
+              {activeView === 'bugs' && (
+                <div className="space-y-3">
+                  {filtBugs.length === 0 && <div className="rounded-2xl p-16" style={{ background: 'rgba(255,255,255,0.8)' }}><EmptyState icon={<Bug />} label={loading ? 'Loading…' : 'No bug reports'} /></div>}
+                  {filtBugs.map((bug, idx) => (
+                    <motion.div key={bug.id}
+                      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
+                      whileHover={{ scale: 1.005, y: -1 }}
+                      className="p-5 rounded-2xl"
+                      style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-4">
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow"
+                            style={{ background: bug.priority === 'CRITICAL' ? 'linear-gradient(135deg,#FF3B30,#FF6B6B)' : bug.priority === 'HIGH' ? 'linear-gradient(135deg,#FF9F0A,#FF6B35)' : 'linear-gradient(135deg,#007AFF,#5AC8FA)' }}>
+                            <Bug className="w-4 h-4 text-white" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-sm" style={{ color: '#1D1D1F' }}>{bug.title}</p>
+                            <p className="text-sm mt-0.5 line-clamp-2" style={{ color: '#6E6E73' }}>{bug.description}</p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <PriorityPill priority={bug.priority} />
+                              {bug.customerProfile && <span className="text-xs" style={{ color: '#8E8E93' }}>· {bug.customerProfile.businessName}</span>}
+                              <span className="text-xs" style={{ color: '#C7C7CC' }}>{new Date(bug.createdAt).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <StatusPill status={bug.status} />
+                          {bug.status === 'OPEN' && <AppleBtn size="sm" variant="secondary" onClick={() => updateBugStatus(bug.id, 'IN_PROGRESS')}>Start</AppleBtn>}
+                          {bug.status === 'IN_PROGRESS' && <AppleBtn size="sm" variant="secondary" onClick={() => updateBugStatus(bug.id, 'RESOLVED')}>Resolve</AppleBtn>}
+                          {bug.status === 'RESOLVED' && <AppleBtn size="sm" variant="secondary" onClick={() => updateBugStatus(bug.id, 'CLOSED')}>Close</AppleBtn>}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+
+              {/* ── Requests ─────────────────────────────────────────────── */}
+              {activeView === 'requests' && (
+                <div className="space-y-3">
+                  {filtRequests.length === 0 && <div className="rounded-2xl p-16" style={{ background: 'rgba(255,255,255,0.8)' }}><EmptyState icon={<Lightbulb />} label={loading ? 'Loading…' : 'No feature requests'} /></div>}
+                  {filtRequests.map((req, idx) => (
+                    <motion.div key={req.id}
+                      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
+                      whileHover={{ scale: 1.005, y: -1 }}
+                      className="p-5 rounded-2xl"
+                      style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-4">
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow"
+                            style={{ background: 'linear-gradient(135deg,#FF9F0A,#FF6B35)' }}>
+                            <Lightbulb className="w-4 h-4 text-white" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-sm" style={{ color: '#1D1D1F' }}>{req.title}</p>
+                            <p className="text-sm mt-0.5 line-clamp-2" style={{ color: '#6E6E73' }}>{req.description}</p>
+                            <div className="flex items-center gap-2 mt-2">
+                              {req.customerProfile && <span className="text-xs" style={{ color: '#8E8E93' }}>· {req.customerProfile.businessName}</span>}
+                              <span className="text-xs" style={{ color: '#C7C7CC' }}>{new Date(req.createdAt).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.92 }}
+                            onClick={() => featureRequestsApi.vote(req.id).then(loadAll)}
+                            className="flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-xl"
+                            style={{ background: 'rgba(0,122,255,0.08)', color: '#007AFF' }}>
+                            <TrendingUp className="w-3.5 h-3.5" />{req.votes}
+                          </motion.button>
+                          <StatusPill status={req.status} />
+                          <select
+                            value={req.status}
+                            onChange={e => updateRequestStatus(req.id, e.target.value)}
+                            className="text-xs font-medium px-2.5 py-1.5 rounded-xl outline-none cursor-pointer"
+                            style={{ background: 'rgba(118,118,128,0.1)', color: '#3C3C43', border: 'none' }}>
+                            {['SUBMITTED','UNDER_REVIEW','PLANNED','IN_PROGRESS','RELEASED','REJECTED'].map(s => (
+                              <option key={s} value={s}>{STATUS_META[s]?.label || s}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+
+              {/* ── Billing ───────────────────────────────────────────────── */}
+              {activeView === 'billing' && (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-3 gap-4">
+                    {[
+                      { label: 'Monthly Revenue', value: `£${stats.mrr.toLocaleString()}`, icon: <DollarSign />, g: 'linear-gradient(135deg,#34C759,#30D158)' },
+                      { label: 'Active Subscriptions', value: tenants.filter(t => t.status === 'ACTIVE').length, icon: <CheckCircle />, g: 'linear-gradient(135deg,#007AFF,#5AC8FA)' },
+                      { label: 'Pending Setup', value: tenants.filter(t => t.status === 'PENDING_SETUP').length, icon: <Clock />, g: 'linear-gradient(135deg,#FF9F0A,#FF6B35)' },
+                    ].map(({ label, value, icon, g }) => (
+                      <div key={label} className="rounded-2xl p-5 flex items-center gap-4"
+                        style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                        <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-lg" style={{ background: g }}>
+                          {React.cloneElement(icon as React.ReactElement, { className: 'w-5 h-5' })}
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold tracking-tight" style={{ color: '#1D1D1F' }}>{value}</p>
+                          <p className="text-xs font-medium" style={{ color: '#6E6E73' }}>{label}</p>
                         </div>
                       </div>
                     ))}
                   </div>
-                </motion.div>
-
-                {/* Provision Tenant Button (1/3 width) */}
-                <motion.button
-                  whileHover={{ scale: 1.03, boxShadow: '0 25px 50px -12px rgba(59,130,246,0.5)' }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowCreateTenant(true)}
-                  className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-3xl p-6 text-white shadow-xl shadow-blue-500/20 transition-all"
-                >
-                  <div className="flex flex-col items-center justify-center h-full text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center mb-4">
-                      <Plus className="w-8 h-8 text-white" />
+                  <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                    <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                      <p className="font-bold" style={{ color: '#1D1D1F' }}>All Subscriptions</p>
                     </div>
-                    <h3 className="text-xl font-bold mb-2">New Tenant</h3>
-                    <p className="text-sm text-white/80">Provision a new customer instance</p>
-                  </div>
-                </motion.button>
-              </div>
-
-              {/* Tenant List Preview */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-bold text-gray-900">Active Tenants</h3>
-                  <Button
-                    variant="ghost"
-                    onClick={() => setActiveView('tenants')}
-                    className="text-sm text-blue-600 hover:text-blue-700"
-                  >
-                    View All
-                    <ChevronRight className="w-4 h-4 ml-1" />
-                  </Button>
-                </div>
-                <div className="bg-white rounded-3xl border border-gray-200/50 overflow-hidden">
-                  <div className="divide-y divide-gray-100">
-                    {tenants.slice(0, 5).map((tenant) => (
-                      <motion.div
-                        key={tenant.id}
-                        whileHover={{ scale: 1.01, backgroundColor: 'rgba(249,250,251,1)' }}
-                        className="flex items-center justify-between p-4 transition-all"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30">
-                            {tenant.businessName[0]}
-                          </div>
-                          <div>
-                            <p className="font-semibold text-gray-900">{tenant.businessName}</p>
-                            <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                              <Globe className="w-3 h-3" />
-                              {tenant.subdomain}.truedesk.co.uk
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Badge
-                            variant={tenant.status === 'ACTIVE' ? 'default' : 'secondary'}
-                            className={tenant.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : ''}
-                          >
-                            {tenant.status}
-                          </Badge>
-                          <Button variant="ghost" size="sm" asChild>
-                            <a
-                              href={`https://${tenant.subdomain}.truedesk.co.uk`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </a>
-                          </Button>
-                        </div>
-                      </motion.div>
-                    ))}
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                          {['Business', 'Plan', 'Monthly', 'Users', 'Status', 'Next Billing'].map(h => (
+                            <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#6E6E73' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tenants.map(t => (
+                          <motion.tr key={t.id} whileHover={{ backgroundColor: 'rgba(0,122,255,0.02)' }}
+                            className="cursor-pointer" style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}
+                            onClick={() => openTenant(t)}>
+                            <td className="px-5 py-3.5">
+                              <p className="font-semibold text-sm" style={{ color: '#1D1D1F' }}>{t.businessName}</p>
+                              <p className="text-[11px] font-mono" style={{ color: '#8E8E93' }}>{t.subdomain}</p>
+                            </td>
+                            <td className="px-5 py-3.5 text-sm" style={{ color: '#3C3C43' }}>{t.subscription?.plan || '—'}</td>
+                            <td className="px-5 py-3.5 text-sm font-medium" style={{ color: '#1D1D1F' }}>{t.subscription?.basePrice ? `£${t.subscription.basePrice}` : '—'}</td>
+                            <td className="px-5 py-3.5 text-sm" style={{ color: '#6E6E73' }}>{t.subscription?.currentUsers ?? '—'}</td>
+                            <td className="px-5 py-3.5"><StatusPill status={t.status} /></td>
+                            <td className="px-5 py-3.5 text-sm" style={{ color: '#8E8E93' }}>{t.subscription?.nextBillingDate ? new Date(t.subscription.nextBillingDate).toLocaleDateString() : '—'}</td>
+                          </motion.tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-              </div>
-            </motion.div>
-          )}
+              )}
 
-          {/* Tenants Section */}
-          {activeView === 'tenants' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-3xl font-bold text-gray-900 mb-1">Tenants</h2>
-                  <p className="text-sm text-gray-500">Manage all customer instances</p>
-                </div>
-                <Button
-                  onClick={() => setShowCreateTenant(true)}
-                  className="bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Tenant
-                </Button>
-              </div>
-
-              {/* Search Bar */}
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <Input
-                  placeholder="Search by name, subdomain, or email..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-12 py-6 rounded-2xl border-gray-200 bg-white focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Premium Data Table */}
-              <div className="bg-white rounded-3xl border border-gray-200/50 overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-50/50 border-b border-gray-100">
-                    <tr>
-                      <th className="text-left px-6 py-4 text-xs font-bold text-gray-600 uppercase tracking-wider">
-                        Company
-                      </th>
-                      <th className="text-left px-6 py-4 text-xs font-bold text-gray-600 uppercase tracking-wider">
-                        Subdomain
-                      </th>
-                      <th className="text-left px-6 py-4 text-xs font-bold text-gray-600 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="text-left px-6 py-4 text-xs font-bold text-gray-600 uppercase tracking-wider">
-                        Plan
-                      </th>
-                      <th className="text-left px-6 py-4 text-xs font-bold text-gray-600 uppercase tracking-wider">
-                        Users
-                      </th>
-                      <th className="text-right px-6 py-4 text-xs font-bold text-gray-600 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {filteredTenants.map((tenant) => (
-                      <motion.tr
-                        key={tenant.id}
-                        whileHover={{ scale: 1.01 }}
-                        className="transition-all hover:bg-gray-50/50"
-                      >
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-blue-500/30">
-                              {tenant.businessName[0]}
-                            </div>
-                            <div>
-                              <p className="font-semibold text-gray-900">{tenant.businessName}</p>
-                              <p className="text-xs text-gray-500">{tenant.businessEmail}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <a
-                            href={`https://${tenant.subdomain}.truedesk.co.uk`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm font-mono text-blue-600 hover:text-blue-700 flex items-center gap-1 group"
-                          >
-                            {tenant.subdomain}.truedesk.co.uk
-                            <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </a>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className={`w-2 h-2 rounded-full ${
-                                tenant.status === 'ACTIVE'
-                                  ? 'bg-green-500'
-                                  : tenant.status === 'SUSPENDED'
-                                  ? 'bg-red-500'
-                                  : 'bg-yellow-500'
-                              }`}
-                            />
-                            <span
-                              className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                                tenant.status === 'ACTIVE'
-                                  ? 'bg-green-100 text-green-700'
-                                  : tenant.status === 'SUSPENDED'
-                                  ? 'bg-red-100 text-red-700'
-                                  : 'bg-yellow-100 text-yellow-700'
-                              }`}
-                            >
-                              {tenant.status}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-sm font-medium text-gray-700">
-                            {tenant.subscription?.plan || 'N/A'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <Users className="w-4 h-4" />
-                            <span>{tenant._count?.customerUsers || 0}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button variant="ghost" size="sm">
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </motion.tr>
+              {/* ── Settings ─────────────────────────────────────────────── */}
+              {activeView === 'settings' && (
+                <div className="grid grid-cols-2 gap-5">
+                  <div className="rounded-2xl p-6 space-y-3" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                    <p className="text-base font-bold mb-4" style={{ color: '#1D1D1F' }}>System Status</p>
+                    {[
+                      { l: 'Uptime', v: '99.9%', ok: true },
+                      { l: 'Total tenants', v: stats.totalTenants, ok: true },
+                      { l: 'Active tenants', v: stats.activeTenants, ok: true },
+                      { l: 'Open bugs', v: bugStats.open || 0, ok: !(bugStats.open) },
+                      { l: 'Critical bugs', v: bugStats.critical || 0, ok: !(bugStats.critical) },
+                      { l: 'Features configured', v: features.length, ok: features.length > 0 },
+                    ].map(({ l, v, ok }) => (
+                      <div key={l} className="flex items-center justify-between p-3 rounded-xl" style={{ background: 'rgba(0,0,0,0.03)' }}>
+                        <p className="text-sm" style={{ color: '#3C3C43' }}>{l}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold" style={{ color: '#1D1D1F' }}>{v}</p>
+                          <div className="w-2 h-2 rounded-full" style={{ background: ok ? '#34C759' : '#FF9F0A' }} />
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            </motion.div>
-          )}
+                  </div>
 
-          {/* Placeholder for other views */}
-          {activeView !== 'overview' && activeView !== 'tenants' && (
-            <div className="flex items-center justify-center h-96">
-              <div className="text-center">
-                <div className="w-20 h-20 rounded-3xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
-                  <Package className="w-10 h-10 text-gray-400" />
+                  <div className="space-y-4">
+                    <div className="rounded-2xl p-6" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                      <p className="text-base font-bold mb-4" style={{ color: '#1D1D1F' }}>Quick Actions</p>
+                      <div className="space-y-2">
+                        {[
+                          { l: 'Provision New Tenant', g: 'linear-gradient(135deg,#007AFF,#5856D6)', action: () => setPanel('createTenant'), icon: <Plus className="w-4 h-4" /> },
+                          { l: 'Seed Default Features', g: 'linear-gradient(135deg,#FF9F0A,#FF6B35)', action: seedFeatures, icon: <Zap className="w-4 h-4" /> },
+                          { l: 'Report a Bug', g: 'linear-gradient(135deg,#FF3B30,#FF6B6B)', action: () => setPanel('createBug'), icon: <Bug className="w-4 h-4" /> },
+                          { l: 'New Feature Request', g: 'linear-gradient(135deg,#AF52DE,#5856D6)', action: () => setPanel('createRequest'), icon: <Lightbulb className="w-4 h-4" /> },
+                          { l: 'Refresh All Data', g: 'linear-gradient(135deg,#34C759,#30D158)', action: loadAll, icon: <RefreshCw className="w-4 h-4" /> },
+                        ].map(({ l, g, action, icon }) => (
+                          <motion.button key={l} whileHover={{ x: 4, scale: 1.01 }} whileTap={{ scale: 0.98 }}
+                            onClick={action}
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-left"
+                            style={{ background: 'rgba(0,0,0,0.03)', color: '#1D1D1F' }}>
+                            <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white shadow-sm" style={{ background: g }}>
+                              {icon}
+                            </div>
+                            {l}
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                      <p className="text-sm font-bold mb-3" style={{ color: '#1D1D1F' }}>Admin</p>
+                      {[['Name', `${admin?.firstName} ${admin?.lastName}`], ['Email', admin?.email || ''], ['Role', admin?.role || '']].map(([k, v]) => (
+                        <div key={k} className="flex justify-between py-1.5">
+                          <p className="text-xs" style={{ color: '#8E8E93' }}>{k}</p>
+                          <p className="text-xs font-medium" style={{ color: '#1D1D1F' }}>{v}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Coming Soon</h3>
-                <p className="text-sm text-gray-500">This section is under development</p>
-              </div>
-            </div>
-          )}
+              )}
+
+            </motion.div>
+          </AnimatePresence>
         </div>
-      </main>
+      </div>
 
-      {/* Create Tenant Dialog */}
-      <Dialog open={showCreateTenant} onOpenChange={setShowCreateTenant}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold">Provision New Tenant</DialogTitle>
-            <p className="text-sm text-gray-500">Create a new customer instance with dedicated database</p>
-          </DialogHeader>
+      {/* ══════════════════════════════════════════════════════════════════════ */
+      /* SIDE PANELS (replace all dialogs)                                     */}
 
-          <div className="space-y-6 mt-6">
-            {/* Business Information */}
-            <div>
-              <h4 className="text-sm font-bold text-gray-900 mb-4">Business Information</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <Label>Business Name *</Label>
-                  <Input
-                    placeholder="B-House Jewelry Ltd"
-                    value={newTenant.businessName}
-                    onChange={(e) => setNewTenant({ ...newTenant, businessName: e.target.value })}
-                    className="mt-1"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <Label>Business Email *</Label>
-                  <Input
-                    type="email"
-                    placeholder="admin@bhouse.com"
-                    value={newTenant.businessEmail}
-                    onChange={(e) => setNewTenant({ ...newTenant, businessEmail: e.target.value })}
-                    className="mt-1"
-                  />
-                </div>
+      {/* Create Tenant */}
+      <SidePanel
+        open={panel === 'createTenant'}
+        onClose={() => setPanel('none')}
+        title="Provision New Tenant"
+        subtitle="Create a new customer POS instance"
+        width="w-[540px]"
+        footer={
+          <div className="flex justify-end gap-3">
+            <AppleBtn variant="secondary" onClick={() => setPanel('none')}>Cancel</AppleBtn>
+            <AppleBtn variant="primary" disabled={creating} onClick={createTenant}>
+              <Plus className="w-3.5 h-3.5" />{creating ? 'Creating…' : 'Create Tenant'}
+            </AppleBtn>
+          </div>
+        }
+      >
+        <div className="space-y-6">
+          <FormSection title="Business Info">
+            <Field label="Business Name" required>
+              <AppleInput placeholder="B-House Jewellery Ltd" value={newTenant.businessName} onChange={e => setNewTenant(p => ({ ...p, businessName: e.target.value }))} />
+            </Field>
+            <Field label="Business Email" required>
+              <AppleInput type="email" placeholder="admin@bhouse.com" value={newTenant.businessEmail} onChange={e => setNewTenant(p => ({ ...p, businessEmail: e.target.value }))} />
+            </Field>
+          </FormSection>
+
+          <FormSection title="Company Code">
+            <Field label="Company Code" required hint="Customers enter this at the POS login screen">
+              <div className="space-y-1.5">
+                <AppleInput
+                  placeholder="bhouse"
+                  value={newTenant.subdomain}
+                  onChange={e => onSubdomainChange(e.target.value)}
+                  status={subdomainValid === true ? 'ok' : subdomainValid === false ? 'error' : undefined}
+                />
+                <AnimatePresence>
+                  {subdomainChecking && <motion.p key="checking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-xs" style={{ color: '#8E8E93' }}>Checking…</motion.p>}
+                  {subdomainValid === true && <motion.p key="valid" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-xs flex items-center gap-1" style={{ color: '#34C759' }}><Check className="w-3 h-3" />Available</motion.p>}
+                  {subdomainValid === false && <motion.p key="invalid" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-xs flex items-center gap-1" style={{ color: '#FF3B30' }}><AlertCircle className="w-3 h-3" />Already taken</motion.p>}
+                </AnimatePresence>
               </div>
-            </div>
+            </Field>
+          </FormSection>
 
-            {/* Subdomain */}
-            <div>
-              <h4 className="text-sm font-bold text-gray-900 mb-4">Subdomain Configuration</h4>
-              <div>
-                <Label>Subdomain *</Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <Input
-                    placeholder="bhouse"
-                    value={newTenant.subdomain}
-                    onChange={(e) => handleSubdomainChange(e.target.value)}
-                    className={
-                      subdomainValid === false
-                        ? 'border-red-500'
-                        : subdomainValid === true
-                        ? 'border-green-500'
-                        : ''
-                    }
-                  />
-                  <span className="text-sm text-gray-500 whitespace-nowrap">.truedesk.co.uk</span>
-                </div>
-                {subdomainChecking && (
-                  <p className="text-xs text-gray-500 mt-1">Checking availability...</p>
-                )}
-                {subdomainValid === true && (
-                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3" />
-                    Subdomain available
-                  </p>
-                )}
-                {subdomainValid === false && (
-                  <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    Subdomain not available
-                  </p>
-                )}
-              </div>
+          <FormSection title="Primary Contact">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="First Name" required>
+                <AppleInput placeholder="John" value={newTenant.contactFirstName} onChange={e => setNewTenant(p => ({ ...p, contactFirstName: e.target.value }))} />
+              </Field>
+              <Field label="Last Name" required>
+                <AppleInput placeholder="Doe" value={newTenant.contactLastName} onChange={e => setNewTenant(p => ({ ...p, contactLastName: e.target.value }))} />
+              </Field>
             </div>
+            <Field label="Contact Email" required>
+              <AppleInput type="email" placeholder="john@bhouse.com" value={newTenant.contactEmail} onChange={e => setNewTenant(p => ({ ...p, contactEmail: e.target.value }))} />
+            </Field>
+            <Field label="Phone">
+              <AppleInput placeholder="+44 20 1234 5678" value={newTenant.contactPhone} onChange={e => setNewTenant(p => ({ ...p, contactPhone: e.target.value }))} />
+            </Field>
+          </FormSection>
 
-            {/* Contact Person */}
-            <div>
-              <h4 className="text-sm font-bold text-gray-900 mb-4">Primary Contact</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>First Name *</Label>
-                  <Input
-                    placeholder="John"
-                    value={newTenant.contactFirstName}
-                    onChange={(e) => setNewTenant({ ...newTenant, contactFirstName: e.target.value })}
-                    className="mt-1"
-                  />
+          <FormSection title="Subscription Plan">
+            <select value={newTenant.plan} onChange={e => setNewTenant(p => ({ ...p, plan: e.target.value }))}
+              className="w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-pointer"
+              style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}>
+              <option value="STARTER">Starter — £29/month</option>
+              <option value="PROFESSIONAL">Professional — £79/month</option>
+              <option value="BUSINESS">Business — £199/month</option>
+              <option value="ENTERPRISE">Enterprise — £499/month</option>
+            </select>
+          </FormSection>
+        </div>
+      </SidePanel>
+
+      {/* Provisioning result */}
+      <SidePanel
+        open={panel === 'provisionResult'}
+        onClose={() => setPanel('none')}
+        title="Tenant Provisioned"
+        subtitle="Share these credentials with the customer"
+        footer={<AppleBtn variant="primary" className="w-full justify-center" onClick={() => setPanel('none')}>Done</AppleBtn>}
+      >
+        {provisionResult && (
+          <div className="space-y-5">
+            <div className="rounded-2xl p-5 space-y-4" style={{ background: 'linear-gradient(135deg, rgba(0,122,255,0.06), rgba(88,86,214,0.06))', border: '1px solid rgba(0,122,255,0.15)' }}>
+              {[
+                { l: 'Company Code', v: provisionResult.companyCode, mono: true, accent: false },
+                { l: 'Owner Email', v: provisionResult.ownerEmail, mono: false, accent: false },
+                { l: 'Temporary Password', v: provisionResult.ownerPassword, mono: true, accent: true },
+              ].map(({ l, v, mono, accent }) => (
+                <div key={l}>
+                  <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#8E8E93' }}>{l}</p>
+                  <p className={`text-sm font-bold ${mono ? 'font-mono' : ''}`}
+                    style={{ color: accent ? '#007AFF' : '#1D1D1F' }}>{v}</p>
                 </div>
-                <div>
-                  <Label>Last Name *</Label>
-                  <Input
-                    placeholder="Doe"
-                    value={newTenant.contactLastName}
-                    onChange={(e) => setNewTenant({ ...newTenant, contactLastName: e.target.value })}
-                    className="mt-1"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <Label>Contact Email *</Label>
-                  <Input
-                    type="email"
-                    placeholder="john.doe@bhouse.com"
-                    value={newTenant.contactEmail}
-                    onChange={(e) => setNewTenant({ ...newTenant, contactEmail: e.target.value })}
-                    className="mt-1"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <Label>Phone</Label>
-                  <Input
-                    placeholder="+44 20 1234 5678"
-                    value={newTenant.contactPhone}
-                    onChange={(e) => setNewTenant({ ...newTenant, contactPhone: e.target.value })}
-                    className="mt-1"
-                  />
-                </div>
-              </div>
+              ))}
             </div>
-
-            {/* Subscription Plan */}
-            <div>
-              <h4 className="text-sm font-bold text-gray-900 mb-4">Subscription Plan</h4>
-              <Select
-                value={newTenant.plan}
-                onValueChange={(value) => setNewTenant({ ...newTenant, plan: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="STARTER">Starter - £49/month</SelectItem>
-                  <SelectItem value="PROFESSIONAL">Professional - £99/month</SelectItem>
-                  <SelectItem value="ENTERPRISE">Enterprise - £199/month</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="rounded-2xl p-4 flex items-start gap-3" style={{ background: 'rgba(255,159,10,0.08)', border: '1px solid rgba(255,159,10,0.2)' }}>
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#FF9F0A' }} />
+              <p className="text-xs" style={{ color: '#92400E' }}>Save these credentials now. The password cannot be retrieved after closing this panel.</p>
             </div>
           </div>
+        )}
+      </SidePanel>
 
-          <div className="flex justify-end gap-3 mt-8 pt-6 border-t">
-            <Button variant="outline" onClick={() => setShowCreateTenant(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={createTenant}
-              className="bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Create Tenant
-            </Button>
+      {/* Create Bug */}
+      <SidePanel open={panel === 'createBug'} onClose={() => setPanel('none')} title="Report a Bug"
+        footer={<div className="flex justify-end gap-3"><AppleBtn variant="secondary" onClick={() => setPanel('none')}>Cancel</AppleBtn><AppleBtn variant="danger" onClick={createBug}>Submit Report</AppleBtn></div>}>
+        <div className="space-y-5">
+          <Field label="Title" required><AppleInput placeholder="Brief summary of the issue" value={newBug.title} onChange={e => setNewBug(p => ({ ...p, title: e.target.value }))} /></Field>
+          <Field label="Description" required>
+            <textarea value={newBug.description} onChange={e => setNewBug(p => ({ ...p, description: e.target.value }))}
+              className="w-full min-h-[120px] px-4 py-3 rounded-xl text-sm font-medium resize-none outline-none"
+              style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}
+              placeholder="Steps to reproduce, expected vs actual behaviour…" />
+          </Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Priority">
+              <select value={newBug.priority} onChange={e => setNewBug(p => ({ ...p, priority: e.target.value }))}
+                className="w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none"
+                style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}>
+                {['LOW','MEDIUM','HIGH','CRITICAL'].map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </Field>
+            <Field label="Customer">
+              <select value={newBug.customerProfileId} onChange={e => setNewBug(p => ({ ...p, customerProfileId: e.target.value }))}
+                className="w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none"
+                style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}>
+                <option value="">None</option>
+                {tenants.map(t => <option key={t.id} value={t.id}>{t.businessName}</option>)}
+              </select>
+            </Field>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </SidePanel>
+
+      {/* Create Request */}
+      <SidePanel open={panel === 'createRequest'} onClose={() => setPanel('none')} title="New Feature Request"
+        footer={<div className="flex justify-end gap-3"><AppleBtn variant="secondary" onClick={() => setPanel('none')}>Cancel</AppleBtn><AppleBtn variant="primary" onClick={createRequest}>Submit</AppleBtn></div>}>
+        <div className="space-y-5">
+          <Field label="Title" required><AppleInput placeholder="Feature idea" value={newRequest.title} onChange={e => setNewRequest(p => ({ ...p, title: e.target.value }))} /></Field>
+          <Field label="Description" required>
+            <textarea value={newRequest.description} onChange={e => setNewRequest(p => ({ ...p, description: e.target.value }))}
+              className="w-full min-h-[120px] px-4 py-3 rounded-xl text-sm font-medium resize-none outline-none"
+              style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}
+              placeholder="What problem does this solve? How should it work?" />
+          </Field>
+          <Field label="Customer">
+            <select value={newRequest.customerProfileId} onChange={e => setNewRequest(p => ({ ...p, customerProfileId: e.target.value }))}
+              className="w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none"
+              style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}>
+              <option value="">None</option>
+              {tenants.map(t => <option key={t.id} value={t.id}>{t.businessName}</option>)}
+            </select>
+          </Field>
+        </div>
+      </SidePanel>
+
+      {/* Create Feature */}
+      <SidePanel open={panel === 'createFeature'} onClose={() => setPanel('none')} title="New Feature"
+        footer={<div className="flex justify-end gap-3"><AppleBtn variant="secondary" onClick={() => setPanel('none')}>Cancel</AppleBtn><AppleBtn variant="primary" onClick={createFeature}>Create Feature</AppleBtn></div>}>
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Feature Key" required hint="snake_case, e.g. google_drive"><AppleInput placeholder="google_drive" value={newFeature.featureKey} onChange={e => setNewFeature(p => ({ ...p, featureKey: e.target.value.toLowerCase().replace(/\s/g, '_') }))} /></Field>
+            <Field label="Feature Name" required><AppleInput placeholder="Google Drive" value={newFeature.featureName} onChange={e => setNewFeature(p => ({ ...p, featureName: e.target.value }))} /></Field>
+          </div>
+          <Field label="Description"><AppleInput placeholder="Brief description" value={newFeature.description} onChange={e => setNewFeature(p => ({ ...p, description: e.target.value }))} /></Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Category">
+              <select value={newFeature.category} onChange={e => setNewFeature(p => ({ ...p, category: e.target.value }))}
+                className="w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none"
+                style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}>
+                {['core','reporting','analytics','integrations','ai','other'].map(c => <option key={c} value={c} className="capitalize">{c}</option>)}
+              </select>
+            </Field>
+            <Field label="Additional Cost (£/mo)"><AppleInput type="number" min="0" value={newFeature.additionalCost} onChange={e => setNewFeature(p => ({ ...p, additionalCost: parseFloat(e.target.value) || 0 }))} /></Field>
+          </div>
+          <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl" style={{ background: 'rgba(0,0,0,0.03)' }}>
+            <div className="relative">
+              <input type="checkbox" checked={newFeature.isIncludedInBase} onChange={e => setNewFeature(p => ({ ...p, isIncludedInBase: e.target.checked }))} className="sr-only" />
+              <div className="w-5 h-5 rounded flex items-center justify-center" style={{ background: newFeature.isIncludedInBase ? '#007AFF' : 'rgba(0,0,0,0.1)' }}>
+                {newFeature.isIncludedInBase && <Check className="w-3 h-3 text-white" />}
+              </div>
+            </div>
+            <p className="text-sm font-medium" style={{ color: '#1D1D1F' }}>Included in base plan</p>
+          </label>
+        </div>
+      </SidePanel>
+
+      {/* Add User */}
+      <SidePanel open={panel === 'addUser'} onClose={() => setPanel('none')} title={`Add User`} subtitle={selectedTenant?.businessName}
+        footer={<div className="flex justify-end gap-3"><AppleBtn variant="secondary" onClick={() => setPanel('none')}>Cancel</AppleBtn><AppleBtn variant="primary" disabled={savingUser} onClick={addUser}><UserPlus className="w-3.5 h-3.5" />{savingUser ? 'Adding…' : 'Add User'}</AppleBtn></div>}>
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="First Name" required><AppleInput value={newUser.firstName} onChange={e => setNewUser(p => ({ ...p, firstName: e.target.value }))} /></Field>
+            <Field label="Last Name" required><AppleInput value={newUser.lastName} onChange={e => setNewUser(p => ({ ...p, lastName: e.target.value }))} /></Field>
+          </div>
+          <Field label="Email" required><AppleInput type="email" value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} /></Field>
+          <Field label="Password" required><AppleInput type="password" value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} /></Field>
+          <Field label="Role">
+            <select value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))}
+              className="w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none"
+              style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}>
+              {['OWNER','MANAGER','STAFF','CASHIER'].map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </Field>
+        </div>
+      </SidePanel>
     </div>
   );
 };
+
+// ─── Small shared components ──────────────────────────────────────────────────
+
+const Card: React.FC<{ children: React.ReactNode; gradient?: boolean }> = ({ children, gradient }) => (
+  <div className="rounded-2xl p-5 space-y-3"
+    style={{
+      background: gradient ? 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)' : 'rgba(255,255,255,0.8)',
+      backdropFilter: 'blur(10px)',
+      border: gradient ? 'none' : '1px solid rgba(255,255,255,0.6)',
+      boxShadow: gradient ? '0 8px 24px rgba(0,122,255,0.3)' : '0 2px 8px rgba(0,0,0,0.06)',
+    }}>
+    {children}
+  </div>
+);
+
+const CardTitle: React.FC<{ children: React.ReactNode; light?: boolean }> = ({ children, light }) => (
+  <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: light ? 'rgba(255,255,255,0.6)' : '#8E8E93' }}>{children}</p>
+);
+
+const InfoRow: React.FC<{ label: string; value: string; mono?: boolean; light?: boolean }> = ({ label, value, mono, light }) => (
+  <div className="flex flex-col gap-0.5">
+    <p className="text-[11px]" style={{ color: light ? 'rgba(255,255,255,0.5)' : '#8E8E93' }}>{label}</p>
+    <p className={`text-sm font-semibold ${mono ? 'font-mono' : ''}`} style={{ color: light ? '#fff' : '#1D1D1F' }}>{value}</p>
+  </div>
+);
+
+const EmptyState: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon, label }) => (
+  <div className="flex flex-col items-center justify-center gap-3 py-8">
+    <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.04)' }}>
+      {React.cloneElement(icon as React.ReactElement, { className: 'w-7 h-7', style: { color: '#C7C7CC' } })}
+    </div>
+    <p className="text-sm font-medium" style={{ color: '#8E8E93' }}>{label}</p>
+  </div>
+);
+
+const IconBtn: React.FC<{ icon: React.ReactNode; label: string; onClick: () => void }> = ({ icon, label, onClick }) => (
+  <motion.button
+    whileHover={{ scale: 1.12 }} whileTap={{ scale: 0.88 }}
+    onClick={e => { e.stopPropagation(); onClick(); }}
+    title={label}
+    className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+    style={{ background: 'rgba(0,0,0,0.04)', color: '#6E6E73' }}
+  >
+    {icon}
+  </motion.button>
+);
+
+const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+  <div className="space-y-4">
+    <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: '#8E8E93' }}>{title}</p>
+    <div className="space-y-3">{children}</div>
+  </div>
+);
 
 export default MainFrameDashboard;

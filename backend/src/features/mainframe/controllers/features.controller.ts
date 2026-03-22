@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Put, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { FeaturesService } from '../services/features.service';
 
 @Controller('mainframe/features')
@@ -81,5 +82,14 @@ export class FeaturesController {
   @Post('seed-defaults')
   async seedDefaults() {
     return this.featuresService.seedDefaultFeatures();
+  }
+
+  /** Returns the enabled featureKeys for the currently authenticated tenant.
+   *  Called by the POS frontend immediately after login via GET /api/v1/mainframe/features/tenant-features */
+  @Get('tenant-features')
+  async getTenantFeatures(@Req() req: Request) {
+    const subdomain = (req.headers['x-tenant-id'] as string) || '';
+    if (!subdomain) return { features: [] };
+    return this.featuresService.getTenantFeatures(subdomain);
   }
 }

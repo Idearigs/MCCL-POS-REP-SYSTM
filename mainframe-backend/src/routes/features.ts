@@ -114,26 +114,42 @@ router.post('/:id/versions', requireAuth, async (req, res) => {
 router.post('/seed-defaults', requireAuth, async (_req, res) => {
   try {
     const defaults = [
-      { featureKey: 'pos', featureName: 'Point of Sale', category: 'core', isIncludedInBase: true },
-      { featureKey: 'inventory', featureName: 'Inventory Management', category: 'core', isIncludedInBase: true },
-      { featureKey: 'customers', featureName: 'Customer Management', category: 'core', isIncludedInBase: true },
-      { featureKey: 'repairs', featureName: 'Repair Management', category: 'core', isIncludedInBase: true },
-      { featureKey: 'sales_reports', featureName: 'Sales Reports', category: 'reporting', isIncludedInBase: true },
-      { featureKey: 'financial_intelligence', featureName: 'Financial Intelligence', category: 'analytics', isIncludedInBase: false },
-      { featureKey: 'chatbot', featureName: 'AI Chatbot', category: 'ai', isIncludedInBase: false },
-      { featureKey: 'google_drive', featureName: 'Google Drive Integration', category: 'integrations', isIncludedInBase: false },
+      // ── Core ──────────────────────────────────────────────────────────
+      { featureKey: 'dashboard',              featureName: 'Dashboard',              category: 'core',       isIncludedInBase: true  },
+      { featureKey: 'pos',                    featureName: 'Point of Sale',          category: 'core',       isIncludedInBase: true  },
+      { featureKey: 'sales',                  featureName: 'Sales',                  category: 'core',       isIncludedInBase: true  },
+      { featureKey: 'inventory',              featureName: 'Inventory Management',   category: 'core',       isIncludedInBase: true  },
+      { featureKey: 'customers',              featureName: 'Customer Management',    category: 'core',       isIncludedInBase: true  },
+      { featureKey: 'repairs',                featureName: 'Repair Management',      category: 'core',       isIncludedInBase: true  },
+      { featureKey: 'history',                featureName: 'History',                category: 'core',       isIncludedInBase: true  },
+      // ── Operations ────────────────────────────────────────────────────
+      { featureKey: 'shifts',                 featureName: 'Shifts',                 category: 'operations', isIncludedInBase: true  },
+      { featureKey: 'cashiers',               featureName: 'Cashiers',               category: 'operations', isIncludedInBase: true  },
+      { featureKey: 'stock_taking',           featureName: 'Stock Taking',           category: 'operations', isIncludedInBase: true  },
+      // ── Finance ───────────────────────────────────────────────────────
+      { featureKey: 'float_management',       featureName: 'Float Management',       category: 'finance',    isIncludedInBase: true  },
+      { featureKey: 'petty_cash',             featureName: 'Petty Cash',             category: 'finance',    isIncludedInBase: true  },
+      { featureKey: 'sales_reports',          featureName: 'Sales Reports',          category: 'reporting',  isIncludedInBase: true  },
+      // ── Tools ─────────────────────────────────────────────────────────
+      { featureKey: 'tasks',                  featureName: 'Tasks',                  category: 'tools',      isIncludedInBase: true  },
+      { featureKey: 'calendar',               featureName: 'Calendar',               category: 'tools',      isIncludedInBase: true  },
+      // ── Premium ───────────────────────────────────────────────────────
+      { featureKey: 'financial_intelligence', featureName: 'Financial Intelligence', category: 'analytics',  isIncludedInBase: false },
+      { featureKey: 'chatbot',                featureName: 'AI Chatbot',             category: 'ai',         isIncludedInBase: false },
+      { featureKey: 'google_drive',           featureName: 'Google Drive',           category: 'integrations', isIncludedInBase: false },
     ];
 
     const results = [];
     for (const d of defaults) {
-      const existing = await prisma.mf_features.findUnique({ where: { featureKey: d.featureKey } });
-      if (!existing) {
-        const created = await prisma.mf_features.create({ data: { ...d, status: 'STABLE', currentVersion: '1.0.0' } });
-        results.push(created);
-      }
+      const upserted = await prisma.mf_features.upsert({
+        where: { featureKey: d.featureKey },
+        update: { featureName: d.featureName, category: d.category, isIncludedInBase: d.isIncludedInBase },
+        create: { ...d, status: 'STABLE', currentVersion: '1.0.0' },
+      });
+      results.push(upserted);
     }
 
-    return res.json({ seeded: results.length, features: results });
+    return res.json({ seeded: results.length, total: defaults.length, features: results });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Internal server error' });

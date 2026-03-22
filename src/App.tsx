@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import PageTransition from "@/components/ui/page-transition";
 import { AuthProvider } from "./contexts/AuthContext";
+import { FeatureProvider } from "./contexts/FeatureContext";
 import { TransactionProvider } from "./contexts/TransactionContext";
 import { CustomerProvider } from "./contexts/CustomerContext";
 import { InventoryProvider } from "./contexts/InventoryContext";
@@ -65,6 +66,7 @@ const App = () => (
   <BrowserRouter>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <FeatureProvider>
         <SettingsProvider>
           <TransactionProvider>
             <CustomerProvider>
@@ -298,6 +300,7 @@ const App = () => (
             </CustomerProvider>
           </TransactionProvider>
         </SettingsProvider>
+        </FeatureProvider>
       </AuthProvider>
     </QueryClientProvider>
   </BrowserRouter>

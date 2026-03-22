@@ -25,6 +25,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { UserPermissions } from '@/types/user';
+import { useFeatures } from '@/contexts/FeatureContext';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface NavigationItem {
@@ -32,6 +33,7 @@ interface NavigationItem {
   path: string;
   icon: React.ElementType;
   permissionKey: keyof UserPermissions;
+  featureKey?: string; // optional — if set, item is hidden when feature is disabled
 }
 
 interface NavigationCategory {
@@ -46,33 +48,33 @@ const navigationCategories: NavigationCategory[] = [
     title: 'Sales & Transactions',
     icon: ShoppingCart,
     items: [
-      { title: 'Point of Sale', path: '/pos', icon: Tag, permissionKey: 'pos' },
-      { title: 'Sales', path: '/sales', icon: TrendingUp, permissionKey: 'sales' },
-      { title: 'Financials', path: '/financial-intelligence', icon: Brain, permissionKey: 'financial_intelligence' },
-      { title: 'Shifts', path: '/shifts', icon: Clock, permissionKey: 'sales' },
-      { title: 'End of Day Cash-Up', path: '/cash-up', icon: Calculator, permissionKey: 'sales' },
-      { title: 'Float Management', path: '/float', icon: DollarSign, permissionKey: 'floatManagement' },
-      { title: 'Petty Cash', path: '/petty-cash', icon: Wallet, permissionKey: 'pettyCash' },
+      { title: 'Point of Sale',        path: '/pos',                    icon: Tag,          permissionKey: 'pos',                   featureKey: 'pos'                    },
+      { title: 'Sales',               path: '/sales',                  icon: TrendingUp,   permissionKey: 'sales',                 featureKey: 'sales'                  },
+      { title: 'Financials',          path: '/financial-intelligence', icon: Brain,        permissionKey: 'financial_intelligence', featureKey: 'financial_intelligence' },
+      { title: 'Shifts',              path: '/shifts',                 icon: Clock,        permissionKey: 'sales',                 featureKey: 'shifts'                 },
+      { title: 'End of Day Cash-Up',  path: '/cash-up',                icon: Calculator,   permissionKey: 'sales',                 featureKey: 'sales'                  },
+      { title: 'Float Management',    path: '/float',                  icon: DollarSign,   permissionKey: 'floatManagement',       featureKey: 'float_management'       },
+      { title: 'Petty Cash',          path: '/petty-cash',             icon: Wallet,       permissionKey: 'pettyCash',             featureKey: 'petty_cash'             },
     ]
   },
   {
     title: 'Operations',
     icon: Wrench,
     items: [
-      { title: 'Cashiers', path: '/cashiers', icon: Users, permissionKey: 'cashiers' },
-      { title: 'Repair Jobs', path: '/repairs', icon: FileText, permissionKey: 'repairs' },
-      { title: 'Stock Taking', path: '/stock-taking', icon: ClipboardCheck, permissionKey: 'stockTaking' },
+      { title: 'Cashiers',    path: '/cashiers',     icon: Users,          permissionKey: 'cashiers',    featureKey: 'cashiers'    },
+      { title: 'Repair Jobs', path: '/repairs',      icon: FileText,       permissionKey: 'repairs',     featureKey: 'repairs'     },
+      { title: 'Stock Taking',path: '/stock-taking', icon: ClipboardCheck, permissionKey: 'stockTaking', featureKey: 'stock_taking'},
     ]
   },
   {
     title: 'Management',
     icon: Briefcase,
     items: [
-      { title: 'Customers', path: '/customers', icon: User, permissionKey: 'customers' },
-      { title: 'Inventory', path: '/inventory', icon: Package, permissionKey: 'inventory' },
-      { title: 'Tasks', path: '/tasks', icon: CheckSquare, permissionKey: 'pos' },
-      { title: 'Calendar', path: '/calendar', icon: Calendar, permissionKey: 'calendar' },
-      { title: 'History', path: '/history', icon: History, permissionKey: 'history' },
+      { title: 'Customers', path: '/customers', icon: User,        permissionKey: 'customers', featureKey: 'customers' },
+      { title: 'Inventory', path: '/inventory', icon: Package,     permissionKey: 'inventory', featureKey: 'inventory' },
+      { title: 'Tasks',     path: '/tasks',     icon: CheckSquare, permissionKey: 'pos',       featureKey: 'tasks'     },
+      { title: 'Calendar',  path: '/calendar',  icon: Calendar,    permissionKey: 'calendar',  featureKey: 'calendar'  },
+      { title: 'History',   path: '/history',   icon: History,     permissionKey: 'history',   featureKey: 'history'   },
     ]
   },
   {
@@ -102,6 +104,7 @@ const Sidebar = () => {
   const { logout, auth } = useAuth();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
+  const { hasFeature } = useFeatures();
 
   const toggleCategory = (categoryTitle: string) => {
     setExpandedCategories(prev =>
@@ -116,10 +119,13 @@ const Sidebar = () => {
   };
 
   const filterCategoryItems = (items: NavigationItem[]) => {
-    if (auth.user?.role === 'OWNER') {
-      return items;
-    }
-    return items.filter(item => hasPermission(item.permissionKey));
+    // Feature gate first — applies to all roles
+    const featureFiltered = items.filter(item =>
+      !item.featureKey || hasFeature(item.featureKey)
+    );
+    // Permission gate (OWNER bypasses, others need explicit permission)
+    if (auth.user?.role === 'OWNER') return featureFiltered;
+    return featureFiltered.filter(item => hasPermission(item.permissionKey));
   };
 
   const isCategoryActive = (items: NavigationItem[]) => {

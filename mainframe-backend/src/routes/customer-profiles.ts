@@ -368,6 +368,20 @@ router.post('/', requireAuth, async (req, res) => {
         ownerLastName: dto.contactLastName,
         ownerPassword,
       });
+
+      // Provisioning succeeded — automatically activate the tenant
+      await prisma.mf_customer_profiles.update({
+        where: { id: profile.id },
+        data: { status: 'ACTIVE' },
+      });
+      await prisma.mf_activity_logs.create({
+        data: {
+          customerProfileId: profile.id,
+          action: 'profile.activated',
+          description: 'Tenant automatically activated after successful POS provisioning',
+          actorType: 'system',
+        },
+      });
     } catch (err: any) {
       posProvisioningError = err.message;
       console.error('POS provisioning failed (non-fatal):', err.message);
@@ -384,6 +398,27 @@ router.post('/', requireAuth, async (req, res) => {
         ? { status: 'failed', error: posProvisioningError }
         : { status: 'success', ownerEmail: dto.contactEmail, ownerPassword, companyCode: dto.subdomain.toLowerCase() },
     });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// DELETE /mainframe/customer-profiles/:id
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const profile = await prisma.mf_customer_profiles.findUnique({
+      where: { id: req.params.id },
+    });
+    if (!profile) return res.status(404).json({ message: 'Customer profile not found' });
+
+    // Cascade delete related records first (activity logs, features, subscriptions)
+    await prisma.mf_activity_logs.deleteMany({ where: { customerProfileId: req.params.id } });
+    await prisma.mf_customer_features.deleteMany({ where: { customerProfileId: req.params.id } });
+    await prisma.mf_subscriptions.deleteMany({ where: { customerProfileId: req.params.id } });
+    await prisma.mf_customer_profiles.delete({ where: { id: req.params.id } });
+
+    return res.json({ message: 'Tenant deleted successfully' });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -439,13 +474,66 @@ router.put('/:id/status', requireAuth, async (req, res) => {
 });
 
 // GET /mainframe/customer-profiles/:id/features
+// Returns ALL mf_features merged with this tenant's enabled/disabled state.
 router.get('/:id/features', requireAuth, async (req, res) => {
   try {
-    const features = await prisma.mf_customer_features.findMany({
-      where: { customerProfileId: req.params.id },
-      include: { feature: true },
+    const [allFeatures, customerFeatures] = await Promise.all([
+      prisma.mf_features.findMany({
+        where: { status: { not: 'DEPRECATED' as any } },
+        orderBy: [{ category: 'asc' }, { featureName: 'asc' }],
+      }),
+      prisma.mf_customer_features.findMany({
+        where: { customerProfileId: req.params.id },
+      }),
+    ]);
+
+    const cfMap = new Map(customerFeatures.map(cf => [cf.featureId, cf]));
+
+    return res.json(allFeatures.map(f => ({
+      featureId:        f.id,
+      featureKey:       f.featureKey,
+      featureName:      f.featureName,
+      category:         f.category,
+      description:      f.description,
+      isIncludedInBase: f.isIncludedInBase,
+      additionalCost:   f.additionalCost,
+      status:           f.status,
+      customerFeatureId: cfMap.get(f.id)?.id ?? null,
+      isEnabled:         cfMap.get(f.id)?.isEnabled ?? false,
+      config:            cfMap.get(f.id)?.config ?? null,
+    })));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// PUT /mainframe/customer-profiles/:id/features/batch
+router.put('/:id/features/batch', requireAuth, async (req, res) => {
+  try {
+    const { features } = req.body as { features: { featureId: string; isEnabled: boolean }[] };
+    if (!Array.isArray(features)) return res.status(400).json({ message: 'features must be an array' });
+
+    const results = await Promise.all(
+      features.map(({ featureId, isEnabled }) =>
+        prisma.mf_customer_features.upsert({
+          where: { customerProfileId_featureId: { customerProfileId: req.params.id, featureId } },
+          update: { isEnabled, disabledAt: isEnabled ? null : new Date() },
+          create: { customerProfileId: req.params.id, featureId, isEnabled },
+        }),
+      ),
+    );
+
+    await prisma.mf_activity_logs.create({
+      data: {
+        customerProfileId: req.params.id,
+        action: 'features.batch_updated',
+        description: `${features.filter(f => f.isEnabled).length} features enabled, ${features.filter(f => !f.isEnabled).length} disabled`,
+        actorType: 'admin',
+      },
     });
-    return res.json(features);
+
+    return res.json({ updated: results.length });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Internal server error' });

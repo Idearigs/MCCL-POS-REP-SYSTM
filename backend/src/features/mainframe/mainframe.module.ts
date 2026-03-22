@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { CustomerProfilesController } from './controllers/customer-profiles.controller';
 import { CustomerProfilesService } from './services/customer-profiles.service';
 import { CustomerUsersController } from './controllers/customer-users.controller';
@@ -18,7 +19,7 @@ import { CredentialsExportService } from './services/credentials-export.service'
 import { PrismaModule } from '../../core/prisma/prisma.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, ConfigModule],
   controllers: [
     CustomerProfilesController,
     CustomerUsersController,

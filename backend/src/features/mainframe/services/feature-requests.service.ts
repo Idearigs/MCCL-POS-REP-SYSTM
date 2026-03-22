@@ -1,9 +1,23 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 
 @Injectable()
 export class FeatureRequestsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly mainframeUrl: string;
+  private readonly internalKey: string;
+
+  constructor(
+    private prisma: PrismaService,
+    private config: ConfigService,
+  ) {
+    this.mainframeUrl =
+      this.config.get<string>('MAINFRAME_BACKEND_URL') ||
+      'http://localhost:3001/api/v1';
+    this.internalKey =
+      this.config.get<string>('INTERNAL_API_KEY') || 'local-dev-internal-key';
+  }
 
   async create(data: {
     customerProfileId?: string;
@@ -12,16 +26,39 @@ export class FeatureRequestsService {
     priority?: string;
     targetFeatureKey?: string;
   }) {
-    return this.prisma.mf_feature_requests.create({
-      data: {
-        customerProfileId: data.customerProfileId,
-        title: data.title,
-        description: data.description,
-        priority: (data.priority || 'MEDIUM') as any,
-        status: 'SUBMITTED',
-        targetFeatureKey: data.targetFeatureKey,
-      },
-    });
+    // Forward to mainframe backend so it appears in the admin dashboard
+    try {
+      const { data: created } = await axios.post(
+        `${this.mainframeUrl}/mainframe/feature-requests`,
+        {
+          ...data,
+          priority: data.priority || 'MEDIUM',
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'x-internal-key': this.internalKey,
+          },
+          timeout: 8000,
+        },
+      );
+      return created;
+    } catch (err: any) {
+      console.error(
+        '[FeatureRequests] Failed to forward to mainframe, storing locally:',
+        err?.message,
+      );
+      return this.prisma.mf_feature_requests.create({
+        data: {
+          customerProfileId: data.customerProfileId,
+          title: data.title,
+          description: data.description,
+          priority: (data.priority || 'MEDIUM') as any,
+          status: 'SUBMITTED',
+          targetFeatureKey: data.targetFeatureKey,
+        },
+      });
+    }
   }
 
   async findAll(options?: { page?: number; limit?: number; status?: string }) {

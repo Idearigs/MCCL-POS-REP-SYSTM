@@ -11,6 +11,7 @@ import bugReportsRouter from './routes/bug-reports';
 import featureRequestsRouter from './routes/feature-requests';
 import subdomainRouter from './routes/subdomain';
 import credentialsRouter from './routes/credentials';
+import tenantFeaturesRouter from './routes/tenant-features';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001');
@@ -49,6 +50,7 @@ api.use('/mainframe/bug-reports', bugReportsRouter);
 api.use('/mainframe/feature-requests', featureRequestsRouter);
 api.use('/mainframe/subdomain', subdomainRouter);
 api.use('/mainframe/credentials', credentialsRouter);
+api.use('/mainframe/tenant-features', tenantFeaturesRouter);
 
 app.use('/api/v1', api);
 

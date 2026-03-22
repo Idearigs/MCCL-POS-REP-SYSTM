@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireAuthOrInternalKey } from '../middleware/auth';
 
 const router = Router();
 
@@ -38,8 +38,8 @@ router.get('/:id', requireAuth, async (req, res) => {
   }
 });
 
-// POST /mainframe/feature-requests
-router.post('/', requireAuth, async (req, res) => {
+// POST /mainframe/feature-requests (accepts mainframe JWT or internal API key from POS backend)
+router.post('/', requireAuthOrInternalKey, async (req, res) => {
   try {
     const { title, description, customerProfileId } = req.body;
     const request = await prisma.mf_feature_requests.create({

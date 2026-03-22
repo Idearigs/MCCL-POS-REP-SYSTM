@@ -1,9 +1,23 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 
 @Injectable()
 export class BugReportsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly mainframeUrl: string;
+  private readonly internalKey: string;
+
+  constructor(
+    private prisma: PrismaService,
+    private config: ConfigService,
+  ) {
+    this.mainframeUrl =
+      this.config.get<string>('MAINFRAME_BACKEND_URL') ||
+      'http://localhost:3001/api/v1';
+    this.internalKey =
+      this.config.get<string>('INTERNAL_API_KEY') || 'local-dev-internal-key';
+  }
 
   async create(data: {
     customerProfileId?: string;
@@ -24,33 +38,54 @@ export class BugReportsService {
     userAgent?: string;
     pageUrl?: string;
   }) {
-    return this.prisma.mf_bug_reports.create({
-      data: {
-        customerProfileId: data.customerProfileId,
-        title: data.title,
-        description: data.description,
-        priority: (data.priority || 'MEDIUM') as any,
-        status: 'OPEN',
-        featureKey: data.featureKey,
-        affectedVersion: data.affectedVersion,
-        browser: data.browser,
-        os: data.os,
-        deviceType: data.deviceType,
-        stepsToReproduce: data.stepsToReproduce,
-        expectedBehavior: data.expectedBehavior,
-        actualBehavior: data.actualBehavior,
-        screenshots: data.screenshots || [],
-        errorLogs: data.errorLogs,
-        errorStackTrace: data.errorStackTrace,
-        userAgent: data.userAgent,
-        pageUrl: data.pageUrl,
-      },
-      include: {
-        customerProfile: {
-          select: { businessName: true, subdomain: true },
+    // Forward the bug report to the mainframe backend so it appears
+    // in the centralised mainframe admin dashboard.
+    try {
+      const { data: created } = await axios.post(
+        `${this.mainframeUrl}/mainframe/bug-reports`,
+        {
+          ...data,
+          priority: data.priority || 'MEDIUM',
+          screenshots: data.screenshots || [],
         },
-      },
-    });
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'x-internal-key': this.internalKey,
+          },
+          timeout: 8000,
+        },
+      );
+      return created;
+    } catch (err: any) {
+      // Fall back to storing locally if mainframe is unreachable
+      console.error(
+        '[BugReports] Failed to forward to mainframe, storing locally:',
+        err?.message,
+      );
+      return this.prisma.mf_bug_reports.create({
+        data: {
+          customerProfileId: data.customerProfileId,
+          title: data.title,
+          description: data.description,
+          priority: (data.priority || 'MEDIUM') as any,
+          status: 'OPEN',
+          featureKey: data.featureKey,
+          affectedVersion: data.affectedVersion,
+          browser: data.browser,
+          os: data.os,
+          deviceType: data.deviceType,
+          stepsToReproduce: data.stepsToReproduce,
+          expectedBehavior: data.expectedBehavior,
+          actualBehavior: data.actualBehavior,
+          screenshots: data.screenshots || [],
+          errorLogs: data.errorLogs,
+          errorStackTrace: data.errorStackTrace,
+          userAgent: data.userAgent,
+          pageUrl: data.pageUrl,
+        },
+      });
+    }
   }
 
   async findAll(options?: {

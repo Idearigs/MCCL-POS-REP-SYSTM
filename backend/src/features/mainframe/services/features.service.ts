@@ -3,11 +3,38 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 
 @Injectable()
 export class FeaturesService {
-  constructor(private prisma: PrismaService) {}
+  private readonly mainframeUrl: string;
+  private readonly internalKey: string;
+
+  constructor(
+    private prisma: PrismaService,
+    private config: ConfigService,
+  ) {
+    this.mainframeUrl =
+      this.config.get<string>('MAINFRAME_BACKEND_URL') || 'http://localhost:3001/api/v1';
+    this.internalKey =
+      this.config.get<string>('INTERNAL_API_KEY') || 'local-dev-internal-key';
+  }
+
+  /** Called by the POS frontend on login to know which features are enabled for this tenant. */
+  async getTenantFeatures(subdomain: string): Promise<{ features: string[] }> {
+    try {
+      const { data } = await axios.get<{ features: string[] }>(
+        `${this.mainframeUrl}/mainframe/tenant-features/${subdomain}`,
+        { headers: { 'x-internal-key': this.internalKey }, timeout: 5000 },
+      );
+      return data;
+    } catch {
+      // Fail open — return all features if mainframe is unreachable
+      return { features: [] };
+    }
+  }
 
   async create(data: {
     featureKey: string;

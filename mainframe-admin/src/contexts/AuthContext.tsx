@@ -36,7 +36,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     try {
       const response = await mainframeAdminApi.login(email, password);
-      const { id, firstName, lastName, role, email: adminEmail } = response.data;
+      const { token, admin: adminInfo } = response.data;
+      const { id, firstName, lastName, role, email: adminEmail } = adminInfo;
 
       const adminData: Admin = {
         id,
@@ -46,8 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role,
       };
 
-      // Store admin data and create a simple token (in production, backend should return a proper JWT)
-      const token = btoa(`${id}:${email}:${Date.now()}`);
+      // Store the JWT returned by the backend
       localStorage.setItem('mf_admin_user', JSON.stringify(adminData));
       localStorage.setItem('mf_admin_token', token);
 
@@ -63,17 +63,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('mf_admin_token');
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
   return (
     <AuthContext.Provider value={{ admin, isAuthenticated: !!admin, login, logout }}>
-      {children}
+      {isLoading ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      ) : children}
     </AuthContext.Provider>
   );
 };
