@@ -125,7 +125,8 @@ jobs:
           HTTP_STATUS=$(curl -s -o /tmp/coolify_backend_response.txt -w "%{http_code}" \
             --max-time 30 \
             -X GET \
-            "${{ secrets.COOLIFY_BACKEND_WEBHOOK }}&token=${{ secrets.COOLIFY_TOKEN }}")
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            "${{ secrets.COOLIFY_BACKEND_WEBHOOK }}")
 
           echo "Coolify response: $(cat /tmp/coolify_backend_response.txt)"
           echo "HTTP status: $HTTP_STATUS"
@@ -156,7 +157,8 @@ jobs:
           HTTP_STATUS=$(curl -s -o /tmp/coolify_frontend_response.txt -w "%{http_code}" \
             --max-time 30 \
             -X GET \
-            "${{ secrets.COOLIFY_FRONTEND_WEBHOOK }}&token=${{ secrets.COOLIFY_TOKEN }}")
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            "${{ secrets.COOLIFY_FRONTEND_WEBHOOK }}")
 
           echo "Coolify response: $(cat /tmp/coolify_frontend_response.txt)"
           echo "HTTP status: $HTTP_STATUS"
