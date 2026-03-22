@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { RefreshCw } from 'lucide-react';
@@ -17,6 +17,14 @@ const PWAUpdateNotifier: React.FC = () => {
       console.error('Service Worker registration error:', error);
     },
   });
+
+  // On the login page, auto-apply updates immediately — the user hasn't started
+  // a session yet so there's nothing to lose by reloading.
+  useEffect(() => {
+    if (needRefresh && window.location.pathname === '/login') {
+      updateServiceWorker(true);
+    }
+  }, [needRefresh, updateServiceWorker]);
 
   const handleUpdate = () => {
     updateServiceWorker(true);
