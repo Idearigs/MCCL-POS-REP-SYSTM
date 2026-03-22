@@ -875,53 +875,74 @@ const MainFrameDashboard: React.FC = () => {
                       {/* Users */}
                       {tenantTab === 'users' && (
                         <div className="space-y-4">
-                          {/* Login credentials card — shown when we have users with credentials */}
-                          {tenantUsers.some(u => u.tempPassword) && (
-                            <div className="rounded-2xl p-5 space-y-4"
-                              style={{ background: 'linear-gradient(135deg, rgba(0,122,255,0.05), rgba(88,86,214,0.05))', border: '1.5px solid rgba(0,122,255,0.18)' }}>
-                              <div className="flex items-center gap-2">
-                                <Shield className="w-4 h-4" style={{ color: '#007AFF' }} />
-                                <p className="text-sm font-bold" style={{ color: '#007AFF' }}>Login Credentials</p>
-                                <span className="text-[10px] px-2 py-0.5 rounded-full ml-auto font-semibold" style={{ background: '#DBEAFE', color: '#1E40AF' }}>
-                                  Company Code: {selectedTenant?.subdomain}
-                                </span>
-                              </div>
-                              {tenantUsers.filter(u => u.tempPassword).map(u => (
-                                <div key={u.id} className="rounded-xl p-4 space-y-2.5" style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.06)' }}>
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-[11px] flex-shrink-0"
-                                      style={{ background: 'linear-gradient(135deg, #007AFF, #5856D6)' }}>
-                                      {u.firstName[0]}{u.lastName[0]}
-                                    </div>
-                                    <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>{u.firstName} {u.lastName}</p>
-                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#F3F4F6', color: '#6E6E73' }}>{u.role}</span>
-                                    {u.mustChangePassword && (
-                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#FEF3C7', color: '#92400E' }}>Must change password</span>
-                                    )}
+                          {/* Login credentials card — always visible */}
+                          <div className="rounded-2xl p-5 space-y-4"
+                            style={{ background: 'linear-gradient(135deg, rgba(0,122,255,0.05), rgba(88,86,214,0.05))', border: '1.5px solid rgba(0,122,255,0.18)' }}>
+                            <div className="flex items-center gap-2">
+                              <Shield className="w-4 h-4" style={{ color: '#007AFF' }} />
+                              <p className="text-sm font-bold" style={{ color: '#007AFF' }}>Login Credentials</p>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full ml-auto font-semibold" style={{ background: '#DBEAFE', color: '#1E40AF' }}>
+                                Company Code: {selectedTenant?.subdomain}
+                              </span>
+                            </div>
+                            {tenantUsers.length === 0 ? (
+                              <p className="text-sm text-center py-2" style={{ color: '#8E8E93' }}>
+                                No users added yet — add a user to see their login credentials here.
+                              </p>
+                            ) : tenantUsers.map(u => (
+                              <div key={u.id} className="rounded-xl p-4 space-y-2.5" style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-[11px] flex-shrink-0"
+                                    style={{ background: 'linear-gradient(135deg, #007AFF, #5856D6)' }}>
+                                    {u.firstName[0]}{u.lastName[0]}
                                   </div>
-                                  {[
-                                    { l: 'Email', v: u.email, mono: false },
-                                    { l: 'Company Code', v: selectedTenant?.subdomain || '', mono: true },
-                                    { l: 'Current Password', v: u.tempPassword || '', mono: true },
-                                  ].map(({ l, v, mono }) => (
-                                    <div key={l} className="flex items-center justify-between gap-2">
-                                      <p className="text-[11px] font-semibold uppercase tracking-wider w-28 flex-shrink-0" style={{ color: '#8E8E93' }}>{l}</p>
-                                      <p className={`text-sm flex-1 ${mono ? 'font-mono font-bold' : 'font-medium'}`} style={{ color: '#1D1D1F' }}>{v}</p>
-                                      <button
-                                        onClick={() => { navigator.clipboard.writeText(v); toast.success(`${l} copied`); }}
-                                        className="p-1.5 rounded-lg flex-shrink-0 hover:bg-black/5 transition-colors"
-                                        title={`Copy ${l}`}>
+                                  <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>{u.firstName} {u.lastName}</p>
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#F3F4F6', color: '#6E6E73' }}>{u.role}</span>
+                                  {u.mustChangePassword && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#FEF3C7', color: '#92400E' }}>Must change password</span>
+                                  )}
+                                </div>
+                                {[
+                                  { l: 'Email / Username', v: u.email, mono: false },
+                                  { l: 'Company Code', v: selectedTenant?.subdomain || '', mono: true },
+                                ].map(({ l, v, mono }) => (
+                                  <div key={l} className="flex items-center justify-between gap-2">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wider w-32 flex-shrink-0" style={{ color: '#8E8E93' }}>{l}</p>
+                                    <p className={`text-sm flex-1 ${mono ? 'font-mono font-bold' : 'font-medium'}`} style={{ color: '#1D1D1F' }}>{v}</p>
+                                    <button onClick={() => { navigator.clipboard.writeText(v); toast.success(`${l} copied`); }}
+                                      className="p-1.5 rounded-lg flex-shrink-0 hover:bg-black/5 transition-colors">
+                                      <Copy className="w-3.5 h-3.5" style={{ color: '#8E8E93' }} />
+                                    </button>
+                                  </div>
+                                ))}
+                                {/* Password row — always shown */}
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wider w-32 flex-shrink-0" style={{ color: '#8E8E93' }}>Password</p>
+                                  {u.tempPassword ? (
+                                    <>
+                                      <p className="text-sm flex-1 font-mono font-bold" style={{ color: '#007AFF' }}>{u.tempPassword}</p>
+                                      <button onClick={() => { navigator.clipboard.writeText(u.tempPassword!); toast.success('Password copied'); }}
+                                        className="p-1.5 rounded-lg flex-shrink-0 hover:bg-black/5 transition-colors">
                                         <Copy className="w-3.5 h-3.5" style={{ color: '#8E8E93' }} />
                                       </button>
-                                    </div>
-                                  ))}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <p className="text-sm flex-1 italic" style={{ color: '#C7C7CC' }}>Set by user (unknown)</p>
+                                      <button onClick={() => resetPw(u)}
+                                        className="px-2 py-1 rounded-lg text-[11px] font-semibold flex-shrink-0 hover:bg-black/5 transition-colors"
+                                        style={{ color: '#FF9F0A' }}>
+                                        Reset
+                                      </button>
+                                    </>
+                                  )}
                                 </div>
-                              ))}
-                              <p className="text-[11px]" style={{ color: '#8E8E93' }}>
-                                Password shown is the last admin-set password. If the user has changed their own password since, this may no longer be accurate — use "Reset Password" to generate a new one.
-                              </p>
-                            </div>
-                          )}
+                              </div>
+                            ))}
+                            <p className="text-[11px]" style={{ color: '#8E8E93' }}>
+                              Password shown is the last admin-set password. Use "Reset Password" (🔑) to generate a new one if the client is locked out.
+                            </p>
+                          </div>
 
                           <div className="flex items-center justify-between">
                             <p className="text-sm font-medium" style={{ color: '#6E6E73' }}>{tenantUsers.length} users</p>

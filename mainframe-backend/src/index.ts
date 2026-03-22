@@ -171,6 +171,107 @@ async function seedFeatures() {
   }
 }
 
+/**
+ * Seeds the Buy Me Jewellery profile as an existing client.
+ * This is the original first client of the TrueDesk POS system, set up before
+ * the mainframe was built. Their POS is already running — we're just registering
+ * their profile in the mainframe for management purposes.
+ */
+async function seedBuymeTenant() {
+  const SUBDOMAIN = 'buymejewellery';
+  const SALT = process.env.PASSWORD_SALT || 'truedesk-mainframe-salt';
+
+  try {
+    // Check if already seeded
+    const existing = await prisma.mf_customer_profiles.findUnique({
+      where: { subdomain: SUBDOMAIN },
+    });
+    if (existing) {
+      console.log('ℹ️  Buy Me Jewellery profile already exists — skipping seed');
+      return;
+    }
+
+    // Create profile
+    const profile = await prisma.mf_customer_profiles.create({
+      data: {
+        businessName: 'Buy Me Jewellery',
+        businessEmail: 'admin@buymejewellery.co.uk',
+        businessPhone: '',
+        businessAddress: '',
+        city: '',
+        country: 'United Kingdom',
+        subdomain: SUBDOMAIN,
+        databaseName: 'truedesk_buymejewellery',
+        contactFirstName: 'Buy Me',
+        contactLastName: 'Jewellery',
+        contactEmail: 'admin@buymejewellery.co.uk',
+        status: 'ACTIVE',
+        setupCompletedAt: new Date(),
+        primaryColor: '#1e3a5f',
+        secondaryColor: '#c9a84c',
+        internalNotes: 'Original first client — POS was set up before mainframe was built. Profile added manually.',
+      },
+    });
+
+    // Create subscription (PROFESSIONAL plan — existing client)
+    const nextBilling = new Date();
+    nextBilling.setMonth(nextBilling.getMonth() + 1);
+    await prisma.mf_subscriptions.create({
+      data: {
+        customerProfileId: profile.id,
+        plan: 'PROFESSIONAL',
+        billingCycle: 'MONTHLY',
+        basePrice: 79,
+        perUserPrice: 8,
+        includedUsers: 5,
+        maxUsers: 15,
+        currentUsers: 1,
+        currentPeriodEnd: nextBilling,
+        nextBillingDate: nextBilling,
+      },
+    });
+
+    // Enable all features (existing client has access to everything)
+    const allFeatures = await prisma.mf_features.findMany({ where: { isEnabled: true } });
+    for (const feature of allFeatures) {
+      await prisma.mf_customer_features.create({
+        data: { customerProfileId: profile.id, featureId: feature.id, isEnabled: true },
+      });
+    }
+
+    // Create owner user entry so credentials show in the admin panel
+    // Generate a temp password — admin can reset this to match the client's real POS password
+    const tempPassword = 'BuyMe@2026';
+    const passwordHash = crypto.createHash('sha256').update(tempPassword + SALT).digest('hex');
+    await prisma.mf_customer_users.create({
+      data: {
+        customerProfileId: profile.id,
+        firstName: 'Buy Me',
+        lastName: 'Jewellery',
+        email: 'admin@buymejewellery.co.uk',
+        role: 'OWNER',
+        passwordHash,
+        tempPassword,
+        mustChangePassword: false,
+      },
+    });
+
+    // Log activity
+    await prisma.mf_activity_logs.create({
+      data: {
+        customerProfileId: profile.id,
+        action: 'profile.created',
+        description: 'Existing client profile seeded on startup — Buy Me Jewellery',
+        actorType: 'system',
+      },
+    });
+
+    console.log('✅ Buy Me Jewellery profile seeded as existing client');
+  } catch (err) {
+    console.error('⚠️  Buy Me Jewellery seed failed (non-fatal):', err);
+  }
+}
+
 async function bootstrap() {
   try {
     await prisma.$connect();
@@ -182,6 +283,7 @@ async function bootstrap() {
 
   await seedAdmin();
   await seedFeatures();
+  await seedBuymeTenant();
 
   app.listen(PORT, () => {
     console.log(`🚀 Mainframe Backend running on http://localhost:${PORT}`);
