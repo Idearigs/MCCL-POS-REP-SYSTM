@@ -121,12 +121,18 @@ jobs:
 
     steps:
       - name: Trigger Coolify backend deployment
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_BACKEND_WEBHOOK: ${{ secrets.COOLIFY_BACKEND_WEBHOOK }}
         run: |
+          TOKEN=$(echo "$COOLIFY_TOKEN" | tr -d '[:space:]')
+          WEBHOOK=$(echo "$COOLIFY_BACKEND_WEBHOOK" | tr -d '[:space:]')
+
           HTTP_STATUS=$(curl -s -o /tmp/coolify_backend_response.txt -w "%{http_code}" \
             --max-time 30 \
             -X GET \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
-            "${{ secrets.COOLIFY_BACKEND_WEBHOOK }}")
+            -H "Authorization: Bearer ${TOKEN}" \
+            "${WEBHOOK}")
 
           echo "Coolify response: $(cat /tmp/coolify_backend_response.txt)"
           echo "HTTP status: $HTTP_STATUS"
@@ -153,12 +159,18 @@ jobs:
 
     steps:
       - name: Trigger Coolify frontend deployment
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_FRONTEND_WEBHOOK: ${{ secrets.COOLIFY_FRONTEND_WEBHOOK }}
         run: |
+          TOKEN=$(echo "$COOLIFY_TOKEN" | tr -d '[:space:]')
+          WEBHOOK=$(echo "$COOLIFY_FRONTEND_WEBHOOK" | tr -d '[:space:]')
+
           HTTP_STATUS=$(curl -s -o /tmp/coolify_frontend_response.txt -w "%{http_code}" \
             --max-time 30 \
             -X GET \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
-            "${{ secrets.COOLIFY_FRONTEND_WEBHOOK }}")
+            -H "Authorization: Bearer ${TOKEN}" \
+            "${WEBHOOK}")
 
           echo "Coolify response: $(cat /tmp/coolify_frontend_response.txt)"
           echo "HTTP status: $HTTP_STATUS"
