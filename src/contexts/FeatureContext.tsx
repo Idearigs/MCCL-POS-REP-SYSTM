@@ -1,6 +1,18 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../services/apiClient';
 
+// Core features are ALWAYS enabled regardless of mainframe configuration.
+// They represent the minimum viable POS functionality every tenant needs.
+// Even if the mainframe is unreachable, these are never hidden.
+export const CORE_FEATURES = new Set([
+  'pos',        // Point of Sale terminal
+  'inventory',  // Inventory Management
+  'customers',  // Customer Management
+  'sales',      // Sales & Transactions (also covers End of Day Cash-Up)
+  'repairs',    // Repair Management
+  'cashiers',   // Staff/Cashiers Management
+]);
+
 interface FeatureContextType {
   enabledFeatures: string[];
   hasFeature: (key: string) => boolean;
@@ -10,7 +22,7 @@ interface FeatureContextType {
 
 const FeatureContext = createContext<FeatureContextType>({
   enabledFeatures: [],
-  hasFeature: () => true,
+  hasFeature: (key: string) => CORE_FEATURES.has(key),
   loading: false,
   reload: () => {},
 });
@@ -48,12 +60,14 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [load]);
 
-  /** Returns true if a feature is enabled for this tenant.
-   *  - Always true while loading or if the request failed (fail-open).
-   *  - Always true if features have not yet been loaded. */
   const hasFeature = useCallback((key: string): boolean => {
+    // Core features are ALWAYS enabled — no mainframe config can disable them
+    if (CORE_FEATURES.has(key)) return true;
+
+    // While loading or on error: fail-open (show non-core features too)
     if (!loaded || loading || loadError) return true;
-    if (enabledFeatures.length === 0) return true; // fail-open: no features assigned yet
+
+    // Features were loaded: check the list
     return enabledFeatures.includes(key);
   }, [enabledFeatures, loaded, loading, loadError]);
 

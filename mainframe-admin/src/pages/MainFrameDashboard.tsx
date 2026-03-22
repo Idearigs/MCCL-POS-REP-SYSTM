@@ -21,6 +21,7 @@ interface TenantFeature {
   category: string; description?: string;
   isIncludedInBase: boolean; additionalCost: any;
   status: string; isEnabled: boolean;
+  customerFeatureId: string | null;
 }
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -538,12 +539,15 @@ const MainFrameDashboard: React.FC = () => {
   const saveFeatures = async () => {
     if (!selectedTenant || !tenantFeatures.length) return;
     setSavingFeatures(true);
+    const CORE_KEYS = new Set(['pos', 'inventory', 'customers', 'sales', 'repairs', 'cashiers']);
     try {
+      // Only save non-core features — core features are always enabled by the system
+      const nonCoreFeatures = tenantFeatures.filter(f => !CORE_KEYS.has(f.featureKey));
       await customerProfilesApi.batchUpdateFeatures(
         selectedTenant.id,
-        tenantFeatures.map(f => ({ featureId: f.featureId, isEnabled: f.isEnabled })),
+        nonCoreFeatures.map(f => ({ featureId: f.featureId, isEnabled: f.isEnabled })),
       );
-      toast.success('Feature configuration saved');
+      toast.success('Add-on features saved successfully');
     } catch { toast.error('Failed to save features'); }
     finally { setSavingFeatures(false); }
   };
@@ -895,55 +899,67 @@ const MainFrameDashboard: React.FC = () => {
 
                       {/* Features */}
                       {tenantTab === 'features' && (() => {
-                        const enabled   = tenantFeatures.filter(f => f.isEnabled);
-                        const available = tenantFeatures.filter(f => !f.isEnabled);
+                        const CORE_KEYS = new Set(['pos', 'inventory', 'customers', 'sales', 'repairs', 'cashiers']);
+                        const STANDARD_KEYS = new Set(['shifts', 'float_management', 'petty_cash', 'stock_taking', 'calendar', 'tasks', 'history']);
+                        const PREMIUM_KEYS = new Set(['financial_intelligence', 'chatbot', 'google_drive']);
 
-                        const CAT_COLORS: Record<string, { bg: string; text: string }> = {
-                          core:         { bg: '#DBEAFE', text: '#1E40AF' },
-                          operations:   { bg: '#FEF3C7', text: '#92400E' },
-                          finance:      { bg: '#D1FAE5', text: '#065F46' },
-                          reporting:    { bg: '#EDE9FE', text: '#5B21B6' },
-                          tools:        { bg: '#E0F2FE', text: '#0C4A6E' },
-                          analytics:    { bg: '#FEE2E2', text: '#991B1B' },
-                          ai:           { bg: '#FDF4FF', text: '#701A75' },
-                          integrations: { bg: '#F0FDF4', text: '#14532D' },
+                        const coreFeatures     = tenantFeatures.filter(f => CORE_KEYS.has(f.featureKey));
+                        const nonCoreFeatures  = tenantFeatures.filter(f => !CORE_KEYS.has(f.featureKey));
+                        const enabledNonCore   = nonCoreFeatures.filter(f => f.isEnabled);
+                        const disabledNonCore  = nonCoreFeatures.filter(f => !f.isEnabled);
+
+                        const TIER_COLORS: Record<string, { bg: string; text: string }> = {
+                          Core:     { bg: '#DBEAFE', text: '#1E40AF' },
+                          Standard: { bg: '#D1FAE5', text: '#065F46' },
+                          Premium:  { bg: '#EDE9FE', text: '#5B21B6' },
                         };
 
-                        const FeatureCard = ({ f, zone }: { f: TenantFeature; zone: 'enabled' | 'available' }) => {
-                          const cc = CAT_COLORS[f.category ?? ''] ?? { bg: '#F3F4F6', text: '#374151' };
+                        const getTier = (key: string) => {
+                          if (CORE_KEYS.has(key)) return 'Core';
+                          if (STANDARD_KEYS.has(key)) return 'Standard';
+                          if (PREMIUM_KEYS.has(key)) return 'Premium';
+                          return 'Standard';
+                        };
+
+                        const FeatureCard = ({ f, zone, locked = false }: { f: TenantFeature; zone: 'enabled' | 'available' | 'core'; locked?: boolean }) => {
+                          const tier = getTier(f.featureKey);
+                          const tc = TIER_COLORS[tier] ?? { bg: '#F3F4F6', text: '#374151' };
                           return (
                             <motion.div
                               key={f.featureId}
                               layout
                               initial={{ opacity: 0, scale: 0.97 }}
                               animate={{ opacity: 1, scale: 1 }}
-                              draggable
-                              onDragStart={() => { dragFeatureId.current = f.featureId; }}
-                              onDragEnd={() => { dragFeatureId.current = null; }}
+                              draggable={!locked}
+                              onDragStart={locked ? undefined : () => { dragFeatureId.current = f.featureId; }}
+                              onDragEnd={locked ? undefined : () => { dragFeatureId.current = null; }}
                               className="flex items-center justify-between px-3 py-2.5 rounded-xl select-none"
                               style={{
-                                background: 'rgba(255,255,255,0.9)',
+                                background: locked ? 'rgba(59,130,246,0.04)' : 'rgba(255,255,255,0.9)',
                                 boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
-                                cursor: 'grab',
-                                border: zone === 'enabled' ? '1px solid rgba(52,199,89,0.2)' : '1px solid rgba(0,0,0,0.06)',
+                                cursor: locked ? 'default' : 'grab',
+                                border: zone === 'core'
+                                  ? '1px solid rgba(59,130,246,0.2)'
+                                  : zone === 'enabled'
+                                    ? '1px solid rgba(52,199,89,0.2)'
+                                    : '1px solid rgba(0,0,0,0.06)',
+                                opacity: locked ? 0.85 : 1,
                               }}
                             >
                               <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: zone === 'enabled' ? '#34C759' : '#C7C7CC' }} />
+                                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                  style={{ background: zone === 'available' ? '#C7C7CC' : '#34C759' }} />
                                 <div className="min-w-0">
                                   <p className="text-sm font-semibold truncate" style={{ color: '#1D1D1F' }}>{f.featureName}</p>
                                   <p className="text-[11px] font-mono" style={{ color: '#8E8E93' }}>{f.featureKey}</p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                                {f.isIncludedInBase && (
-                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#DBEAFE', color: '#1E40AF' }}>BASE</span>
+                                {locked && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#FEF3C7', color: '#92400E' }}>LOCKED</span>
                                 )}
-                                {Number(f.additionalCost) > 0 && (
-                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#FEF3C7', color: '#92400E' }}>+£{Number(f.additionalCost)}/mo</span>
-                                )}
-                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full capitalize"
-                                  style={{ backgroundColor: cc.bg, color: cc.text }}>{f.category}</span>
+                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
+                                  style={{ backgroundColor: tc.bg, color: tc.text }}>{tier}</span>
                               </div>
                             </motion.div>
                           );
@@ -952,21 +968,26 @@ const MainFrameDashboard: React.FC = () => {
                         const handleDrop = (toEnabled: boolean) => {
                           const id = dragFeatureId.current;
                           if (!id) return;
+                          // Never allow dragging core features
+                          const feature = tenantFeatures.find(f => f.featureId === id);
+                          if (feature && CORE_KEYS.has(feature.featureKey)) return;
                           setTenantFeatures(prev =>
                             prev.map(f => f.featureId === id ? { ...f, isEnabled: toEnabled } : f)
                           );
                         };
 
+                        const tenantPlan = selectedTenant?.subscription?.plan || 'STARTER';
+
                         return (
-                          <div className="space-y-4">
+                          <div className="space-y-5">
                             {/* Header */}
                             <div className="flex items-center justify-between">
                               <div>
                                 <p className="text-sm font-medium" style={{ color: '#1D1D1F' }}>
-                                  Drag features between columns to enable or disable them for this tenant.
+                                  Drag Standard & Premium features to enable or disable them.
                                 </p>
                                 <p className="text-xs mt-0.5" style={{ color: '#8E8E93' }}>
-                                  Changes apply immediately to the POS after saving.
+                                  Core features are always active and cannot be disabled. Current plan: <strong>{tenantPlan}</strong>
                                 </p>
                               </div>
                               <div className="flex gap-2">
@@ -979,65 +1000,104 @@ const MainFrameDashboard: React.FC = () => {
                                 </AppleBtn>
                                 <AppleBtn variant="primary" disabled={savingFeatures} onClick={saveFeatures}>
                                   <CheckCircle className="w-3.5 h-3.5" />
-                                  {savingFeatures ? 'Saving…' : `Save & Activate (${enabled.length} features)`}
+                                  {savingFeatures ? 'Saving…' : `Save & Activate (${enabledNonCore.length} add-ons)`}
                                 </AppleBtn>
                               </div>
                             </div>
 
                             {tenantFeatures.length === 0
-                              ? <EmptyState icon={<Package />} label="No features found — click 'Seed Defaults' in the Features menu first" />
+                              ? <div style={{ textAlign: 'center', padding: '2rem', color: '#8E8E93', fontSize: 14 }}>No features found — click Reload or check that features are seeded.</div>
                               : (
-                                <div className="grid grid-cols-2 gap-4">
-                                  {/* Enabled zone */}
-                                  <div
-                                    className="rounded-2xl p-4 space-y-2 min-h-[320px]"
-                                    style={{
-                                      background: 'rgba(52,199,89,0.05)',
-                                      border: '2px dashed rgba(52,199,89,0.35)',
-                                      transition: 'border-color 0.15s',
-                                    }}
-                                    onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = '#34C759'; }}
-                                    onDragLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(52,199,89,0.35)'; }}
-                                    onDrop={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(52,199,89,0.35)'; handleDrop(true); }}
-                                  >
+                                <div className="space-y-4">
+                                  {/* Core Features — locked, always on */}
+                                  <div className="rounded-2xl p-4 space-y-2"
+                                    style={{ background: 'rgba(59,130,246,0.04)', border: '1.5px solid rgba(59,130,246,0.15)' }}>
                                     <div className="flex items-center gap-2 mb-3">
-                                      <div className="w-2 h-2 rounded-full" style={{ background: '#34C759' }} />
-                                      <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#34C759' }}>
-                                        Active — {enabled.length}
+                                      <div className="w-2 h-2 rounded-full" style={{ background: '#3B82F6' }} />
+                                      <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#3B82F6' }}>
+                                        Core — Always Active ({coreFeatures.length})
                                       </p>
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full ml-auto" style={{ background: '#DBEAFE', color: '#1E40AF' }}>
+                                        Cannot be disabled
+                                      </span>
                                     </div>
-                                    {enabled.length === 0 && (
-                                      <p className="text-xs text-center py-8" style={{ color: 'rgba(52,199,89,0.5)' }}>
-                                        Drop features here to enable them
-                                      </p>
-                                    )}
-                                    {enabled.map(f => <FeatureCard key={f.featureId} f={f} zone="enabled" />)}
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {coreFeatures.map(f => <FeatureCard key={f.featureId} f={f} zone="core" locked />)}
+                                      {coreFeatures.length === 0 && (
+                                        <p className="text-xs col-span-2 text-center py-4" style={{ color: '#8E8E93' }}>No core features found — seed defaults first</p>
+                                      )}
+                                    </div>
                                   </div>
 
-                                  {/* Disabled zone */}
-                                  <div
-                                    className="rounded-2xl p-4 space-y-2 min-h-[320px]"
-                                    style={{
-                                      background: 'rgba(120,120,128,0.05)',
-                                      border: '2px dashed rgba(120,120,128,0.25)',
-                                      transition: 'border-color 0.15s',
-                                    }}
-                                    onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = '#8E8E93'; }}
-                                    onDragLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(120,120,128,0.25)'; }}
-                                    onDrop={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(120,120,128,0.25)'; handleDrop(false); }}
-                                  >
-                                    <div className="flex items-center gap-2 mb-3">
-                                      <div className="w-2 h-2 rounded-full" style={{ background: '#C7C7CC' }} />
-                                      <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#8E8E93' }}>
-                                        Disabled — {available.length}
-                                      </p>
+                                  {/* Standard & Premium — drag-and-drop */}
+                                  <div className="grid grid-cols-2 gap-4">
+                                    {/* Enabled zone */}
+                                    <div
+                                      className="rounded-2xl p-4 space-y-2 min-h-[280px]"
+                                      style={{
+                                        background: 'rgba(52,199,89,0.05)',
+                                        border: '2px dashed rgba(52,199,89,0.35)',
+                                        transition: 'border-color 0.15s',
+                                      }}
+                                      onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = '#34C759'; }}
+                                      onDragLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(52,199,89,0.35)'; }}
+                                      onDrop={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(52,199,89,0.35)'; handleDrop(true); }}
+                                    >
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-2 h-2 rounded-full" style={{ background: '#34C759' }} />
+                                        <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#34C759' }}>
+                                          Add-ons Active — {enabledNonCore.length}
+                                        </p>
+                                      </div>
+                                      {enabledNonCore.length === 0 && (
+                                        <p className="text-xs text-center py-8" style={{ color: 'rgba(52,199,89,0.5)' }}>
+                                          Drop add-ons here to enable them
+                                        </p>
+                                      )}
+                                      {enabledNonCore.map(f => <FeatureCard key={f.featureId} f={f} zone="enabled" />)}
                                     </div>
-                                    {available.length === 0 && (
-                                      <p className="text-xs text-center py-8" style={{ color: 'rgba(120,120,128,0.4)' }}>
-                                        Drop features here to disable them
-                                      </p>
-                                    )}
-                                    {available.map(f => <FeatureCard key={f.featureId} f={f} zone="available" />)}
+
+                                    {/* Disabled zone */}
+                                    <div
+                                      className="rounded-2xl p-4 space-y-2 min-h-[280px]"
+                                      style={{
+                                        background: 'rgba(120,120,128,0.05)',
+                                        border: '2px dashed rgba(120,120,128,0.25)',
+                                        transition: 'border-color 0.15s',
+                                      }}
+                                      onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = '#8E8E93'; }}
+                                      onDragLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(120,120,128,0.25)'; }}
+                                      onDrop={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(120,120,128,0.25)'; handleDrop(false); }}
+                                    >
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-2 h-2 rounded-full" style={{ background: '#C7C7CC' }} />
+                                        <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#8E8E93' }}>
+                                          Add-ons Disabled — {disabledNonCore.length}
+                                        </p>
+                                      </div>
+                                      {disabledNonCore.length === 0 && (
+                                        <p className="text-xs text-center py-8" style={{ color: 'rgba(120,120,128,0.4)' }}>
+                                          Drop add-ons here to disable them
+                                        </p>
+                                      )}
+                                      {disabledNonCore.map(f => <FeatureCard key={f.featureId} f={f} zone="available" />)}
+                                    </div>
+                                  </div>
+
+                                  {/* Plan legend */}
+                                  <div className="flex items-center gap-4 text-[11px]" style={{ color: '#8E8E93' }}>
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full" style={{ background: '#3B82F6' }} />
+                                      Core — all plans
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full" style={{ background: '#10B981' }} />
+                                      Standard — Professional+
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full" style={{ background: '#8B5CF6' }} />
+                                      Premium — Business+
+                                    </span>
                                   </div>
                                 </div>
                               )

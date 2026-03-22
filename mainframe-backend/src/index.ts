@@ -117,6 +117,60 @@ async function seedAdmin() {
   }
 }
 
+async function seedFeatures() {
+  const features = [
+    // Core features
+    { featureKey: 'pos', featureName: 'Point of Sale', description: 'Main POS terminal for sales and transactions', category: 'Core', isIncludedInBase: true, additionalCost: 0 },
+    { featureKey: 'inventory', featureName: 'Inventory Management', description: 'Product and stock management', category: 'Core', isIncludedInBase: true, additionalCost: 0 },
+    { featureKey: 'customers', featureName: 'Customer Management', description: 'Customer database and history', category: 'Core', isIncludedInBase: true, additionalCost: 0 },
+    { featureKey: 'sales', featureName: 'Sales & Transactions', description: 'Sales processing and reporting', category: 'Core', isIncludedInBase: true, additionalCost: 0 },
+    { featureKey: 'repairs', featureName: 'Repair Management', description: 'Repair job tracking and management', category: 'Core', isIncludedInBase: true, additionalCost: 0 },
+    { featureKey: 'cashiers', featureName: 'Staff & Cashiers', description: 'Staff and cashier management', category: 'Core', isIncludedInBase: true, additionalCost: 0 },
+    // Standard features
+    { featureKey: 'shifts', featureName: 'Shift Management', description: 'Staff shift tracking and handover', category: 'Standard', isIncludedInBase: false, additionalCost: 0 },
+    { featureKey: 'float_management', featureName: 'Float Management', description: 'Cash drawer float management', category: 'Standard', isIncludedInBase: false, additionalCost: 0 },
+    { featureKey: 'petty_cash', featureName: 'Petty Cash', description: 'Petty cash tracking and management', category: 'Standard', isIncludedInBase: false, additionalCost: 0 },
+    { featureKey: 'stock_taking', featureName: 'Stock Taking', description: 'Stock audit and reconciliation', category: 'Standard', isIncludedInBase: false, additionalCost: 0 },
+    { featureKey: 'calendar', featureName: 'Calendar', description: 'Appointments and scheduling', category: 'Standard', isIncludedInBase: false, additionalCost: 0 },
+    { featureKey: 'tasks', featureName: 'Tasks', description: 'Task and workflow management', category: 'Standard', isIncludedInBase: false, additionalCost: 0 },
+    { featureKey: 'history', featureName: 'Transaction History', description: 'Full transaction history and audit trail', category: 'Standard', isIncludedInBase: false, additionalCost: 0 },
+    // Premium features
+    { featureKey: 'financial_intelligence', featureName: 'Financial Intelligence', description: 'Advanced financial analytics and reporting', category: 'Premium', isIncludedInBase: false, additionalCost: 20 },
+    { featureKey: 'chatbot', featureName: 'AI Business Insights', description: 'AI-powered business insights and recommendations', category: 'Premium', isIncludedInBase: false, additionalCost: 20 },
+    { featureKey: 'google_drive', featureName: 'Google Drive Integration', description: 'Cloud storage and document management', category: 'Premium', isIncludedInBase: false, additionalCost: 20 },
+  ];
+
+  try {
+    for (const f of features) {
+      await prisma.mf_features.upsert({
+        where: { featureKey: f.featureKey },
+        update: {
+          featureName: f.featureName,
+          category: f.category,
+          description: f.description,
+          isIncludedInBase: f.isIncludedInBase,
+          additionalCost: f.additionalCost,
+        },
+        create: {
+          featureKey: f.featureKey,
+          featureName: f.featureName,
+          category: f.category,
+          description: f.description,
+          isIncludedInBase: f.isIncludedInBase,
+          additionalCost: f.additionalCost,
+          isEnabled: true,
+          status: 'STABLE',
+          currentVersion: '1.0.0',
+          dependsOn: [],
+        },
+      });
+    }
+    console.log(`✅ ${features.length} features seeded/updated`);
+  } catch (err) {
+    console.error('⚠️  Feature seed failed (non-fatal):', err);
+  }
+}
+
 async function bootstrap() {
   try {
     await prisma.$connect();
@@ -127,6 +181,7 @@ async function bootstrap() {
   }
 
   await seedAdmin();
+  await seedFeatures();
 
   app.listen(PORT, () => {
     console.log(`🚀 Mainframe Backend running on http://localhost:${PORT}`);
