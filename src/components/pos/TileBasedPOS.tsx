@@ -455,10 +455,10 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     }
   }, [showRepairView]);
 
-  // Fetch backend categories when Quick Product dialog opens
+  // Fetch backend categories on mount and when Quick Product dialog opens
   useEffect(() => {
     const fetchBackendCategories = async () => {
-      if (showQuickProductDialog && backendCategories.length === 0) {
+      if (backendCategories.length === 0) {
         try {
           const response = await productService.getCategories();
           console.log('📂 Fetched backend categories:', response);
@@ -1073,7 +1073,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       const productData: any = {
         name: catNewProduct.name.trim(),
         sku: catNewProduct.sku.trim(),
-        category: categoryMatch?.id || activeCategoryName,
+        category: categoryMatch?.id || undefined,
         price,
         cost,
         stock: qty,
