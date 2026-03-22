@@ -57,16 +57,13 @@ app.post('/setup', async (req, res) => {
   const PASSWORD = 'TrueDesk@2026';
   const passwordHash = crypto.createHash('sha256').update(PASSWORD + SALT).digest('hex');
 
-  const count = await prisma.mf_admins.count();
-  if (count > 0) {
-    return res.json({ message: 'Admin already exists', count });
-  }
-
-  await prisma.mf_admins.create({
-    data: { firstName: 'Super', lastName: 'Admin', email: EMAIL, passwordHash, role: 'superadmin' },
+  await prisma.mf_admins.upsert({
+    where: { email: EMAIL },
+    update: { passwordHash, isActive: true },
+    create: { firstName: 'Super', lastName: 'Admin', email: EMAIL, passwordHash, role: 'superadmin' },
   });
 
-  return res.json({ message: 'Admin created', email: EMAIL, password: PASSWORD });
+  return res.json({ message: 'Admin created/reset', email: EMAIL, password: PASSWORD });
 });
 
 // API routes under /api/v1/mainframe/...
