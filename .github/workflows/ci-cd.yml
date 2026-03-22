@@ -310,6 +310,12 @@ jobs:
           TOKEN=$(echo "$COOLIFY_TOKEN" | tr -d '[:space:]')
           WEBHOOK=$(echo "$COOLIFY_MAINFRAME_BACKEND_WEBHOOK" | tr -d '[:space:]')
 
+          if [ -z "$WEBHOOK" ]; then
+            echo "ERROR: COOLIFY_MAINFRAME_BACKEND_WEBHOOK secret is not set."
+            echo "Add it in GitHub → Settings → Secrets → Actions."
+            exit 1
+          fi
+
           HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
             --max-time 30 -X GET \
             -H "Authorization: Bearer ${TOKEN}" \
@@ -347,6 +353,12 @@ jobs:
         run: |
           TOKEN=$(echo "$COOLIFY_TOKEN" | tr -d '[:space:]')
           WEBHOOK=$(echo "$COOLIFY_MAINFRAME_ADMIN_WEBHOOK" | tr -d '[:space:]')
+
+          if [ -z "$WEBHOOK" ]; then
+            echo "ERROR: COOLIFY_MAINFRAME_ADMIN_WEBHOOK secret is not set."
+            echo "Add it in GitHub → Settings → Secrets → Actions."
+            exit 1
+          fi
 
           HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
             --max-time 30 -X GET \
