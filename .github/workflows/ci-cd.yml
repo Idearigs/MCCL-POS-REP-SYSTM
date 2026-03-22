@@ -102,7 +102,7 @@ jobs:
         run: npm run build
         env:
           VITE_API_BASE_URL: https://api.truedesk.co.uk/api/v1
-          VITE_TENANT_ID: buymejewellery
+          # VITE_TENANT_ID intentionally unset — enables multi-tenant mode (company code field on login)
           VITE_APP_TITLE: "MPS Jewelry System"
           VITE_APP_VERSION: ${{ github.sha }}
 
