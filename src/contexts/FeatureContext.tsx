@@ -37,7 +37,14 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Load on mount and reload whenever the tab becomes visible again
+  // This ensures feature changes made in mainframe take effect without a full logout
+  useEffect(() => {
+    load();
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [load]);
 
   /** Returns true if a feature is enabled for this tenant.
    *  - Always true while loading or if the list failed to load (fail-open).

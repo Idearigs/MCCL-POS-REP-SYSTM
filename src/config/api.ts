@@ -72,8 +72,8 @@ export const API_CONFIG = {
     'Accept': 'application/json'
   },
   
-  // Tenant configuration
-  TENANT_ID: import.meta.env.VITE_TENANT_ID || 'buymejewellery'
+  // Tenant configuration — resolved from localStorage after login, not hardcoded
+  TENANT_ID: import.meta.env.VITE_TENANT_ID || ''
 };
 
 // API Response Types
