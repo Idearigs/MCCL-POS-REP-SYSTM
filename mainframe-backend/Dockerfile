@@ -2,13 +2,14 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
-COPY prisma ./prisma/
+# Build context is the repo root — all paths prefixed with mainframe-backend/
+COPY mainframe-backend/package*.json ./
+COPY mainframe-backend/prisma ./prisma/
 
 RUN npm ci
 
-COPY tsconfig.json ./
-COPY src ./src/
+COPY mainframe-backend/tsconfig.json ./
+COPY mainframe-backend/src ./src/
 
 RUN npx prisma generate
 RUN npm run build
@@ -21,14 +22,13 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-COPY package*.json ./
+COPY mainframe-backend/package*.json ./
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY prisma ./prisma/
-
+COPY mainframe-backend/prisma ./prisma/
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
