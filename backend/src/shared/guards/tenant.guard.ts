@@ -92,27 +92,8 @@ export class TenantGuard implements CanActivate {
         }
       }
 
-      // Final check
       if (!tenant) {
-        this.logger.error(
-          'No valid tenant found in database - all queries failed',
-        );
-
-        // As a last resort, try to get ANY tenant
-        try {
-          const anyTenant = await this.prismaService.tenants.findFirst();
-          if (anyTenant) {
-            this.logger.warn(
-              `Using ANY tenant as emergency fallback: ${anyTenant.name}`,
-            );
-            tenant = anyTenant;
-          }
-        } catch (err) {
-          this.logger.error(`Emergency fallback also failed: ${err.message}`);
-        }
-      }
-
-      if (!tenant) {
+        this.logger.error('No valid tenant found in database');
         throw new UnauthorizedException('No valid tenant found');
       }
 

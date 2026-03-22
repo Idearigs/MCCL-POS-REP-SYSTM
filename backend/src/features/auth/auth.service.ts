@@ -58,7 +58,7 @@ export class AuthService {
       // Find user by email and tenant
       const user = await this.prismaService.users.findFirst({
         where: {
-          email,
+          email: email.toLowerCase(),
           tenantId,
           isActive: true,
         },
@@ -147,7 +147,7 @@ export class AuthService {
       // Check if user already exists
       const existingUser = await this.prismaService.users.findFirst({
         where: {
-          email,
+          email: email.toLowerCase(),
           tenantId,
         },
       });
@@ -176,7 +176,7 @@ export class AuthService {
       const user = await this.prismaService.users.create({
         data: {
           id: generateId(),
-          email,
+          email: email.toLowerCase(),
           password: hashedPassword,
           firstName,
           lastName,
@@ -396,23 +396,24 @@ export class AuthService {
     ownerLastName: string;
     ownerPassword: string;
   }): Promise<{ tenantId: string; userId: string }> {
-    // Check tenant doesn't already exist
-    const existingTenant = await this.prismaService.tenants.findUnique({
-      where: { id: data.tenantId },
-    });
-    if (existingTenant) {
-      throw new ConflictException('Tenant already exists');
-    }
-
     const saltRounds = parseInt(
       this.configService.get('HASH_SALT_ROUNDS', '12'),
       10,
     );
     const hashedPassword = await bcrypt.hash(data.ownerPassword, saltRounds);
+    const ownerEmail = data.ownerEmail.toLowerCase();
 
-    // Create tenant
-    await this.prismaService.tenants.create({
-      data: {
+    // Upsert tenant — safe to re-run on reprovision
+    await this.prismaService.tenants.upsert({
+      where: { id: data.tenantId },
+      update: {
+        name: data.businessName,
+        subdomain: data.subdomain.toLowerCase(),
+        domain: `${data.subdomain.toLowerCase()}.truedesk.co.uk`,
+        status: 'ACTIVE',
+        updatedAt: new Date(),
+      },
+      create: {
         id: data.tenantId,
         name: data.businessName,
         subdomain: data.subdomain.toLowerCase(),
@@ -423,20 +424,33 @@ export class AuthService {
       },
     });
 
-    // Create owner user
-    const userId = generateId();
-    await this.prismaService.users.create({
-      data: {
-        id: userId,
-        email: data.ownerEmail.toLowerCase(),
-        password: hashedPassword,
-        firstName: data.ownerFirstName,
-        lastName: data.ownerLastName,
-        role: 'OWNER',
-        tenantId: data.tenantId,
-        updatedAt: new Date(),
-      } as any,
+    // Upsert owner user — resets password on reprovision
+    const existingUser = await this.prismaService.users.findFirst({
+      where: { email: ownerEmail, tenantId: data.tenantId },
     });
+
+    let userId: string;
+    if (existingUser) {
+      await this.prismaService.users.update({
+        where: { id: existingUser.id },
+        data: { password: hashedPassword, isActive: true, updatedAt: new Date() },
+      });
+      userId = existingUser.id;
+    } else {
+      userId = generateId();
+      await this.prismaService.users.create({
+        data: {
+          id: userId,
+          email: ownerEmail,
+          password: hashedPassword,
+          firstName: data.ownerFirstName,
+          lastName: data.ownerLastName,
+          role: 'OWNER',
+          tenantId: data.tenantId,
+          updatedAt: new Date(),
+        } as any,
+      });
+    }
 
     this.logger.log(`Tenant provisioned: ${data.tenantId} (${data.businessName})`);
     return { tenantId: data.tenantId, userId };
