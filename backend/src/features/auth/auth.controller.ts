@@ -10,6 +10,8 @@ import {
   Patch,
   Query,
   Param,
+  Headers,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -290,6 +292,34 @@ export class AuthController {
     @Body() body: { password: string },
   ) {
     return this.authService.resetUserPassword(tenant.id, id, body.password);
+  }
+
+  /**
+   * Internal endpoint — called by Mainframe to provision a new tenant + owner user.
+   * Requires X-Internal-Key header matching INTERNAL_API_KEY env var.
+   */
+  @Public()
+  @Post('provision-tenant')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Provision new tenant (internal)', description: 'Called by Mainframe to create a new customer tenant and owner account' })
+  @ApiResponse({ status: 201, description: 'Tenant provisioned successfully' })
+  async provisionTenant(
+    @Headers('x-internal-key') internalKey: string,
+    @Body() body: {
+      tenantId: string;
+      businessName: string;
+      subdomain: string;
+      ownerEmail: string;
+      ownerFirstName: string;
+      ownerLastName: string;
+      ownerPassword: string;
+    },
+  ) {
+    const expectedKey = process.env.INTERNAL_API_KEY;
+    if (!expectedKey || internalKey !== expectedKey) {
+      throw new UnauthorizedException('Invalid internal API key');
+    }
+    return this.authService.provisionTenant(body);
   }
 
   @Public()

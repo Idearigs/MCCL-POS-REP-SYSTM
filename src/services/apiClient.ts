@@ -40,8 +40,9 @@ class ApiClient {
           console.warn('⚠️ No access token found for API request:', config.url);
         }
 
-        // Add tenant ID header (lowercase as expected by backend)
-        config.headers['x-tenant-id'] = API_CONFIG.TENANT_ID;
+        // Add tenant ID — prefer the one stored after login, fall back to env var
+        const tenantId = localStorage.getItem('tenantId') || API_CONFIG.TENANT_ID;
+        config.headers['x-tenant-id'] = tenantId;
 
         // Log request in development
         if (process.env.NODE_ENV === 'development') {
@@ -156,7 +157,7 @@ class ApiClient {
         {
           headers: {
             'Content-Type': 'application/json',
-            'x-tenant-id': API_CONFIG.TENANT_ID,
+            'x-tenant-id': localStorage.getItem('tenantId') || API_CONFIG.TENANT_ID,
           },
         }
       );

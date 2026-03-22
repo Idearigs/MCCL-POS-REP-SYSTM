@@ -6,6 +6,7 @@ export interface LoginCredentials {
   email: string;
   password: string;
   tenantId?: string;
+  companySlug?: string;
 }
 
 export interface RegisterData {
@@ -38,22 +39,28 @@ export interface ChangePasswordData {
 class AuthService {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
-      // Only send email and password in the body - tenantId goes in header
-      const loginData = {
+      const loginData: Record<string, string> = {
         email: credentials.email,
-        password: credentials.password
+        password: credentials.password,
       };
-      
+      if (credentials.companySlug) {
+        loginData.companySlug = credentials.companySlug;
+      }
+
       const response = await apiClient.post<AuthResponse>(API_CONFIG.ENDPOINTS.LOGIN, loginData);
-      
-      // Store tokens using apiClient's method
+
+      // Store tokens and tenantId using apiClient's method
       if (response.accessToken && response.refreshToken) {
         apiClient.setTokens(response.accessToken, response.refreshToken);
+        // Store tenantId so all subsequent requests use the correct tenant
+        if (response.user?.tenantId) {
+          localStorage.setItem('tenantId', response.user.tenantId);
+        }
         console.log('🔑 Tokens stored successfully');
       } else {
         console.error('❌ No tokens received from backend');
       }
-      
+
       return response;
     } catch (error: any) {
       console.error('Login failed:', error);
@@ -130,6 +137,7 @@ class AuthService {
 
   clearAuth(): void {
     apiClient.removeTokens();
+    localStorage.removeItem('tenantId');
   }
 }
 

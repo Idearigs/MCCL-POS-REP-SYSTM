@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -34,9 +35,26 @@ export class AuthService {
    * User login
    */
   async login(loginDto: LoginDto, tenantId: string): Promise<AuthResponseDto> {
-    const { email, password } = loginDto;
+    const { email, password, companySlug } = loginDto;
 
     try {
+      // If companySlug provided, resolve tenant by subdomain/id (multi-tenant login)
+      if (companySlug) {
+        const tenant = await this.prismaService.tenants.findFirst({
+          where: {
+            OR: [
+              { id: companySlug.toLowerCase() },
+              { subdomain: companySlug.toLowerCase() },
+            ],
+            status: 'ACTIVE',
+          },
+        });
+        if (!tenant) {
+          throw new UnauthorizedException('Company not found or inactive');
+        }
+        tenantId = tenant.id;
+      }
+
       // Find user by email and tenant
       const user = await this.prismaService.users.findFirst({
         where: {
@@ -364,6 +382,64 @@ export class AuthService {
     ]);
 
     return { accessToken, refreshToken };
+  }
+
+  /**
+   * Provision a new tenant + owner user (called by Mainframe when creating a customer profile)
+   */
+  async provisionTenant(data: {
+    tenantId: string;
+    businessName: string;
+    subdomain: string;
+    ownerEmail: string;
+    ownerFirstName: string;
+    ownerLastName: string;
+    ownerPassword: string;
+  }): Promise<{ tenantId: string; userId: string }> {
+    // Check tenant doesn't already exist
+    const existingTenant = await this.prismaService.tenants.findUnique({
+      where: { id: data.tenantId },
+    });
+    if (existingTenant) {
+      throw new ConflictException('Tenant already exists');
+    }
+
+    const saltRounds = parseInt(
+      this.configService.get('HASH_SALT_ROUNDS', '12'),
+      10,
+    );
+    const hashedPassword = await bcrypt.hash(data.ownerPassword, saltRounds);
+
+    // Create tenant
+    await this.prismaService.tenants.create({
+      data: {
+        id: data.tenantId,
+        name: data.businessName,
+        subdomain: data.subdomain.toLowerCase(),
+        domain: `${data.subdomain.toLowerCase()}.truedesk.co.uk`,
+        status: 'ACTIVE',
+        subscriptionPlan: 'basic',
+        updatedAt: new Date(),
+      },
+    });
+
+    // Create owner user
+    const userId = generateId();
+    await this.prismaService.users.create({
+      data: {
+        id: userId,
+        email: data.ownerEmail.toLowerCase(),
+        password: hashedPassword,
+        firstName: data.ownerFirstName,
+        lastName: data.ownerLastName,
+        role: 'OWNER',
+        tenantId: data.tenantId,
+        updatedAt: new Date(),
+      } as any,
+    });
+
+    this.logger.log(`Tenant provisioned: ${data.tenantId} (${data.businessName})`);
+    return { tenantId: data.tenantId, userId };
   }
 
   /**

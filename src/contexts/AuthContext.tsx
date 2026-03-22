@@ -41,7 +41,7 @@ interface AuthState {
 // Define the context type
 interface AuthContextType {
   auth: AuthState;
-  login: (email: string, password: string, tenantId?: string) => Promise<boolean>;
+  login: (email: string, password: string, companySlug?: string) => Promise<boolean>;
   register: (userData: RegisterData) => Promise<boolean>;
   logout: () => Promise<void>;
   changePassword: (passwordData: ChangePasswordData) => Promise<boolean>;
@@ -181,11 +181,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [auth.subscription, auth.notifications]);
 
   // Login function
-  const login = async (email: string, password: string, tenantId?: string): Promise<boolean> => {
+  const login = async (email: string, password: string, companySlug?: string): Promise<boolean> => {
     setAuth(prev => ({ ...prev, loading: true, error: null }));
 
     try {
-      const response = await authService.login({ email, password, tenantId });
+      const response = await authService.login({ email, password, companySlug });
 
       // Save user permissions to localStorage
       const userId = response.user.id;

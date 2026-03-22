@@ -1,6 +1,70 @@
 import { Router } from 'express';
+import https from 'https';
+import http from 'http';
+import crypto from 'crypto';
 import prisma from '../lib/prisma';
 import { requireAuth } from '../middleware/auth';
+
+function generateTempPassword(): string {
+  // e.g. "Td#Ab12xY9" - readable but random
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let pw = 'Td#';
+  for (let i = 0; i < 7; i++) {
+    pw += chars[crypto.randomInt(chars.length)];
+  }
+  return pw;
+}
+
+/**
+ * Call the POS backend to provision a new tenant + owner user.
+ * Called after creating an mf_customer_profile.
+ */
+async function provisionPosTenant(data: {
+  tenantId: string;
+  businessName: string;
+  subdomain: string;
+  ownerEmail: string;
+  ownerFirstName: string;
+  ownerLastName: string;
+  ownerPassword: string;
+}): Promise<void> {
+  const posBackendUrl = process.env.POS_BACKEND_URL || 'http://localhost:3002/api/v1';
+  const internalKey = process.env.INTERNAL_API_KEY || '';
+
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(data);
+    const url = new URL(`${posBackendUrl}/auth/provision-tenant`);
+    const lib = url.protocol === 'https:' ? https : http;
+
+    const req = lib.request(
+      {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+          'x-internal-key': internalKey,
+        },
+      },
+      (res) => {
+        let raw = '';
+        res.on('data', (chunk) => (raw += chunk));
+        res.on('end', () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve();
+          } else {
+            reject(new Error(`POS provisioning failed: ${res.statusCode} ${raw}`));
+          }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
 
 const router = Router();
 
@@ -291,11 +355,35 @@ router.post('/', requireAuth, async (req, res) => {
       data: { customerProfileId: profile.id, action: 'profile.created', description: 'Customer profile created', actorType: 'admin' },
     });
 
+    // Provision the POS tenant so the customer gets their own empty POS system
+    const ownerPassword = dto.ownerPassword || generateTempPassword();
+    let posProvisioningError: string | null = null;
+    try {
+      await provisionPosTenant({
+        tenantId: dto.subdomain.toLowerCase(),
+        businessName: dto.businessName,
+        subdomain: dto.subdomain.toLowerCase(),
+        ownerEmail: dto.contactEmail.toLowerCase(),
+        ownerFirstName: dto.contactFirstName,
+        ownerLastName: dto.contactLastName,
+        ownerPassword,
+      });
+    } catch (err: any) {
+      posProvisioningError = err.message;
+      console.error('POS provisioning failed (non-fatal):', err.message);
+    }
+
     const created = await prisma.mf_customer_profiles.findUnique({
       where: { id: profile.id },
       include: profileInclude,
     });
-    return res.status(201).json(formatProfile(created));
+
+    return res.status(201).json({
+      ...formatProfile(created),
+      posProvisioning: posProvisioningError
+        ? { status: 'failed', error: posProvisioningError }
+        : { status: 'success', ownerEmail: dto.contactEmail, ownerPassword, companyCode: dto.subdomain.toLowerCase() },
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Internal server error' });

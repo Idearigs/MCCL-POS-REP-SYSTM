@@ -25,6 +25,15 @@ export class LoginDto {
   @MinLength(8, { message: 'Password must be at least 8 characters long' })
   @MaxLength(128, { message: 'Password must not exceed 128 characters' })
   password: string;
+
+  @ApiProperty({
+    description: 'Company code / subdomain (for multi-tenant login)',
+    example: 'buymejewellery',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  companySlug?: string;
 }
 
 export class RefreshTokenDto {

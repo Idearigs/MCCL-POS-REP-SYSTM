@@ -5,7 +5,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import IntroAnimation from "@/components/ui/intro-animation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, LockKeyhole, User } from "lucide-react";
+import { Eye, EyeOff, LockKeyhole, User, Building2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,10 +18,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 
+// Multi-tenant mode: show company code when VITE_TENANT_ID is not set
+const MULTI_TENANT_MODE = !import.meta.env.VITE_TENANT_ID;
+
 // Define the form schema with Zod
 const formSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
   password: z.string().min(1, { message: "Password is required" }),
+  companySlug: MULTI_TENANT_MODE
+    ? z.string().min(1, { message: "Company code is required" })
+    : z.string().optional(),
 });
 
 // Define the form values type
@@ -51,6 +57,7 @@ const Login = () => {
     defaultValues: {
       email: "",
       password: "",
+      companySlug: "",
     },
   });
 
@@ -59,7 +66,7 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const success = await login(data.email, data.password);
+      const success = await login(data.email, data.password, data.companySlug || undefined);
 
       if (success) {
         toast({
@@ -136,6 +143,33 @@ const Login = () => {
         <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-8">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              {/* Company Code Field — shown only in multi-tenant mode */}
+              {MULTI_TENANT_MODE && (
+                <FormField
+                  control={form.control}
+                  name="companySlug"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="relative">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                          <Building2 className="h-5 w-5" />
+                        </div>
+                        <FormControl>
+                          <Input
+                            type="text"
+                            placeholder="Company code"
+                            className="pl-12 h-12 text-base bg-slate-50 border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                            {...field}
+                            disabled={isLoading}
+                          />
+                        </FormControl>
+                      </div>
+                      <FormMessage className="text-xs font-medium text-red-500 mt-1.5 ml-1" />
+                    </FormItem>
+                  )}
+                />
+              )}
+
               {/* Email Field */}
               <FormField
                 control={form.control}
