@@ -58,9 +58,10 @@ import {
   Calendar,
   Printer,
   AlertCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { useInventory, InventoryItem } from '@/contexts/InventoryContext';
-import { Customer } from '@/contexts/CustomerContext';
+import { Customer, useCustomers } from '@/contexts/CustomerContext';
 import { useToast } from '@/hooks/use-toast';
 import CustomerInfo from './CustomerInfo';
 import LiveGoldRate from './LiveGoldRate';
@@ -118,6 +119,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const { customers } = useCustomers();
 
   // Discount state - starts at 0 (no localStorage loading on mount)
   const [discountPercentage, setDiscountPercentage] = useState<number>(0);
@@ -2586,17 +2589,59 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         </div>
       </div>
 
-      {/* Customer Dialog */}
-      <Dialog open={isCustomerDialogOpen} onOpenChange={setIsCustomerDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      {/* Customer Dialog — single popup with search */}
+      <Dialog open={isCustomerDialogOpen} onOpenChange={(open) => { setIsCustomerDialogOpen(open); if (!open) setCustomerSearchQuery(''); }}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Select Customer</DialogTitle>
-            <DialogDescription>Choose a customer for this sale</DialogDescription>
+            <DialogDescription>Search by name, phone or email</DialogDescription>
           </DialogHeader>
-          <CustomerInfo onSelectCustomer={(customer) => {
-            setSelectedCustomer(customer);
-            setIsCustomerDialogOpen(false);
-          }} />
+          <div className="py-2">
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+              <Input
+                placeholder="Search customers..."
+                className="pl-10"
+                value={customerSearchQuery}
+                onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="max-h-72 overflow-y-auto border rounded-md divide-y">
+              {customers
+                .filter(c => {
+                  const q = customerSearchQuery.toLowerCase();
+                  return !q || c.name.toLowerCase().includes(q) || c.phone?.includes(q) || c.email?.toLowerCase().includes(q);
+                })
+                .map(customer => (
+                  <div
+                    key={customer.id}
+                    className="p-3 hover:bg-gray-50 cursor-pointer flex justify-between items-center"
+                    onClick={() => { setSelectedCustomer(customer); setIsCustomerDialogOpen(false); setCustomerSearchQuery(''); }}
+                  >
+                    <div>
+                      <p className="font-medium text-sm">{customer.name}</p>
+                      <p className="text-xs text-muted-foreground">{customer.phone}{customer.email ? ` • ${customer.email}` : ''}</p>
+                    </div>
+                    {customer.redFlag && (
+                      <Badge variant="destructive" className="flex items-center gap-1 text-xs">
+                        <AlertTriangle size={10} />
+                        Flag
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+              {customers.filter(c => {
+                const q = customerSearchQuery.toLowerCase();
+                return !q || c.name.toLowerCase().includes(q) || c.phone?.includes(q) || c.email?.toLowerCase().includes(q);
+              }).length === 0 && (
+                <div className="p-4 text-center text-muted-foreground text-sm">No customers found</div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setIsCustomerDialogOpen(false); setCustomerSearchQuery(''); }}>Cancel</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
