@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import crypto from 'crypto';
 import prisma from './lib/prisma';
 
 import adminsRouter from './routes/admins';
@@ -65,6 +66,31 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   res.status(500).json({ message: err.message || 'Internal server error' });
 });
 
+async function seedAdmin() {
+  const SALT = process.env.PASSWORD_SALT || 'truedesk-mainframe-salt';
+  const EMAIL = 'admin@truedesk.co.uk';
+  const PASSWORD = 'TrueDesk@2026';
+  const passwordHash = crypto.createHash('sha256').update(PASSWORD + SALT).digest('hex');
+
+  try {
+    const count = await prisma.mf_admins.count();
+    if (count === 0) {
+      await prisma.mf_admins.create({
+        data: {
+          firstName: 'Super',
+          lastName: 'Admin',
+          email: EMAIL,
+          passwordHash,
+          role: 'superadmin',
+        },
+      });
+      console.log(`✅ Default admin seeded: ${EMAIL}`);
+    }
+  } catch (err) {
+    console.error('⚠️  Admin seed failed (non-fatal):', err);
+  }
+}
+
 async function bootstrap() {
   try {
     await prisma.$connect();
@@ -73,6 +99,8 @@ async function bootstrap() {
     console.error('❌ Database connection failed:', err);
     process.exit(1);
   }
+
+  await seedAdmin();
 
   app.listen(PORT, () => {
     console.log(`🚀 Mainframe Backend running on http://localhost:${PORT}`);

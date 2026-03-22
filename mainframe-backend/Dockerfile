@@ -40,3 +40,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3001/health', r => process.exit(r.statusCode === 200 ? 0 : 1))" || exit 1
 
 CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/index.js"]
+# Note: default admin is seeded automatically in index.ts bootstrap
