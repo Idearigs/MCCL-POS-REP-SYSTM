@@ -253,16 +253,12 @@ class SalesService {
   }
 
 
-  async voidSale(saleId: string, reason: string, details: string): Promise<Sale> {
+  async voidSale(saleId: string, _reason: string, _details: string): Promise<Sale> {
     try {
-      const endpoint = apiClient.replaceUrlParams(API_CONFIG.ENDPOINTS.UPDATE_SALE, {
+      const endpoint = apiClient.replaceUrlParams(API_CONFIG.ENDPOINTS.DELETE_SALE, {
         id: saleId,
       });
-      return await apiClient.put<Sale>(endpoint, {
-        status: 'CANCELLED',
-        notes: `VOIDED - Reason: ${reason}
-Details: ${details}`,
-      });
+      return await apiClient.delete<Sale>(endpoint);
     } catch (error) {
       console.error(`Failed to void sale ${saleId}:`, error);
       throw error;
