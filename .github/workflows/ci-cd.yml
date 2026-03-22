@@ -74,7 +74,7 @@ jobs:
         run: npm run build
 
   # -------------------------------------------------------------------
-  # JOB 2 — Frontend lint & build validation
+  # JOB 2 — POS Frontend lint & build validation
   # -------------------------------------------------------------------
   test-frontend:
     name: "Frontend — Lint & Build"
@@ -107,10 +107,40 @@ jobs:
           VITE_APP_VERSION: ${{ github.sha }}
 
   # -------------------------------------------------------------------
-  # JOB 3 — Deploy backend via Coolify webhook (main only)
+  # JOB 3 — Mainframe Admin build validation
+  # -------------------------------------------------------------------
+  test-mainframe-admin:
+    name: "Mainframe Admin — Build"
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mainframe-admin
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: mainframe-admin/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build mainframe admin
+        run: npm run build
+        env:
+          VITE_API_URL: https://apimainframe.truedesk.co.uk/api/v1
+
+  # -------------------------------------------------------------------
+  # JOB 4 — Deploy POS backend via Coolify webhook (main only)
   # -------------------------------------------------------------------
   deploy-backend:
-    name: "Deploy — Backend (Coolify)"
+    name: "Deploy — POS Backend (Coolify)"
     runs-on: ubuntu-latest
     needs: [test-backend, test-frontend]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -145,10 +175,10 @@ jobs:
           echo "Backend deployment triggered successfully"
 
   # -------------------------------------------------------------------
-  # JOB 4 — Deploy frontend via Coolify webhook (main only)
+  # JOB 5 — Deploy POS frontend via Coolify webhook (main only)
   # -------------------------------------------------------------------
   deploy-frontend:
-    name: "Deploy — Frontend (Coolify)"
+    name: "Deploy — POS Frontend (Coolify)"
     runs-on: ubuntu-latest
     needs: [test-backend, test-frontend]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -183,46 +213,119 @@ jobs:
           echo "Frontend deployment triggered successfully"
 
   # -------------------------------------------------------------------
-  # JOB 5 — Smoke test after both deploys complete
+  # JOB 6 — Deploy Mainframe backend via Coolify webhook (main only)
+  # -------------------------------------------------------------------
+  deploy-mainframe-backend:
+    name: "Deploy — Mainframe Backend (Coolify)"
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend, test-mainframe-admin]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    environment:
+      name: production
+      url: https://apimainframe.truedesk.co.uk
+
+    steps:
+      - name: Trigger Coolify mainframe backend deployment
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_MAINFRAME_BACKEND_WEBHOOK: ${{ secrets.COOLIFY_MAINFRAME_BACKEND_WEBHOOK }}
+        run: |
+          TOKEN=$(echo "$COOLIFY_TOKEN" | tr -d '[:space:]')
+          WEBHOOK=$(echo "$COOLIFY_MAINFRAME_BACKEND_WEBHOOK" | tr -d '[:space:]')
+
+          HTTP_STATUS=$(curl -s -o /tmp/coolify_mf_backend_response.txt -w "%{http_code}" \
+            --max-time 30 \
+            -X GET \
+            -H "Authorization: Bearer ${TOKEN}" \
+            "${WEBHOOK}")
+
+          echo "Coolify response: $(cat /tmp/coolify_mf_backend_response.txt)"
+          echo "HTTP status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
+            echo "ERROR: Coolify mainframe backend webhook failed with status $HTTP_STATUS"
+            exit 1
+          fi
+
+          echo "Mainframe backend deployment triggered successfully"
+
+  # -------------------------------------------------------------------
+  # JOB 7 — Deploy Mainframe admin via Coolify webhook (main only)
+  # -------------------------------------------------------------------
+  deploy-mainframe-admin:
+    name: "Deploy — Mainframe Admin (Coolify)"
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend, test-mainframe-admin]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    environment:
+      name: production
+      url: https://mainframe.truedesk.co.uk
+
+    steps:
+      - name: Trigger Coolify mainframe admin deployment
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_MAINFRAME_ADMIN_WEBHOOK: ${{ secrets.COOLIFY_MAINFRAME_ADMIN_WEBHOOK }}
+        run: |
+          TOKEN=$(echo "$COOLIFY_TOKEN" | tr -d '[:space:]')
+          WEBHOOK=$(echo "$COOLIFY_MAINFRAME_ADMIN_WEBHOOK" | tr -d '[:space:]')
+
+          HTTP_STATUS=$(curl -s -o /tmp/coolify_mf_admin_response.txt -w "%{http_code}" \
+            --max-time 30 \
+            -X GET \
+            -H "Authorization: Bearer ${TOKEN}" \
+            "${WEBHOOK}")
+
+          echo "Coolify response: $(cat /tmp/coolify_mf_admin_response.txt)"
+          echo "HTTP status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
+            echo "ERROR: Coolify mainframe admin webhook failed with status $HTTP_STATUS"
+            exit 1
+          fi
+
+          echo "Mainframe admin deployment triggered successfully"
+
+  # -------------------------------------------------------------------
+  # JOB 8 — Smoke test after all deploys complete
   # -------------------------------------------------------------------
   smoke-test:
     name: "Smoke Test — Production"
     runs-on: ubuntu-latest
-    needs: [deploy-backend, deploy-frontend]
+    needs: [deploy-backend, deploy-frontend, deploy-mainframe-backend, deploy-mainframe-admin]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
       - name: Wait for Coolify to finish building & deploying
         run: |
-          echo "Waiting 60s for Coolify to build and deploy..."
-          sleep 60
+          echo "Waiting 90s for Coolify to build and deploy..."
+          sleep 90
 
-      - name: Health check — API (api.truedesk.co.uk)
+      - name: Health check — POS API
         run: |
-          echo "Checking API health..."
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            --max-time 30 \
-            "https://api.truedesk.co.uk/health" || echo "000")
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://api.truedesk.co.uk/health" || echo "000")
+          echo "POS API status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ]; then echo "ERROR: POS API health check failed"; exit 1; fi
 
-          echo "API health status: $HTTP_STATUS"
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "ERROR: API health check failed with status $HTTP_STATUS"
-            exit 1
-          fi
-          echo "API health check passed!"
-
-      - name: Health check — Frontend (pos.truedesk.co.uk)
+      - name: Health check — POS Frontend
         run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            --max-time 30 \
-            "https://pos.truedesk.co.uk" || echo "000")
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://pos.truedesk.co.uk" || echo "000")
+          echo "POS Frontend status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ]; then echo "ERROR: POS frontend health check failed"; exit 1; fi
 
-          echo "Frontend status: $HTTP_STATUS"
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "ERROR: Frontend health check failed with status $HTTP_STATUS"
-            exit 1
-          fi
-          echo "Frontend health check passed!"
+      - name: Health check — Mainframe API
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://apimainframe.truedesk.co.uk/health" || echo "000")
+          echo "Mainframe API status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ]; then echo "ERROR: Mainframe API health check failed"; exit 1; fi
+
+      - name: Health check — Mainframe Admin
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://mainframe.truedesk.co.uk" || echo "000")
+          echo "Mainframe Admin status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ]; then echo "ERROR: Mainframe admin health check failed"; exit 1; fi
 
       - name: Notify on failure
         if: failure()
