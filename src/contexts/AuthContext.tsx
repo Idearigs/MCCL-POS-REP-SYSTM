@@ -113,44 +113,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   });
 
-  // Check authentication status on mount
+  // Check authentication status on mount — call /auth/me so we always
+  // get the real user name/role from the server, not just the JWT payload
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
         const token = authService.getToken();
-        if (token) {
-          // Validate token by checking if user data is valid
-          const currentUser = authService.getCurrentUser();
-          if (currentUser && isTokenValid(token)) {
-            setAuth(prev => ({
-              ...prev,
-              user: currentUser,
-              isAuthenticated: true,
-              loading: false
-            }));
-            return;
-          }
+        if (token && isTokenValid(token)) {
+          const me = await authService.getMe();
+          setAuth(prev => ({
+            ...prev,
+            user: {
+              id: me.id,
+              name: `${me.firstName} ${me.lastName}`.trim(),
+              email: me.email,
+              role: me.role,
+            },
+            isAuthenticated: true,
+            loading: false,
+          }));
+          return;
         }
-        
-        // No valid token found, clear any stale data
+
+        // No valid token — clear stale data
         authService.clearAuth();
-        setAuth(prev => ({
-          ...prev,
-          user: null,
-          isAuthenticated: false,
-          loading: false
-        }));
-        
-      } catch (error) {
-        console.error('Auth check failed:', error);
+        setAuth(prev => ({ ...prev, user: null, isAuthenticated: false, loading: false }));
+      } catch {
+        // Token invalid or /auth/me failed — force logout
         authService.clearAuth();
-        setAuth(prev => ({
-          ...prev,
-          user: null,
-          isAuthenticated: false,
-          loading: false,
-          error: 'Authentication check failed'
-        }));
+        setAuth(prev => ({ ...prev, user: null, isAuthenticated: false, loading: false }));
       }
     };
 

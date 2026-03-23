@@ -34,12 +34,10 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, hasPaymentWarning = false })
 
   // Get user information from auth context
   const user = auth.user;
-  const userName = user && user.firstName && user.lastName
-    ? `${user.firstName} ${user.lastName}`
-    : "Guest";
+  const userName = user?.name || "Guest";
   const userRole = user?.role || "GUEST";
-  const userInitials = user && user.firstName && user.lastName
-    ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`
+  const userInitials = userName !== "Guest"
+    ? userName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : "G";
 
   // Format role for display (capitalize first letter, lowercase rest)
@@ -197,8 +195,7 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, hasPaymentWarning = false })
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="flex items-center gap-2 rounded-full bg-card/90 border-border hover:bg-accent shadow-sm">
               <Avatar className="w-6 h-6 border border-border">
-                <AvatarImage src="https://github.com/shadcn.png" alt={userName} />
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-medium">{userInitials}</AvatarFallback>
+                                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-medium">{userInitials}</AvatarFallback>
               </Avatar>
               <div className="hidden md:flex flex-col items-start">
                 <span className="text-sm font-medium text-foreground">{userName}</span>
@@ -211,8 +208,7 @@ const Header: React.FC<HeaderProps> = ({ pageTitle, hasPaymentWarning = false })
             <div className="px-3 py-3 border-b border-border bg-accent/50">
               <div className="flex items-center gap-3">
                 <Avatar className="w-10 h-10 border-2 border-background shadow-sm">
-                  <AvatarImage src="https://github.com/shadcn.png" alt={userName} />
-                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-bold">{userInitials}</AvatarFallback>
+                                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-bold">{userInitials}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-foreground truncate">{userName}</p>

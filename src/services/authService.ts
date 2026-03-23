@@ -107,6 +107,10 @@ class AuthService {
     }
   }
 
+  async getMe(): Promise<{ id: string; firstName: string; lastName: string; email: string; role: string; tenantId: string }> {
+    return apiClient.get('/auth/me');
+  }
+
   isAuthenticated(): boolean {
     return apiClient.isAuthenticated();
   }
