@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>MCCL POS System - Jewelry Store Management</title>
+    <meta name="description" content="Modern jewelry store Point of Sale system with inventory, sales, and customer management" />
+    <meta name="author" content="MCCL" />
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#1e3a5f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MCCL POS" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- iOS Splash Screens -->
+    <link rel="apple-touch-icon" href="/pwa-192x192.png" />
+    <link rel="apple-touch-startup-image" href="/pwa-512x512.png" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="MCCL POS System" />
+    <meta property="og:description" content="Modern jewelry store Point of Sale system with inventory, sales, and customer management" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/pwa-512x512.png" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="MCCL POS System" />
+    <meta name="twitter:description" content="Modern jewelry store Point of Sale system" />
+    <meta name="twitter:image" content="/pwa-512x512.png" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <script type="module" crossorigin src="/assets/index-U_G0WDVN.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-Crr0cg6U.css">
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
+    <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
+
+    <!-- Unregister any old service workers and clear their caches so stale
+         cached pages (like the old login page) are never served again -->
+    <script>
+      (function () {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (registrations) {
+            registrations.forEach(function (reg) { reg.unregister(); });
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then(function (names) {
+            names.forEach(function (name) { caches.delete(name); });
+          });
+        }
+      })();
+    </script>
+
+  </body>
+</html>
