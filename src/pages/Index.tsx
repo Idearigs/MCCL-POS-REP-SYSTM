@@ -82,7 +82,7 @@ const Index = () => {
     return 'Good evening';
   };
 
-  const userName = user?.firstName || 'Admin';
+  const userName = user?.name?.split(' ')[0] || 'there';
   
   return (
     <MainLayout pageTitle="Dashboard">
