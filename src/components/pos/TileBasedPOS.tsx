@@ -465,21 +465,19 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     }
   }, [showRepairView]);
 
-  // Fetch backend categories on mount and when Quick Product dialog opens
+  // Fetch backend categories on mount, when Quick Product dialog opens, or when category view opens
   useEffect(() => {
     const fetchBackendCategories = async () => {
-      if (backendCategories.length === 0) {
-        try {
-          const response = await productService.getCategories();
-          console.log('📂 Fetched backend categories:', response);
-          setBackendCategories(response);
-        } catch (error) {
-          console.error('Failed to fetch categories:', error);
-        }
+      try {
+        const response = await productService.getCategories();
+        console.log('📂 Fetched backend categories:', response);
+        setBackendCategories(response);
+      } catch (error) {
+        console.error('Failed to fetch categories:', error);
       }
     };
     fetchBackendCategories();
-  }, [showQuickProductDialog, backendCategories.length]);
+  }, [showQuickProductDialog, activeCategoryName]);
 
   // Debounced customer search for Layaway
   useEffect(() => {
