@@ -451,9 +451,9 @@ export class FileStorageService {
       // Write file to disk
       await fs.promises.writeFile(filePath, buffer);
 
-      // Create accessible URL (assuming server serves static files)
-      const port = this.configService.get('PORT', 3002);
-      const baseUrl = `http://localhost:${port}`;
+      // Create accessible URL using APP_URL env var (production domain) or fallback to localhost
+      const appUrl = this.configService.get('APP_URL', `http://localhost:${this.configService.get('PORT', 3000)}`);
+      const baseUrl = appUrl.replace(/\/$/, ''); // strip trailing slash
       const fileUrl = `${baseUrl}/uploads/${category}/${uniqueFileName}`;
 
       // Save metadata if provided
