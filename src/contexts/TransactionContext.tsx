@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { salesService, Sale, CreateSaleData } from '../services/salesService';
 import { repairService, Repair, CreateRepairData } from '../services/repairService';
+import { useAuth } from './AuthContext';
 
 // Types for our transaction data (extending backend types)
 export type TransactionType = 'sale' | 'repair';
@@ -51,6 +52,7 @@ const TransactionContext = createContext<TransactionContextType | undefined>(und
 // Provider component
 export const TransactionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // State for transactions
+  const { auth } = useAuth();
   const [salesTransactions, setSalesTransactions] = useState<SaleTransaction[]>([]);
   const [repairTransactions, setRepairTransactions] = useState<RepairTransaction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -99,8 +101,13 @@ export const TransactionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   useEffect(() => {
-    loadTransactions();
-  }, []);
+    if (auth.isAuthenticated && !auth.loading) {
+      loadTransactions();
+    } else if (!auth.isAuthenticated) {
+      setSalesTransactions([]);
+      setRepairTransactions([]);
+    }
+  }, [auth.isAuthenticated, auth.loading]);
 
   // Add a new sale transaction
   const addSaleTransaction = async (saleData: CreateSaleData): Promise<SaleTransaction> => {
