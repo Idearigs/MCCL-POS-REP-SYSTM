@@ -82,7 +82,13 @@ const Index = () => {
     return 'Good evening';
   };
 
-  const userName = user?.name?.split(' ')[0] || 'there';
+  const formatRole = (role?: string) =>
+    role ? role.charAt(0) + role.slice(1).toLowerCase() : '';
+  const firstName = user?.name?.split(' ')[0] || '';
+  const GENERIC_NAMES = ['admin', 'user', 'test', 'temp', 'buy'];
+  const userName = (firstName && !GENERIC_NAMES.includes(firstName.toLowerCase()))
+    ? firstName
+    : formatRole(user?.role) || firstName || 'there';
   
   return (
     <MainLayout pageTitle="Dashboard">
