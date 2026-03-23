@@ -24,6 +24,7 @@ export interface FileUploadOptions {
     | 'customer-documents'
     | 'product-images'
     | 'receipts';
+  tenantId?: string;
   metadata?: Record<string, any>;
 }
 
@@ -33,9 +34,14 @@ export class FileStorageService {
   private driveClient: any = null;
   private isGoogleDriveAvailable = false;
   private uploadDirectory: string;
+  private googleDriveTenantIds: Set<string> = new Set();
 
   constructor(private configService: ConfigService) {
     this.uploadDirectory = path.join(process.cwd(), 'uploads');
+    const tenantIds = this.configService.get<string>('GOOGLE_DRIVE_TENANT_IDS', '');
+    if (tenantIds) {
+      tenantIds.split(',').map(id => id.trim()).filter(Boolean).forEach(id => this.googleDriveTenantIds.add(id));
+    }
     this.initializeStorageSystems();
   }
 
@@ -77,20 +83,12 @@ export class FileStorageService {
   }
 
   private async initializeGoogleDrive() {
-    // Google Drive temporarily disabled - waiting for client Shared Drive setup
-    this.logger.warn(
-      '⚠️ Google Drive integration temporarily disabled. Using local storage only.',
-    );
-    this.logger.log(
-      '📋 Reason: Waiting for client to complete Shared Drive setup',
-    );
-    this.logger.log(
-      '📁 All files will be stored locally until Google Drive is re-enabled',
-    );
-    this.isGoogleDriveAvailable = false;
+    if (this.googleDriveTenantIds.size === 0) {
+      this.logger.log('📁 No Google Drive tenants configured — all files use local VPS storage.');
+      this.isGoogleDriveAvailable = false;
+      return;
+    }
 
-    // Uncomment below code once Shared Drive is configured by client
-    /*
     try {
       const clientEmail = this.configService.get('GOOGLE_DRIVE_CLIENT_EMAIL');
       const privateKey = this.configService.get('GOOGLE_DRIVE_PRIVATE_KEY');
@@ -101,48 +99,52 @@ export class FileStorageService {
         return;
       }
 
-      // Create JWT client with broader permissions
       const auth = new google.auth.JWT({
         email: clientEmail,
         key: privateKey.replace(/\\n/g, '\n'),
         scopes: [
           'https://www.googleapis.com/auth/drive',
           'https://www.googleapis.com/auth/drive.file',
-          'https://www.googleapis.com/auth/drive.metadata'
-        ]
+          'https://www.googleapis.com/auth/drive.metadata',
+        ],
       });
 
       this.driveClient = google.drive({ version: 'v3', auth });
-      
+
       // Test basic authentication
       await this.driveClient.about.get({ fields: 'user' });
-      
+
       this.isGoogleDriveAvailable = true;
-      this.logger.log('✅ Google Drive integration initialized');
-      
+      this.logger.log(
+        `✅ Google Drive initialized for tenants: ${[...this.googleDriveTenantIds].join(', ')}`,
+      );
     } catch (error) {
       this.logger.warn(`⚠️ Google Drive initialization failed: ${error.message}`);
-      this.logger.log('📁 Falling back to local storage only');
+      this.logger.log('📁 Falling back to local storage for all tenants');
       this.isGoogleDriveAvailable = false;
     }
-    */
   }
 
   /**
    * Upload file with multiple strategies
    */
   async uploadFile(options: FileUploadOptions): Promise<FileUploadResult> {
-    const { fileName, buffer, mimeType, category, metadata } = options;
+    const { fileName, buffer, mimeType, category, tenantId } = options;
 
     this.logger.debug(
-      `📤 Starting file upload: ${fileName} (${buffer.length} bytes)`,
+      `📤 Starting file upload: ${fileName} (${buffer.length} bytes) tenant=${tenantId}`,
     );
 
     // Security: Validate file before upload
     this.validateFile(fileName, buffer, mimeType, category);
 
-    // Strategy 1: Try Google Drive first (if available)
-    if (this.isGoogleDriveAvailable) {
+    // Use Google Drive only for tenants explicitly configured to use it
+    const useGoogleDrive =
+      this.isGoogleDriveAvailable &&
+      !!tenantId &&
+      this.googleDriveTenantIds.has(tenantId);
+
+    if (useGoogleDrive) {
       try {
         const driveResult = await this.uploadToGoogleDrive(options);
         if (driveResult.success) {
@@ -150,11 +152,11 @@ export class FileStorageService {
           return driveResult;
         }
       } catch (error) {
-        this.logger.warn(`⚠️ Google Drive upload failed: ${error.message}`);
+        this.logger.warn(`⚠️ Google Drive upload failed, falling back to VPS: ${error.message}`);
       }
     }
 
-    // Strategy 2: Fallback to local storage
+    // Local VPS storage (default for all non-Google-Drive tenants)
     try {
       const localResult = await this.uploadToLocal(options);
       this.logger.log(`✅ Local storage upload successful: ${fileName}`);
@@ -347,32 +349,25 @@ export class FileStorageService {
       };
 
       // Get the appropriate folder ID based on category
-      const folderId = this.getSharedDriveFolderId(category);
+      const folderId =
+        this.getSharedDriveFolderId(category) ||
+        this.configService.get('GOOGLE_DRIVE_PARENT_FOLDER_ID');
 
-      if (folderId) {
-        try {
-          // Test if we can access the Shared Drive folder
-          await this.driveClient.files.get({
-            fileId: folderId,
-            supportsAllDrives: true,
-          });
-          fileMetadata.parents = [folderId];
-          this.logger.debug(
-            `Uploading to Shared Drive folder: ${category} (${folderId})`,
-          );
-        } catch (folderError) {
-          this.logger.warn(
-            `Cannot access Shared Drive folder ${category}: ${folderError.message}`,
-          );
-          throw new Error(`Shared Drive folder not accessible: ${category}`);
-        }
-      } else {
-        this.logger.warn(
-          `No Shared Drive folder configured for category: ${category}`,
+      if (!folderId) {
+        throw new Error('No Google Drive folder configured');
+      }
+
+      try {
+        await this.driveClient.files.get({
+          fileId: folderId,
+          supportsAllDrives: true,
+        });
+        fileMetadata.parents = [folderId];
+        this.logger.debug(
+          `Uploading to Drive folder: ${category} (${folderId})`,
         );
-        throw new Error(
-          `No Shared Drive folder configured for category: ${category}`,
-        );
+      } catch (folderError) {
+        throw new Error(`Drive folder not accessible: ${folderError.message}`);
       }
 
       const media = {

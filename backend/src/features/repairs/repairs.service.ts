@@ -643,6 +643,7 @@ export class RepairsService {
             buffer: file.buffer,
             mimeType: file.mimetype,
             category: 'repair-images',
+            tenantId,
             metadata: {
               repairId: repair.repairNumber,
               repairInternalId: repairId,
