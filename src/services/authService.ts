@@ -100,10 +100,10 @@ class AuthService {
 
   async changePassword(passwordData: ChangePasswordData): Promise<void> {
     try {
-      await apiClient.post(API_CONFIG.ENDPOINTS.CHANGE_PASSWORD, passwordData);
-    } catch (error) {
-      console.error('Change password failed:', error);
-      throw error;
+      await apiClient.patch(API_CONFIG.ENDPOINTS.CHANGE_PASSWORD, passwordData);
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || 'Failed to change password';
+      throw new Error(message);
     }
   }
 

@@ -369,26 +369,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Change password function
   const changePassword = async (passwordData: ChangePasswordData): Promise<boolean> => {
     setAuth(prev => ({ ...prev, loading: true, error: null }));
-    
+
     try {
       await authService.changePassword(passwordData);
-      
-      setAuth(prev => ({
-        ...prev,
-        loading: false,
-        error: null
-      }));
-      
+
+      setAuth(prev => ({ ...prev, loading: false, error: null }));
       return true;
     } catch (error: any) {
-      console.error('Change password failed:', error);
-      setAuth(prev => ({
-        ...prev,
-        loading: false,
-        error: error.message || 'Password change failed'
-      }));
-      
-      return false;
+      const message = error.message || 'Password change failed';
+      setAuth(prev => ({ ...prev, loading: false, error: message }));
+      // Re-throw so the calling component can show the real backend error
+      throw new Error(message);
     }
   };
   
