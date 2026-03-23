@@ -15,6 +15,7 @@ import {
   ApiConsumes,
 } from '@nestjs/swagger';
 import { FileStorageService, FileUploadResult } from './file-storage.service';
+import { TenantId } from '../../shared/decorators/tenant.decorator';
 
 interface UploadedFile {
   fieldname: string;
@@ -38,6 +39,7 @@ export class FileStorageController {
   async uploadRepairImages(
     @UploadedFiles() files: UploadedFile[],
     @Body() metadata: any,
+    @TenantId() tenantId: string,
   ): Promise<{ results: FileUploadResult[]; summary: any }> {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files provided');
@@ -52,6 +54,7 @@ export class FileStorageController {
           buffer: file.buffer,
           mimeType: file.mimetype,
           category: 'repair-images',
+          tenantId,
           metadata: {
             repairId: metadata.repairId,
             description: metadata.description,
@@ -96,6 +99,7 @@ export class FileStorageController {
   async uploadCustomerDocuments(
     @UploadedFiles() files: UploadedFile[],
     @Body() metadata: any,
+    @TenantId() tenantId: string,
   ): Promise<{ results: FileUploadResult[] }> {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files provided');
@@ -109,6 +113,7 @@ export class FileStorageController {
         buffer: file.buffer,
         mimeType: file.mimetype,
         category: 'customer-documents',
+        tenantId,
         metadata: {
           customerId: metadata.customerId,
           documentType: metadata.documentType,
@@ -129,6 +134,7 @@ export class FileStorageController {
   async uploadProductImages(
     @UploadedFiles() files: UploadedFile[],
     @Body() metadata: any,
+    @TenantId() tenantId: string,
   ): Promise<{ results: FileUploadResult[] }> {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files provided');
@@ -142,6 +148,7 @@ export class FileStorageController {
         buffer: file.buffer,
         mimeType: file.mimetype,
         category: 'product-images',
+        tenantId,
         metadata: {
           productId: metadata.productId,
           imageType: metadata.imageType || 'product',

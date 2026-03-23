@@ -1,26 +1,27 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DialogFooter
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { X, Upload, Image as ImageIcon, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { productService } from "@/services/productService";
 
 export interface InventoryItemDetails {
   id: string;
@@ -82,7 +83,15 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
   const [editedItem, setEditedItem] = useState<InventoryItemDetails>(item || defaultItem);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch categories from backend when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      productService.getCategories().then(setCategories).catch(console.error);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (item) {
@@ -245,13 +254,9 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="cmgknthys0001o7w0l4bcd7qx">Rings</SelectItem>
-                  <SelectItem value="cmgkntibq0003o7w0os5kgyyj">Necklaces</SelectItem>
-                  <SelectItem value="cmgkntika0005o7w0j9h5c96x">Bracelets</SelectItem>
-                  <SelectItem value="cmgkntisx0007o7w0ym95j6p9">Earrings</SelectItem>
-                  <SelectItem value="cmgkntj1h0009o7w0cu72l9a2">Pendants</SelectItem>
-                  <SelectItem value="cmgkntja0000bo7w0g226zjiq">Watches</SelectItem>
-                  <SelectItem value="cmgkntjil000do7w0hnofge2u">Other</SelectItem>
+                  {categories.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
