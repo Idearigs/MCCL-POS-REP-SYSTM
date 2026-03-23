@@ -152,13 +152,33 @@ const ProfilePage: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Reset so same file can be re-selected if needed
+    e.target.value = '';
+
     const reader = new FileReader();
     reader.onload = ev => {
-      const result = ev.target?.result as string;
-      setProfileImage(result);
-      if (userId) localStorage.setItem(`profile_img_${userId}`, result);
-      toast.success('Profile picture updated');
-      setShowUpload(false);
+      const dataUrl = ev.target?.result as string;
+      // Compress via canvas to keep well under localStorage quota
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 256;
+        const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(img.width  * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const compressed = canvas.toDataURL('image/jpeg', 0.75);
+        setProfileImage(compressed);
+        try {
+          if (userId) localStorage.setItem(`profile_img_${userId}`, compressed);
+          toast.success('Profile picture updated');
+        } catch {
+          toast.error('Image too large to save — try a smaller file');
+        }
+        setShowUpload(false);
+      };
+      img.src = dataUrl;
     };
     reader.readAsDataURL(file);
   };
