@@ -1073,13 +1073,24 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       return;
     }
 
-    // Ensure category is resolved before saving
-    const categoryMatch = backendCategories.find(
+    // Ensure categories are loaded — fetch inline if not yet available
+    let cats = backendCategories;
+    if (!cats.find(c => c.name.toLowerCase() === activeCategoryName.toLowerCase())) {
+      try {
+        cats = await productService.getCategories();
+        setBackendCategories(cats);
+      } catch {
+        toast({ title: 'Category Error', description: 'Failed to load categories. Please try again.', variant: 'destructive' });
+        return;
+      }
+    }
+
+    const categoryMatch = cats.find(
       cat => cat.name.toLowerCase() === activeCategoryName.toLowerCase()
     );
 
     if (!categoryMatch) {
-      toast({ title: 'Category Error', description: `Could not find category "${activeCategoryName}". Please refresh and try again.`, variant: 'destructive' });
+      toast({ title: 'Category Error', description: `Category "${activeCategoryName}" not found. Please contact support.`, variant: 'destructive' });
       return;
     }
 

@@ -1,0 +1,30 @@
+import { FileStorageService, FileUploadResult } from './file-storage.service';
+interface UploadedFile {
+    fieldname: string;
+    originalname: string;
+    encoding: string;
+    mimetype: string;
+    size: number;
+    buffer: Buffer;
+}
+export declare class FileStorageController {
+    private readonly fileStorageService;
+    constructor(fileStorageService: FileStorageService);
+    uploadRepairImages(files: UploadedFile[], metadata: any): Promise<{
+        results: FileUploadResult[];
+        summary: any;
+    }>;
+    uploadCustomerDocuments(files: UploadedFile[], metadata: any): Promise<{
+        results: FileUploadResult[];
+    }>;
+    uploadProductImages(files: UploadedFile[], metadata: any): Promise<{
+        results: FileUploadResult[];
+    }>;
+    getStorageStatus(): {
+        googleDriveAvailable: boolean;
+        localStorageAvailable: boolean;
+        preferredMethod: string;
+    };
+    testStorageMethods(): Promise<Record<string, any>>;
+}
+export {};

@@ -452,8 +452,41 @@ export class AuthService {
       });
     }
 
+    // Seed default jewellery categories if the tenant has none
+    await this.seedDefaultCategories(data.tenantId);
+
     this.logger.log(`Tenant provisioned: ${data.tenantId} (${data.businessName})`);
     return { tenantId: data.tenantId, userId };
+  }
+
+  /**
+   * Seed default jewellery categories for a tenant (idempotent)
+   */
+  async seedDefaultCategories(tenantId: string): Promise<void> {
+    const DEFAULT_CATEGORIES = [
+      'Rings', 'Necklaces', 'Bracelets', 'Earrings',
+      'Pendants', 'Watches', 'Other',
+    ];
+
+    const existing = await this.prismaService.categories.findMany({
+      where: { tenantId },
+      select: { name: true },
+    });
+    const existingNames = new Set(existing.map((c) => c.name.toLowerCase()));
+    const toCreate = DEFAULT_CATEGORIES.filter(
+      (name) => !existingNames.has(name.toLowerCase()),
+    );
+
+    if (toCreate.length > 0) {
+      for (const name of toCreate) {
+        await this.prismaService.categories.create({
+          data: { id: generateId(), name, tenantId, isActive: true, updatedAt: new Date() },
+        });
+      }
+      this.logger.log(
+        `Seeded ${toCreate.length} categories for tenant ${tenantId}`,
+      );
+    }
   }
 
   /**
