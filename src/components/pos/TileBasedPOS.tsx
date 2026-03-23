@@ -729,6 +729,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
       setCart([...cart, cartItem]);
 
+      // Refresh inventory so new product appears immediately
+      await refreshInventory();
+
       toast({
         title: 'Product Added',
         description: `${quickProductName} saved to inventory and added to cart`,
@@ -1114,6 +1117,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       };
 
       setCart([...cart, cartItem]);
+
+      // Refresh inventory so the new product appears in the list immediately
+      await refreshInventory();
 
       toast({
         title: 'Product Added',
