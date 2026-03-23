@@ -232,7 +232,7 @@ model repairs {
   tenantId              String
   customerId            String?
   createdBy             String
-  repairNumber          String                  @unique
+  repairNumber          String
   itemDescription       String
   issueDescription      String
   estimatedCost         Decimal?
@@ -258,6 +258,8 @@ model repairs {
   users                 users                   @relation(fields: [createdBy], references: [id])
   customers             customers?              @relation(fields: [customerId], references: [id])
   tenants               tenants                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, repairNumber])
 }
 
 model sale_items {
@@ -277,7 +279,7 @@ model sales {
   tenantId       String
   customerId     String?
   createdBy      String
-  saleNumber     String        @unique
+  saleNumber     String
   subtotal       Decimal
   taxAmount      Decimal       @default(0)
   discountAmount Decimal       @default(0)
@@ -287,7 +289,7 @@ model sales {
   paidAmount     Decimal       @default(0)
   changeAmount   Decimal       @default(0)
   notes          String?
-  receiptNumber  String?       @unique
+  receiptNumber  String?
   status         SaleStatus    @default(COMPLETED)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime
@@ -300,11 +302,14 @@ model sales {
   customers      customers?    @relation(fields: [customerId], references: [id])
   shift          shifts?       @relation("ShiftSales", fields: [shiftId], references: [id])
   tenants        tenants       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, saleNumber])
+  @@unique([tenantId, receiptNumber])
 }
 
 model shifts {
   id            String      @id
-  shiftNumber   String      @unique
+  shiftNumber   String
   userId        String
   tenantId      String
   startTime     DateTime    @default(now())
@@ -326,6 +331,7 @@ model shifts {
   tenant        tenants     @relation("TenantShifts", fields: [tenantId], references: [id], onDelete: Cascade)
   user          users       @relation("UserShifts", fields: [userId], references: [id])
 
+  @@unique([tenantId, shiftNumber])
   @@index([userId, startTime])
   @@index([tenantId, startTime])
   @@index([status])
@@ -468,7 +474,7 @@ model float_sessions {
   id                 String               @id
   tenantId           String
   userId             String
-  floatNumber        String               @unique
+  floatNumber        String
   registerName       String?
   openingBalance     Decimal
   expectedClosing    Decimal?
@@ -488,6 +494,8 @@ model float_sessions {
   tenants            tenants              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   users              users                @relation(fields: [userId], references: [id])
   float_transactions float_transactions[]
+
+  @@unique([tenantId, floatNumber])
 }
 
 model float_transactions {
@@ -510,7 +518,7 @@ model petty_cash_accounts {
   id                      String                    @id
   tenantId                String
   accountName             String
-  accountNumber           String                    @unique
+  accountNumber           String
   registerName            String?
   location                String?
   openingBalance          Decimal                   @default(0)
@@ -524,13 +532,15 @@ model petty_cash_accounts {
   creator                 users                     @relation("PettyCashAccountCreator", fields: [createdBy], references: [id])
   tenants                 tenants                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   petty_cash_transactions petty_cash_transactions[]
+
+  @@unique([tenantId, accountNumber])
 }
 
 model petty_cash_transactions {
   id                String              @id
   tenantId          String
   accountId         String
-  transactionNumber String              @unique
+  transactionNumber String
   category          PettyCashCategory
   amount            Decimal
   description       String
@@ -552,6 +562,8 @@ model petty_cash_transactions {
   rejecter          users?              @relation("PettyCashRejecter", fields: [rejectedBy], references: [id])
   requester         users               @relation("PettyCashRequester", fields: [requestedBy], references: [id])
   tenants           tenants             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, transactionNumber])
 }
 
 model financial_analyses {
