@@ -50,4 +50,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 COPY --from=builder --chown=node:node /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 
 ENTRYPOINT ["dumb-init", "--"]
+# Run pending migrations then start the app (migrations are idempotent)
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
