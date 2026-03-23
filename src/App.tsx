@@ -43,9 +43,6 @@ import TasksPage from "./pages/TasksPage";
 import PettyCashPage from "./pages/PettyCashPage";
 import ShiftsPage from "./pages/ShiftsPage";
 import FinancialIntelligencePage from "./pages/FinancialIntelligencePage";
-import PWAInstallPrompt from "./components/pwa/PWAInstallPrompt";
-import OfflineIndicator from "./components/pwa/OfflineIndicator";
-import PWAUpdateNotifier from "./components/pwa/PWAUpdateNotifier";
 
 // Create a client for React Query
 const queryClient = new QueryClient();
@@ -76,10 +73,6 @@ const App = () => (
                     <TooltipProvider>
               <Toaster />
               <Sonner />
-              {/* PWA Components */}
-              <PWAInstallPrompt />
-              <OfflineIndicator />
-              <PWAUpdateNotifier />
               <PageTransition>
                 <Routes>
                   {/* Public routes */}

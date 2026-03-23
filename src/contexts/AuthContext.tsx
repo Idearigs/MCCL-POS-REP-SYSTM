@@ -342,7 +342,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Logout function
   const logout = async (): Promise<void> => {
     setAuth(prev => ({ ...prev, loading: true }));
-    
+
     try {
       await authService.logout();
     } catch (error) {
@@ -350,21 +350,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       // Clear all authentication data
       authService.clearAuth();
-      
+
       // Clear UI data from localStorage
       localStorage.removeItem(AUTH_UI_STORAGE_KEY);
-      
-      // Reset state to initial
-      setAuth(prev => ({
-        ...prev,
-        user: null,
-        isAuthenticated: false,
-        loading: false,
-        error: null
-      }));
-      
-      // Force redirect to login page
-      window.location.href = '/login';
+
+      // Clear the service worker navigation cache so the login page is
+      // always fetched fresh — prevents stale cached page showing after logout
+      if ('caches' in window) {
+        caches.delete('navigation-cache').catch(() => {});
+      }
+
+      // Replace history entry so the user can't go back to the authed app
+      // and use location.replace so the browser fetches a fresh response
+      window.location.replace('/login');
     }
   };
 
