@@ -1162,10 +1162,6 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       toast({ title: 'Cart is empty', variant: 'destructive' });
       return;
     }
-    if (!selectedCustomer) {
-      toast({ title: 'Please select a customer', variant: 'destructive' });
-      return;
-    }
     // Open payment dialog
     setShowPaymentDialog(true);
     setCashAmount(total.toFixed(2)); // Pre-fill with total amount
@@ -2576,7 +2572,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
                   <Users className="h-4 w-4 text-slate-500" />
                 </div>
-                <span className="text-slate-500 text-sm font-medium">Select Customer</span>
+                <span className="text-slate-500 text-sm font-medium">Select Customer (Optional)</span>
               </div>
               <ChevronDown className="h-5 w-5 text-slate-400 group-hover:text-slate-500 transition-colors" />
             </button>

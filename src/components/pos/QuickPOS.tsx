@@ -189,15 +189,6 @@ const QuickPOS: React.FC<QuickPOSProps> = ({ isOpen, onClose }) => {
 
   // Handle payment
   const handlePayment = (method: 'cash' | 'card' | 'transfer' | 'wallet') => {
-    if (!selectedCustomer) {
-      toast({
-        title: 'Customer Required',
-        description: 'Please select a customer before completing the sale',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     // TODO: Process payment through PaymentPanel
     toast({
       title: 'Payment Successful',
@@ -621,7 +612,7 @@ const QuickPOS: React.FC<QuickPOSProps> = ({ isOpen, onClose }) => {
                   className="w-full border-2 border-dashed border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 h-14"
                 >
                   <User className="h-5 w-5 mr-2" />
-                  Select Customer (Required)
+                  Select Customer (Optional)
                 </Button>
               )}
             </div>
