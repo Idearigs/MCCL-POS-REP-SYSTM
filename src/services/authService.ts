@@ -100,7 +100,12 @@ class AuthService {
 
   async changePassword(passwordData: ChangePasswordData): Promise<void> {
     try {
-      await apiClient.patch(API_CONFIG.ENDPOINTS.CHANGE_PASSWORD, passwordData);
+      // Backend DTO only accepts currentPassword + newPassword.
+      // Sending confirmPassword triggers forbidNonWhitelisted → 400.
+      await apiClient.patch(API_CONFIG.ENDPOINTS.CHANGE_PASSWORD, {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      });
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || 'Failed to change password';
       throw new Error(message);
