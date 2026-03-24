@@ -2,8 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { apiClient } from '../services/apiClient';
 
 // Core features are ALWAYS enabled regardless of mainframe configuration.
-// They represent the minimum viable POS functionality every tenant needs.
-// Even if the mainframe is unreachable, these are never hidden.
 export const CORE_FEATURES = new Set([
   'pos',        // Point of Sale terminal
   'inventory',  // Inventory Management
@@ -12,6 +10,27 @@ export const CORE_FEATURES = new Set([
   'repairs',    // Repair Management
   'cashiers',   // Staff/Cashiers Management
 ]);
+
+const CACHE_KEY = 'mps_tenant_features';
+
+function readCache(): string[] | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(features: string[]) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(features)); } catch { /* ignore */ }
+}
+
+function clearCache() {
+  try { localStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
+}
 
 interface FeatureContextType {
   enabledFeatures: string[];
@@ -23,36 +42,43 @@ interface FeatureContextType {
 const FeatureContext = createContext<FeatureContextType>({
   enabledFeatures: [],
   hasFeature: (key: string) => CORE_FEATURES.has(key),
-  loading: false,
+  loading: true,
   reload: () => {},
 });
 
 export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [enabledFeatures, setEnabledFeatures] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [loadError, setLoadError] = useState(false);
+  // Initialise from cache so we never show features before the real list arrives
+  const [enabledFeatures, setEnabledFeatures] = useState<string[]>(() => readCache() ?? []);
+  const [loading, setLoading] = useState(true);
+  const [everLoaded, setEverLoaded] = useState(() => readCache() !== null);
 
   const load = useCallback(async () => {
     const token = localStorage.getItem('accessToken');
-    if (!token) { setLoaded(true); setLoadError(false); return; }
+    if (!token) {
+      clearCache();
+      setEnabledFeatures([]);
+      setLoading(false);
+      setEverLoaded(false);
+      return;
+    }
 
     setLoading(true);
     try {
       const data = await apiClient.get<{ features: string[] }>('/mainframe/features/tenant-features');
-      setEnabledFeatures(data.features || []);
-      setLoadError(false);
+      const features = data.features || [];
+      setEnabledFeatures(features);
+      writeCache(features);
+      setEverLoaded(true);
     } catch {
-      // Keep existing features on transient errors rather than clearing them
-      setLoadError(true);
+      // On error: keep whatever we had (cache or previous load).
+      // Do NOT fall back to "all features enabled" — that bypasses restrictions.
+      // If we've never loaded successfully, we stay at core-only.
     } finally {
       setLoading(false);
-      setLoaded(true);
     }
   }, []);
 
-  // Load on mount and reload whenever the tab becomes visible again
-  // This ensures feature changes made in mainframe take effect without a full logout
+  // Load on mount and whenever the tab becomes visible (picks up mainframe changes)
   useEffect(() => {
     load();
     const onVisible = () => { if (document.visibilityState === 'visible') load(); };
@@ -61,15 +87,14 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [load]);
 
   const hasFeature = useCallback((key: string): boolean => {
-    // Core features are ALWAYS enabled — no mainframe config can disable them
+    // Core features are always enabled — plan/mainframe cannot disable them
     if (CORE_FEATURES.has(key)) return true;
 
-    // While loading or on error: fail-open (show non-core features too)
-    if (!loaded || loading || loadError) return true;
+    // Still on the very first load with no cache: block non-core until we know
+    if (loading && !everLoaded) return false;
 
-    // Features were loaded: check the list
     return enabledFeatures.includes(key);
-  }, [enabledFeatures, loaded, loading, loadError]);
+  }, [enabledFeatures, loading, everLoaded]);
 
   return (
     <FeatureContext.Provider value={{ enabledFeatures, hasFeature, loading, reload: load }}>

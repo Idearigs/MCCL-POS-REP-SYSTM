@@ -15,6 +15,7 @@ import { RepairTagsProvider } from "./contexts/RepairTagsContext";
 import { SettingsProvider } from "./contexts/SettingsContext";
 import PrivateRoute from "./components/auth/PrivateRoute";
 import PermissionGuard from "./components/auth/PermissionGuard";
+import FeatureGuard from "./components/auth/FeatureGuard";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import MainLayout from "./components/layout/MainLayout";
@@ -115,7 +116,9 @@ const App = () => (
                     path="/tasks"
                     element={
                       <PrivateRoute>
-                        <TasksPage />
+                        <FeatureGuard feature="tasks" pageTitle="Tasks">
+                          <TasksPage />
+                        </FeatureGuard>
                       </PrivateRoute>
                     }
                   />
@@ -143,9 +146,11 @@ const App = () => (
                     path="/stock-taking"
                     element={
                       <PrivateRoute>
-                        <PermissionGuard permission="stockTaking">
-                          <StockTakingPage />
-                        </PermissionGuard>
+                        <FeatureGuard feature="stock_taking" pageTitle="Stock Taking">
+                          <PermissionGuard permission="stockTaking">
+                            <StockTakingPage />
+                          </PermissionGuard>
+                        </FeatureGuard>
                       </PrivateRoute>
                     }
                   />
@@ -183,9 +188,11 @@ const App = () => (
                     path="/calendar"
                     element={
                       <PrivateRoute>
-                        <PermissionGuard permission="calendar">
-                          <CalendarPage />
-                        </PermissionGuard>
+                        <FeatureGuard feature="calendar" pageTitle="Calendar">
+                          <PermissionGuard permission="calendar">
+                            <CalendarPage />
+                          </PermissionGuard>
+                        </FeatureGuard>
                       </PrivateRoute>
                     }
                   />
@@ -193,9 +200,11 @@ const App = () => (
                     path="/history"
                     element={
                       <PrivateRoute>
-                        <PermissionGuard permission="history">
-                          <HistoryPage />
-                        </PermissionGuard>
+                        <FeatureGuard feature="history" pageTitle="History">
+                          <PermissionGuard permission="history">
+                            <HistoryPage />
+                          </PermissionGuard>
+                        </FeatureGuard>
                       </PrivateRoute>
                     }
                   />
@@ -233,9 +242,11 @@ const App = () => (
                     path="/financial-intelligence"
                     element={
                       <PrivateRoute>
-                        <PermissionGuard permission="financial_intelligence">
-                          <FinancialIntelligencePage />
-                        </PermissionGuard>
+                        <FeatureGuard feature="financial_intelligence" pageTitle="Financial Intelligence">
+                          <PermissionGuard permission="financial_intelligence">
+                            <FinancialIntelligencePage />
+                          </PermissionGuard>
+                        </FeatureGuard>
                       </PrivateRoute>
                     }
                   />
@@ -255,9 +266,11 @@ const App = () => (
                     path="/float"
                     element={
                       <PrivateRoute>
-                        <PermissionGuard permission="floatManagement">
-                          <FloatManagementPage />
-                        </PermissionGuard>
+                        <FeatureGuard feature="float_management" pageTitle="Float Management">
+                          <PermissionGuard permission="floatManagement">
+                            <FloatManagementPage />
+                          </PermissionGuard>
+                        </FeatureGuard>
                       </PrivateRoute>
                     }
                   />
@@ -265,9 +278,11 @@ const App = () => (
                     path="/petty-cash"
                     element={
                       <PrivateRoute>
-                        <PermissionGuard permission="pettyCash">
-                          <PettyCashPage />
-                        </PermissionGuard>
+                        <FeatureGuard feature="petty_cash" pageTitle="Petty Cash">
+                          <PermissionGuard permission="pettyCash">
+                            <PettyCashPage />
+                          </PermissionGuard>
+                        </FeatureGuard>
                       </PrivateRoute>
                     }
                   />
@@ -275,9 +290,9 @@ const App = () => (
                     path="/shifts"
                     element={
                       <PrivateRoute>
-                        <PermissionGuard permission="sales">
+                        <FeatureGuard feature="shifts" pageTitle="Shifts">
                           <ShiftsPage />
-                        </PermissionGuard>
+                        </FeatureGuard>
                       </PrivateRoute>
                     }
                   />
