@@ -48,13 +48,18 @@ router.post('/', requireAuth, async (req, res) => {
         lastName,
         role: role || 'STAFF',
         passwordHash: hashPassword(password),
+        tempPassword: password,
         mustChangePassword: true,
       },
       select: {
         id: true, firstName: true, lastName: true, email: true,
-        role: true, isActive: true, createdAt: true,
+        role: true, isActive: true, createdAt: true, tempPassword: true,
       },
     });
+
+    // Record initial password in history
+    await prisma.mf_password_history.create({ data: { userId: user.id, password } });
+
     return res.status(201).json(user);
   } catch (err) {
     console.error(err);
@@ -93,7 +98,25 @@ router.post('/:id/reset-password', requireAuth, async (req, res) => {
         mustChangePassword: true,
       },
     });
+    // Record in history so we can look it up later without resetting again
+    await prisma.mf_password_history.create({ data: { userId: req.params.id, password: tempPassword } });
     return res.json({ tempPassword });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// GET /mainframe/customer-users/:id/password-history
+router.get('/:id/password-history', requireAuth, async (req, res) => {
+  try {
+    const history = await prisma.mf_password_history.findMany({
+      where: { userId: req.params.id },
+      orderBy: { setAt: 'desc' },
+      take: 20,
+      select: { id: true, password: true, setAt: true },
+    });
+    return res.json(history);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Internal server error' });

@@ -15,13 +15,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.FeatureRequestsController = void 0;
 const common_1 = require("@nestjs/common");
 const feature_requests_service_1 = require("../services/feature-requests.service");
+const jwt_auth_guard_1 = require("../../auth/guards/jwt-auth.guard");
 let FeatureRequestsController = class FeatureRequestsController {
     featureRequestsService;
     constructor(featureRequestsService) {
         this.featureRequestsService = featureRequestsService;
     }
-    async create(data) {
-        return this.featureRequestsService.create(data);
+    async create(req, data) {
+        return this.featureRequestsService.create({ ...data, tenantId: req.user?.tenantId });
     }
     async findAll(page, limit, status) {
         return this.featureRequestsService.findAll({
@@ -43,9 +44,11 @@ let FeatureRequestsController = class FeatureRequestsController {
 exports.FeatureRequestsController = FeatureRequestsController;
 __decorate([
     (0, common_1.Post)(),
-    __param(0, (0, common_1.Body)()),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], FeatureRequestsController.prototype, "create", null);
 __decorate([

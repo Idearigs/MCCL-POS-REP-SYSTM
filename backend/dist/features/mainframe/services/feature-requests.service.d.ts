@@ -8,6 +8,7 @@ export declare class FeatureRequestsService {
     constructor(prisma: PrismaService, config: ConfigService);
     create(data: {
         customerProfileId?: string;
+        tenantId?: string;
         title: string;
         description: string;
         priority?: string;

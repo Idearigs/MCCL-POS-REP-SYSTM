@@ -21,17 +21,37 @@ export class FeatureRequestsService {
 
   async create(data: {
     customerProfileId?: string;
+    tenantId?: string;
     title: string;
     description: string;
     priority?: string;
     targetFeatureKey?: string;
   }) {
+    // Resolve customerProfileId from tenantId so the request is linked to the tenant
+    let customerProfileId = data.customerProfileId;
+    if (!customerProfileId && data.tenantId) {
+      try {
+        const tenant = await this.prisma.tenants.findUnique({
+          where: { id: data.tenantId },
+          select: { subdomain: true },
+        });
+        if (tenant?.subdomain) {
+          const profile = await this.prisma.mf_customer_profiles.findUnique({
+            where: { subdomain: tenant.subdomain },
+            select: { id: true },
+          });
+          customerProfileId = profile?.id;
+        }
+      } catch { /* non-critical — request still goes through without tenant link */ }
+    }
+
     // Forward to mainframe backend so it appears in the admin dashboard
     try {
       const { data: created } = await axios.post(
         `${this.mainframeUrl}/mainframe/feature-requests`,
         {
           ...data,
+          customerProfileId,
           priority: data.priority || 'MEDIUM',
         },
         {
@@ -50,7 +70,7 @@ export class FeatureRequestsService {
       );
       return this.prisma.mf_feature_requests.create({
         data: {
-          customerProfileId: data.customerProfileId,
+          customerProfileId,
           title: data.title,
           description: data.description,
           priority: (data.priority || 'MEDIUM') as any,

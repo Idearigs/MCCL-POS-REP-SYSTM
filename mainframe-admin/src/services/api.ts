@@ -59,11 +59,12 @@ export const customerProfilesApi = {
 
 // ── Customer Users ───────────────────────────────────────────────────────────
 export const customerUsersApi = {
-  getByProfile:  (profileId: string)    => apiClient.get(`/mainframe/customer-users/profile/${profileId}`),
-  create:        (data: any)            => apiClient.post('/mainframe/customer-users', data),
-  update:        (id: string, data: any)=> apiClient.put(`/mainframe/customer-users/${id}`, data),
-  resetPassword: (id: string)           => apiClient.post(`/mainframe/customer-users/${id}/reset-password`),
-  delete:        (id: string)           => apiClient.delete(`/mainframe/customer-users/${id}`),
+  getByProfile:     (profileId: string)    => apiClient.get(`/mainframe/customer-users/profile/${profileId}`),
+  create:           (data: any)            => apiClient.post('/mainframe/customer-users', data),
+  update:           (id: string, data: any)=> apiClient.put(`/mainframe/customer-users/${id}`, data),
+  resetPassword:    (id: string)           => apiClient.post(`/mainframe/customer-users/${id}/reset-password`),
+  getPasswordHistory:(id: string)          => apiClient.get(`/mainframe/customer-users/${id}/password-history`),
+  delete:           (id: string)           => apiClient.delete(`/mainframe/customer-users/${id}`),
 };
 
 // ── Subscriptions ────────────────────────────────────────────────────────────

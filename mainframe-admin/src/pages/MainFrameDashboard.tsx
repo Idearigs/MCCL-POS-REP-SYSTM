@@ -39,11 +39,14 @@ const STATUS_META: Record<string, { label: string; dot: string; bg: string; text
   IN_PROGRESS:  { label: 'In Progress', dot: '#AF52DE', bg: '#EDE9FE', text: '#5B21B6' },
   RESOLVED:     { label: 'Resolved',    dot: '#34C759', bg: '#D1FAE5', text: '#065F46' },
   CLOSED:       { label: 'Closed',      dot: '#8E8E93', bg: '#F3F4F6', text: '#374151' },
-  SUBMITTED:    { label: 'Submitted',   dot: '#5AC8FA', bg: '#E0F2FE', text: '#0C4A6E' },
-  UNDER_REVIEW: { label: 'In Review',   dot: '#AF52DE', bg: '#EDE9FE', text: '#5B21B6' },
-  PLANNED:      { label: 'Planned',     dot: '#5856D6', bg: '#EEF2FF', text: '#3730A3' },
-  RELEASED:     { label: 'Released',    dot: '#34C759', bg: '#D1FAE5', text: '#065F46' },
-  REJECTED:     { label: 'Rejected',    dot: '#FF3B30', bg: '#FEE2E2', text: '#991B1B' },
+  SUBMITTED:      { label: 'Submitted',    dot: '#5AC8FA', bg: '#E0F2FE', text: '#0C4A6E' },
+  UNDER_REVIEW:   { label: 'In Review',    dot: '#AF52DE', bg: '#EDE9FE', text: '#5B21B6' },
+  APPROVED:       { label: 'Approved',     dot: '#34C759', bg: '#D1FAE5', text: '#065F46' },
+  IN_DEVELOPMENT: { label: 'In Dev',       dot: '#5856D6', bg: '#EEF2FF', text: '#3730A3' },
+  TESTING:        { label: 'Testing',      dot: '#FF9F0A', bg: '#FEF3C7', text: '#92400E' },
+  PLANNED:        { label: 'Planned',      dot: '#5856D6', bg: '#EEF2FF', text: '#3730A3' },
+  RELEASED:       { label: 'Released',     dot: '#34C759', bg: '#D1FAE5', text: '#065F46' },
+  REJECTED:       { label: 'Rejected',     dot: '#FF3B30', bg: '#FEE2E2', text: '#991B1B' },
   STABLE:       { label: 'Stable',      dot: '#34C759', bg: '#D1FAE5', text: '#065F46' },
   BETA:         { label: 'Beta',        dot: '#FF9F0A', bg: '#FEF3C7', text: '#92400E' },
   DEPRECATED:   { label: 'Deprecated',  dot: '#8E8E93', bg: '#F3F4F6', text: '#374151' },
@@ -239,6 +242,9 @@ interface TenantUser {
   role: string; isActive: boolean; lastLoginAt?: string; createdAt: string;
   tempPassword?: string | null; mustChangePassword?: boolean;
 }
+interface PasswordHistoryEntry {
+  id: string; password: string; setAt: string;
+}
 interface Invoice {
   id: string; invoiceNumber: string; amount: number; status: string;
   dueDate: string; paidAt?: string;
@@ -266,6 +272,8 @@ const MainFrameDashboard: React.FC = () => {
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [tenantTab, setTenantTab] = useState<'info' | 'users' | 'billing' | 'activity' | 'features'>('info');
   const [tenantUsers, setTenantUsers] = useState<TenantUser[]>([]);
+  const [passwordHistoryMap, setPasswordHistoryMap] = useState<Record<string, PasswordHistoryEntry[]>>({});
+  const [expandedHistory, setExpandedHistory] = useState<Record<string, boolean>>({});
   const [tenantInvoices, setTenantInvoices] = useState<Invoice[]>([]);
   const [tenantActivity, setTenantActivity] = useState<any[]>([]);
   const [tenantFeatures, setTenantFeatures] = useState<TenantFeature[]>([]);
@@ -333,6 +341,7 @@ const MainFrameDashboard: React.FC = () => {
       setSelectedTenant(r.data);
       setTenantTab('info');
       setTenantUsers([]); setTenantInvoices([]); setTenantActivity([]); setTenantFeatures([]);
+      setPasswordHistoryMap({}); setExpandedHistory({});
     } catch { toast.error('Failed to load tenant'); }
   };
 
@@ -403,6 +412,18 @@ const MainFrameDashboard: React.FC = () => {
       toast.success('User added');
     } catch (e: any) { toast.error(e.response?.data?.message || 'Failed'); }
     finally { setSavingUser(false); }
+  };
+
+  const loadPasswordHistory = async (userId: string) => {
+    if (passwordHistoryMap[userId]) {
+      setExpandedHistory(p => ({ ...p, [userId]: !p[userId] }));
+      return;
+    }
+    try {
+      const r = await customerUsersApi.getPasswordHistory(userId);
+      setPasswordHistoryMap(p => ({ ...p, [userId]: r.data || [] }));
+      setExpandedHistory(p => ({ ...p, [userId]: true }));
+    } catch { toast.error('Failed to load password history'); }
   };
 
   const resetPw = async (u: TenantUser) => {
@@ -570,7 +591,11 @@ const MainFrameDashboard: React.FC = () => {
   const q = searchQuery.toLowerCase();
   const filtTenants  = tenants.filter(t => t.businessName.toLowerCase().includes(q) || t.subdomain.toLowerCase().includes(q) || t.businessEmail.toLowerCase().includes(q));
   const filtBugs     = bugReports.filter(b => b.title.toLowerCase().includes(q));
-  const filtRequests = featureRequests.filter(r => r.title.toLowerCase().includes(q));
+  const filtRequests = featureRequests.filter(r =>
+    r.title.toLowerCase().includes(q) ||
+    r.description.toLowerCase().includes(q) ||
+    (r.customerProfile?.businessName || '').toLowerCase().includes(q)
+  );
   const filtFeatures = features.filter(f => f.featureName.toLowerCase().includes(q) || f.featureKey.toLowerCase().includes(q));
 
   // ── Nav items ───────────────────────────────────────────────────────────────
@@ -935,6 +960,43 @@ const MainFrameDashboard: React.FC = () => {
                                         Reset
                                       </button>
                                     </>
+                                  )}
+                                </div>
+
+                                {/* Password history toggle */}
+                                <div>
+                                  <button
+                                    onClick={() => loadPasswordHistory(u.id)}
+                                    className="flex items-center gap-1 text-[11px] font-semibold mt-1 px-0 py-0.5 rounded transition-colors"
+                                    style={{ color: '#5856D6' }}>
+                                    <Key className="w-3 h-3" />
+                                    {expandedHistory[u.id] ? 'Hide history' : 'View password history'}
+                                  </button>
+                                  {expandedHistory[u.id] && (
+                                    <div className="mt-2 rounded-xl overflow-hidden" style={{ border: '1px solid rgba(88,86,214,0.15)', background: 'rgba(88,86,214,0.03)' }}>
+                                      {(passwordHistoryMap[u.id] || []).length === 0 ? (
+                                        <p className="text-[11px] text-center py-3" style={{ color: '#C7C7CC' }}>No history yet</p>
+                                      ) : (
+                                        (passwordHistoryMap[u.id] || []).map((entry, i) => (
+                                          <div key={entry.id} className="flex items-center justify-between px-3 py-2 gap-2"
+                                            style={{ borderBottom: i < (passwordHistoryMap[u.id]?.length ?? 0) - 1 ? '1px solid rgba(0,0,0,0.06)' : 'none' }}>
+                                            <div className="flex items-center gap-2 min-w-0">
+                                              <span className="text-[10px] font-semibold flex-shrink-0" style={{ color: '#8E8E93' }}>
+                                                {new Date(entry.setAt).toLocaleDateString()} {new Date(entry.setAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                              </span>
+                                              <span className="font-mono text-sm font-bold truncate" style={{ color: i === 0 ? '#007AFF' : '#1D1D1F' }}>
+                                                {entry.password}
+                                              </span>
+                                              {i === 0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: '#DBEAFE', color: '#1E40AF' }}>LATEST</span>}
+                                            </div>
+                                            <button onClick={() => { navigator.clipboard.writeText(entry.password); toast.success('Password copied'); }}
+                                              className="p-1 rounded-lg flex-shrink-0 hover:bg-black/5 transition-colors">
+                                              <Copy className="w-3 h-3" style={{ color: '#8E8E93' }} />
+                                            </button>
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
                                   )}
                                 </div>
                               </div>
@@ -1539,7 +1601,7 @@ const MainFrameDashboard: React.FC = () => {
                             onChange={e => updateRequestStatus(req.id, e.target.value)}
                             className="text-xs font-medium px-2.5 py-1.5 rounded-xl outline-none cursor-pointer"
                             style={{ background: 'rgba(118,118,128,0.1)', color: '#3C3C43', border: 'none' }}>
-                            {['SUBMITTED','UNDER_REVIEW','PLANNED','IN_PROGRESS','RELEASED','REJECTED'].map(s => (
+                            {['SUBMITTED','UNDER_REVIEW','APPROVED','IN_DEVELOPMENT','TESTING','RELEASED','REJECTED'].map(s => (
                               <option key={s} value={s}>{STATUS_META[s]?.label || s}</option>
                             ))}
                           </select>

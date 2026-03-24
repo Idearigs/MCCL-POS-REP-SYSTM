@@ -32,9 +32,27 @@ let FeatureRequestsService = class FeatureRequestsService {
             this.config.get('INTERNAL_API_KEY') || 'local-dev-internal-key';
     }
     async create(data) {
+        let customerProfileId = data.customerProfileId;
+        if (!customerProfileId && data.tenantId) {
+            try {
+                const tenant = await this.prisma.tenants.findUnique({
+                    where: { id: data.tenantId },
+                    select: { subdomain: true },
+                });
+                if (tenant?.subdomain) {
+                    const profile = await this.prisma.mf_customer_profiles.findUnique({
+                        where: { subdomain: tenant.subdomain },
+                        select: { id: true },
+                    });
+                    customerProfileId = profile?.id;
+                }
+            }
+            catch { }
+        }
         try {
             const { data: created } = await axios_1.default.post(`${this.mainframeUrl}/mainframe/feature-requests`, {
                 ...data,
+                customerProfileId,
                 priority: data.priority || 'MEDIUM',
             }, {
                 headers: {
@@ -49,7 +67,7 @@ let FeatureRequestsService = class FeatureRequestsService {
             console.error('[FeatureRequests] Failed to forward to mainframe, storing locally:', err?.message);
             return this.prisma.mf_feature_requests.create({
                 data: {
-                    customerProfileId: data.customerProfileId,
+                    customerProfileId,
                     title: data.title,
                     description: data.description,
                     priority: (data.priority || 'MEDIUM'),

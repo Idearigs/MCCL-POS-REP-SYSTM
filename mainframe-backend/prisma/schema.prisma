@@ -130,10 +130,22 @@ model mf_customer_users {
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   customerProfile    mf_customer_profiles @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+  passwordHistory    mf_password_history[]
 
   @@unique([customerProfileId, email])
   @@index([customerProfileId])
   @@index([email])
+}
+
+model mf_password_history {
+  id       String            @id @default(uuid())
+  userId   String
+  password String
+  setAt    DateTime          @default(now())
+  user     mf_customer_users @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([setAt])
 }
 
 model mf_features {

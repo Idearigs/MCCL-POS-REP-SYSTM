@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Put, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { FeatureRequestsService } from '../services/feature-requests.service';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 
 @Controller('mainframe/feature-requests')
 export class FeatureRequestsController {
@@ -8,7 +9,9 @@ export class FeatureRequestsController {
   ) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard)
   async create(
+    @Request() req: any,
     @Body()
     data: {
       customerProfileId?: string;
@@ -18,7 +21,7 @@ export class FeatureRequestsController {
       targetFeatureKey?: string;
     },
   ) {
-    return this.featureRequestsService.create(data);
+    return this.featureRequestsService.create({ ...data, tenantId: req.user?.tenantId });
   }
 
   @Get()
