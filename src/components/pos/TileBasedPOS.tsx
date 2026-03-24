@@ -1255,15 +1255,17 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       // Prepare all sale items (products + repairs)
       const saleItems = [];
 
-      // Add regular products
+      // Add regular products (and in-session service items that have no DB product ID)
       for (const item of productItems) {
+        const isServiceItem = item.sku?.startsWith('SERVICE-') || item.id?.startsWith('battery-') || item.id?.startsWith('cleaning-');
         saleItems.push({
           productId: item.id,
           quantity: item.quantity,
           unitPrice: item.price,
           discountAmount: 0,
-          taxRate: 0, // No VAT - prices already include VAT
-          notes: undefined,
+          taxRate: 0,
+          // Service items use the same "REPAIR SERVICE" marker so backend skips product DB lookup
+          notes: isServiceItem ? `REPAIR SERVICE: ${item.name}` : undefined,
         });
       }
 
