@@ -15,6 +15,69 @@ function generateTempPassword(): string {
   return pw;
 }
 
+// Map mainframe profile statuses → POS tenant statuses
+const MF_TO_POS_STATUS: Record<string, string> = {
+  ACTIVE:         'ACTIVE',
+  SUSPENDED:      'SUSPENDED',
+  DEACTIVATED:    'SUSPENDED',
+  MAINTENANCE:    'INACTIVE',
+  PENDING_SETUP:  'INACTIVE',
+};
+
+/**
+ * Sync a tenant's status from the mainframe profile to the POS tenants table.
+ * Called whenever the mainframe updates a customer profile's status.
+ * Non-fatal — logs errors but never throws, so the mainframe update always succeeds.
+ */
+async function syncStatusToPOS(subdomain: string, mfStatus: string, opts?: { suspendedReason?: string }): Promise<void> {
+  const posBackendUrl = process.env.POS_BACKEND_URL || 'http://localhost:3002/api/v1';
+  const internalKey   = process.env.INTERNAL_API_KEY || '';
+  const posStatus     = MF_TO_POS_STATUS[mfStatus] ?? 'INACTIVE';
+
+  const body = JSON.stringify({
+    subdomain,
+    status: posStatus,
+    suspendedReason: posStatus === 'SUSPENDED' ? (opts?.suspendedReason || 'MANUAL') : undefined,
+  });
+
+  return new Promise((resolve) => {
+    const url = new URL(`${posBackendUrl}/auth/tenant-status`);
+    const lib = url.protocol === 'https:' ? https : http;
+
+    const req = lib.request(
+      {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: url.pathname,
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+          'x-internal-key': internalKey,
+        },
+      },
+      (res) => {
+        let raw = '';
+        res.on('data', (c) => (raw += c));
+        res.on('end', () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            console.log(`[Mainframe] POS tenant status synced: ${subdomain} → ${posStatus}`);
+          } else {
+            console.error(`[Mainframe] POS status sync failed: ${res.statusCode} ${raw}`);
+          }
+          resolve();
+        });
+      },
+    );
+    req.on('error', (err) => {
+      console.error(`[Mainframe] POS status sync error for ${subdomain}:`, err.message);
+      resolve(); // non-fatal
+    });
+    req.write(body);
+    req.end();
+  });
+}
+
 /**
  * Call the POS backend to provision a new tenant + owner user.
  * Called after creating an mf_customer_profile.
@@ -527,7 +590,7 @@ router.put('/:id', requireAuth, async (req, res) => {
 // PUT /mainframe/customer-profiles/:id/status
 router.put('/:id/status', requireAuth, async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, suspendedReason } = req.body;
     const profile = await prisma.mf_customer_profiles.update({
       where: { id: req.params.id },
       data: {
@@ -539,6 +602,9 @@ router.put('/:id/status', requireAuth, async (req, res) => {
     await prisma.mf_activity_logs.create({
       data: { customerProfileId: req.params.id, action: 'profile.status_changed', description: `Status changed to ${status}`, actorType: 'admin' },
     });
+
+    // Sync to POS tenants table so the JWT guard immediately enforces the new status
+    syncStatusToPOS(profile.subdomain, status, { suspendedReason }).catch(() => {});
 
     return res.json(profile);
   } catch (err) {
