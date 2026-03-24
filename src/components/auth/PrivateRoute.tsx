@@ -1,17 +1,17 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import TenantSuspendedScreen from './TenantSuspendedScreen';
 
 interface PrivateRouteProps {
   children: React.ReactNode;
 }
 
 const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
-  const { auth } = useAuth();
+  const { auth, logout } = useAuth();
   const location = useLocation();
 
   if (auth.loading) {
-    // Show loading spinner while checking authentication
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -22,8 +22,13 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
     );
   }
 
+  // Suspended tenant — show full-screen suspension message (not login)
+  const tenantStatus = auth.tenantInfo?.status;
+  if (tenantStatus === 'SUSPENDED') {
+    return <TenantSuspendedScreen tenantInfo={auth.tenantInfo} onLogout={logout} />;
+  }
+
   if (!auth.isAuthenticated) {
-    // Redirect to login page with return url
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
@@ -32,13 +37,11 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
     const allowedPaths = ['/pos', '/sales', '/cash-up', '/shifts', '/repairs', '/customers', '/inventory', '/calendar', '/search'];
     const currentPath = location.pathname;
 
-    // If STAFF user tries to access a restricted page, redirect to POS
     if (!allowedPaths.some(path => currentPath.startsWith(path))) {
       return <Navigate to="/pos" replace />;
     }
   }
 
-  // User is authenticated and authorized, render the protected component
   return <>{children}</>;
 };
 

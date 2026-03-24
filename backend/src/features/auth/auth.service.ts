@@ -682,4 +682,54 @@ export class AuthService {
       throw error;
     }
   }
+
+  /**
+   * Update tenant status — called by Mainframe via internal API
+   * to sync suspension / billing state into the POS database.
+   */
+  async updateTenantStatus(data: {
+    subdomain: string;
+    status: 'ACTIVE' | 'PAYMENT_DUE' | 'PAYMENT_WARNING' | 'SUSPENDED' | 'INACTIVE';
+    suspendedReason?: string;
+    billingDueDate?: string;
+  }): Promise<{ tenantId: string; status: string }> {
+    const tenant = await this.prismaService.tenants.findUnique({
+      where: { subdomain: data.subdomain.toLowerCase() },
+    });
+
+    if (!tenant) {
+      throw new Error(`Tenant with subdomain '${data.subdomain}' not found`);
+    }
+
+    const updateData: any = {
+      status: data.status,
+      updatedAt: new Date(),
+    };
+
+    if (data.status === 'SUSPENDED') {
+      updateData.suspendedAt = new Date();
+      updateData.suspendedReason = data.suspendedReason || 'MANUAL';
+    }
+
+    if (data.status === 'ACTIVE') {
+      // Clear suspension fields on re-activation
+      updateData.suspendedAt = null;
+      updateData.suspendedReason = null;
+    }
+
+    if (data.billingDueDate) {
+      updateData.billingDueDate = new Date(data.billingDueDate);
+    }
+
+    const updated = await this.prismaService.tenants.update({
+      where: { id: tenant.id },
+      data: updateData,
+    });
+
+    this.logger.log(
+      `Tenant ${data.subdomain} status updated to ${data.status} (reason: ${data.suspendedReason || 'none'})`,
+    );
+
+    return { tenantId: updated.id, status: updated.status };
+  }
 }

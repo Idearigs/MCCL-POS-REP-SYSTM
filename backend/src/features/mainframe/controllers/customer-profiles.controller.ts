@@ -94,8 +94,14 @@ export class CustomerProfilesController {
   }
 
   @Patch(':id/status')
-  async updateStatus(@Param('id') id: string, @Body('status') status: string) {
-    return this.customerProfilesService.updateStatus(id, status);
+  async updateStatus(
+    @Param('id') id: string,
+    @Body() body: { status: string; suspendedReason?: string; billingDueDate?: string },
+  ) {
+    return this.customerProfilesService.updateStatus(id, body.status, {
+      suspendedReason: body.suspendedReason,
+      billingDueDate: body.billingDueDate,
+    });
   }
 
   @Post(':id/features/:featureKey/enable')

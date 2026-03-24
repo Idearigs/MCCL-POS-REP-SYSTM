@@ -363,6 +363,9 @@ model tenants {
   settings                Json?
   subscriptionPlan        String                    @default("basic")
   status                  TenantStatus              @default(ACTIVE)
+  suspendedAt             DateTime?
+  suspendedReason         String?                   // 'MANUAL' | 'PAYMENT_OVERDUE'
+  billingDueDate          DateTime?                 // When the current billing period ended
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime
   ai_recommendations      ai_recommendations[]
@@ -1185,8 +1188,10 @@ enum SaleStatus {
 
 enum TenantStatus {
   ACTIVE
-  INACTIVE
-  SUSPENDED
+  PAYMENT_DUE      // Day 0-1: billing period ended, show notification
+  PAYMENT_WARNING  // Day 2-3: prominent warning, still functional
+  SUSPENDED        // Day 4+ or manual: full screen lock
+  INACTIVE         // Disabled account
 }
 
 enum UserRole {

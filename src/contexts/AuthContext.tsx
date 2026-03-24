@@ -23,6 +23,15 @@ interface Subscription {
   price: number;
 }
 
+export type TenantStatus = 'ACTIVE' | 'PAYMENT_DUE' | 'PAYMENT_WARNING' | 'SUSPENDED' | 'INACTIVE' | null;
+
+export interface TenantInfo {
+  status: TenantStatus;
+  suspendedReason?: string | null; // 'MANUAL' | 'PAYMENT_OVERDUE'
+  billingDueDate?: string | null;
+  billingDaysOverdue?: number | null;
+}
+
 // Define the authentication state type
 interface AuthState {
   user: {
@@ -32,6 +41,7 @@ interface AuthState {
     role: string;
   } | null;
   isAuthenticated: boolean;
+  tenantInfo: TenantInfo;
   subscription: Subscription;
   notifications: Notification[];
   loading: boolean;
@@ -50,6 +60,7 @@ interface AuthContextType {
   addNotification: (notification: Omit<Notification, 'id' | 'time' | 'isNew'>) => void;
   markNotificationAsRead: (id: string) => void;
   clearNotification: (id: string) => void;
+  refreshTenantStatus: () => Promise<void>;
 }
 
 // Create the context with a default value
@@ -83,6 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isAuthenticated: false,
       loading: true, // Start with loading true
       error: null,
+      tenantInfo: { status: null },
       subscription: uiData?.subscription || {
         plan: 'standard' as const,
         status: 'active' as const,
@@ -113,6 +125,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   });
 
+  // Helper: compute billing days overdue from billingDueDate
+  const calcDaysOverdue = (billingDueDate?: string | null): number | null => {
+    if (!billingDueDate) return null;
+    const due = new Date(billingDueDate).getTime();
+    const now = Date.now();
+    if (now <= due) return 0;
+    return Math.floor((now - due) / (1000 * 60 * 60 * 24));
+  };
+
+  // Helper: build TenantInfo from getMe response
+  const buildTenantInfo = (me: any): TenantInfo => {
+    const tenant = me.tenant as any;
+    if (!tenant) return { status: 'ACTIVE' };
+    return {
+      status: tenant.status as TenantStatus,
+      suspendedReason: tenant.suspendedReason ?? null,
+      billingDueDate: tenant.billingDueDate ?? null,
+      billingDaysOverdue: calcDaysOverdue(tenant.billingDueDate),
+    };
+  };
+
   // Check authentication status on mount — call /auth/me so we always
   // get the real user name/role from the server, not just the JWT payload
   useEffect(() => {
@@ -129,6 +162,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email: me.email,
               role: me.role,
             },
+            tenantInfo: buildTenantInfo(me),
             isAuthenticated: true,
             loading: false,
           }));
@@ -138,7 +172,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // No valid token — clear stale data
         authService.clearAuth();
         setAuth(prev => ({ ...prev, user: null, isAuthenticated: false, loading: false }));
-      } catch {
+      } catch (err: any) {
+        // 403 TENANT_SUSPENDED — show the suspension screen without logging out
+        if (err?.response?.status === 403 || err?.status === 403) {
+          const data = err?.response?.data || err?.data || {};
+          setAuth(prev => ({
+            ...prev,
+            isAuthenticated: false,
+            loading: false,
+            tenantInfo: {
+              status: 'SUSPENDED',
+              suspendedReason: data.reason || 'MANUAL',
+            },
+          }));
+          return;
+        }
         // Token invalid or /auth/me failed — force logout
         authService.clearAuth();
         setAuth(prev => ({ ...prev, user: null, isAuthenticated: false, loading: false }));
@@ -147,6 +195,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     checkAuthStatus();
   }, []);
+
+  // Allow components to manually re-check tenant status (e.g. after payment)
+  const refreshTenantStatus = async (): Promise<void> => {
+    try {
+      const me = await authService.getMe();
+      setAuth(prev => ({ ...prev, tenantInfo: buildTenantInfo(me) }));
+    } catch {
+      // ignore
+    }
+  };
 
   // Function to check if token is still valid (not expired)
   const isTokenValid = (token: string): boolean => {
@@ -275,6 +333,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: response.user.email,
           role: response.user.role
         },
+        tenantInfo: buildTenantInfo(response),
         isAuthenticated: true,
         loading: false,
         error: null
@@ -434,17 +493,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      auth, 
+    <AuthContext.Provider value={{
+      auth,
       login,
-      register, 
-      logout, 
-      changePassword, 
-      updateSubscription, 
+      register,
+      logout,
+      changePassword,
+      updateSubscription,
       renewSubscription,
       addNotification,
       markNotificationAsRead,
-      clearNotification
+      clearNotification,
+      refreshTenantStatus,
     }}>
       {children}
     </AuthContext.Provider>

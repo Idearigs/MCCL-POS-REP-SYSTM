@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 import {
@@ -13,13 +14,81 @@ import {
 } from '../dto/customer-profile.dto';
 import { SubdomainService } from './subdomain.service';
 import * as bcrypt from 'bcrypt';
+import { ConfigService } from '@nestjs/config';
+import * as https from 'https';
+import * as http from 'http';
+
+// Map mainframe profile statuses to POS tenant statuses
+const MF_TO_POS_STATUS: Record<string, string> = {
+  ACTIVE: 'ACTIVE',
+  SUSPENDED: 'SUSPENDED',
+  DEACTIVATED: 'SUSPENDED',
+  MAINTENANCE: 'INACTIVE',
+  PENDING_SETUP: 'INACTIVE',
+};
 
 @Injectable()
 export class CustomerProfilesService {
+  private readonly logger = new Logger(CustomerProfilesService.name);
+  private readonly posApiUrl: string;
+  private readonly internalKey: string;
+
   constructor(
     private prisma: PrismaService,
     private subdomainService: SubdomainService,
-  ) {}
+    private config: ConfigService,
+  ) {
+    this.posApiUrl = this.config.get<string>('POS_API_URL') || 'http://localhost:3000';
+    this.internalKey = this.config.get<string>('INTERNAL_API_KEY') || 'local-dev-internal-key';
+  }
+
+  /** Call the POS backend to sync tenant status */
+  private async syncTenantStatusToPOS(
+    subdomain: string,
+    mfStatus: string,
+    opts?: { suspendedReason?: string; billingDueDate?: string },
+  ): Promise<void> {
+    const posStatus = MF_TO_POS_STATUS[mfStatus] ?? 'INACTIVE';
+    const payload = JSON.stringify({
+      subdomain,
+      status: posStatus,
+      suspendedReason: opts?.suspendedReason,
+      billingDueDate: opts?.billingDueDate,
+    });
+
+    return new Promise((resolve) => {
+      const url = new URL(`${this.posApiUrl}/api/v1/auth/tenant-status`);
+      const lib = url.protocol === 'https:' ? https : http;
+      const req = lib.request(
+        {
+          hostname: url.hostname,
+          port: url.port || (url.protocol === 'https:' ? 443 : 80),
+          path: url.pathname,
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(payload),
+            'x-internal-key': this.internalKey,
+          },
+        },
+        (res) => {
+          res.resume(); // drain
+          if (res.statusCode && res.statusCode >= 400) {
+            this.logger.warn(`POS status sync returned HTTP ${res.statusCode} for ${subdomain}`);
+          } else {
+            this.logger.log(`POS tenant status synced: ${subdomain} → ${posStatus}`);
+          }
+          resolve();
+        },
+      );
+      req.on('error', (err) => {
+        this.logger.error(`Failed to sync tenant status to POS for ${subdomain}: ${err.message}`);
+        resolve(); // don't fail the mainframe operation if POS sync fails
+      });
+      req.write(payload);
+      req.end();
+    });
+  }
 
   async create(dto: CreateCustomerProfileDto) {
     // Validate subdomain format
@@ -293,7 +362,11 @@ export class CustomerProfilesService {
     return this.formatProfileResponse(updated);
   }
 
-  async updateStatus(id: string, status: string) {
+  async updateStatus(
+    id: string,
+    status: string,
+    opts?: { suspendedReason?: string; billingDueDate?: string },
+  ) {
     const profile = await this.prisma.mf_customer_profiles.update({
       where: { id },
       data: {
@@ -308,6 +381,9 @@ export class CustomerProfilesService {
       `Status changed to ${status}`,
       'system',
     );
+
+    // Sync status into the POS tenant database
+    await this.syncTenantStatusToPOS(profile.subdomain, status, opts);
 
     return profile;
   }

@@ -322,6 +322,30 @@ export class AuthController {
     return this.authService.provisionTenant(body);
   }
 
+  /**
+   * Internal endpoint — called by Mainframe to update tenant suspension/billing status.
+   * Requires X-Internal-Key header matching INTERNAL_API_KEY env var.
+   */
+  @Public()
+  @Patch('tenant-status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update tenant status (internal)', description: 'Called by Mainframe to sync tenant suspension or billing status' })
+  async updateTenantStatus(
+    @Headers('x-internal-key') internalKey: string,
+    @Body() body: {
+      subdomain: string;
+      status: 'ACTIVE' | 'PAYMENT_DUE' | 'PAYMENT_WARNING' | 'SUSPENDED' | 'INACTIVE';
+      suspendedReason?: string;
+      billingDueDate?: string;
+    },
+  ) {
+    const expectedKey = process.env.INTERNAL_API_KEY;
+    if (!expectedKey || internalKey !== expectedKey) {
+      throw new UnauthorizedException('Invalid internal API key');
+    }
+    return this.authService.updateTenantStatus(body);
+  }
+
   @Public()
   @Get('health')
   @ApiOperation({
