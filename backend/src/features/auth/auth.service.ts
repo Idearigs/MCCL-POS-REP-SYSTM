@@ -109,6 +109,11 @@ export class AuthService {
 
       this.logger.log(`User logged in: ${email} (${user.id})`);
 
+      // Ensure all default categories exist for this tenant (idempotent — safe to run on every login)
+      this.seedDefaultCategories(user.tenantId).catch((err) =>
+        this.logger.warn(`Failed to seed categories on login for ${user.tenantId}: ${err.message}`),
+      );
+
       return {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
@@ -465,7 +470,7 @@ export class AuthService {
   async seedDefaultCategories(tenantId: string): Promise<void> {
     const DEFAULT_CATEGORIES = [
       'Rings', 'Necklaces', 'Bracelets', 'Earrings',
-      'Pendants', 'Watches', 'Other',
+      'Pendants', 'Watches', 'Chains', 'Other',
     ];
 
     const existing = await this.prismaService.categories.findMany({

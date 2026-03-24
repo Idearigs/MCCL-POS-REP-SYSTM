@@ -333,9 +333,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     let products = inventory.filter(item => {
       const matchesCategory =
         item.categoryName?.toLowerCase() === activeCategoryName.toLowerCase() ||
-        item.category?.toLowerCase() === activeCategoryName.toLowerCase() ||
         (categoryId && item.category === categoryId);
-      return matchesCategory && item.quantity > 0;
+      return matchesCategory;
     });
 
     // Search filter
@@ -1319,6 +1318,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         await fetchRepairs();
       }
 
+      // Refresh inventory so stock quantities are up to date after the sale
+      await refreshInventory();
+
       // Clear cart and close dialogs
       setCart([]);
       setSelectedCustomer(null);
@@ -1926,11 +1928,18 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
               <div className="flex-1 overflow-y-auto p-5">
                 {paginatedCategoryProducts.length > 0 ? (
                   <div className="grid grid-cols-4 gap-4">
-                    {paginatedCategoryProducts.map(product => (
+                    {paginatedCategoryProducts.map(product => {
+                      const outOfStock = product.quantity <= 0;
+                      return (
                       <button
                         key={product.id}
-                        onClick={() => addToCart(product)}
-                        className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:border-orange-400 hover:shadow-lg transition-all text-left group"
+                        onClick={() => !outOfStock && addToCart(product)}
+                        disabled={outOfStock}
+                        className={`bg-white rounded-xl border overflow-hidden transition-all text-left group ${
+                          outOfStock
+                            ? 'border-gray-100 opacity-50 cursor-not-allowed'
+                            : 'border-gray-200 hover:border-orange-400 hover:shadow-lg'
+                        }`}
                       >
                         {/* Product Image */}
                         <div className="aspect-square bg-gray-100 relative overflow-hidden">
@@ -1946,21 +1955,23 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                             </div>
                           )}
                           {/* Condition Badge */}
-                          <div className="absolute top-2 left-2">
-                            <Badge
-                              className={
-                                (product as any).condition === 'USED'
-                                  ? 'bg-amber-100 text-amber-700 border-amber-200'
-                                  : 'bg-green-100 text-green-700 border-green-200'
-                              }
-                            >
-                              {(product as any).condition === 'USED' ? 'Used' : 'New'}
-                            </Badge>
-                          </div>
+                          {!outOfStock && (
+                            <div className="absolute top-2 left-2">
+                              <Badge
+                                className={
+                                  (product as any).condition === 'USED'
+                                    ? 'bg-amber-100 text-amber-700 border-amber-200'
+                                    : 'bg-green-100 text-green-700 border-green-200'
+                                }
+                              >
+                                {(product as any).condition === 'USED' ? 'Used' : 'New'}
+                              </Badge>
+                            </div>
+                          )}
                           {/* Stock Badge */}
                           <div className="absolute bottom-2 right-2">
-                            <Badge variant="secondary" className="bg-white/90 text-gray-600 text-xs">
-                              Stock: {product.quantity}
+                            <Badge variant="secondary" className={outOfStock ? 'bg-red-100 text-red-600 text-xs' : 'bg-white/90 text-gray-600 text-xs'}>
+                              {outOfStock ? 'Out of Stock' : `Stock: ${product.quantity}`}
                             </Badge>
                           </div>
                         </div>
@@ -1981,7 +1992,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                           </div>
                         </div>
                       </button>
-                    ))}
+                    );
+                    })}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-16">
