@@ -300,8 +300,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         } else {
           categoryMap.set(key, {
             id: key,
-            name: item.categoryName || key, // Use categoryName if available, otherwise use ID
-            count: item.quantity > 0 ? 1 : 0
+            name: item.categoryName || key,
+            count: 1
           });
         }
       }
@@ -310,14 +310,25 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     return Array.from(categoryMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [inventory]);
 
-  // Filter products
+  // Count products per named category (for tile badges)
+  const categoryCountByName = useMemo(() => {
+    const counts: Record<string, number> = {};
+    inventory.forEach(item => {
+      const name = item.categoryName;
+      if (name) counts[name] = (counts[name] || 0) + 1;
+    });
+    return counts;
+  }, [inventory]);
+
+  // Filter products — when searchQuery is active with no selectedCategory, search ALL inventory
   const filteredProducts = useMemo(() => {
     return inventory.filter(item => {
-      const matchesCategory = !selectedCategory || item.category === selectedCategory;
+      const matchesCategory = !selectedCategory || item.category === selectedCategory || item.categoryName === selectedCategory;
       const matchesSearch = !searchQuery ||
         item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.sku?.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch && item.quantity > 0;
+        item.sku?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.barcode?.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
     });
   }, [inventory, selectedCategory, searchQuery]);
 
@@ -463,6 +474,18 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       fetchRepairs();
     }
   }, [showRepairView]);
+
+  // When search query is typed on the main screen, switch to product grid view
+  useEffect(() => {
+    if (!showCategoryView && !showRepairView && !showAppraisalView) {
+      if (searchQuery.trim().length >= 1) {
+        setSelectedCategory(null);
+        setShowProductGrid(true);
+      } else {
+        setShowProductGrid(false);
+      }
+    }
+  }, [searchQuery, showCategoryView, showRepairView, showAppraisalView]);
 
   // Fetch backend categories on mount, when Quick Product dialog opens, or when category view opens
   useEffect(() => {
@@ -2181,7 +2204,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   >
                     <Gem className="h-7 w-7 text-amber-600 mb-3" />
                     <h3 className="text-gray-900 font-semibold text-base">Rings</h3>
-                    <p className="text-gray-400 text-xs mt-0.5">Wedding & Engagement</p>
+                    <p className="text-gray-400 text-xs mt-0.5">{categoryCountByName['Rings'] ? `${categoryCountByName['Rings']} items` : 'Wedding & Engagement'}</p>
                   </div>
 
                   {/* Necklaces */}
@@ -2191,7 +2214,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   >
                     <Sparkles className="h-7 w-7 text-amber-600 mb-3" />
                     <h3 className="text-gray-900 font-semibold text-base">Necklaces</h3>
-                    <p className="text-gray-400 text-xs mt-0.5">Chains & Pendants</p>
+                    <p className="text-gray-400 text-xs mt-0.5">{categoryCountByName['Necklaces'] ? `${categoryCountByName['Necklaces']} items` : 'Chains & Pendants'}</p>
                   </div>
 
                   {/* Earrings */}
@@ -2201,7 +2224,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   >
                     <Crown className="h-7 w-7 text-amber-600 mb-3" />
                     <h3 className="text-gray-900 font-semibold text-base">Earrings</h3>
-                    <p className="text-gray-400 text-xs mt-0.5">Studs & Hoops</p>
+                    <p className="text-gray-400 text-xs mt-0.5">{categoryCountByName['Earrings'] ? `${categoryCountByName['Earrings']} items` : 'Studs & Hoops'}</p>
                   </div>
 
                   {/* Bracelets */}
@@ -2211,7 +2234,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   >
                     <Heart className="h-7 w-7 text-amber-600 mb-3" />
                     <h3 className="text-gray-900 font-semibold text-base">Bracelets</h3>
-                    <p className="text-gray-400 text-xs mt-0.5">Bangles & Tennis</p>
+                    <p className="text-gray-400 text-xs mt-0.5">{categoryCountByName['Bracelets'] ? `${categoryCountByName['Bracelets']} items` : 'Bangles & Tennis'}</p>
                   </div>
 
                   {/* Watches */}
@@ -2221,7 +2244,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   >
                     <Watch className="h-7 w-7 text-amber-600 mb-3" />
                     <h3 className="text-gray-900 font-semibold text-base">Watches</h3>
-                    <p className="text-gray-400 text-xs mt-0.5">Men's & Women's</p>
+                    <p className="text-gray-400 text-xs mt-0.5">{categoryCountByName['Watches'] ? `${categoryCountByName['Watches']} items` : "Men's & Women's"}</p>
                   </div>
 
                   {/* Chains */}
@@ -2231,7 +2254,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   >
                     <ShoppingBag className="h-7 w-7 text-amber-600 mb-3" />
                     <h3 className="text-gray-900 font-semibold text-base">Chains</h3>
-                    <p className="text-gray-400 text-xs mt-0.5">Gold & Silver</p>
+                    <p className="text-gray-400 text-xs mt-0.5">{categoryCountByName['Chains'] ? `${categoryCountByName['Chains']} items` : 'Gold & Silver'}</p>
                   </div>
 
                   {/* Pendants */}
@@ -2241,7 +2264,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   >
                     <Award className="h-7 w-7 text-amber-600 mb-3" />
                     <h3 className="text-gray-900 font-semibold text-base">Pendants</h3>
-                    <p className="text-gray-400 text-xs mt-0.5">Custom & Religious</p>
+                    <p className="text-gray-400 text-xs mt-0.5">{categoryCountByName['Pendants'] ? `${categoryCountByName['Pendants']} items` : 'Custom & Religious'}</p>
                   </div>
 
                   {/* Gift Card */}
@@ -2410,34 +2433,63 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
             </div>
           ) : (
-            /* PRODUCT GRID VIEW - Apple-like smooth transition */
-            <div className="grid grid-cols-3 gap-4 animate-scale-in">
-              {filteredProducts.map(product => (
-                <button
-                  key={product.id}
-                  onClick={() => addToCart(product)}
-                  className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 hover:shadow-lg transition-all text-left group"
-                >
-                  <div className="aspect-square bg-gray-100 relative">
-                    {product.imageUrl ? (
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Package className="h-12 w-12 text-gray-400" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <h3 className="text-gray-900 font-medium mb-1 line-clamp-2">{product.name}</h3>
-                    <p className="text-gray-600 text-sm mb-2">Stock: {product.quantity}</p>
-                    <p className="text-blue-600 font-bold text-lg">£{product.price.toFixed(2)}</p>
-                  </div>
-                </button>
-              ))}
+            /* PRODUCT GRID VIEW - search results across all inventory */
+            <div className="animate-scale-in">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-1">
+                {searchQuery ? `${filteredProducts.length} result${filteredProducts.length !== 1 ? 's' : ''} for "${searchQuery}"` : `${filteredProducts.length} products`}
+              </p>
+              {filteredProducts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <Package className="h-12 w-12 text-gray-300 mb-3" />
+                  <p className="text-gray-500 text-sm">No products found for "{searchQuery}"</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-4">
+                  {filteredProducts.map(product => {
+                    const outOfStock = product.quantity <= 0;
+                    return (
+                      <button
+                        key={product.id}
+                        onClick={() => !outOfStock && addToCart(product)}
+                        disabled={outOfStock}
+                        className={`bg-white border-2 rounded-xl overflow-hidden transition-all text-left group ${
+                          outOfStock
+                            ? 'border-gray-100 opacity-50 cursor-not-allowed'
+                            : 'border-gray-200 hover:border-blue-500 hover:shadow-lg'
+                        }`}
+                      >
+                        <div className="aspect-square bg-gray-100 relative">
+                          {product.imageUrl ? (
+                            <img
+                              src={product.imageUrl}
+                              alt={product.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Package className="h-12 w-12 text-gray-400" />
+                            </div>
+                          )}
+                          {outOfStock && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/60">
+                              <span className="text-xs font-semibold text-red-500 bg-white px-2 py-1 rounded-full border border-red-200">Out of Stock</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-4">
+                          <h3 className="text-gray-900 font-medium mb-1 line-clamp-2">{product.name}</h3>
+                          {product.categoryName && (
+                            <p className="text-amber-600 text-xs mb-1">{product.categoryName}</p>
+                          )}
+                          <p className="text-gray-500 text-xs mb-1">SKU: {product.sku}</p>
+                          <p className="text-gray-600 text-sm mb-1">{outOfStock ? 'Out of Stock' : `Stock: ${product.quantity}`}</p>
+                          <p className="text-blue-600 font-bold text-lg">£{product.price.toFixed(2)}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
