@@ -52,6 +52,13 @@ const STATUS_META: Record<string, { label: string; dot: string; bg: string; text
   DEPRECATED:   { label: 'Deprecated',  dot: '#8E8E93', bg: '#F3F4F6', text: '#374151' },
 };
 
+const STATUS_GLOW: Record<string, { ring: string; glow: string }> = {
+  ACTIVE:        { ring: 'rgba(52,199,89,0.55)',   glow: '#34C759' },
+  PENDING_SETUP: { ring: 'rgba(255,159,10,0.55)',  glow: '#FF9F0A' },
+  SUSPENDED:     { ring: 'rgba(255,59,48,0.55)',   glow: '#FF3B30' },
+  CANCELLED:     { ring: 'rgba(142,142,147,0.35)', glow: '#8E8E93' },
+};
+
 const StatusPill: React.FC<{ status: string }> = ({ status }) => {
   const m = STATUS_META[status] || { label: status, dot: '#8E8E93', bg: '#F3F4F6', text: '#374151' };
   return (
@@ -214,6 +221,73 @@ const AppleInput: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { statu
       '--tw-ring-color': '#007AFF',
     }}
   />
+);
+
+// ─── Skeleton primitives ──────────────────────────────────────────────────────
+const Skel: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <div className={`skeleton-shimmer rounded-lg ${className}`} />
+);
+
+const SkeletonStatCards: React.FC = () => (
+  <div className="grid grid-cols-4 gap-4">
+    {[...Array(4)].map((_, i) => (
+      <div key={i} className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.6)' }}>
+        <Skel className="w-10 h-10 rounded-xl mb-4" />
+        <Skel className="h-7 w-14 mb-2" />
+        <Skel className="h-3.5 w-28 mb-1.5" />
+        <Skel className="h-3 w-20" />
+      </div>
+    ))}
+  </div>
+);
+
+const SkeletonTenantListRow: React.FC = () => (
+  <div className="flex items-center justify-between p-2.5 rounded-xl" style={{ background: 'rgba(0,0,0,0.02)' }}>
+    <div className="flex items-center gap-3">
+      <Skel className="w-7 h-7 rounded-lg flex-shrink-0" />
+      <div className="space-y-1.5">
+        <Skel className="h-3.5 w-28" />
+        <Skel className="h-2.5 w-16" />
+      </div>
+    </div>
+    <Skel className="h-5 w-14 rounded-full" />
+  </div>
+);
+
+const SkeletonTableRow: React.FC<{ cols?: number }> = ({ cols = 5 }) => (
+  <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+    <td className="px-5 py-3.5">
+      <div className="flex items-center gap-3">
+        <Skel className="w-8 h-8 rounded-xl flex-shrink-0" />
+        <div className="space-y-1.5">
+          <Skel className="h-3.5 w-28" />
+          <Skel className="h-2.5 w-20" />
+        </div>
+      </div>
+    </td>
+    <td className="px-5 py-3.5"><Skel className="h-5 w-16 rounded-lg" /></td>
+    {[...Array(cols - 2)].map((_, i) => (
+      <td key={i} className="px-5 py-3.5"><Skel className="h-4 w-16" /></td>
+    ))}
+  </tr>
+);
+
+const SkeletonCard: React.FC = () => (
+  <div className="p-5 rounded-2xl" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.6)' }}>
+    <div className="flex items-start gap-4">
+      <Skel className="w-9 h-9 rounded-xl flex-shrink-0" />
+      <div className="flex-1 space-y-2">
+        <Skel className="h-4 w-2/3" />
+        <Skel className="h-3.5 w-full" />
+        <Skel className="h-3.5 w-4/5" />
+        <div className="flex gap-2 pt-1">
+          <Skel className="h-5 w-16 rounded-full" />
+          <Skel className="h-5 w-20 rounded-full" />
+        </div>
+      </div>
+      <Skel className="h-6 w-20 rounded-full flex-shrink-0" />
+    </div>
+  </div>
 );
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -621,7 +695,7 @@ const MainFrameDashboard: React.FC = () => {
       }} />
 
       {/* ── Sidebar ───────────────────────────────────────────────────────── */}
-      <aside className="w-60 flex flex-col flex-shrink-0" style={{ background: 'rgba(255,255,255,0.75)', backdropFilter: 'saturate(180%) blur(20px)', borderRight: '1px solid rgba(0,0,0,0.08)' }}>
+      <aside className="w-60 flex flex-col flex-shrink-0" style={{ background: '#0F1117', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
         {/* Logo */}
         <div className="px-5 pt-7 pb-5">
           <div className="flex items-center gap-3">
@@ -630,11 +704,14 @@ const MainFrameDashboard: React.FC = () => {
               <Server className="w-4.5 h-4.5 text-white" style={{ width: 18, height: 18 }} />
             </div>
             <div>
-              <p className="text-sm font-bold tracking-tight" style={{ color: '#1D1D1F' }}>TruedeskPOS</p>
-              <p className="text-[9px] font-semibold tracking-[0.15em] uppercase" style={{ color: '#8E8E93' }}>Mainframe</p>
+              <p className="text-sm font-bold tracking-tight" style={{ color: 'rgba(255,255,255,0.95)' }}>TruedeskPOS</p>
+              <p className="text-[9px] font-semibold tracking-[0.15em] uppercase" style={{ color: 'rgba(255,255,255,0.35)' }}>Mainframe</p>
             </div>
           </div>
         </div>
+
+        {/* Divider */}
+        <div className="mx-4 mb-3 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
 
         {/* Nav */}
         <nav className="flex-1 px-3 space-y-0.5">
@@ -643,22 +720,24 @@ const MainFrameDashboard: React.FC = () => {
             return (
               <motion.button
                 key={id}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => navigate(id)}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all"
                 style={{
                   background: active ? 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)' : 'transparent',
-                  boxShadow: active ? '0 4px 12px rgba(0,122,255,0.3)' : 'none',
+                  boxShadow: active ? '0 4px 14px rgba(0,122,255,0.35)' : 'none',
                 }}
+                onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+                onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
               >
-                <span className="flex items-center gap-2.5 text-sm font-medium" style={{ color: active ? '#fff' : '#3C3C43' }}>
+                <span className="flex items-center gap-2.5 text-sm font-medium" style={{ color: active ? '#fff' : 'rgba(255,255,255,0.55)' }}>
                   <Icon className="w-4 h-4 flex-shrink-0" />
                   {label}
                 </span>
                 {badge !== undefined && (
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center"
-                    style={{ background: active ? 'rgba(255,255,255,0.25)' : 'rgba(120,120,128,0.12)', color: active ? '#fff' : '#6E6E73' }}>
+                    style={{ background: active ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)', color: active ? '#fff' : 'rgba(255,255,255,0.45)' }}>
                     {badge}
                   </span>
                 )}
@@ -668,22 +747,22 @@ const MainFrameDashboard: React.FC = () => {
         </nav>
 
         {/* User */}
-        <div className="p-4 mt-2" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-          <div className="flex items-center gap-2.5 mb-2 px-1">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md flex-shrink-0"
+        <div className="p-4 mt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center gap-2.5 mb-3 px-1">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
               style={{ background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)' }}>
               {admin?.firstName?.[0]}{admin?.lastName?.[0]}
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold truncate" style={{ color: '#1D1D1F' }}>{admin?.firstName} {admin?.lastName}</p>
-              <p className="text-[10px]" style={{ color: '#8E8E93' }}>{admin?.role}</p>
+              <p className="text-xs font-semibold truncate" style={{ color: 'rgba(255,255,255,0.85)' }}>{admin?.firstName} {admin?.lastName}</p>
+              <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{admin?.role}</p>
             </div>
           </div>
           <motion.button
             whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
             onClick={logout}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-colors"
-            style={{ color: '#FF3B30', background: 'rgba(255,59,48,0.06)' }}
+            style={{ color: 'rgba(255,100,100,0.85)', background: 'rgba(255,59,48,0.1)' }}
           >
             <LogOut className="w-3.5 h-3.5" /> Sign Out
           </motion.button>
@@ -749,68 +828,157 @@ const MainFrameDashboard: React.FC = () => {
                 animate={{ x: 0 }}
                 exit={{ x: '100%' }}
                 transition={spring}
-                className="absolute inset-0 z-20 flex flex-col"
-                style={{ background: '#F2F2F7' }}
+                className="absolute inset-0 z-20 flex flex-col overflow-hidden"
+                style={{
+                  background: '#080C14',
+                  backgroundImage: 'linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px)',
+                  backgroundSize: '48px 48px',
+                }}
               >
-                {/* Tenant header */}
-                <div className="px-8 py-5 flex items-center gap-4 flex-shrink-0"
-                  style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                    onClick={closeTenant}
-                    className="flex items-center gap-1 text-sm font-medium"
-                    style={{ color: '#007AFF' }}
-                  >
-                    <ChevronLeft className="w-4 h-4" /> Tenants
-                  </motion.button>
-                  <div className="w-px h-5" style={{ background: 'rgba(0,0,0,0.12)' }} />
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg"
-                      style={{ background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)' }}>
-                      {av(selectedTenant.businessName)}
+                {/* ── Hero ──────────────────────────────────────────────────── */}
+                <div className="relative flex-shrink-0 px-8 pt-5" style={{
+                  background: 'linear-gradient(180deg, rgba(88,86,214,0.1) 0%, rgba(0,122,255,0.05) 60%, transparent 100%)',
+                  borderBottom: '1px solid rgba(255,255,255,0.06)',
+                }}>
+                  {/* Top bar */}
+                  <div className="flex items-center justify-between mb-7">
+                    <motion.button
+                      whileHover={{ x: -2 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={closeTenant}
+                      className="flex items-center gap-1.5 text-sm font-medium transition-colors"
+                      style={{ color: 'rgba(255,255,255,0.35)' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.65)')}
+                      onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.35)')}
+                    >
+                      <ChevronLeft className="w-4 h-4" /> All Tenants
+                    </motion.button>
+                    <div className="flex items-center gap-2">
+                      {selectedTenant.status === 'PENDING_SETUP' && (
+                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                          onClick={() => reprovision(selectedTenant.id, selectedTenant.businessName)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium"
+                          style={{ background: 'rgba(0,122,255,0.15)', color: '#60A5FA', border: '1px solid rgba(0,122,255,0.25)' }}>
+                          <RefreshCw className="w-3.5 h-3.5" /> Re-provision
+                        </motion.button>
+                      )}
+                      {selectedTenant.status !== 'ACTIVE'
+                        ? (
+                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                            onClick={() => changeStatus(selectedTenant.id, 'ACTIVE', selectedTenant.businessName)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium"
+                            style={{ background: 'rgba(52,199,89,0.15)', color: '#34C759', border: '1px solid rgba(52,199,89,0.25)' }}>
+                            <CheckCircle className="w-3.5 h-3.5" /> Activate
+                          </motion.button>
+                        ) : (
+                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                            onClick={() => changeStatus(selectedTenant.id, 'SUSPENDED', selectedTenant.businessName)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium"
+                            style={{ background: 'rgba(255,59,48,0.15)', color: '#FF6B6B', border: '1px solid rgba(255,59,48,0.25)' }}>
+                            <XCircle className="w-3.5 h-3.5" /> Suspend
+                          </motion.button>
+                        )
+                      }
+                      <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.92 }}
+                        onClick={() => deleteTenant(selectedTenant.id, selectedTenant.businessName)}
+                        title="Delete tenant"
+                        className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
+                        style={{ background: 'rgba(255,59,48,0.1)', border: '1px solid rgba(255,59,48,0.2)' }}>
+                        <Trash2 className="w-3.5 h-3.5" style={{ color: '#FF6B6B' }} />
+                      </motion.button>
                     </div>
-                    <div>
-                      <p className="text-base font-bold" style={{ color: '#1D1D1F' }}>{selectedTenant.businessName}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="font-mono text-xs px-2 py-0.5 rounded-md" style={{ background: '#EEF2FF', color: '#5856D6' }}>{selectedTenant.subdomain}</span>
+                  </div>
+
+                  {/* Identity */}
+                  <div className="flex items-center gap-6 mb-6">
+                    {/* Avatar with glow ring */}
+                    <div className="relative flex-shrink-0">
+                      <div className="absolute -inset-3 rounded-2xl opacity-30 blur-xl pointer-events-none"
+                        style={{ background: STATUS_GLOW[selectedTenant.status]?.glow ?? '#007AFF' }} />
+                      <div className="relative w-20 h-20 rounded-2xl flex items-center justify-center text-white font-black text-3xl"
+                        style={{
+                          background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
+                          boxShadow: `0 0 0 2px #080C14, 0 0 0 4px ${STATUS_GLOW[selectedTenant.status]?.ring ?? 'rgba(255,255,255,0.2)'}`,
+                        }}>
+                        {av(selectedTenant.businessName)}
+                      </div>
+                      {selectedTenant.status === 'ACTIVE' && (
+                        <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center"
+                          style={{ background: '#080C14' }}>
+                          <div className="w-3 h-3 rounded-full" style={{ background: '#34C759', boxShadow: '0 0 8px rgba(52,199,89,0.9)' }} />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="min-w-0">
+                      <h1 className="text-3xl font-black tracking-tight leading-tight mb-2.5" style={{ color: 'rgba(255,255,255,0.95)' }}>
+                        {selectedTenant.businessName}
+                      </h1>
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="font-mono text-sm px-2.5 py-1 rounded-lg tracking-wide"
+                          style={{ background: 'rgba(88,86,214,0.15)', color: '#818CF8', border: '1px solid rgba(88,86,214,0.3)' }}>
+                          {selectedTenant.subdomain}
+                        </span>
                         <StatusPill status={selectedTenant.status} />
+                        <span className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                          Client since {new Date(selectedTenant.createdAt).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+                        </span>
                       </div>
                     </div>
                   </div>
-                  <div className="ml-auto flex gap-2">
-                    {selectedTenant.status === 'PENDING_SETUP' && (
-                      <AppleBtn variant="primary" size="sm" onClick={() => reprovision(selectedTenant.id, selectedTenant.businessName)}>
-                        <RefreshCw className="w-3.5 h-3.5" />Re-provision
-                      </AppleBtn>
-                    )}
-                    {selectedTenant.status !== 'ACTIVE'
-                      ? <AppleBtn variant="primary" size="sm" onClick={() => changeStatus(selectedTenant.id, 'ACTIVE', selectedTenant.businessName)}><CheckCircle className="w-3.5 h-3.5" />Activate</AppleBtn>
-                      : <AppleBtn variant="danger" size="sm" onClick={() => changeStatus(selectedTenant.id, 'SUSPENDED', selectedTenant.businessName)}><XCircle className="w-3.5 h-3.5" />Suspend</AppleBtn>
-                    }
-                    <IconBtn icon={<Trash2 className="w-4 h-4" style={{ color: '#FF3B30' }} />} label="Delete tenant" onClick={() => deleteTenant(selectedTenant.id, selectedTenant.businessName)} />
+
+                  {/* Stats bar */}
+                  <div className="grid grid-cols-4 gap-px rounded-2xl overflow-hidden mb-5"
+                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    {[
+                      { label: 'MRR',       value: selectedTenant.subscription ? `£${selectedTenant.subscription.basePrice}` : '—', sub: 'Monthly revenue' },
+                      { label: 'Plan',      value: selectedTenant.subscription?.plan ?? '—', sub: 'Subscription tier' },
+                      { label: 'Users',     value: String(selectedTenant.subscription?.currentUsers ?? selectedTenant._count?.customerUsers ?? 0), sub: 'Provisioned seats' },
+                      { label: 'Next Bill', value: selectedTenant.subscription ? new Date(selectedTenant.subscription.nextBillingDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—', sub: 'Renewal date' },
+                    ].map(({ label, value, sub }) => (
+                      <div key={label} className="px-5 py-4" style={{ background: 'rgba(255,255,255,0.025)' }}>
+                        <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(255,255,255,0.28)' }}>{label}</p>
+                        <p className="text-xl font-black tracking-tight" style={{ color: 'rgba(255,255,255,0.92)' }}>{value}</p>
+                        <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.22)' }}>{sub}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Tab strip */}
+                  <div className="flex items-center gap-0.5 -mx-1">
+                    {([
+                      { id: 'info',     label: 'Overview', icon: LayoutDashboard },
+                      { id: 'users',    label: 'Users',    icon: Users },
+                      { id: 'billing',  label: 'Billing',  icon: CreditCard },
+                      { id: 'activity', label: 'Activity', icon: Clock },
+                      { id: 'features', label: 'Features', icon: Package },
+                    ] as const).map(({ id, label, icon: Icon }) => {
+                      const active = tenantTab === id;
+                      return (
+                        <motion.button
+                          key={id}
+                          whileTap={{ scale: 0.97 }}
+                          onClick={() => loadTenantTab(id)}
+                          className="relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors"
+                          style={{ color: active ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.32)' }}
+                        >
+                          <Icon className="w-3.5 h-3.5" />
+                          {label}
+                          {active && (
+                            <motion.div
+                              layoutId="tenant-tab-line"
+                              className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full"
+                              style={{ background: 'linear-gradient(90deg, #007AFF, #5856D6)' }}
+                              transition={springFast}
+                            />
+                          )}
+                        </motion.button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex px-8 gap-1 pt-4 flex-shrink-0">
-                  {(['info', 'users', 'billing', 'activity', 'features'] as const).map(tab => (
-                    <motion.button
-                      key={tab}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => loadTenantTab(tab)}
-                      className="px-4 py-1.5 rounded-xl text-sm font-medium capitalize transition-all"
-                      style={{
-                        background: tenantTab === tab ? 'rgba(0,122,255,0.1)' : 'transparent',
-                        color: tenantTab === tab ? '#007AFF' : '#6E6E73',
-                      }}
-                    >
-                      {tab}
-                    </motion.button>
-                  ))}
-                </div>
-
-                {/* Tenant tab content */}
+                {/* ── Tab content ───────────────────────────────────────────── */}
                 <div className="flex-1 overflow-y-auto px-8 py-6">
                   <AnimatePresence mode="wait">
                     <motion.div
@@ -820,75 +988,108 @@ const MainFrameDashboard: React.FC = () => {
                       exit={{ opacity: 0, y: -10 }}
                       transition={springFast}
                     >
-                      {/* Info */}
+                      {/* ── Overview tab ──────────────────────────────────── */}
                       {tenantTab === 'info' && (
-                        <div className="space-y-5">
-                          <div className="grid grid-cols-3 gap-5">
-                            <Card>
-                              <CardTitle>Business</CardTitle>
-                              <InfoRow label="Email" value={selectedTenant.businessEmail} />
-                              <InfoRow label="Phone" value={selectedTenant.businessPhone || '—'} />
-                              <InfoRow label="Company Code" value={selectedTenant.subdomain} mono />
-                              <InfoRow label="Created" value={new Date(selectedTenant.createdAt).toLocaleDateString()} />
-                            </Card>
-                            <Card>
-                              <CardTitle>Contact</CardTitle>
-                              {selectedTenant.contact ? <>
-                                <InfoRow label="Name" value={`${selectedTenant.contact.firstName} ${selectedTenant.contact.lastName}`} />
-                                <InfoRow label="Email" value={selectedTenant.contact.email} />
-                                <InfoRow label="Phone" value={selectedTenant.contact.phone || '—'} />
-                              </> : <p className="text-sm" style={{ color: '#8E8E93' }}>No contact info</p>}
-                            </Card>
-                            {selectedTenant.subscription && (
-                              <Card gradient>
-                                <CardTitle light>Subscription</CardTitle>
-                                <InfoRow label="Plan" value={selectedTenant.subscription.plan} light />
-                                <InfoRow label="Monthly" value={`£${selectedTenant.subscription.basePrice}`} light />
-                                <InfoRow label="Users" value={String(selectedTenant.subscription.currentUsers)} light />
-                                <InfoRow label="Next Bill" value={new Date(selectedTenant.subscription.nextBillingDate).toLocaleDateString()} light />
-                              </Card>
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-3 gap-4">
+                            {/* Business */}
+                            <div className="rounded-2xl p-5 space-y-4"
+                              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                              <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.28)' }}>Business</p>
+                              {[
+                                { l: 'Email', v: selectedTenant.businessEmail },
+                                { l: 'Phone', v: selectedTenant.businessPhone || '—' },
+                                { l: 'Company Code', v: selectedTenant.subdomain, mono: true },
+                                { l: 'Member since', v: new Date(selectedTenant.createdAt).toLocaleDateString() },
+                              ].map(({ l, v, mono }) => (
+                                <div key={l} className="flex flex-col gap-0.5">
+                                  <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.28)' }}>{l}</p>
+                                  <p className={`text-sm font-semibold ${mono ? 'font-mono' : ''}`} style={{ color: 'rgba(255,255,255,0.85)' }}>{v}</p>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Contact */}
+                            <div className="rounded-2xl p-5 space-y-4"
+                              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                              <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.28)' }}>Contact</p>
+                              {selectedTenant.contact ? [
+                                { l: 'Name', v: `${selectedTenant.contact.firstName} ${selectedTenant.contact.lastName}` },
+                                { l: 'Email', v: selectedTenant.contact.email },
+                                { l: 'Phone', v: selectedTenant.contact.phone || '—' },
+                              ].map(({ l, v }) => (
+                                <div key={l} className="flex flex-col gap-0.5">
+                                  <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.28)' }}>{l}</p>
+                                  <p className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>{v}</p>
+                                </div>
+                              )) : <p className="text-sm" style={{ color: 'rgba(255,255,255,0.25)' }}>No contact info</p>}
+                            </div>
+
+                            {/* Subscription */}
+                            {selectedTenant.subscription ? (
+                              <div className="rounded-2xl p-5 space-y-4"
+                                style={{ background: 'linear-gradient(135deg, rgba(0,122,255,0.15) 0%, rgba(88,86,214,0.15) 100%)', border: '1px solid rgba(88,86,214,0.28)' }}>
+                                <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.4)' }}>Subscription</p>
+                                {[
+                                  { l: 'Plan', v: selectedTenant.subscription.plan },
+                                  { l: 'Monthly', v: `£${selectedTenant.subscription.basePrice}` },
+                                  { l: 'Users', v: String(selectedTenant.subscription.currentUsers) },
+                                  { l: 'Next Bill', v: new Date(selectedTenant.subscription.nextBillingDate).toLocaleDateString() },
+                                ].map(({ l, v }) => (
+                                  <div key={l} className="flex flex-col gap-0.5">
+                                    <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.4)' }}>{l}</p>
+                                    <p className="text-sm font-semibold" style={{ color: '#fff' }}>{v}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="rounded-2xl p-5"
+                                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                <p className="text-[10px] font-bold tracking-widest uppercase mb-4" style={{ color: 'rgba(255,255,255,0.28)' }}>Subscription</p>
+                                <p className="text-sm" style={{ color: 'rgba(255,255,255,0.25)' }}>No subscription</p>
+                              </div>
                             )}
                           </div>
 
-                          {/* POS Login Details — always visible */}
-                          <div className="rounded-2xl p-5"
-                            style={{ background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(0,0,0,0.06)' }}>
-                            <div className="flex items-center gap-2 mb-4">
-                              <Shield className="w-4 h-4" style={{ color: '#5856D6' }} />
-                              <p className="text-sm font-bold" style={{ color: '#1D1D1F' }}>POS Login Details</p>
-                              <span className="text-[10px] font-semibold ml-auto" style={{ color: '#8E8E93' }}>
-                                Share these with the client
+                          {/* POS Credentials — terminal style */}
+                          <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(0,0,0,0.45)', border: '1px solid rgba(99,102,241,0.22)' }}>
+                            <div className="flex items-center gap-2 px-5 py-3" style={{ background: 'rgba(99,102,241,0.1)', borderBottom: '1px solid rgba(99,102,241,0.15)' }}>
+                              <Shield className="w-3.5 h-3.5" style={{ color: '#818CF8' }} />
+                              <p className="text-xs font-bold tracking-wider uppercase" style={{ color: '#818CF8' }}>POS Access Credentials</p>
+                              <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(99,102,241,0.18)', color: '#818CF8', border: '1px solid rgba(99,102,241,0.25)' }}>
+                                Share with client
                               </span>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-2 gap-px p-px" style={{ background: 'rgba(255,255,255,0.05)' }}>
                               {[
                                 { l: 'Login URL', v: `https://${selectedTenant.subdomain}.truedesk.co.uk/login` },
                                 { l: 'Company Code', v: selectedTenant.subdomain },
                                 { l: 'Owner Email', v: selectedTenant.contact?.email || selectedTenant.businessEmail },
                               ].map(({ l, v }) => (
-                                <div key={l} className="flex items-center justify-between px-3 py-2.5 rounded-xl gap-2"
-                                  style={{ background: 'rgba(118,118,128,0.06)' }}>
+                                <div key={l} className="flex items-center justify-between px-4 py-3.5 gap-3"
+                                  style={{ background: 'rgba(0,0,0,0.3)' }}>
                                   <div className="min-w-0">
-                                    <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#8E8E93' }}>{l}</p>
-                                    <p className="text-sm font-mono font-semibold truncate" style={{ color: '#1D1D1F' }}>{v}</p>
+                                    <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(255,255,255,0.28)' }}>{l}</p>
+                                    <p className="text-sm font-mono font-semibold truncate" style={{ color: '#A5F3FC' }}>{v}</p>
                                   </div>
                                   <button onClick={() => { navigator.clipboard.writeText(v); toast.success(`${l} copied`); }}
-                                    className="p-1.5 rounded-lg flex-shrink-0 hover:bg-black/5 transition-colors">
-                                    <Copy className="w-3.5 h-3.5" style={{ color: '#8E8E93' }} />
+                                    className="flex-shrink-0 p-1.5 rounded-lg transition-colors"
+                                    style={{ color: 'rgba(255,255,255,0.25)' }}
+                                    onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}
+                                    onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.25)')}>
+                                    <Copy className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
                               ))}
-                              <div className="flex items-center justify-between px-3 py-2.5 rounded-xl gap-2"
-                                style={{ background: 'rgba(118,118,128,0.06)' }}>
+                              <div className="flex items-center justify-between px-4 py-3.5 gap-3"
+                                style={{ background: 'rgba(0,0,0,0.3)' }}>
                                 <div className="min-w-0">
-                                  <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#8E8E93' }}>Password</p>
-                                  <p className="text-sm font-mono font-semibold" style={{ color: '#8E8E93' }}>
-                                    See Users tab
-                                  </p>
+                                  <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(255,255,255,0.28)' }}>Password</p>
+                                  <p className="text-sm font-mono italic" style={{ color: 'rgba(255,255,255,0.2)' }}>See Users tab</p>
                                 </div>
                                 <button onClick={() => loadTenantTab('users')}
-                                  className="px-2.5 py-1 rounded-lg text-xs font-semibold flex-shrink-0 hover:bg-black/5 transition-colors"
-                                  style={{ color: '#007AFF' }}>
+                                  className="text-xs font-semibold px-2.5 py-1 rounded-lg flex-shrink-0 transition-colors"
+                                  style={{ background: 'rgba(99,102,241,0.18)', color: '#818CF8', border: '1px solid rgba(99,102,241,0.3)' }}>
                                   View
                                 </button>
                               </div>
@@ -897,168 +1098,222 @@ const MainFrameDashboard: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Users */}
+                      {/* ── Users tab ─────────────────────────────────────── */}
                       {tenantTab === 'users' && (
                         <div className="space-y-4">
-                          {/* Login credentials card — always visible */}
-                          <div className="rounded-2xl p-5 space-y-4"
-                            style={{ background: 'linear-gradient(135deg, rgba(0,122,255,0.05), rgba(88,86,214,0.05))', border: '1.5px solid rgba(0,122,255,0.18)' }}>
-                            <div className="flex items-center gap-2">
-                              <Shield className="w-4 h-4" style={{ color: '#007AFF' }} />
-                              <p className="text-sm font-bold" style={{ color: '#007AFF' }}>Login Credentials</p>
-                              <span className="text-[10px] px-2 py-0.5 rounded-full ml-auto font-semibold" style={{ background: '#DBEAFE', color: '#1E40AF' }}>
-                                Company Code: {selectedTenant?.subdomain}
+                          {/* Credentials */}
+                          <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(0,122,255,0.2)' }}>
+                            <div className="flex items-center gap-2 px-5 py-3" style={{ background: 'rgba(0,122,255,0.1)', borderBottom: '1px solid rgba(0,122,255,0.15)' }}>
+                              <Shield className="w-3.5 h-3.5" style={{ color: '#60A5FA' }} />
+                              <p className="text-xs font-bold tracking-wider uppercase" style={{ color: '#60A5FA' }}>Login Credentials</p>
+                              <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                                style={{ background: 'rgba(0,122,255,0.18)', color: '#60A5FA', border: '1px solid rgba(0,122,255,0.25)' }}>
+                                Code: {selectedTenant?.subdomain}
                               </span>
                             </div>
-                            {tenantUsers.length === 0 ? (
-                              <p className="text-sm text-center py-2" style={{ color: '#8E8E93' }}>
-                                No users added yet — add a user to see their login credentials here.
-                              </p>
-                            ) : tenantUsers.map(u => (
-                              <div key={u.id} className="rounded-xl p-4 space-y-2.5" style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.06)' }}>
-                                <div className="flex items-center gap-2">
-                                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-[11px] flex-shrink-0"
-                                    style={{ background: 'linear-gradient(135deg, #007AFF, #5856D6)' }}>
-                                    {u.firstName[0]}{u.lastName[0]}
+                            <div className="p-4 space-y-3">
+                              {tenantUsers.length === 0 ? (
+                                <p className="text-sm text-center py-4" style={{ color: 'rgba(255,255,255,0.22)' }}>No users added yet</p>
+                              ) : tenantUsers.map(u => (
+                                <div key={u.id} className="rounded-xl p-4 space-y-3"
+                                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-[11px] flex-shrink-0"
+                                      style={{ background: 'linear-gradient(135deg, #007AFF, #5856D6)' }}>
+                                      {u.firstName[0]}{u.lastName[0]}
+                                    </div>
+                                    <p className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>{u.firstName} {u.lastName}</p>
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                                      style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.4)' }}>{u.role}</span>
+                                    {u.mustChangePassword && (
+                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                                        style={{ background: 'rgba(255,159,10,0.15)', color: '#FF9F0A' }}>Must change pw</span>
+                                    )}
                                   </div>
-                                  <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>{u.firstName} {u.lastName}</p>
-                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#F3F4F6', color: '#6E6E73' }}>{u.role}</span>
-                                  {u.mustChangePassword && (
-                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#FEF3C7', color: '#92400E' }}>Must change password</span>
-                                  )}
-                                </div>
-                                {[
-                                  { l: 'Email / Username', v: u.email, mono: false },
-                                  { l: 'Company Code', v: selectedTenant?.subdomain || '', mono: true },
-                                ].map(({ l, v, mono }) => (
-                                  <div key={l} className="flex items-center justify-between gap-2">
-                                    <p className="text-[11px] font-semibold uppercase tracking-wider w-32 flex-shrink-0" style={{ color: '#8E8E93' }}>{l}</p>
-                                    <p className={`text-sm flex-1 ${mono ? 'font-mono font-bold' : 'font-medium'}`} style={{ color: '#1D1D1F' }}>{v}</p>
-                                    <button onClick={() => { navigator.clipboard.writeText(v); toast.success(`${l} copied`); }}
-                                      className="p-1.5 rounded-lg flex-shrink-0 hover:bg-black/5 transition-colors">
-                                      <Copy className="w-3.5 h-3.5" style={{ color: '#8E8E93' }} />
+                                  {[
+                                    { l: 'Email / Username', v: u.email, mono: false },
+                                    { l: 'Company Code', v: selectedTenant?.subdomain || '', mono: true },
+                                  ].map(({ l, v, mono }) => (
+                                    <div key={l} className="flex items-center justify-between gap-2">
+                                      <p className="text-[11px] font-semibold uppercase tracking-wider w-32 flex-shrink-0"
+                                        style={{ color: 'rgba(255,255,255,0.28)' }}>{l}</p>
+                                      <p className={`text-sm flex-1 ${mono ? 'font-mono font-bold' : 'font-medium'}`}
+                                        style={{ color: 'rgba(255,255,255,0.82)' }}>{v}</p>
+                                      <button onClick={() => { navigator.clipboard.writeText(v); toast.success(`${l} copied`); }}
+                                        className="p-1.5 rounded-lg flex-shrink-0 transition-colors"
+                                        style={{ color: 'rgba(255,255,255,0.25)' }}
+                                        onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.65)')}
+                                        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.25)')}>
+                                        <Copy className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wider w-32 flex-shrink-0"
+                                      style={{ color: 'rgba(255,255,255,0.28)' }}>Password</p>
+                                    {u.tempPassword ? (
+                                      <>
+                                        <p className="text-sm flex-1 font-mono font-bold" style={{ color: '#60A5FA' }}>{u.tempPassword}</p>
+                                        <button onClick={() => { navigator.clipboard.writeText(u.tempPassword!); toast.success('Password copied'); }}
+                                          className="p-1.5 rounded-lg flex-shrink-0 transition-colors"
+                                          style={{ color: 'rgba(255,255,255,0.25)' }}
+                                          onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.65)')}
+                                          onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.25)')}>
+                                          <Copy className="w-3.5 h-3.5" />
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <p className="text-sm flex-1 italic" style={{ color: 'rgba(255,255,255,0.2)' }}>Set by user (unknown)</p>
+                                        <button onClick={() => resetPw(u)}
+                                          className="px-2 py-1 rounded-lg text-[11px] font-semibold flex-shrink-0"
+                                          style={{ background: 'rgba(255,159,10,0.12)', color: '#FF9F0A', border: '1px solid rgba(255,159,10,0.2)' }}>
+                                          Reset
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <button onClick={() => loadPasswordHistory(u.id)}
+                                      className="flex items-center gap-1 text-[11px] font-semibold mt-1"
+                                      style={{ color: '#818CF8' }}>
+                                      <Key className="w-3 h-3" />
+                                      {expandedHistory[u.id] ? 'Hide history' : 'View password history'}
                                     </button>
-                                  </div>
-                                ))}
-                                {/* Password row — always shown */}
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="text-[11px] font-semibold uppercase tracking-wider w-32 flex-shrink-0" style={{ color: '#8E8E93' }}>Password</p>
-                                  {u.tempPassword ? (
-                                    <>
-                                      <p className="text-sm flex-1 font-mono font-bold" style={{ color: '#007AFF' }}>{u.tempPassword}</p>
-                                      <button onClick={() => { navigator.clipboard.writeText(u.tempPassword!); toast.success('Password copied'); }}
-                                        className="p-1.5 rounded-lg flex-shrink-0 hover:bg-black/5 transition-colors">
-                                        <Copy className="w-3.5 h-3.5" style={{ color: '#8E8E93' }} />
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <p className="text-sm flex-1 italic" style={{ color: '#C7C7CC' }}>Set by user (unknown)</p>
-                                      <button onClick={() => resetPw(u)}
-                                        className="px-2 py-1 rounded-lg text-[11px] font-semibold flex-shrink-0 hover:bg-black/5 transition-colors"
-                                        style={{ color: '#FF9F0A' }}>
-                                        Reset
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-
-                                {/* Password history toggle */}
-                                <div>
-                                  <button
-                                    onClick={() => loadPasswordHistory(u.id)}
-                                    className="flex items-center gap-1 text-[11px] font-semibold mt-1 px-0 py-0.5 rounded transition-colors"
-                                    style={{ color: '#5856D6' }}>
-                                    <Key className="w-3 h-3" />
-                                    {expandedHistory[u.id] ? 'Hide history' : 'View password history'}
-                                  </button>
-                                  {expandedHistory[u.id] && (
-                                    <div className="mt-2 rounded-xl overflow-hidden" style={{ border: '1px solid rgba(88,86,214,0.15)', background: 'rgba(88,86,214,0.03)' }}>
-                                      {(passwordHistoryMap[u.id] || []).length === 0 ? (
-                                        <p className="text-[11px] text-center py-3" style={{ color: '#C7C7CC' }}>No history yet</p>
-                                      ) : (
-                                        (passwordHistoryMap[u.id] || []).map((entry, i) => (
+                                    {expandedHistory[u.id] && (
+                                      <div className="mt-2 rounded-xl overflow-hidden"
+                                        style={{ border: '1px solid rgba(99,102,241,0.2)', background: 'rgba(99,102,241,0.05)' }}>
+                                        {(passwordHistoryMap[u.id] || []).length === 0 ? (
+                                          <p className="text-[11px] text-center py-3" style={{ color: 'rgba(255,255,255,0.2)' }}>No history yet</p>
+                                        ) : (passwordHistoryMap[u.id] || []).map((entry, i) => (
                                           <div key={entry.id} className="flex items-center justify-between px-3 py-2 gap-2"
-                                            style={{ borderBottom: i < (passwordHistoryMap[u.id]?.length ?? 0) - 1 ? '1px solid rgba(0,0,0,0.06)' : 'none' }}>
+                                            style={{ borderBottom: i < (passwordHistoryMap[u.id]?.length ?? 0) - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
                                             <div className="flex items-center gap-2 min-w-0">
-                                              <span className="text-[10px] font-semibold flex-shrink-0" style={{ color: '#8E8E93' }}>
+                                              <span className="text-[10px] font-semibold flex-shrink-0" style={{ color: 'rgba(255,255,255,0.22)' }}>
                                                 {new Date(entry.setAt).toLocaleDateString()} {new Date(entry.setAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                               </span>
-                                              <span className="font-mono text-sm font-bold truncate" style={{ color: i === 0 ? '#007AFF' : '#1D1D1F' }}>
+                                              <span className="font-mono text-sm font-bold truncate" style={{ color: i === 0 ? '#60A5FA' : 'rgba(255,255,255,0.7)' }}>
                                                 {entry.password}
                                               </span>
-                                              {i === 0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: '#DBEAFE', color: '#1E40AF' }}>LATEST</span>}
+                                              {i === 0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0"
+                                                style={{ background: 'rgba(0,122,255,0.2)', color: '#60A5FA' }}>LATEST</span>}
                                             </div>
                                             <button onClick={() => { navigator.clipboard.writeText(entry.password); toast.success('Password copied'); }}
-                                              className="p-1 rounded-lg flex-shrink-0 hover:bg-black/5 transition-colors">
-                                              <Copy className="w-3 h-3" style={{ color: '#8E8E93' }} />
+                                              className="p-1 rounded-lg flex-shrink-0 transition-colors"
+                                              style={{ color: 'rgba(255,255,255,0.22)' }}
+                                              onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.6)')}
+                                              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.22)')}>
+                                              <Copy className="w-3 h-3" />
                                             </button>
                                           </div>
-                                        ))
-                                      )}
-                                    </div>
-                                  )}
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
-                            <p className="text-[11px]" style={{ color: '#8E8E93' }}>
-                              Password shown is the last admin-set password. Use "Reset Password" (🔑) to generate a new one if the client is locked out.
-                            </p>
+                              ))}
+                              <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                                Password shown is the last admin-set password. Use Reset to generate a new one if the client is locked out.
+                              </p>
+                            </div>
                           </div>
 
                           <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium" style={{ color: '#6E6E73' }}>{tenantUsers.length} users</p>
-                            <AppleBtn variant="primary" size="sm" onClick={() => setPanel('addUser')}><UserPlus className="w-3.5 h-3.5" />Add User</AppleBtn>
+                            <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>{tenantUsers.length} users</p>
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                              onClick={() => setPanel('addUser')}
+                              className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium"
+                              style={{ background: 'rgba(0,122,255,0.15)', color: '#60A5FA', border: '1px solid rgba(0,122,255,0.25)' }}>
+                              <UserPlus className="w-3.5 h-3.5" /> Add User
+                            </motion.button>
                           </div>
-                          {tenantUsers.length === 0 && <EmptyState icon={<Users />} label="No users yet" />}
+                          {tenantUsers.length === 0 && (
+                            <div className="flex flex-col items-center gap-3 py-10">
+                              <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                                <Users className="w-7 h-7" style={{ color: 'rgba(255,255,255,0.18)' }} />
+                              </div>
+                              <p className="text-sm" style={{ color: 'rgba(255,255,255,0.25)' }}>No users yet</p>
+                            </div>
+                          )}
                           {tenantUsers.map(u => (
                             <motion.div key={u.id} whileHover={{ scale: 1.005 }}
                               className="flex items-center justify-between p-4 rounded-2xl"
-                              style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
                               <div className="flex items-center gap-3">
                                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-xs"
-                                  style={{ background: u.isActive ? 'linear-gradient(135deg, #007AFF,#5856D6)' : '#C7C7CC' }}>
+                                  style={{ background: u.isActive ? 'linear-gradient(135deg, #007AFF,#5856D6)' : 'rgba(255,255,255,0.08)' }}>
                                   {u.firstName[0]}{u.lastName[0]}
                                 </div>
                                 <div>
-                                  <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>{u.firstName} {u.lastName}</p>
-                                  <p className="text-xs" style={{ color: '#8E8E93' }}>
+                                  <p className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>{u.firstName} {u.lastName}</p>
+                                  <p className="text-xs" style={{ color: 'rgba(255,255,255,0.32)' }}>
                                     {u.email} · {u.role}
-                                    {u.tempPassword && <span className="ml-1.5 font-mono text-[11px]" style={{ color: '#007AFF' }}>· pw: {u.tempPassword}</span>}
+                                    {u.tempPassword && <span className="ml-1.5 font-mono text-[11px]" style={{ color: '#60A5FA' }}>· pw: {u.tempPassword}</span>}
                                   </p>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1.5">
                                 <StatusPill status={u.isActive ? 'ACTIVE' : 'SUSPENDED'} />
-                                <IconBtn icon={<Key className="w-3.5 h-3.5" />} label="Reset password" onClick={() => resetPw(u)} />
-                                <IconBtn icon={u.isActive ? <ToggleRight className="w-4 h-4" style={{ color: '#34C759' }} /> : <ToggleLeft className="w-4 h-4" />} label="Toggle" onClick={() => toggleUser(u)} />
-                                <IconBtn icon={<Trash2 className="w-3.5 h-3.5" style={{ color: '#FF3B30' }} />} label="Delete" onClick={() => deleteUser(u)} />
+                                {[
+                                  { icon: <Key className="w-3.5 h-3.5" />, label: 'Reset password', action: () => resetPw(u) },
+                                  { icon: u.isActive ? <ToggleRight className="w-4 h-4" style={{ color: '#34C759' }} /> : <ToggleLeft className="w-4 h-4" />, label: 'Toggle', action: () => toggleUser(u) },
+                                ].map(({ icon, label, action }) => (
+                                  <motion.button key={label} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                                    onClick={action} title={label}
+                                    className="w-7 h-7 rounded-lg flex items-center justify-center"
+                                    style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.45)' }}>
+                                    {icon}
+                                  </motion.button>
+                                ))}
+                                <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                                  onClick={() => deleteUser(u)} title="Delete user"
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center"
+                                  style={{ background: 'rgba(255,59,48,0.1)', color: '#FF6B6B' }}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </motion.button>
                               </div>
                             </motion.div>
                           ))}
                         </div>
                       )}
 
-                      {/* Billing */}
+                      {/* ── Billing tab ───────────────────────────────────── */}
                       {tenantTab === 'billing' && (
                         <div className="space-y-3">
                           <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium" style={{ color: '#6E6E73' }}>{tenantInvoices.length} invoices</p>
-                            <AppleBtn variant="secondary" size="sm" onClick={generateInvoice}><FileText className="w-3.5 h-3.5" />Generate Invoice</AppleBtn>
+                            <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>{tenantInvoices.length} invoices</p>
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                              onClick={generateInvoice}
+                              className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium"
+                              style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.65)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                              <FileText className="w-3.5 h-3.5" /> Generate Invoice
+                            </motion.button>
                           </div>
-                          {tenantInvoices.length === 0 && <EmptyState icon={<FileText />} label="No invoices yet" />}
+                          {tenantInvoices.length === 0 && (
+                            <div className="flex flex-col items-center gap-3 py-10">
+                              <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                                <FileText className="w-7 h-7" style={{ color: 'rgba(255,255,255,0.18)' }} />
+                              </div>
+                              <p className="text-sm" style={{ color: 'rgba(255,255,255,0.25)' }}>No invoices yet</p>
+                            </div>
+                          )}
                           {tenantInvoices.map(inv => (
                             <div key={inv.id} className="flex items-center justify-between p-4 rounded-2xl"
-                              style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
                               <div>
-                                <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>{inv.invoiceNumber}</p>
-                                <p className="text-xs mt-0.5" style={{ color: '#8E8E93' }}>Due {new Date(inv.dueDate).toLocaleDateString()}</p>
+                                <p className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>{inv.invoiceNumber}</p>
+                                <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>Due {new Date(inv.dueDate).toLocaleDateString()}</p>
                               </div>
                               <div className="flex items-center gap-3">
-                                <p className="text-sm font-bold" style={{ color: '#1D1D1F' }}>£{inv.amount}</p>
+                                <p className="text-sm font-bold" style={{ color: 'rgba(255,255,255,0.85)' }}>£{inv.amount}</p>
                                 <StatusPill status={inv.status} />
                                 {inv.status !== 'PAID' && (
-                                  <AppleBtn size="sm" variant="ghost" onClick={() => markPaid(inv.id)}>Mark Paid</AppleBtn>
+                                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                                    onClick={() => markPaid(inv.id)}
+                                    className="px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                    style={{ background: 'rgba(52,199,89,0.12)', color: '#34C759', border: '1px solid rgba(52,199,89,0.22)' }}>
+                                    Mark Paid
+                                  </motion.button>
                                 )}
                               </div>
                             </div>
@@ -1066,19 +1321,27 @@ const MainFrameDashboard: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Activity */}
+                      {/* ── Activity tab ──────────────────────────────────── */}
                       {tenantTab === 'activity' && (
                         <div className="space-y-2">
-                          {tenantActivity.length === 0 && <EmptyState icon={<Clock />} label="No activity yet" />}
+                          {tenantActivity.length === 0 && (
+                            <div className="flex flex-col items-center gap-3 py-10">
+                              <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                                <Clock className="w-7 h-7" style={{ color: 'rgba(255,255,255,0.18)' }} />
+                              </div>
+                              <p className="text-sm" style={{ color: 'rgba(255,255,255,0.25)' }}>No activity yet</p>
+                            </div>
+                          )}
                           {tenantActivity.map((log: any) => (
                             <div key={log.id} className="flex items-start gap-3 p-3.5 rounded-xl"
-                              style={{ background: 'rgba(255,255,255,0.7)' }}>
-                              <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: '#007AFF' }} />
+                              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                              <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0"
+                                style={{ background: '#007AFF', boxShadow: '0 0 6px rgba(0,122,255,0.6)' }} />
                               <div className="flex-1">
-                                <p className="text-sm font-medium" style={{ color: '#1D1D1F' }}>{log.action}</p>
-                                {log.description && <p className="text-xs mt-0.5" style={{ color: '#8E8E93' }}>{log.description}</p>}
+                                <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.8)' }}>{log.action}</p>
+                                {log.description && <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>{log.description}</p>}
                               </div>
-                              <p className="text-[11px] flex-shrink-0" style={{ color: '#C7C7CC' }}>{new Date(log.createdAt).toLocaleString()}</p>
+                              <p className="text-[11px] flex-shrink-0" style={{ color: 'rgba(255,255,255,0.2)' }}>{new Date(log.createdAt).toLocaleString()}</p>
                             </div>
                           ))}
                         </div>
@@ -1096,9 +1359,9 @@ const MainFrameDashboard: React.FC = () => {
                         const disabledNonCore  = nonCoreFeatures.filter(f => !f.isEnabled);
 
                         const TIER_COLORS: Record<string, { bg: string; text: string }> = {
-                          Core:     { bg: '#DBEAFE', text: '#1E40AF' },
-                          Standard: { bg: '#D1FAE5', text: '#065F46' },
-                          Premium:  { bg: '#EDE9FE', text: '#5B21B6' },
+                          Core:     { bg: 'rgba(59,130,246,0.2)',  text: '#60A5FA' },
+                          Standard: { bg: 'rgba(52,199,89,0.15)',  text: '#34C759' },
+                          Premium:  { bg: 'rgba(139,92,246,0.2)',  text: '#A78BFA' },
                         };
 
                         const getTier = (key: string) => {
@@ -1122,28 +1385,27 @@ const MainFrameDashboard: React.FC = () => {
                               onDragEnd={locked ? undefined : () => { dragFeatureId.current = null; }}
                               className="flex items-center justify-between px-3 py-2.5 rounded-xl select-none"
                               style={{
-                                background: locked ? 'rgba(59,130,246,0.04)' : 'rgba(255,255,255,0.9)',
-                                boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
+                                background: 'rgba(255,255,255,0.05)',
                                 cursor: locked ? 'default' : 'grab',
                                 border: zone === 'core'
-                                  ? '1px solid rgba(59,130,246,0.2)'
+                                  ? '1px solid rgba(59,130,246,0.25)'
                                   : zone === 'enabled'
-                                    ? '1px solid rgba(52,199,89,0.2)'
-                                    : '1px solid rgba(0,0,0,0.06)',
-                                opacity: locked ? 0.85 : 1,
+                                    ? '1px solid rgba(52,199,89,0.25)'
+                                    : '1px solid rgba(255,255,255,0.07)',
+                                opacity: locked ? 0.75 : 1,
                               }}
                             >
                               <div className="flex items-center gap-2.5 min-w-0">
                                 <div className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                  style={{ background: zone === 'available' ? '#C7C7CC' : '#34C759' }} />
+                                  style={{ background: zone === 'available' ? 'rgba(255,255,255,0.2)' : '#34C759', boxShadow: zone !== 'available' ? '0 0 5px rgba(52,199,89,0.6)' : 'none' }} />
                                 <div className="min-w-0">
-                                  <p className="text-sm font-semibold truncate" style={{ color: '#1D1D1F' }}>{f.featureName}</p>
-                                  <p className="text-[11px] font-mono" style={{ color: '#8E8E93' }}>{f.featureKey}</p>
+                                  <p className="text-sm font-semibold truncate" style={{ color: 'rgba(255,255,255,0.85)' }}>{f.featureName}</p>
+                                  <p className="text-[11px] font-mono" style={{ color: 'rgba(255,255,255,0.3)' }}>{f.featureKey}</p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
                                 {locked && (
-                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#FEF3C7', color: '#92400E' }}>LOCKED</span>
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,159,10,0.15)', color: '#FF9F0A' }}>LOCKED</span>
                                 )}
                                 <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
                                   style={{ backgroundColor: tc.bg, color: tc.text }}>{tier}</span>
@@ -1170,41 +1432,47 @@ const MainFrameDashboard: React.FC = () => {
                             {/* Header */}
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="text-sm font-medium" style={{ color: '#1D1D1F' }}>
+                                <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.75)' }}>
                                   Drag Standard & Premium features to enable or disable them.
                                 </p>
-                                <p className="text-xs mt-0.5" style={{ color: '#8E8E93' }}>
-                                  Core features are always active and cannot be disabled. Current plan: <strong>{tenantPlan}</strong>
+                                <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                                  Core features are always active and cannot be disabled. Current plan: <strong style={{ color: 'rgba(255,255,255,0.6)' }}>{tenantPlan}</strong>
                                 </p>
                               </div>
                               <div className="flex gap-2">
-                                <AppleBtn variant="secondary" size="sm" onClick={() =>
-                                  customerProfilesApi.getFeatures(selectedTenant!.id)
-                                    .then(r => setTenantFeatures(r.data || []))
-                                    .catch(() => toast.error('Failed to reload'))
-                                }>
+                                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                                  onClick={() =>
+                                    customerProfilesApi.getFeatures(selectedTenant!.id)
+                                      .then(r => setTenantFeatures(r.data || []))
+                                      .catch(() => toast.error('Failed to reload'))
+                                  }
+                                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium"
+                                  style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.65)', border: '1px solid rgba(255,255,255,0.1)' }}>
                                   <RefreshCw className="w-3.5 h-3.5" /> Reload
-                                </AppleBtn>
-                                <AppleBtn variant="primary" disabled={savingFeatures} onClick={saveFeatures}>
+                                </motion.button>
+                                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                                  disabled={savingFeatures} onClick={saveFeatures}
+                                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium"
+                                  style={{ background: savingFeatures ? 'rgba(0,122,255,0.1)' : 'rgba(0,122,255,0.2)', color: '#60A5FA', border: '1px solid rgba(0,122,255,0.3)', opacity: savingFeatures ? 0.6 : 1 }}>
                                   <CheckCircle className="w-3.5 h-3.5" />
                                   {savingFeatures ? 'Saving…' : `Save & Activate (${enabledNonCore.length} add-ons)`}
-                                </AppleBtn>
+                                </motion.button>
                               </div>
                             </div>
 
                             {tenantFeatures.length === 0
-                              ? <div style={{ textAlign: 'center', padding: '2rem', color: '#8E8E93', fontSize: 14 }}>No features found — click Reload or check that features are seeded.</div>
+                              ? <div className="text-center py-10" style={{ color: 'rgba(255,255,255,0.25)', fontSize: 14 }}>No features found — click Reload or check that features are seeded.</div>
                               : (
                                 <div className="space-y-4">
-                                  {/* Core Features — locked, always on */}
+                                  {/* Core Features */}
                                   <div className="rounded-2xl p-4 space-y-2"
-                                    style={{ background: 'rgba(59,130,246,0.04)', border: '1.5px solid rgba(59,130,246,0.15)' }}>
+                                    style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)' }}>
                                     <div className="flex items-center gap-2 mb-3">
-                                      <div className="w-2 h-2 rounded-full" style={{ background: '#3B82F6' }} />
-                                      <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#3B82F6' }}>
+                                      <div className="w-2 h-2 rounded-full" style={{ background: '#60A5FA', boxShadow: '0 0 6px rgba(96,165,250,0.7)' }} />
+                                      <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#60A5FA' }}>
                                         Core — Always Active ({coreFeatures.length})
                                       </p>
-                                      <span className="text-[10px] px-2 py-0.5 rounded-full ml-auto" style={{ background: '#DBEAFE', color: '#1E40AF' }}>
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full ml-auto" style={{ background: 'rgba(59,130,246,0.15)', color: '#60A5FA', border: '1px solid rgba(59,130,246,0.25)' }}>
                                         Cannot be disabled
                                       </span>
                                     </div>
@@ -1222,22 +1490,22 @@ const MainFrameDashboard: React.FC = () => {
                                     <div
                                       className="rounded-2xl p-4 space-y-2 min-h-[280px]"
                                       style={{
-                                        background: 'rgba(52,199,89,0.05)',
-                                        border: '2px dashed rgba(52,199,89,0.35)',
-                                        transition: 'border-color 0.15s',
+                                        background: 'rgba(52,199,89,0.04)',
+                                        border: '1.5px dashed rgba(52,199,89,0.3)',
+                                        transition: 'border-color 0.15s, background 0.15s',
                                       }}
-                                      onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = '#34C759'; }}
-                                      onDragLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(52,199,89,0.35)'; }}
-                                      onDrop={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(52,199,89,0.35)'; handleDrop(true); }}
+                                      onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = '#34C759'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(52,199,89,0.08)'; }}
+                                      onDragLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(52,199,89,0.3)'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(52,199,89,0.04)'; }}
+                                      onDrop={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(52,199,89,0.3)'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(52,199,89,0.04)'; handleDrop(true); }}
                                     >
                                       <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-2 h-2 rounded-full" style={{ background: '#34C759' }} />
+                                        <div className="w-2 h-2 rounded-full" style={{ background: '#34C759', boxShadow: '0 0 5px rgba(52,199,89,0.7)' }} />
                                         <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#34C759' }}>
                                           Add-ons Active — {enabledNonCore.length}
                                         </p>
                                       </div>
                                       {enabledNonCore.length === 0 && (
-                                        <p className="text-xs text-center py-8" style={{ color: 'rgba(52,199,89,0.5)' }}>
+                                        <p className="text-xs text-center py-8" style={{ color: 'rgba(52,199,89,0.35)' }}>
                                           Drop add-ons here to enable them
                                         </p>
                                       )}
@@ -1248,22 +1516,22 @@ const MainFrameDashboard: React.FC = () => {
                                     <div
                                       className="rounded-2xl p-4 space-y-2 min-h-[280px]"
                                       style={{
-                                        background: 'rgba(120,120,128,0.05)',
-                                        border: '2px dashed rgba(120,120,128,0.25)',
-                                        transition: 'border-color 0.15s',
+                                        background: 'rgba(255,255,255,0.02)',
+                                        border: '1.5px dashed rgba(255,255,255,0.1)',
+                                        transition: 'border-color 0.15s, background 0.15s',
                                       }}
-                                      onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = '#8E8E93'; }}
-                                      onDragLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(120,120,128,0.25)'; }}
-                                      onDrop={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(120,120,128,0.25)'; handleDrop(false); }}
+                                      onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.3)'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)'; }}
+                                      onDragLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.1)'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.02)'; }}
+                                      onDrop={e => { e.preventDefault(); (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.1)'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.02)'; handleDrop(false); }}
                                     >
                                       <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-2 h-2 rounded-full" style={{ background: '#C7C7CC' }} />
-                                        <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#8E8E93' }}>
+                                        <div className="w-2 h-2 rounded-full" style={{ background: 'rgba(255,255,255,0.2)' }} />
+                                        <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.35)' }}>
                                           Add-ons Disabled — {disabledNonCore.length}
                                         </p>
                                       </div>
                                       {disabledNonCore.length === 0 && (
-                                        <p className="text-xs text-center py-8" style={{ color: 'rgba(120,120,128,0.4)' }}>
+                                        <p className="text-xs text-center py-8" style={{ color: 'rgba(255,255,255,0.15)' }}>
                                           Drop add-ons here to disable them
                                         </p>
                                       )}
@@ -1272,17 +1540,17 @@ const MainFrameDashboard: React.FC = () => {
                                   </div>
 
                                   {/* Plan legend */}
-                                  <div className="flex items-center gap-4 text-[11px]" style={{ color: '#8E8E93' }}>
+                                  <div className="flex items-center gap-4 text-[11px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
                                     <span className="flex items-center gap-1.5">
-                                      <span className="w-2 h-2 rounded-full" style={{ background: '#3B82F6' }} />
+                                      <span className="w-2 h-2 rounded-full" style={{ background: '#60A5FA' }} />
                                       Core — all plans
                                     </span>
                                     <span className="flex items-center gap-1.5">
-                                      <span className="w-2 h-2 rounded-full" style={{ background: '#10B981' }} />
+                                      <span className="w-2 h-2 rounded-full" style={{ background: '#34C759' }} />
                                       Standard — Professional+
                                     </span>
                                     <span className="flex items-center gap-1.5">
-                                      <span className="w-2 h-2 rounded-full" style={{ background: '#8B5CF6' }} />
+                                      <span className="w-2 h-2 rounded-full" style={{ background: '#A78BFA' }} />
                                       Premium — Business+
                                     </span>
                                   </div>
@@ -1314,6 +1582,7 @@ const MainFrameDashboard: React.FC = () => {
               {activeView === 'overview' && (
                 <div className="space-y-6">
                   {/* Stat cards */}
+                  {loading ? <SkeletonStatCards /> : (
                   <div className="grid grid-cols-4 gap-4">
                     {[
                       { label: 'Total Tenants', value: stats.totalTenants, sub: `+${stats.weeklyGrowth} this week`, icon: <Building2 />, gradient: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)', onClick: () => navigate('tenants') },
@@ -1339,6 +1608,7 @@ const MainFrameDashboard: React.FC = () => {
                       </motion.button>
                     ))}
                   </div>
+                  )}
 
                   {/* Recent + Provision */}
                   <div className="grid grid-cols-3 gap-5">
@@ -1352,26 +1622,30 @@ const MainFrameDashboard: React.FC = () => {
                         </motion.button>
                       </div>
                       <div className="space-y-1">
-                        {tenants.slice(0, 6).map(t => (
-                          <motion.div key={t.id} whileHover={{ scale: 1.01, x: 4 }}
-                            className="flex items-center justify-between p-2.5 rounded-xl cursor-pointer group"
-                            style={{ background: 'rgba(0,0,0,0.02)' }}
-                            onClick={() => openTenant(t)}>
-                            <div className="flex items-center gap-3">
-                              <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow"
-                                style={{ background: 'linear-gradient(135deg, #007AFF, #5856D6)' }}>{av(t.businessName)}</div>
-                              <div>
-                                <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>{t.businessName}</p>
-                                <p className="text-[11px] font-mono" style={{ color: '#8E8E93' }}>{t.subdomain}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <StatusPill status={t.status} />
-                              <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: '#007AFF' }} />
-                            </div>
-                          </motion.div>
-                        ))}
-                        {tenants.length === 0 && <p className="text-sm text-center py-5" style={{ color: '#8E8E93' }}>{loading ? 'Loading…' : 'No tenants yet'}</p>}
+                        {loading
+                          ? [...Array(6)].map((_, i) => <SkeletonTenantListRow key={i} />)
+                          : tenants.length === 0
+                            ? <p className="text-sm text-center py-5" style={{ color: '#8E8E93' }}>No tenants yet</p>
+                            : tenants.slice(0, 6).map(t => (
+                              <motion.div key={t.id} whileHover={{ scale: 1.01, x: 4 }}
+                                className="flex items-center justify-between p-2.5 rounded-xl cursor-pointer group"
+                                style={{ background: 'rgba(0,0,0,0.02)' }}
+                                onClick={() => openTenant(t)}>
+                                <div className="flex items-center gap-3">
+                                  <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow"
+                                    style={{ background: 'linear-gradient(135deg, #007AFF, #5856D6)' }}>{av(t.businessName)}</div>
+                                  <div>
+                                    <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>{t.businessName}</p>
+                                    <p className="text-[11px] font-mono" style={{ color: '#8E8E93' }}>{t.subdomain}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <StatusPill status={t.status} />
+                                  <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: '#007AFF' }} />
+                                </div>
+                              </motion.div>
+                            ))
+                        }
                       </div>
                     </div>
 
@@ -1431,7 +1705,8 @@ const MainFrameDashboard: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {filtTenants.map((t, idx) => (
+                        {loading && [...Array(7)].map((_, i) => <SkeletonTableRow key={i} cols={7} />)}
+                        {!loading && filtTenants.map((t, idx) => (
                           <motion.tr key={t.id}
                             initial={{ opacity: 0, y: 8 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -1472,8 +1747,8 @@ const MainFrameDashboard: React.FC = () => {
                             </td>
                           </motion.tr>
                         ))}
-                        {filtTenants.length === 0 && (
-                          <tr><td colSpan={7}><div className="py-16"><EmptyState icon={<Building2 />} label={loading ? 'Loading…' : 'No tenants found'} /></div></td></tr>
+                        {!loading && filtTenants.length === 0 && (
+                          <tr><td colSpan={7}><div className="py-16"><EmptyState icon={<Building2 />} label="No tenants found" /></div></td></tr>
                         )}
                       </tbody>
                     </table>
@@ -1484,8 +1759,8 @@ const MainFrameDashboard: React.FC = () => {
               {/* ── Features ─────────────────────────────────────────────── */}
               {activeView === 'features' && (
                 <div className="space-y-4">
-                  {filtFeatures.length === 0
-                    ? <div className="rounded-2xl p-16" style={{ background: 'rgba(255,255,255,0.8)' }}><EmptyState icon={<Package />} label={loading ? 'Loading…' : 'No features — click Seed Defaults'} /></div>
+                  {!loading && filtFeatures.length === 0
+                    ? <div className="rounded-2xl p-16" style={{ background: 'rgba(255,255,255,0.8)' }}><EmptyState icon={<Package />} label="No features — click Seed Defaults" /></div>
                     : (
                       <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.6)' }}>
                         <table className="w-full text-sm">
@@ -1497,7 +1772,8 @@ const MainFrameDashboard: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {filtFeatures.map((f, idx) => (
+                            {loading && [...Array(5)].map((_, i) => <SkeletonTableRow key={i} cols={7} />)}
+                            {!loading && filtFeatures.map((f, idx) => (
                               <motion.tr key={f.id}
                                 initial={{ opacity: 0, y: 6 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -1528,8 +1804,9 @@ const MainFrameDashboard: React.FC = () => {
               {/* ── Bugs ─────────────────────────────────────────────────── */}
               {activeView === 'bugs' && (
                 <div className="space-y-3">
-                  {filtBugs.length === 0 && <div className="rounded-2xl p-16" style={{ background: 'rgba(255,255,255,0.8)' }}><EmptyState icon={<Bug />} label={loading ? 'Loading…' : 'No bug reports'} /></div>}
-                  {filtBugs.map((bug, idx) => (
+                  {loading && [...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
+                  {!loading && filtBugs.length === 0 && <div className="rounded-2xl p-16" style={{ background: 'rgba(255,255,255,0.8)' }}><EmptyState icon={<Bug />} label="No bug reports" /></div>}
+                  {!loading && filtBugs.map((bug, idx) => (
                     <motion.div key={bug.id}
                       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
                       whileHover={{ scale: 1.005, y: -1 }}
@@ -1566,8 +1843,9 @@ const MainFrameDashboard: React.FC = () => {
               {/* ── Requests ─────────────────────────────────────────────── */}
               {activeView === 'requests' && (
                 <div className="space-y-3">
-                  {filtRequests.length === 0 && <div className="rounded-2xl p-16" style={{ background: 'rgba(255,255,255,0.8)' }}><EmptyState icon={<Lightbulb />} label={loading ? 'Loading…' : 'No feature requests'} /></div>}
-                  {filtRequests.map((req, idx) => (
+                  {loading && [...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
+                  {!loading && filtRequests.length === 0 && <div className="rounded-2xl p-16" style={{ background: 'rgba(255,255,255,0.8)' }}><EmptyState icon={<Lightbulb />} label="No feature requests" /></div>}
+                  {!loading && filtRequests.map((req, idx) => (
                     <motion.div key={req.id}
                       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
                       whileHover={{ scale: 1.005, y: -1 }}
@@ -1973,29 +2251,6 @@ const MainFrameDashboard: React.FC = () => {
 };
 
 // ─── Small shared components ──────────────────────────────────────────────────
-
-const Card: React.FC<{ children: React.ReactNode; gradient?: boolean }> = ({ children, gradient }) => (
-  <div className="rounded-2xl p-5 space-y-3"
-    style={{
-      background: gradient ? 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)' : 'rgba(255,255,255,0.8)',
-      backdropFilter: 'blur(10px)',
-      border: gradient ? 'none' : '1px solid rgba(255,255,255,0.6)',
-      boxShadow: gradient ? '0 8px 24px rgba(0,122,255,0.3)' : '0 2px 8px rgba(0,0,0,0.06)',
-    }}>
-    {children}
-  </div>
-);
-
-const CardTitle: React.FC<{ children: React.ReactNode; light?: boolean }> = ({ children, light }) => (
-  <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: light ? 'rgba(255,255,255,0.6)' : '#8E8E93' }}>{children}</p>
-);
-
-const InfoRow: React.FC<{ label: string; value: string; mono?: boolean; light?: boolean }> = ({ label, value, mono, light }) => (
-  <div className="flex flex-col gap-0.5">
-    <p className="text-[11px]" style={{ color: light ? 'rgba(255,255,255,0.5)' : '#8E8E93' }}>{label}</p>
-    <p className={`text-sm font-semibold ${mono ? 'font-mono' : ''}`} style={{ color: light ? '#fff' : '#1D1D1F' }}>{value}</p>
-  </div>
-);
 
 const EmptyState: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon, label }) => (
   <div className="flex flex-col items-center justify-center gap-3 py-8">

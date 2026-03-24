@@ -19,3 +19,14 @@ body {
 #root {
   min-height: 100vh;
 }
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #e8eaed 25%, #f3f4f6 50%, #e8eaed 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
