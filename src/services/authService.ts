@@ -64,9 +64,8 @@ class AuthService {
       return response;
     } catch (error: any) {
       console.error('Login failed:', error);
-      // Re-throw with user-friendly message
-      const message = error.response?.data?.message || error.message || 'Login failed';
-      throw new Error(message);
+      // Re-throw original error so callers can inspect statusCode and data
+      throw error;
     }
   }
 

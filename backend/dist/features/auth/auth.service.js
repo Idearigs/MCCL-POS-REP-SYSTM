@@ -98,7 +98,17 @@ let AuthService = AuthService_1 = class AuthService {
             if (!isPasswordValid) {
                 throw new common_1.UnauthorizedException('Invalid email or password');
             }
-            if (user.tenants.status !== 'ACTIVE') {
+            const tenantStatus = user.tenants.status;
+            if (tenantStatus === 'SUSPENDED') {
+                throw new common_1.ForbiddenException({
+                    code: 'TENANT_SUSPENDED',
+                    reason: user.tenants.suspendedReason || 'MANUAL',
+                    message: user.tenants.suspendedReason === 'PAYMENT_OVERDUE'
+                        ? 'Account suspended due to overdue payment. Please contact MCCL to restore access.'
+                        : 'Account has been deactivated. Please contact MCCL for more information.',
+                });
+            }
+            if (tenantStatus === 'INACTIVE') {
                 throw new common_1.UnauthorizedException('Account is not active');
             }
             const tokens = await this.generateTokens(user);
@@ -116,6 +126,7 @@ let AuthService = AuthService_1 = class AuthService {
                 role: user.role,
             }, 3600);
             this.logger.log(`User logged in: ${email} (${user.id})`);
+            this.seedDefaultCategories(user.tenantId).catch((err) => this.logger.warn(`Failed to seed categories on login for ${user.tenantId}: ${err.message}`));
             return {
                 accessToken: tokens.accessToken,
                 refreshToken: tokens.refreshToken,
@@ -214,7 +225,17 @@ let AuthService = AuthService_1 = class AuthService {
                     tenants: true,
                 },
             });
-            if (!user || user.tenants.status !== 'ACTIVE') {
+            if (!user) {
+                throw new common_1.UnauthorizedException('Invalid refresh token');
+            }
+            if (user.tenants.status === 'SUSPENDED') {
+                throw new common_1.ForbiddenException({
+                    code: 'TENANT_SUSPENDED',
+                    reason: user.tenants.suspendedReason || 'MANUAL',
+                    message: 'Account suspended. Please contact MCCL.',
+                });
+            }
+            if (user.tenants.status === 'INACTIVE') {
                 throw new common_1.UnauthorizedException('Invalid refresh token');
             }
             const tokens = await this.generateTokens(user);
@@ -359,7 +380,7 @@ let AuthService = AuthService_1 = class AuthService {
     async seedDefaultCategories(tenantId) {
         const DEFAULT_CATEGORIES = [
             'Rings', 'Necklaces', 'Bracelets', 'Earrings',
-            'Pendants', 'Watches', 'Other',
+            'Pendants', 'Watches', 'Chains', 'Other',
         ];
         const existing = await this.prismaService.categories.findMany({
             where: { tenantId },
@@ -504,6 +525,35 @@ let AuthService = AuthService_1 = class AuthService {
             this.logger.error(`Failed to reset password for user ${userId}:`, error.message);
             throw error;
         }
+    }
+    async updateTenantStatus(data) {
+        const tenant = await this.prismaService.tenants.findUnique({
+            where: { subdomain: data.subdomain.toLowerCase() },
+        });
+        if (!tenant) {
+            throw new Error(`Tenant with subdomain '${data.subdomain}' not found`);
+        }
+        const updateData = {
+            status: data.status,
+            updatedAt: new Date(),
+        };
+        if (data.status === 'SUSPENDED') {
+            updateData.suspendedAt = new Date();
+            updateData.suspendedReason = data.suspendedReason || 'MANUAL';
+        }
+        if (data.status === 'ACTIVE') {
+            updateData.suspendedAt = null;
+            updateData.suspendedReason = null;
+        }
+        if (data.billingDueDate) {
+            updateData.billingDueDate = new Date(data.billingDueDate);
+        }
+        const updated = await this.prismaService.tenants.update({
+            where: { id: tenant.id },
+            data: updateData,
+        });
+        this.logger.log(`Tenant ${data.subdomain} status updated to ${data.status} (reason: ${data.suspendedReason || 'none'})`);
+        return { tenantId: updated.id, status: updated.status };
     }
 };
 exports.AuthService = AuthService;

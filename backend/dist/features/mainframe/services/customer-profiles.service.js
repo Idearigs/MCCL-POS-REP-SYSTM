@@ -8,18 +8,50 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var CustomerProfilesService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CustomerProfilesService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../../core/prisma/prisma.service");
 const customer_profile_dto_1 = require("../dto/customer-profile.dto");
 const subdomain_service_1 = require("./subdomain.service");
-let CustomerProfilesService = class CustomerProfilesService {
+const config_1 = require("@nestjs/config");
+const MF_TO_POS_STATUS = {
+    ACTIVE: 'ACTIVE',
+    SUSPENDED: 'SUSPENDED',
+    DEACTIVATED: 'SUSPENDED',
+    MAINTENANCE: 'INACTIVE',
+    PENDING_SETUP: 'INACTIVE',
+};
+let CustomerProfilesService = CustomerProfilesService_1 = class CustomerProfilesService {
     prisma;
     subdomainService;
-    constructor(prisma, subdomainService) {
+    config;
+    logger = new common_1.Logger(CustomerProfilesService_1.name);
+    constructor(prisma, subdomainService, config) {
         this.prisma = prisma;
         this.subdomainService = subdomainService;
+        this.config = config;
+    }
+    async syncTenantStatusToPOS(subdomain, mfStatus, opts) {
+        const posStatus = MF_TO_POS_STATUS[mfStatus] ?? 'INACTIVE';
+        const isSuspended = posStatus === 'SUSPENDED';
+        try {
+            await this.prisma.tenants.update({
+                where: { subdomain: subdomain.toLowerCase() },
+                data: {
+                    status: posStatus,
+                    suspendedAt: isSuspended ? new Date() : null,
+                    suspendedReason: isSuspended ? (opts?.suspendedReason || 'MANUAL') : null,
+                    billingDueDate: opts?.billingDueDate ? new Date(opts.billingDueDate) : undefined,
+                    updatedAt: new Date(),
+                },
+            });
+            this.logger.log(`Tenant '${subdomain}' status synced: ${mfStatus} → ${posStatus}`);
+        }
+        catch (err) {
+            this.logger.error(`Failed to sync tenant status for '${subdomain}': ${err.message}`);
+        }
     }
     async create(dto) {
         const subdomainRegex = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -232,7 +264,7 @@ let CustomerProfilesService = class CustomerProfilesService {
         await this.logActivity(id, 'profile.updated', 'Customer profile updated', 'admin');
         return this.formatProfileResponse(updated);
     }
-    async updateStatus(id, status) {
+    async updateStatus(id, status, opts) {
         const profile = await this.prisma.mf_customer_profiles.update({
             where: { id },
             data: {
@@ -241,6 +273,7 @@ let CustomerProfilesService = class CustomerProfilesService {
             },
         });
         await this.logActivity(id, 'profile.status_changed', `Status changed to ${status}`, 'system');
+        await this.syncTenantStatusToPOS(profile.subdomain, status, opts);
         return profile;
     }
     async enableFeature(profileId, featureKey) {
@@ -446,9 +479,10 @@ let CustomerProfilesService = class CustomerProfilesService {
     }
 };
 exports.CustomerProfilesService = CustomerProfilesService;
-exports.CustomerProfilesService = CustomerProfilesService = __decorate([
+exports.CustomerProfilesService = CustomerProfilesService = CustomerProfilesService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        subdomain_service_1.SubdomainService])
+        subdomain_service_1.SubdomainService,
+        config_1.ConfigService])
 ], CustomerProfilesService);
 //# sourceMappingURL=customer-profiles.service.js.map

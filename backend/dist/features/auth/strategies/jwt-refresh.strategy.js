@@ -54,7 +54,15 @@ let JwtRefreshStrategy = class JwtRefreshStrategy extends (0, passport_1.Passpor
             if (!user) {
                 throw new common_1.UnauthorizedException('Invalid refresh token');
             }
-            if (user.tenants.status !== 'ACTIVE') {
+            const tenantStatus = user.tenants.status;
+            if (tenantStatus === 'SUSPENDED') {
+                throw new common_1.ForbiddenException({
+                    code: 'TENANT_SUSPENDED',
+                    reason: user.tenants.suspendedReason || 'MANUAL',
+                    message: 'Account suspended. Please contact MCCL.',
+                });
+            }
+            if (!['ACTIVE', 'PAYMENT_DUE', 'PAYMENT_WARNING'].includes(tenantStatus)) {
                 throw new common_1.UnauthorizedException('Tenant account is not active');
             }
             return {

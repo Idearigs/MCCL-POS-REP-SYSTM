@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFeatures } from "@/contexts/FeatureContext";
+import TenantSuspendedScreen from "@/components/auth/TenantSuspendedScreen";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import IntroAnimation from "@/components/ui/intro-animation";
@@ -33,7 +34,7 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { auth, login } = useAuth();
+  const { auth, login, logout } = useAuth();
   const { reload: reloadFeatures } = useFeatures();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -76,6 +77,9 @@ const Login = () => {
         throw new Error("Invalid credentials");
       }
     } catch (error: any) {
+      // Suspension is handled by TenantSuspendedScreen — no toast needed
+      if (error.code === 'TENANT_SUSPENDED') return;
+
       const errorMessage = error.message || "Invalid email or password";
       toast({
         title: "Login failed",
@@ -93,6 +97,16 @@ const Login = () => {
     const redirectTo = urlParams.get('redirect') || location.state?.from?.pathname || '/dashboard';
     navigate(redirectTo, { replace: true });
   };
+
+  // Suspended tenant tried to log in — show full-screen suspension screen
+  if (auth.tenantInfo?.status === 'SUSPENDED') {
+    return (
+      <TenantSuspendedScreen
+        tenantInfo={auth.tenantInfo}
+        onLogout={logout}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-slate-50">

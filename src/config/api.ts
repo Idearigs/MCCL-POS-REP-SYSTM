@@ -101,6 +101,7 @@ export interface ApiError {
   message: string;
   statusCode: number;
   error?: string;
+  data?: any;
   timestamp?: string;
 }
 

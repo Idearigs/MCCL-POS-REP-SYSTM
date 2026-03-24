@@ -287,7 +287,11 @@ export declare class CustomerProfilesController {
         createdAt: any;
         updatedAt: any;
     }>;
-    updateStatus(id: string, status: string): Promise<{
+    updateStatus(id: string, body: {
+        status: string;
+        suspendedReason?: string;
+        billingDueDate?: string;
+    }): Promise<{
         id: string;
         subdomain: string;
         status: import("@prisma/client").$Enums.CustomerProfileStatus;

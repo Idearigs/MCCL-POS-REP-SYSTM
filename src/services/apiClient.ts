@@ -121,6 +121,7 @@ class ApiClient {
           message: error.response?.data?.message || error.message || 'An unexpected error occurred',
           statusCode: error.response?.status || 0,
           error: error.response?.data?.error,
+          data: error.response?.data,
           timestamp: new Date().toISOString(),
         };
 

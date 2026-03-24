@@ -74,6 +74,13 @@ let AuthController = class AuthController {
         }
         return this.authService.provisionTenant(body);
     }
+    async updateTenantStatus(internalKey, body) {
+        const expectedKey = process.env.INTERNAL_API_KEY;
+        if (!expectedKey || internalKey !== expectedKey) {
+            throw new common_1.UnauthorizedException('Invalid internal API key');
+        }
+        return this.authService.updateTenantStatus(body);
+    }
     health() {
         return {
             status: 'ok',
@@ -322,6 +329,17 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "provisionTenant", null);
+__decorate([
+    (0, public_decorator_1.Public)(),
+    (0, common_1.Patch)('tenant-status'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, swagger_1.ApiOperation)({ summary: 'Update tenant status (internal)', description: 'Called by Mainframe to sync tenant suspension or billing status' }),
+    __param(0, (0, common_1.Headers)('x-internal-key')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "updateTenantStatus", null);
 __decorate([
     (0, public_decorator_1.Public)(),
     (0, common_1.Get)('health'),

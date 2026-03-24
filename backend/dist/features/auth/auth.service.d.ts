@@ -39,4 +39,13 @@ export declare class AuthService {
     getUserById(tenantId: string, userId: string): Promise<any>;
     updateUser(tenantId: string, userId: string, updateData: any): Promise<any>;
     resetUserPassword(tenantId: string, userId: string, newPassword: string): Promise<void>;
+    updateTenantStatus(data: {
+        subdomain: string;
+        status: 'ACTIVE' | 'PAYMENT_DUE' | 'PAYMENT_WARNING' | 'SUSPENDED' | 'INACTIVE';
+        suspendedReason?: string;
+        billingDueDate?: string;
+    }): Promise<{
+        tenantId: string;
+        status: string;
+    }>;
 }

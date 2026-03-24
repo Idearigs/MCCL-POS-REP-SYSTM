@@ -78,9 +78,21 @@ export class AuthService {
       }
 
       // Check tenant status
-      if (user.tenants.status !== 'ACTIVE') {
+      const tenantStatus = user.tenants.status;
+      if (tenantStatus === 'SUSPENDED') {
+        throw new ForbiddenException({
+          code: 'TENANT_SUSPENDED',
+          reason: (user.tenants as any).suspendedReason || 'MANUAL',
+          message:
+            (user.tenants as any).suspendedReason === 'PAYMENT_OVERDUE'
+              ? 'Account suspended due to overdue payment. Please contact MCCL to restore access.'
+              : 'Account has been deactivated. Please contact MCCL for more information.',
+        });
+      }
+      if (tenantStatus === 'INACTIVE') {
         throw new UnauthorizedException('Account is not active');
       }
+      // PAYMENT_DUE and PAYMENT_WARNING are allowed to log in — frontend shows banners
 
       // Generate tokens
       const tokens = await this.generateTokens(user);
@@ -253,7 +265,17 @@ export class AuthService {
         },
       });
 
-      if (!user || user.tenants.status !== 'ACTIVE') {
+      if (!user) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+      if (user.tenants.status === 'SUSPENDED') {
+        throw new ForbiddenException({
+          code: 'TENANT_SUSPENDED',
+          reason: (user.tenants as any).suspendedReason || 'MANUAL',
+          message: 'Account suspended. Please contact MCCL.',
+        });
+      }
+      if (user.tenants.status === 'INACTIVE') {
         throw new UnauthorizedException('Invalid refresh token');
       }
 

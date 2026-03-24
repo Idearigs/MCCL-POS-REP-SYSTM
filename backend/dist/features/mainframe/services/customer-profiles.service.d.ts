@@ -1,10 +1,14 @@
 import { PrismaService } from '../../../core/prisma/prisma.service';
 import { CreateCustomerProfileDto, UpdateCustomerProfileDto } from '../dto/customer-profile.dto';
 import { SubdomainService } from './subdomain.service';
+import { ConfigService } from '@nestjs/config';
 export declare class CustomerProfilesService {
     private prisma;
     private subdomainService;
-    constructor(prisma: PrismaService, subdomainService: SubdomainService);
+    private config;
+    private readonly logger;
+    constructor(prisma: PrismaService, subdomainService: SubdomainService, config: ConfigService);
+    private syncTenantStatusToPOS;
     create(dto: CreateCustomerProfileDto): Promise<{
         id: any;
         businessName: any;
@@ -263,7 +267,10 @@ export declare class CustomerProfilesService {
         createdAt: any;
         updatedAt: any;
     }>;
-    updateStatus(id: string, status: string): Promise<{
+    updateStatus(id: string, status: string, opts?: {
+        suspendedReason?: string;
+        billingDueDate?: string;
+    }): Promise<{
         id: string;
         subdomain: string;
         status: import("@prisma/client").$Enums.CustomerProfileStatus;

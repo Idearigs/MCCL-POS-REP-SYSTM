@@ -342,6 +342,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
     } catch (error: any) {
       console.error('Login failed:', error);
+
+      // 403 TENANT_SUSPENDED — set suspension state and throw typed error
+      // so the Login page can suppress the generic toast and show the screen instead
+      if (error.statusCode === 403 && error.data?.code === 'TENANT_SUSPENDED') {
+        setAuth(prev => ({
+          ...prev,
+          loading: false,
+          tenantInfo: {
+            status: 'SUSPENDED',
+            suspendedReason: error.data?.reason || 'MANUAL',
+          },
+        }));
+        const err: any = new Error('Account suspended');
+        err.code = 'TENANT_SUSPENDED';
+        throw err;
+      }
+
       setAuth(prev => ({
         ...prev,
         user: null,

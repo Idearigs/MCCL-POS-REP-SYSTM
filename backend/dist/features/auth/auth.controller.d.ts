@@ -51,6 +51,15 @@ export declare class AuthController {
         tenantId: string;
         userId: string;
     }>;
+    updateTenantStatus(internalKey: string, body: {
+        subdomain: string;
+        status: 'ACTIVE' | 'PAYMENT_DUE' | 'PAYMENT_WARNING' | 'SUSPENDED' | 'INACTIVE';
+        suspendedReason?: string;
+        billingDueDate?: string;
+    }): Promise<{
+        tenantId: string;
+        status: string;
+    }>;
     health(): {
         status: string;
         service: string;

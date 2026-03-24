@@ -65,8 +65,11 @@ let CustomerProfilesController = class CustomerProfilesController {
     async update(id, dto) {
         return this.customerProfilesService.update(id, dto);
     }
-    async updateStatus(id, status) {
-        return this.customerProfilesService.updateStatus(id, status);
+    async updateStatus(id, body) {
+        return this.customerProfilesService.updateStatus(id, body.status, {
+            suspendedReason: body.suspendedReason,
+            billingDueDate: body.billingDueDate,
+        });
     }
     async enableFeature(id, featureKey) {
         return this.customerProfilesService.enableFeature(id, featureKey);
@@ -159,9 +162,9 @@ __decorate([
 __decorate([
     (0, common_1.Patch)(':id/status'),
     __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, common_1.Body)('status')),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], CustomerProfilesController.prototype, "updateStatus", null);
 __decorate([

@@ -15,6 +15,7 @@ const passport_1 = require("@nestjs/passport");
 const passport_jwt_1 = require("passport-jwt");
 const config_1 = require("@nestjs/config");
 const prisma_service_1 = require("../../../core/prisma/prisma.service");
+const FUNCTIONAL_STATUSES = ['ACTIVE', 'PAYMENT_DUE', 'PAYMENT_WARNING'];
 let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(passport_jwt_1.Strategy) {
     configService;
     prismaService;
@@ -28,8 +29,9 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
         this.prismaService = prismaService;
     }
     async validate(payload) {
+        let user;
         try {
-            const user = await this.prismaService.users.findUnique({
+            user = await this.prismaService.users.findUnique({
                 where: {
                     id: payload.sub,
                     isActive: true,
@@ -43,34 +45,50 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
                             subdomain: true,
                             status: true,
                             subscriptionPlan: true,
+                            suspendedAt: true,
+                            suspendedReason: true,
+                            billingDueDate: true,
                         },
                     },
                 },
             });
-            if (!user) {
-                throw new common_1.UnauthorizedException('User not found or inactive');
-            }
-            if (user.tenants.status !== 'ACTIVE') {
-                throw new common_1.UnauthorizedException('Tenant account is not active');
-            }
-            await this.prismaService.users.update({
-                where: { id: user.id },
-                data: { lastLogin: new Date() },
-            });
-            return {
-                id: user.id,
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                role: user.role,
-                tenantId: user.tenantId,
-                permissions: user.permissions,
-                tenant: user.tenants,
-            };
         }
-        catch (error) {
+        catch {
             throw new common_1.UnauthorizedException('Invalid token');
         }
+        if (!user) {
+            throw new common_1.UnauthorizedException('User not found or inactive');
+        }
+        const tenantStatus = user.tenants.status;
+        if (tenantStatus === 'SUSPENDED') {
+            throw new common_1.ForbiddenException({
+                code: 'TENANT_SUSPENDED',
+                reason: user.tenants.suspendedReason || 'MANUAL',
+                message: user.tenants.suspendedReason === 'PAYMENT_OVERDUE'
+                    ? 'Account suspended due to overdue payment. Please contact MCCL to restore access.'
+                    : 'Account has been deactivated. Please contact MCCL for more information.',
+            });
+        }
+        if (tenantStatus === 'INACTIVE') {
+            throw new common_1.UnauthorizedException('Account is not active');
+        }
+        if (!FUNCTIONAL_STATUSES.includes(tenantStatus)) {
+            throw new common_1.UnauthorizedException('Account is not active');
+        }
+        await this.prismaService.users.update({
+            where: { id: user.id },
+            data: { lastLogin: new Date() },
+        });
+        return {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role,
+            tenantId: user.tenantId,
+            permissions: user.permissions,
+            tenant: user.tenants,
+        };
     }
 };
 exports.JwtStrategy = JwtStrategy;
