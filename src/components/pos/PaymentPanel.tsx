@@ -176,7 +176,12 @@ const PaymentPanel: React.FC<PaymentPanelProps> = ({
         discountAmount: item.discount ? (item.price * item.quantity * item.discount / 100) : 0,
         discountPercentage: item.discount || 0,
         taxRate: 20, // 20% VAT
-        notes: item.karat || item.weight ? `Karat: ${item.karat || 'N/A'}, Weight: ${item.weight || 'N/A'}` : undefined
+        notes: (() => {
+          const parts: string[] = [];
+          if ((item as any).condition) parts.push(`CONDITION:${(item as any).condition}`);
+          if (item.karat || item.weight) parts.push(`Karat: ${item.karat || 'N/A'}, Weight: ${item.weight || 'N/A'}`);
+          return parts.length > 0 ? parts.join(' | ') : undefined;
+        })()
       })),
       payments: payments,
       taxRate: 20, // 20% VAT

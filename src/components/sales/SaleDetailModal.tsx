@@ -99,6 +99,14 @@ const SaleDetailModal: React.FC<SaleDetailModalProps> = ({
 
   const canRefund = sale.paymentStatus === 'COMPLETED' && sale.status === 'COMPLETED';
 
+  // Parse condition from item notes (stored as "CONDITION:BRAND_NEW | ...")
+  const parseCondition = (notes?: string): string | null => {
+    if (!notes) return null;
+    const match = notes.match(/CONDITION:(BRAND_NEW|USED)/);
+    if (!match) return null;
+    return match[1] === 'BRAND_NEW' ? 'Brand New' : 'Used';
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -177,6 +185,7 @@ const SaleDetailModal: React.FC<SaleDetailModalProps> = ({
                   <TableRow className="bg-gray-50">
                     <TableHead className="font-semibold">Product</TableHead>
                     <TableHead className="font-semibold">SKU</TableHead>
+                    <TableHead className="font-semibold">Condition</TableHead>
                     <TableHead className="font-semibold text-center">Qty</TableHead>
                     <TableHead className="font-semibold text-right">Unit Price</TableHead>
                     <TableHead className="font-semibold text-right">Discount</TableHead>
@@ -186,14 +195,27 @@ const SaleDetailModal: React.FC<SaleDetailModalProps> = ({
                 <TableBody>
                   {sale.items && sale.items.length > 0 ? (
                     sale.items.map((item, index) => {
-                      // Calculate total if not provided: (quantity * unitPrice) - discount
                       const itemTotal = item.total || ((item.quantity * item.unitPrice) - (item.discount || 0));
                       const itemSku = (item as any).productSku || item.sku || '-';
+                      const condition = parseCondition((item as any).notes);
 
                       return (
                         <TableRow key={index}>
                           <TableCell className="font-medium">{item.productName}</TableCell>
                           <TableCell className="text-gray-600 text-sm">{itemSku}</TableCell>
+                          <TableCell>
+                            {condition ? (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                condition === 'Brand New'
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-amber-100 text-amber-700'
+                              }`}>
+                                {condition}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300 text-xs">—</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-center">{item.quantity}</TableCell>
                           <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
                           <TableCell className="text-right text-red-600">
@@ -207,7 +229,7 @@ const SaleDetailModal: React.FC<SaleDetailModalProps> = ({
                     })
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-gray-500">
+                      <TableCell colSpan={7} className="text-center text-gray-500">
                         No items found
                       </TableCell>
                     </TableRow>

@@ -94,6 +94,7 @@ interface CartItem {
   sku?: string;
   isRepair?: boolean; // Flag to identify repair items
   repairId?: string;  // Original repair ID if it's a repair
+  condition?: string; // BRAND_NEW | USED — recorded in sale notes
 }
 
 interface TileBasedPOSProps {
@@ -594,6 +595,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         stock: product.stock,
         image: product.imageUrl,
         sku: product.sku,
+        condition: (product as any).condition || undefined,
       }]);
     }
     toast({ title: 'Added to cart', description: product.name, duration: 1000 });
