@@ -12,6 +12,8 @@ const MATERIALS = [
   'PEARL', 'GEMSTONE', 'STAINLESS_STEEL', 'OTHER',
 ];
 
+const WATCH_BRANDS = ['Rosefeld', 'Roamer', 'Briston', 'Festina', 'Secondhand'];
+
 const CONDITIONS = ['BRAND_NEW', 'USED'];
 
 const MATERIAL_LABELS: Record<string, string> = {
@@ -42,6 +44,7 @@ const emptyForm = {
   material: 'GOLD',
   condition: 'BRAND_NEW',
   description: '',
+  brand: '',
 };
 
 export default function MobileAddProduct() {
@@ -114,6 +117,7 @@ export default function MobileAddProduct() {
         description: form.description.trim() || undefined,
       };
       (payload as any).condition = form.condition;
+      if (form.brand) (payload as any).supplierName = form.brand;
 
       const created = await productService.createProduct(payload);
 
@@ -132,7 +136,7 @@ export default function MobileAddProduct() {
       setAddedCount(c => c + 1);
       setSuccessFlash(true);
       setTimeout(() => setSuccessFlash(false), 1800);
-      setForm(f => ({ ...emptyForm, material: f.material, condition: f.condition, category: f.category }));
+      setForm(f => ({ ...emptyForm, material: f.material, condition: f.condition, category: f.category, brand: f.brand }));
       clearPhoto();
     } catch (err: any) {
       setError(err?.message || 'Failed to add product. Please try again.');
@@ -453,6 +457,28 @@ export default function MobileAddProduct() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Watch Brand */}
+            <div className="px-4 py-3">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Watch Brand</label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {WATCH_BRANDS.map(b => (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, brand: f.brand === b ? '' : b }))}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      form.brand === b
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-gray-100 text-gray-600 active:bg-gray-200'
+                    }`}
+                  >
+                    {b}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-1.5">Tap to select, tap again to deselect</p>
             </div>
           </div>
         </section>
