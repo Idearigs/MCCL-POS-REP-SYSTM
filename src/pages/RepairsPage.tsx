@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Filter, Plus, Calendar, Trash2, LayoutGrid, List, Eye, Edit, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Filter, Plus, Calendar, Trash2, LayoutGrid, List, Eye, Edit, Settings, ChevronLeft, ChevronRight, QrCode, X } from 'lucide-react';
+import QRCode from 'react-qr-code';
 import RepairJobCard from '@/components/repair/RepairJobCard';
 import RepairStatusBadge from '@/components/repair/RepairStatusBadge';
 import NewRepairJobForm from '@/components/repair/NewRepairJobForm';
@@ -135,6 +136,7 @@ const RepairsPage: React.FC = () => {
   const [selectedJob, setSelectedJob] = useState<UIRepairJob | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isNewJobDialogOpen, setIsNewJobDialogOpen] = useState(false);
+  const [isRepairQROpen, setIsRepairQROpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -459,6 +461,15 @@ const RepairsPage: React.FC = () => {
             </Button>
 
             <Button
+              onClick={() => setIsRepairQROpen(true)}
+              className="rounded-full px-4 shadow-sm bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
+              title="Mobile Quick-Add (QR Code)"
+            >
+              <QrCode size={15} />
+              Mobile Add
+            </Button>
+
+            <Button
               onClick={() => setIsNewJobDialogOpen(true)}
               className="rounded-full bg-navy hover:bg-navy-dark text-white shadow-sm"
             >
@@ -467,6 +478,44 @@ const RepairsPage: React.FC = () => {
             </Button>
           </div>
         </div>
+
+        {/* Repair QR Code Modal */}
+        {isRepairQROpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setIsRepairQROpen(false)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl p-8 w-80 flex flex-col items-center gap-5"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">Mobile Repair Add</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Scan to log repair jobs from your phone</p>
+                </div>
+                <button
+                  onClick={() => setIsRepairQROpen(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <QRCode
+                  value={`${window.location.origin}/mobile/add-repair`}
+                  size={200}
+                  bgColor="#f9fafb"
+                  fgColor="#111827"
+                />
+              </div>
+              <p className="text-xs text-center text-gray-400 leading-relaxed">
+                Point your phone camera at this code.<br />
+                Opens the mobile repair job form directly.
+              </p>
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center h-40 border border-gray-100 rounded-xl bg-white/50 backdrop-blur-sm">

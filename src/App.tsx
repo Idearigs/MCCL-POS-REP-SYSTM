@@ -45,6 +45,7 @@ import PettyCashPage from "./pages/PettyCashPage";
 import ShiftsPage from "./pages/ShiftsPage";
 import FinancialIntelligencePage from "./pages/FinancialIntelligencePage";
 import MobileAddProduct from "./pages/MobileAddProduct";
+import MobileAddRepair from "./pages/MobileAddRepair";
 
 // Create a client for React Query
 const queryClient = new QueryClient();
@@ -300,6 +301,7 @@ const App = () => (
 
                   {/* Mobile routes (standalone, no MainLayout) */}
                   <Route path="/mobile/add-product" element={<PrivateRoute><MobileAddProduct /></PrivateRoute>} />
+                  <Route path="/mobile/add-repair" element={<PrivateRoute><MobileAddRepair /></PrivateRoute>} />
 
                   {/* Catch-all route */}
                   <Route path="*" element={<NotFound />} />
