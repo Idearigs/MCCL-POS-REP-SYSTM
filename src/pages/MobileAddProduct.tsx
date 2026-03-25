@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { productService, CreateProductData } from '@/services/productService';
 import {
-  CheckCircle, ChevronLeft, Package, Plus, RefreshCw,
-  Shuffle, ArrowLeft,
+  CheckCircle, Plus, RefreshCw,
+  Shuffle, ArrowLeft, Camera, ImagePlus, X, ImageOff,
 } from 'lucide-react';
 
 const MATERIALS = [
@@ -45,7 +45,7 @@ const emptyForm = {
 };
 
 export default function MobileAddProduct() {
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState(emptyForm);
@@ -54,6 +54,13 @@ export default function MobileAddProduct() {
   const [addedCount, setAddedCount] = useState(0);
   const [successFlash, setSuccessFlash] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Photo state
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     productService.getCategories().then(setCategories).catch(() => {});
@@ -66,6 +73,22 @@ export default function MobileAddProduct() {
   const autoSKU = () => {
     if (!form.name) return;
     setForm(f => ({ ...f, sku: generateSKU(f.name, f.material) }));
+  };
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoFile(file);
+    const reader = new FileReader();
+    reader.onload = ev => setPhotoPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+    // reset input so same file can be re-selected
+    e.target.value = '';
+  };
+
+  const clearPhoto = () => {
+    setPhotoFile(null);
+    setPhotoPreview(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -90,15 +113,27 @@ export default function MobileAddProduct() {
         material: form.material,
         description: form.description.trim() || undefined,
       };
-      // pass condition via extra field (backend accepts it)
       (payload as any).condition = form.condition;
 
-      await productService.createProduct(payload);
+      const created = await productService.createProduct(payload);
+
+      // Upload photo if one was selected
+      if (photoFile && created?.id) {
+        setPhotoUploading(true);
+        try {
+          await productService.uploadProductImage(created.id, photoFile);
+        } catch {
+          // photo upload failure is non-fatal — product was still created
+        } finally {
+          setPhotoUploading(false);
+        }
+      }
+
       setAddedCount(c => c + 1);
       setSuccessFlash(true);
       setTimeout(() => setSuccessFlash(false), 1800);
-      // Reset form but keep material/condition/category for quick repeated entry
       setForm(f => ({ ...emptyForm, material: f.material, condition: f.condition, category: f.category }));
+      clearPhoto();
     } catch (err: any) {
       setError(err?.message || 'Failed to add product. Please try again.');
     } finally {
@@ -131,8 +166,6 @@ export default function MobileAddProduct() {
             </div>
           )}
         </div>
-
-        {/* Success flash bar */}
         <div
           className="h-1 bg-green-500 transition-all duration-500 ease-out"
           style={{ width: successFlash ? '100%' : '0%', opacity: successFlash ? 1 : 0 }}
@@ -142,21 +175,101 @@ export default function MobileAddProduct() {
       {/* ── Form ── */}
       <form onSubmit={handleSubmit} className="flex-1 px-4 py-5 space-y-5 pb-32">
 
-        {/* Error banner */}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
             {error}
           </div>
         )}
 
-        {/* Section: Identity */}
+        {/* ── Section: Photo ── */}
+        <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Product Photo</p>
+          </div>
+          <div className="px-4 py-4">
+            {photoPreview ? (
+              /* ── Preview ── */
+              <div className="relative">
+                <img
+                  src={photoPreview}
+                  alt="Product preview"
+                  className="w-full h-52 object-cover rounded-xl border border-gray-200"
+                />
+                <button
+                  type="button"
+                  onClick={clearPhoto}
+                  className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full bg-black/60 text-white active:bg-black/80"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                {/* Replace buttons below preview */}
+                <div className="flex gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium active:bg-gray-200"
+                  >
+                    <Camera className="w-4 h-4" />
+                    Retake
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => galleryInputRef.current?.click()}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium active:bg-gray-200"
+                  >
+                    <ImagePlus className="w-4 h-4" />
+                    Change
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* ── No photo yet ── */
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex-1 flex flex-col items-center justify-center gap-2 py-5 rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50 text-indigo-600 active:bg-indigo-100 transition-colors"
+                >
+                  <Camera className="w-6 h-6" />
+                  <span className="text-sm font-semibold">Take Photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="flex-1 flex flex-col items-center justify-center gap-2 py-5 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 text-gray-500 active:bg-gray-100 transition-colors"
+                >
+                  <ImagePlus className="w-6 h-6" />
+                  <span className="text-sm font-semibold">From Gallery</span>
+                </button>
+              </div>
+            )}
+
+            {/* Hidden file inputs */}
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handlePhotoChange}
+            />
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoChange}
+            />
+          </div>
+        </section>
+
+        {/* ── Section: Product Info ── */}
         <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Product Info</p>
           </div>
           <div className="divide-y divide-gray-100">
 
-            {/* Name */}
             <div className="px-4 py-3">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 Name <span className="text-red-400">*</span>
@@ -171,7 +284,6 @@ export default function MobileAddProduct() {
               />
             </div>
 
-            {/* SKU */}
             <div className="px-4 py-3">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 SKU <span className="text-red-400">*</span>
@@ -196,7 +308,6 @@ export default function MobileAddProduct() {
               </div>
             </div>
 
-            {/* Description */}
             <div className="px-4 py-3">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</label>
               <textarea
@@ -210,15 +321,13 @@ export default function MobileAddProduct() {
           </div>
         </section>
 
-        {/* Section: Pricing & Stock */}
+        {/* ── Section: Pricing & Stock ── */}
         <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Pricing & Stock</p>
           </div>
           <div className="divide-y divide-gray-100">
-
             <div className="grid grid-cols-2 divide-x divide-gray-100">
-              {/* Selling Price */}
               <div className="px-4 py-3">
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   Price <span className="text-red-400">*</span>
@@ -237,7 +346,6 @@ export default function MobileAddProduct() {
                   />
                 </div>
               </div>
-              {/* Cost */}
               <div className="px-4 py-3">
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Cost</label>
                 <div className="flex items-center gap-1 mt-1.5">
@@ -255,9 +363,7 @@ export default function MobileAddProduct() {
                 </div>
               </div>
             </div>
-
             <div className="grid grid-cols-2 divide-x divide-gray-100">
-              {/* Quantity */}
               <div className="px-4 py-3">
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   Qty <span className="text-red-400">*</span>
@@ -272,7 +378,6 @@ export default function MobileAddProduct() {
                   className="mt-1.5 w-full text-base text-gray-900 bg-transparent outline-none placeholder:text-gray-300"
                 />
               </div>
-              {/* Reorder Level */}
               <div className="px-4 py-3">
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Reorder At</label>
                 <input
@@ -289,14 +394,13 @@ export default function MobileAddProduct() {
           </div>
         </section>
 
-        {/* Section: Classification */}
+        {/* ── Section: Classification ── */}
         <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Classification</p>
           </div>
           <div className="divide-y divide-gray-100">
 
-            {/* Category */}
             <div className="px-4 py-3">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Category</label>
               <select
@@ -311,7 +415,6 @@ export default function MobileAddProduct() {
               </select>
             </div>
 
-            {/* Material */}
             <div className="px-4 py-3">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Material</label>
               <div className="flex flex-wrap gap-2 mt-2">
@@ -332,7 +435,6 @@ export default function MobileAddProduct() {
               </div>
             </div>
 
-            {/* Condition */}
             <div className="px-4 py-3">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Condition</label>
               <div className="flex gap-3 mt-2">
@@ -361,7 +463,6 @@ export default function MobileAddProduct() {
       <div className="fixed bottom-0 left-0 right-0 px-4 pb-6 pt-3 bg-white border-t border-gray-200 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
         <button
           type="submit"
-          form=""
           onClick={handleSubmit}
           disabled={submitting}
           className="w-full h-14 flex items-center justify-center gap-2.5 rounded-2xl text-base font-bold text-white transition-all active:scale-[0.98]"
@@ -371,7 +472,10 @@ export default function MobileAddProduct() {
           }}
         >
           {submitting ? (
-            <RefreshCw className="w-5 h-5 animate-spin" />
+            <>
+              <RefreshCw className="w-5 h-5 animate-spin" />
+              {photoUploading ? 'Uploading photo…' : 'Saving…'}
+            </>
           ) : successFlash ? (
             <>
               <CheckCircle className="w-5 h-5" />
