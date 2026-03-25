@@ -30,6 +30,8 @@ export interface TenantInfo {
   suspendedReason?: string | null; // 'MANUAL' | 'PAYMENT_OVERDUE'
   billingDueDate?: string | null;
   billingDaysOverdue?: number | null;
+  tenantSlug?: string | null;
+  tenantName?: string | null;
 }
 
 // Define the authentication state type
@@ -143,6 +145,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       suspendedReason: tenant.suspendedReason ?? null,
       billingDueDate: tenant.billingDueDate ?? null,
       billingDaysOverdue: calcDaysOverdue(tenant.billingDueDate),
+      tenantSlug: tenant.slug ?? null,
+      tenantName: tenant.name ?? null,
     };
   };
 

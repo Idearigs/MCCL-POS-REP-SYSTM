@@ -48,7 +48,8 @@ const emptyForm = {
 };
 
 export default function MobileAddProduct() {
-  const { user } = useAuth();
+  const { user, auth } = useAuth();
+  const isBuyme = auth.tenantInfo?.tenantSlug === 'buymejewellery';
   const navigate = useNavigate();
 
   const [form, setForm] = useState(emptyForm);
@@ -459,27 +460,29 @@ export default function MobileAddProduct() {
               </div>
             </div>
 
-            {/* Watch Brand */}
-            <div className="px-4 py-3">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Watch Brand</label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {WATCH_BRANDS.map(b => (
-                  <button
-                    key={b}
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, brand: f.brand === b ? '' : b }))}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                      form.brand === b
-                        ? 'bg-amber-500 text-white'
-                        : 'bg-gray-100 text-gray-600 active:bg-gray-200'
-                    }`}
-                  >
-                    {b}
-                  </button>
-                ))}
+            {/* Watch Brand — buymejewellery only */}
+            {isBuyme && (
+              <div className="px-4 py-3">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Watch Brand</label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {WATCH_BRANDS.map(b => (
+                    <button
+                      key={b}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, brand: f.brand === b ? '' : b }))}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                        form.brand === b
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-gray-100 text-gray-600 active:bg-gray-200'
+                      }`}
+                    >
+                      {b}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-1.5">Tap to select, tap again to deselect</p>
               </div>
-              <p className="text-xs text-gray-400 mt-1.5">Tap to select, tap again to deselect</p>
-            </div>
+            )}
           </div>
         </section>
 

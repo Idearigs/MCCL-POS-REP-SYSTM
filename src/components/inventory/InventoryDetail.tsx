@@ -22,6 +22,9 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { X, Upload, Image as ImageIcon, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { productService } from "@/services/productService";
+import { useAuth } from "@/contexts/AuthContext";
+
+const WATCH_BRANDS = ['Rosefeld', 'Roamer', 'Briston', 'Festina', 'Secondhand'];
 
 export interface InventoryItemDetails {
   id: string;
@@ -58,6 +61,9 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
   onClose, 
   onSave 
 }) => {
+  const { auth } = useAuth();
+  const isBuyme = auth.tenantInfo?.tenantSlug === 'buymejewellery';
+
   // Create a default empty item for initialization
   const defaultItem: InventoryItemDetails = {
     id: '',
@@ -305,6 +311,32 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
               <p className="text-xs text-gray-500">Optional: For fast inventory scanning</p>
             </div>
           </div>
+
+          {/* Watch Brand — buymejewellery only */}
+          {isBuyme && (
+            <div className="space-y-2">
+              <Label>Watch Brand</Label>
+              <div className="flex flex-wrap gap-2">
+                {WATCH_BRANDS.map(b => (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() =>
+                      setEditedItem(prev => ({ ...prev, supplier: prev.supplier === b ? '' : b }))
+                    }
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                      editedItem.supplier === b
+                        ? 'bg-amber-500 text-white border-amber-500'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-amber-400 hover:text-amber-600'
+                    }`}
+                  >
+                    {b}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400">Tap to select brand · also saved as Supplier</p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
