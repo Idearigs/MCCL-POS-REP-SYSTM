@@ -17,8 +17,11 @@ import {
   Eye,
   Edit,
   Trash2,
-  Nfc
+  Nfc,
+  QrCode,
+  X
 } from 'lucide-react';
+import QRCode from 'react-qr-code';
 import { useToast } from '@/hooks/use-toast';
 import { useInventory, InventoryItem } from '@/contexts/InventoryContext';
 import { productService } from '@/services/productService';
@@ -83,6 +86,7 @@ const InventoryPage = () => {
   const [parsedCSVData, setParsedCSVData] = useState<ParsedCSVData | null>(null);
   const [isCSVImportDialogOpen, setIsCSVImportDialogOpen] = useState(false);
   const [isBulkRFIDDialogOpen, setIsBulkRFIDDialogOpen] = useState(false);
+  const [isQRModalOpen, setIsQRModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [quickFilter, setQuickFilter] = useState<'lowStock' | 'outOfStock' | null>(null);
   const { toast } = useToast();
@@ -775,12 +779,58 @@ const InventoryPage = () => {
               onFilterChange={handleFilterChange} 
             />
             
+            <Button
+              onClick={() => setIsQRModalOpen(true)}
+              variant="outline"
+              className="rounded-full px-3 shadow-sm"
+              title="Mobile Quick-Add (QR Code)"
+            >
+              <QrCode size={16} />
+            </Button>
             <Button onClick={handleAddItem} className="bg-navy hover:bg-navy-dark text-white rounded-full px-4 shadow-sm">
               <Plus size={16} className="mr-1" />
               Add Item
             </Button>
           </div>
         </div>
+
+        {/* QR Code Modal */}
+        {isQRModalOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setIsQRModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl p-8 w-80 flex flex-col items-center gap-5"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">Mobile Inventory Add</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Scan to add products from your phone</p>
+                </div>
+                <button
+                  onClick={() => setIsQRModalOpen(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <QRCode
+                  value={`${window.location.origin}/mobile/add-product`}
+                  size={200}
+                  bgColor="#f9fafb"
+                  fgColor="#111827"
+                />
+              </div>
+              <p className="text-xs text-center text-gray-400 leading-relaxed">
+                Point your phone camera at this code.<br />
+                You'll be taken directly to the mobile add page.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Inventory grid/table */}
         {filteredInventory.length > 0 ? (
