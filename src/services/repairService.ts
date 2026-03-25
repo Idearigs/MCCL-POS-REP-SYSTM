@@ -41,6 +41,7 @@ export interface CreateRepairData {
   estimatedCost?: number;
   insuranceNumber?: string;
   insuranceValue?: number;
+  rmaId?: string;
   items: {
     productId?: string;
     itemDescription: string;

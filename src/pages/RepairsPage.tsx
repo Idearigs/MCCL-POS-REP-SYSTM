@@ -327,6 +327,7 @@ const RepairsPage: React.FC = () => {
         priority: 'NORMAL' as const,
         expectedCompletionDate: formData.dueDate,
         customerInstructions: formData.notes || '',
+        rmaId: (formData as any).repairId || undefined,
         items: [
           {
             itemDescription: formData.itemDescription,

@@ -42,6 +42,7 @@ interface NewRepairJobFormProps {
     images: File[];
     customerId?: string;
     selectedCustomer?: Customer;
+    repairId?: string;
   }) => void;
   onCancel: () => void;
   onCreateCustomer?: () => void;
@@ -62,6 +63,7 @@ const NewRepairJobForm: React.FC<NewRepairJobFormProps> = ({ onSubmit, onCancel,
   const [estimatedPrice, setEstimatedPrice] = useState('');
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [notes, setNotes] = useState('');
+  const [repairId, setRepairId] = useState('');
   const [images, setImages] = useState<File[]>([]);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -218,7 +220,8 @@ const NewRepairJobForm: React.FC<NewRepairJobFormProps> = ({ onSubmit, onCancel,
         notes,
         images,
         customerId: selectedCustomer?.id,
-        selectedCustomer: selectedCustomer || undefined
+        selectedCustomer: selectedCustomer || undefined,
+        repairId: repairId.trim() || undefined,
       });
     }
   };
@@ -476,6 +479,17 @@ const NewRepairJobForm: React.FC<NewRepairJobFormProps> = ({ onSubmit, onCancel,
             )}
           </div>
           
+          <div className="space-y-2">
+            <Label htmlFor="repairId">Repair ID / Reference</Label>
+            <Input
+              id="repairId"
+              value={repairId}
+              onChange={(e) => setRepairId(e.target.value)}
+              placeholder="e.g. RMA-2024-001"
+            />
+            <p className="text-xs text-muted-foreground">Optional custom reference number for this repair job</p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>
             <Textarea
