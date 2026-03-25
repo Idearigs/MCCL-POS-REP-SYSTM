@@ -82,6 +82,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import NewRepairJobForm from '@/components/repair/NewRepairJobForm';
 
 interface CartItem {
   id: string;
@@ -135,6 +136,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [repairSearchQuery, setRepairSearchQuery] = useState('');
   const [loadingRepairs, setLoadingRepairs] = useState(false);
   const [editingRepairPrices, setEditingRepairPrices] = useState<Record<string, number>>({});
+  const [showNewRepairDialog, setShowNewRepairDialog] = useState(false);
+  const [creatingRepair, setCreatingRepair] = useState(false);
 
   // Backend categories state
   const [backendCategories, setBackendCategories] = useState<Array<{ id: string; name: string }>>([]);
@@ -677,6 +680,57 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       setShowRepairView(false);
       setRepairSearchQuery('');
     });
+  };
+
+  // Handle new repair job creation from POS tile
+  const handleNewRepairSubmit = async (formData: any) => {
+    setCreatingRepair(true);
+    try {
+      let customerId = formData.customerId;
+
+      // Create customer if not selected from existing
+      if (!customerId) {
+        const nameParts = formData.customerName.trim().split(' ');
+        const customer = await customerService.createCustomer({
+          firstName: nameParts[0] || '',
+          lastName: nameParts.slice(1).join(' ') || 'Customer',
+          phone: formData.phoneNumber || '',
+          email: formData.email || undefined,
+          notes: 'Created via POS repair quick-add',
+          dataProcessingConsent: true,
+          marketingEmail: false,
+          marketingSms: false,
+          marketingPhone: false,
+        });
+        customerId = customer.id;
+      }
+
+      const newRepair = await repairService.createRepair({
+        customerId,
+        problemDescription: formData.notes || 'Repair required',
+        priority: 'NORMAL',
+        expectedCompletionDate: formData.dueDate,
+        customerInstructions: formData.notes || '',
+        rmaId: formData.repairId || undefined,
+        items: [{
+          itemDescription: formData.itemDescription,
+          repairType: 'OTHER',
+          repairDescription: formData.notes || 'General repair work required',
+          estimatedCost: parseFloat(formData.estimatedPrice) || 0,
+        }],
+      });
+
+      if (formData.images?.length > 0) {
+        await repairService.uploadRepairImages(newRepair.id, formData.images, 'before').catch(() => {});
+      }
+
+      toast({ title: 'Repair Job Created', description: `Job #${newRepair.id.slice(0, 8)} created successfully.` });
+      setShowNewRepairDialog(false);
+    } catch (err: any) {
+      toast({ title: 'Failed to Create Repair', description: err?.message || 'Please try again.', variant: 'destructive' });
+    } finally {
+      setCreatingRepair(false);
+    }
   };
 
   // Handle Quick Product - save to inventory and add to cart
@@ -2305,7 +2359,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                     <p className="text-blue-500 text-xs mt-0.5">Quick Add</p>
                   </div>
 
-                  {/* Repair */}
+                  {/* Repair - list existing */}
                   <div
                     onClick={handleRepairTileClick}
                     className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-xl p-5 cursor-pointer hover:border-blue-400 hover:shadow-lg hover:scale-[1.02] transition-all"
@@ -2313,6 +2367,16 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                     <Wrench className="h-7 w-7 text-blue-600 mb-3" />
                     <h3 className="text-blue-900 font-semibold text-base">Repair</h3>
                     <p className="text-blue-500 text-xs mt-0.5">Job Orders</p>
+                  </div>
+
+                  {/* New Repair Job - quick create */}
+                  <div
+                    onClick={() => setShowNewRepairDialog(true)}
+                    className="bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl p-5 cursor-pointer hover:from-violet-400 hover:to-purple-500 hover:shadow-lg hover:scale-[1.02] transition-all"
+                  >
+                    <Wrench className="h-7 w-7 text-white mb-3" />
+                    <h3 className="text-white font-semibold text-base">New Repair</h3>
+                    <p className="text-violet-200 text-xs mt-0.5">Quick Add Job</p>
                   </div>
 
                   {/* Cleaning */}
@@ -2698,6 +2762,14 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
           </button>
         </div>
       </div>
+
+      {/* New Repair Job Dialog */}
+      <Dialog open={showNewRepairDialog} onOpenChange={setShowNewRepairDialog}>
+        <NewRepairJobForm
+          onSubmit={handleNewRepairSubmit}
+          onCancel={() => setShowNewRepairDialog(false)}
+        />
+      </Dialog>
 
       {/* Customer Dialog — single popup with search */}
       <Dialog open={isCustomerDialogOpen} onOpenChange={(open) => { setIsCustomerDialogOpen(open); if (!open) setCustomerSearchQuery(''); }}>
