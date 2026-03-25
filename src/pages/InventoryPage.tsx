@@ -781,11 +781,11 @@ const InventoryPage = () => {
             
             <Button
               onClick={() => setIsQRModalOpen(true)}
-              variant="outline"
-              className="rounded-full px-3 shadow-sm"
+              className="rounded-full px-4 shadow-sm bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
               title="Mobile Quick-Add (QR Code)"
             >
-              <QrCode size={16} />
+              <QrCode size={15} />
+              Mobile Add
             </Button>
             <Button onClick={handleAddItem} className="bg-navy hover:bg-navy-dark text-white rounded-full px-4 shadow-sm">
               <Plus size={16} className="mr-1" />
