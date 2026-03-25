@@ -59,6 +59,7 @@ import {
   Printer,
   AlertCircle,
   AlertTriangle,
+  Trash2,
 } from 'lucide-react';
 import { useInventory, InventoryItem } from '@/contexts/InventoryContext';
 import { Customer, useCustomers } from '@/contexts/CustomerContext';
@@ -2511,8 +2512,18 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
               )}
             </div>
             {cart.length > 0 && (
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
-                <ShoppingBag className="h-5 w-5 text-white" />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCart([])}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 text-red-500 hover:bg-red-100 text-xs font-semibold transition-colors border border-red-200"
+                  title="Clear cart"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Clear
+                </button>
+                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                  <ShoppingBag className="h-5 w-5 text-white" />
+                </div>
               </div>
             )}
           </div>
@@ -2560,9 +2571,10 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 <div className="flex flex-col items-end justify-between">
                   <button
                     onClick={() => removeFromCart(item.id)}
-                    className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
+                    className="h-9 w-9 flex items-center justify-center text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all"
+                    title="Remove item"
                   >
-                    <X className="h-4 w-4" />
+                    <Trash2 className="h-4.5 w-4.5" style={{ width: 18, height: 18 }} />
                   </button>
                   <p className="text-slate-900 font-bold text-base">£{(item.price * item.quantity).toFixed(2)}</p>
                 </div>
