@@ -524,10 +524,13 @@ export class SalesService {
       where: { id: itemId, sales: { tenantId } },
     });
     if (!item) throw new NotFoundException(`Sale item ${itemId} not found`);
-    return this.prismaService.sale_items.update({
+    const updated = await this.prismaService.sale_items.update({
       where: { id: itemId },
       data: { notes },
     });
+    // Invalidate per-sale cache so next fetch returns fresh data
+    await this.cacheService.delTenantData(tenantId, `sale:${item.saleId}`);
+    return updated;
   }
 
   /**
@@ -1002,7 +1005,7 @@ export class SalesService {
           taxRate: 0,
           taxAmount: 0,
           totalPrice: Number(item.totalPrice),
-          notes: '',
+          notes: item.notes || '',
           createdAt: sale.createdAt.toISOString(),
           updatedAt: sale.updatedAt.toISOString(),
         })) || [],
