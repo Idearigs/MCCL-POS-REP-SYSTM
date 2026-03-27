@@ -270,6 +270,7 @@ model sale_items {
   unitPrice  Decimal
   discount   Decimal  @default(0)
   totalPrice Decimal
+  notes      String?
   products   products @relation(fields: [productId], references: [id])
   sales      sales    @relation(fields: [saleId], references: [id], onDelete: Cascade)
 }
