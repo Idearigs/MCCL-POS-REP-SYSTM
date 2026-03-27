@@ -319,6 +319,19 @@ const SalesPage = () => {
     return <Badge variant={config.variant} className="text-xs">{config.label}</Badge>;
   };
 
+  const getConditionSummary = (items: any[]): { brandNew: number; used: number } => {
+    let brandNew = 0;
+    let used = 0;
+    (items || []).forEach(item => {
+      if (!(item as any).isRepair) {
+        const m = (item.notes || '').match(/CONDITION:(BRAND_NEW|USED)/);
+        if (m?.[1] === 'BRAND_NEW') brandNew++;
+        else if (m?.[1] === 'USED') used++;
+      }
+    });
+    return { brandNew, used };
+  };
+
   const getPaymentMethodLabel = (method: string) => {
     const methods: Record<string, string> = {
       CASH: 'Cash',
@@ -590,6 +603,7 @@ const SalesPage = () => {
                       <TableHead className="font-semibold">Date & Time</TableHead>
                       <TableHead className="font-semibold">Customer</TableHead>
                       <TableHead className="font-semibold text-center">Items</TableHead>
+                      <TableHead className="font-semibold">Condition</TableHead>
                       <TableHead className="font-semibold text-right">Amount</TableHead>
                       <TableHead className="font-semibold">Payment</TableHead>
                       <TableHead className="font-semibold">Status</TableHead>
@@ -617,6 +631,26 @@ const SalesPage = () => {
                           <Badge variant="outline" className="text-xs">
                             {sale.items?.length || 0}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const { brandNew, used } = getConditionSummary(sale.items || []);
+                            if (brandNew === 0 && used === 0) return <span className="text-xs text-gray-400">—</span>;
+                            return (
+                              <div className="flex flex-wrap gap-1">
+                                {brandNew > 0 && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
+                                    {brandNew > 1 ? `${brandNew}× ` : ''}New
+                                  </span>
+                                )}
+                                {used > 0 && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
+                                    {used > 1 ? `${used}× ` : ''}Used
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="text-right font-semibold">
                           {formatCurrency(sale.totalAmount)}
