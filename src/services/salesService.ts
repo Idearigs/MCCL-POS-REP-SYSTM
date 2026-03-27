@@ -403,6 +403,10 @@ class SalesService {
       errors,
     };
   }
+
+  async updateSaleItemNotes(itemId: string, notes: string): Promise<void> {
+    await apiClient.patch(`${API_CONFIG.ENDPOINTS.SALES}/items/${itemId}`, { notes });
+  }
 }
 
 export const salesService = new SalesService();

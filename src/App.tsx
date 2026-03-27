@@ -46,6 +46,7 @@ import ShiftsPage from "./pages/ShiftsPage";
 import FinancialIntelligencePage from "./pages/FinancialIntelligencePage";
 import MobileAddProduct from "./pages/MobileAddProduct";
 import MobileAddRepair from "./pages/MobileAddRepair";
+import SaleConditionEditPage from "./pages/SaleConditionEditPage";
 
 // Create a client for React Query
 const queryClient = new QueryClient();
@@ -298,6 +299,8 @@ const App = () => (
                       </PrivateRoute>
                     }
                   />
+
+                  <Route path="/settings/sale-conditions" element={<PrivateRoute><SaleConditionEditPage /></PrivateRoute>} />
 
                   {/* Mobile routes (standalone, no MainLayout) */}
                   <Route path="/mobile/add-product" element={<PrivateRoute><MobileAddProduct /></PrivateRoute>} />

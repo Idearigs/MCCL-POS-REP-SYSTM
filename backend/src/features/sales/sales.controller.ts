@@ -236,6 +236,16 @@ export class SalesController {
     return this.salesService.update(id, updateSaleDto, tenantId, userId);
   }
 
+  @Patch('items/:itemId')
+  @ApiOperation({ summary: 'Update sale item notes (e.g. condition)' })
+  async updateSaleItem(
+    @Param('itemId') itemId: string,
+    @Body() body: { notes: string },
+    @TenantId() tenantId: string,
+  ) {
+    return this.salesService.updateSaleItemNotes(itemId, body.notes, tenantId);
+  }
+
   @Post(':id/refund')
   @ApiOperation({
     summary: 'Process sale refund',

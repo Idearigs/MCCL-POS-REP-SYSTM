@@ -517,6 +517,19 @@ export class SalesService {
   }
 
   /**
+   * Update a single sale item's notes (used for condition edits etc.)
+   */
+  async updateSaleItemNotes(itemId: string, notes: string, tenantId: string) {
+    const item = await this.prismaService.sale_items.findFirst({
+      where: { id: itemId, sales: { tenantId } },
+    });
+    if (!item) throw new NotFoundException(`Sale item ${itemId} not found`);
+    return this.prismaService.sale_items.update({
+      where: { id: itemId },
+      data: { notes },
+    });
+  }
+
    * Update sale
    */
   async update(

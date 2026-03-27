@@ -4,7 +4,8 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Save, Lock, Eye, EyeOff, RotateCcw, Loader2 } from 'lucide-react';
+import { Save, Lock, Eye, EyeOff, RotateCcw, Loader2, UserCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import MainLayout from '@/components/layout/MainLayout';
@@ -72,6 +73,7 @@ type SecurityFormValues = z.infer<typeof securityFormSchema>;
 
 const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState("general");
+  const navigate = useNavigate();
   const { changePassword } = useAuth();
   const { settings, loading, updateGeneralSettings, updateNotificationSettings, updateAppearanceSettings, resetToDefaults, toggleDarkMode, toggleCompactView } = useSettings();
 
@@ -216,14 +218,24 @@ const SettingsPage = () => {
               Manage your account settings and preferences.
             </p>
           </div>
-          <Button
-            variant="outline"
-            onClick={handleResetToDefaults}
-            className="flex items-center gap-2"
-          >
-            <RotateCcw size={16} />
-            Reset to Defaults
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Subtle admin tool — sale condition editor */}
+            <button
+              onClick={() => navigate('/settings/sale-conditions')}
+              title="Edit sale item conditions"
+              className="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+            >
+              <UserCircle size={18} />
+            </button>
+            <Button
+              variant="outline"
+              onClick={handleResetToDefaults}
+              className="flex items-center gap-2"
+            >
+              <RotateCcw size={16} />
+              Reset to Defaults
+            </Button>
+          </div>
         </div>
 
         <Separator className="my-6" />
