@@ -530,6 +530,7 @@ export class SalesService {
     });
   }
 
+  /**
    * Update sale
    */
   async update(
