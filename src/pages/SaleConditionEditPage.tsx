@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
+import { useAuth } from '@/contexts/AuthContext';
 import { salesService, Sale } from '@/services/salesService';
 import {
   ArrowLeft, Save, ChevronLeft, ChevronRight, Loader2, CheckCircle,
@@ -61,7 +62,13 @@ function parseCSVReceiptNumbers(text: string): Set<string> {
 
 export default function SaleConditionEditPage() {
   const navigate = useNavigate();
+  const { auth } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Restrict to buymejewellery tenant only
+  if (auth.tenantInfo && auth.tenantInfo.tenantSlug !== 'buymejewellery') {
+    return <Navigate to="/settings" replace />;
+  }
 
   // data
   const [sales, setSales] = useState<Sale[]>([]);
