@@ -467,11 +467,32 @@ const SalesPage = () => {
 
   const handleExportCSV = () => {
     try {
+      const conditionLabel = (notes?: string) => {
+        const m = (notes || '').match(/CONDITION:(BRAND_NEW|USED)/);
+        if (!m) return '';
+        return m[1] === 'BRAND_NEW' ? 'Brand New' : 'Used';
+      };
+
+      const saleConditionSummary = (items: any[]) => {
+        const productItems = (items || []).filter(i => !i.isRepair);
+        if (productItems.length === 0) return '—';
+        const labels = productItems.map(i => conditionLabel((i as any).notes)).filter(Boolean);
+        if (labels.length === 0) return '—';
+        const brandNew = labels.filter(l => l === 'Brand New').length;
+        const used = labels.filter(l => l === 'Used').length;
+        const parts: string[] = [];
+        if (brandNew > 0) parts.push(brandNew === productItems.length ? 'Brand New' : `Brand New (${brandNew})`);
+        if (used > 0) parts.push(used === productItems.length ? 'Used' : `Used (${used})`);
+        return parts.join(' / ') || '—';
+      };
+
+      // One row per sale — summary condition column
       const headers = [
         'Sale Number',
         'Date',
         'Customer',
         'Items',
+        'Condition',
         'Subtotal',
         'Tax',
         'Total',
@@ -488,6 +509,7 @@ const SalesPage = () => {
           format(new Date(sale.createdAt), 'yyyy-MM-dd HH:mm'),
           `"${sale.customerName || 'Walk-in'}"`,
           sale.items?.length || 0,
+          `"${saleConditionSummary(sale.items || [])}"`,
           sale.subtotal,
           sale.taxAmount,
           sale.totalAmount,
