@@ -8,6 +8,7 @@ import {
   Request,
   Get,
   Patch,
+  Delete,
   Query,
   Param,
   Headers,
@@ -292,6 +293,19 @@ export class AuthController {
     @Body() body: { password: string },
   ) {
     return this.authService.resetUserPassword(tenant.id, id, body.password);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('users/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Delete user', description: 'Permanently delete a cashier/user (admin only)' })
+  @ApiResponse({ status: 204, description: 'User deleted successfully' })
+  async deleteUser(
+    @CurrentTenant() tenant: TenantInfo,
+    @Param('id') id: string,
+  ): Promise<void> {
+    await this.authService.deleteUser(tenant.id, id);
   }
 
   /**

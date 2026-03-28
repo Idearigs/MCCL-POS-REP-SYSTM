@@ -706,6 +706,21 @@ export class AuthService {
   }
 
   /**
+   * Permanently delete a user/cashier (admin only)
+   */
+  async deleteUser(tenantId: string, userId: string): Promise<void> {
+    try {
+      await this.prismaService.users.delete({
+        where: { id: userId, tenantId },
+      });
+      this.logger.log(`User deleted: ${userId}`);
+    } catch (error) {
+      this.logger.error(`Failed to delete user ${userId}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Update tenant status — called by Mainframe via internal API
    * to sync suspension / billing state into the POS database.
    */

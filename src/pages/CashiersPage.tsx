@@ -27,7 +27,8 @@ import {
   CheckCircle,
   TrendingUp,
   Search,
-  Key
+  Key,
+  Trash2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -43,6 +44,7 @@ const CashiersPage: React.FC = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingCashier, setEditingCashier] = useState<Cashier | null>(null);
   const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
+  const [deletingCashierId, setDeletingCashierId] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -168,6 +170,17 @@ const CashiersPage: React.FC = () => {
   const closeDialog = () => {
     setEditingCashier(null);
     setIsAddDialogOpen(false);
+  };
+
+  const handleDeleteCashier = async (cashier: Cashier) => {
+    try {
+      await cashierService.deleteCashier(cashier.id);
+      toast({ title: 'Success', description: `${cashierService.formatCashierName(cashier)} has been deleted` });
+      setDeletingCashierId(null);
+      await loadCashiers();
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to delete cashier', variant: 'destructive' });
+    }
   };
 
   const getCashierStat = (cashierId: string) => {
@@ -301,7 +314,7 @@ const CashiersPage: React.FC = () => {
                         ? format(new Date(cashier.lastLogin), 'PPp')
                         : 'Never'}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right relative">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -328,8 +341,40 @@ const CashiersPage: React.FC = () => {
                               </>
                             )}
                           </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-red-600 focus:text-red-600"
+                            onClick={() => setDeletingCashierId(cashier.id)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+
+                      {/* Inline confirm */}
+                      {deletingCashierId === cashier.id && (
+                        <div className="absolute right-0 z-50 mt-1 w-64 rounded-lg border border-red-200 bg-white p-3 shadow-lg">
+                          <p className="text-sm font-medium text-gray-900 mb-1">Delete cashier?</p>
+                          <p className="text-xs text-gray-500 mb-3">
+                            This permanently removes <strong>{cashierService.formatCashierName(cashier)}</strong> and cannot be undone.
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleDeleteCashier(cashier)}
+                              className="flex-1 rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-colors"
+                            >
+                              Delete
+                            </button>
+                            <button
+                              onClick={() => setDeletingCashierId(null)}
+                              className="flex-1 rounded-md border border-gray-200 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 );

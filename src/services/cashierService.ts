@@ -150,6 +150,18 @@ class CashierService {
   }
 
   /**
+   * Permanently delete a cashier
+   */
+  async deleteCashier(id: string): Promise<void> {
+    try {
+      await apiClient.delete(`/auth/users/${id}`);
+    } catch (error) {
+      console.error(`Failed to delete cashier ${id}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Get cashier statistics
    */
   async getCashierStats(cashierId?: string): Promise<CashierStats[]> {
