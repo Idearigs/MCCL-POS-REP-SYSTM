@@ -5,7 +5,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
 import * as http from 'http';
-import { google } from 'googleapis';
+// googleapis loaded lazily so a missing package doesn't crash the server
+let googleLib: typeof import('googleapis') | null = null;
+async function getGoogle() {
+  if (!googleLib) {
+    try { googleLib = await import('googleapis'); }
+    catch { throw new Error('googleapis package not installed — run: npm install googleapis in mainframe-backend/'); }
+  }
+  return googleLib;
+}
 
 const router = Router();
 router.use(requireAuth);
@@ -67,70 +75,50 @@ function pgDump(databaseUrl: string, outputPath: string): Promise<void> {
 }
 
 /** Call POS backend internal API, return parsed JSON */
-function callPOS<T>(path: string): Promise<T> {
+function callPOS<T>(urlPath: string): Promise<T> {
   return new Promise((resolve, reject) => {
-    const urlStr = `${POS_BACKEND_URL}${path}`;
-    const url = new URL(urlStr);
+    const urlStr = `${POS_BACKEND_URL}${urlPath}`;
+    let url: URL;
+    try { url = new URL(urlStr); }
+    catch (e) { return reject(new Error(`Invalid POS_BACKEND_URL: ${POS_BACKEND_URL}`)); }
+
     const mod = url.protocol === 'https:' ? https : http;
     const options = {
       hostname: url.hostname,
-      port: url.port || (url.protocol === 'https:' ? 443 : 80),
+      port: url.port ? parseInt(url.port) : (url.protocol === 'https:' ? 443 : 80),
       path: url.pathname + url.search,
       method: 'GET',
       headers: { 'x-internal-key': INTERNAL_API_KEY },
+      timeout: 30000,
     };
     const req = mod.request(options, (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
+        if ((res.statusCode || 200) >= 400) {
+          return reject(new Error(`POS backend returned ${res.statusCode}: ${data.slice(0, 200)}`));
+        }
         try { resolve(JSON.parse(data)); }
-        catch { reject(new Error('Invalid JSON from POS backend')); }
+        catch { reject(new Error(`POS backend returned non-JSON (status ${res.statusCode}): ${data.slice(0, 200)}`)); }
       });
     });
-    req.on('error', reject);
+    req.on('error', (e) => reject(new Error(`Cannot reach POS backend at ${POS_BACKEND_URL}: ${e.message}`)));
+    req.on('timeout', () => { req.destroy(); reject(new Error('POS backend request timed out after 30s')); });
     req.end();
   });
 }
 
-/** Build a Google Drive client from the service account JSON in env */
-function getDriveClient() {
-  if (!SERVICE_ACCOUNT_JSON) throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON env var not set');
-  const credentials = JSON.parse(
-    Buffer.from(SERVICE_ACCOUNT_JSON, 'base64').toString('utf8')
-  );
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/drive.file'],
-  });
-  return google.drive({ version: 'v3', auth });
-}
-
 /** Upload a local file to Google Drive, returns the web link */
 async function uploadToDrive(filePath: string, driveFolder: string, mimeType = 'application/octet-stream'): Promise<string> {
-  const drive = getDriveClient();
+  if (!SERVICE_ACCOUNT_JSON) throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON env var not set');
+  const { google } = await getGoogle();
+  const credentials = JSON.parse(Buffer.from(SERVICE_ACCOUNT_JSON, 'base64').toString('utf8'));
+  const auth = new google.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/drive.file'] });
+  const drive = google.drive({ version: 'v3', auth });
   const filename = path.basename(filePath);
 
-  // Find or create subfolder
-  let folderId = driveFolder;
-  const folderName = path.dirname(filePath).split(path.sep).pop() || '';
-  if (folderName) {
-    const folderSearch = await drive.files.list({
-      q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${driveFolder}' in parents and trashed=false`,
-      fields: 'files(id)',
-    });
-    if (folderSearch.data.files?.length) {
-      folderId = folderSearch.data.files[0].id!;
-    } else {
-      const created = await drive.files.create({
-        requestBody: { name: folderName, mimeType: 'application/vnd.google-apps.folder', parents: [driveFolder] },
-        fields: 'id',
-      });
-      folderId = created.data.id!;
-    }
-  }
-
   const file = await drive.files.create({
-    requestBody: { name: filename, parents: [folderId] },
+    requestBody: { name: filename, parents: [driveFolder] },
     media: { mimeType, body: fs.createReadStream(filePath) },
     fields: 'id,webViewLink',
   });
@@ -242,17 +230,24 @@ router.post('/pos-tenant/:slug', async (req: Request, res: Response) => {
     await new Promise<void>((resolve, reject) => {
       const options = {
         hostname: url.hostname,
-        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        port: url.port ? parseInt(url.port) : (url.protocol === 'https:' ? 443 : 80),
         path: url.pathname,
         method: 'GET',
         headers: { 'x-internal-key': INTERNAL_API_KEY },
+        timeout: 60000,
       };
       const proxyReq = mod.request(options, (proxyRes) => {
+        if ((proxyRes.statusCode || 200) >= 400) {
+          fileStream.close();
+          try { fs.unlinkSync(filepath); } catch {}
+          return reject(new Error(`POS export returned ${proxyRes.statusCode}`));
+        }
         proxyRes.pipe(fileStream);
         fileStream.on('finish', resolve);
         fileStream.on('error', reject);
       });
-      proxyReq.on('error', reject);
+      proxyReq.on('error', (e) => reject(new Error(`POS export connection failed: ${e.message}`)));
+      proxyReq.on('timeout', () => { proxyReq.destroy(); reject(new Error('POS export timed out')); });
       proxyReq.end();
     });
 
