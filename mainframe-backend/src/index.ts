@@ -13,6 +13,7 @@ import featureRequestsRouter from './routes/feature-requests';
 import subdomainRouter from './routes/subdomain';
 import credentialsRouter from './routes/credentials';
 import tenantFeaturesRouter from './routes/tenant-features';
+import backupRouter from './routes/backup';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001');
@@ -78,6 +79,7 @@ api.use('/mainframe/feature-requests', featureRequestsRouter);
 api.use('/mainframe/subdomain', subdomainRouter);
 api.use('/mainframe/credentials', credentialsRouter);
 api.use('/mainframe/tenant-features', tenantFeaturesRouter);
+api.use('/mainframe/backup', backupRouter);
 
 app.use('/api/v1', api);
 

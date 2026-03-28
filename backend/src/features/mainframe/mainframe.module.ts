@@ -14,6 +14,7 @@ import { FeatureRequestsController } from './controllers/feature-requests.contro
 import { FeatureRequestsService } from './services/feature-requests.service';
 import { MainframeAdminsController } from './controllers/mainframe-admins.controller';
 import { MainframeAdminsService } from './services/mainframe-admins.service';
+import { BackupController } from './controllers/backup.controller';
 import { SubdomainService } from './services/subdomain.service';
 import { CredentialsExportService } from './services/credentials-export.service';
 import { PrismaModule } from '../../core/prisma/prisma.module';
@@ -28,6 +29,7 @@ import { PrismaModule } from '../../core/prisma/prisma.module';
     BugReportsController,
     FeatureRequestsController,
     MainframeAdminsController,
+    BackupController,
   ],
   providers: [
     CustomerProfilesService,

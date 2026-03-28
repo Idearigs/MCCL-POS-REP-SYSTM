@@ -117,3 +117,14 @@ export const subdomainApi = {
   suggest: (businessName: string) =>
     apiClient.get('/mainframe/customer-profiles/suggest-subdomain', { params: { businessName } }),
 };
+
+// ── Backup ────────────────────────────────────────────────────────────────────
+export const backupApi = {
+  getStatus:       ()                    => apiClient.get('/mainframe/backup/status'),
+  listFiles:       ()                    => apiClient.get('/mainframe/backup/list'),
+  backupMainframe: (toDrive = false)     => apiClient.post(`/mainframe/backup/mainframe-db?drive=${toDrive}`, {}, { responseType: toDrive ? 'json' : 'blob' }),
+  backupPosFull:   (toDrive = false)     => apiClient.post(`/mainframe/backup/pos-full?drive=${toDrive}`, {}, { responseType: toDrive ? 'json' : 'blob' }),
+  backupTenant:    (slug: string, toDrive = false) =>
+    apiClient.post(`/mainframe/backup/pos-tenant/${slug}?drive=${toDrive}`, {}, { responseType: toDrive ? 'json' : 'blob' }),
+  deleteFile:      (filename: string)    => apiClient.delete(`/mainframe/backup/${filename}`),
+};

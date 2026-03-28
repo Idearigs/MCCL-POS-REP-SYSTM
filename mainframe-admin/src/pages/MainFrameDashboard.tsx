@@ -7,12 +7,13 @@ import {
   CheckCircle, AlertCircle, Search, Eye, ArrowUpRight, DollarSign,
   Bug, Lightbulb, RefreshCw, XCircle, Clock, LogOut, Trash2,
   Key, UserPlus, ToggleLeft, ToggleRight, FileText,
-  Check, X, ChevronLeft, Copy, Shield,
+  Check, X, ChevronLeft, Copy, Shield, HardDrive,
+  Download, Upload as CloudUpload, Database, FolderOpen,
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import {
   customerProfilesApi, customerUsersApi, subscriptionsApi, featuresApi,
-  bugReportsApi, featureRequestsApi, subdomainApi,
+  bugReportsApi, featureRequestsApi, subdomainApi, backupApi,
 } from '../services/api';
 
 // ─── Feature types ─────────────────────────────────────────────────────────────
@@ -324,7 +325,7 @@ interface Invoice {
   dueDate: string; paidAt?: string;
 }
 
-type View = 'overview' | 'tenants' | 'features' | 'bugs' | 'requests' | 'billing' | 'settings';
+type View = 'overview' | 'tenants' | 'features' | 'bugs' | 'requests' | 'billing' | 'backups' | 'settings';
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const MainFrameDashboard: React.FC = () => {
@@ -352,6 +353,12 @@ const MainFrameDashboard: React.FC = () => {
   const [tenantActivity, setTenantActivity] = useState<any[]>([]);
   const [tenantFeatures, setTenantFeatures] = useState<TenantFeature[]>([]);
   const [savingFeatures, setSavingFeatures] = useState(false);
+
+  // Backup state
+  const [backupStatus, setBackupStatus] = useState<any>(null);
+  const [backupFiles, setBackupFiles] = useState<{ filename: string; size: number; createdAt: string }[]>([]);
+  const [backupLoading, setBackupLoading] = useState<Record<string, boolean>>({});
+  const [backupDriveLinks, setBackupDriveLinks] = useState<Record<string, string>>({});
   const dragFeatureId = React.useRef<string | null>(null);
 
   // Panel states
@@ -680,11 +687,12 @@ const MainFrameDashboard: React.FC = () => {
     { id: 'bugs',      label: 'Bug Reports',        icon: Bug,        badge: bugStats.open || undefined },
     { id: 'requests',  label: 'Feature Requests',   icon: Lightbulb,  badge: featureRequests.length || undefined },
     { id: 'billing',   label: 'Billing',            icon: CreditCard },
+    { id: 'backups',   label: 'Backups',            icon: HardDrive },
     { id: 'settings',  label: 'Settings',           icon: Settings },
   ];
 
   // Determine slide direction based on nav order
-  const viewOrder: View[] = ['overview', 'tenants', 'features', 'bugs', 'requests', 'billing', 'settings'];
+  const viewOrder: View[] = ['overview', 'tenants', 'features', 'bugs', 'requests', 'billing', 'backups', 'settings'];
   const direction = viewOrder.indexOf(activeView) >= viewOrder.indexOf(prevView) ? 1 : -1;
 
   // ─── RENDER ─────────────────────────────────────────────────────────────────
@@ -1946,6 +1954,192 @@ const MainFrameDashboard: React.FC = () => {
               )}
 
               {/* ── Settings ─────────────────────────────────────────────── */}
+              {/* ── Backups ──────────────────────────────────────────────── */}
+              {activeView === 'backups' && (() => {
+                const fmtSize = (b: number) => b < 1024 * 1024 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1024 / 1024).toFixed(2)} MB`;
+                const fmtDate = (s: string) => new Date(s).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                const loadStatus = async () => {
+                  try {
+                    const [s, f] = await Promise.all([backupApi.getStatus(), backupApi.listFiles()]);
+                    setBackupStatus(s.data);
+                    setBackupFiles(f.data);
+                  } catch { toast.error('Failed to load backup info'); }
+                };
+
+                const triggerDownload = (blob: Blob, filename: string) => {
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url; a.download = filename;
+                  document.body.appendChild(a); a.click();
+                  document.body.removeChild(a); URL.revokeObjectURL(url);
+                };
+
+                const runBackup = async (key: string, apiFn: () => Promise<any>, toDrive: boolean, filename: string) => {
+                  setBackupLoading(p => ({ ...p, [key]: true }));
+                  try {
+                    const res = await apiFn();
+                    if (toDrive) {
+                      setBackupDriveLinks(p => ({ ...p, [key]: res.data.driveLink }));
+                      toast.success('Saved to Google Drive');
+                    } else {
+                      triggerDownload(new Blob([res.data]), filename);
+                      toast.success('Download started');
+                    }
+                    await loadStatus();
+                  } catch (e: any) {
+                    toast.error(e?.response?.data?.message || 'Backup failed');
+                  } finally {
+                    setBackupLoading(p => ({ ...p, [key]: false }));
+                  }
+                };
+
+                const BackupCard = ({ title, subtitle, icon, gradient, dlKey, driveKey, onDownload, onDrive }: any) => (
+                  <div className="rounded-2xl p-5 space-y-4" style={{ background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow" style={{ background: gradient }}>
+                        {icon}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold" style={{ color: '#1D1D1F' }}>{title}</p>
+                        <p className="text-xs" style={{ color: '#8E8E93' }}>{subtitle}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <motion.button whileTap={{ scale: 0.95 }} onClick={onDownload} disabled={backupLoading[dlKey]}
+                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold text-white transition-opacity disabled:opacity-50"
+                        style={{ background: 'linear-gradient(135deg,#007AFF,#5856D6)' }}>
+                        {backupLoading[dlKey] ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                        Download to PC
+                      </motion.button>
+                      {backupStatus?.driveConfigured ? (
+                        <motion.button whileTap={{ scale: 0.95 }} onClick={onDrive} disabled={backupLoading[driveKey]}
+                          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold text-white transition-opacity disabled:opacity-50"
+                          style={{ background: 'linear-gradient(135deg,#34C759,#30A14E)' }}>
+                          {backupLoading[driveKey] ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CloudUpload className="w-3.5 h-3.5" />}
+                          Save to Drive
+                        </motion.button>
+                      ) : (
+                        <div className="flex-1 flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-medium" style={{ background: 'rgba(0,0,0,0.04)', color: '#8E8E93' }}>
+                          <CloudUpload className="w-3.5 h-3.5" /> Drive not set up
+                        </div>
+                      )}
+                    </div>
+                    {backupDriveLinks[driveKey] && (
+                      <a href={backupDriveLinks[driveKey]} target="_blank" rel="noreferrer"
+                        className="flex items-center gap-1.5 text-xs font-medium" style={{ color: '#34C759' }}>
+                        <CheckCircle className="w-3.5 h-3.5" /> Saved to Drive — Open
+                      </a>
+                    )}
+                  </div>
+                );
+
+                // Load status on first render of this view
+                if (!backupStatus) { loadStatus(); }
+
+                return (
+                  <div className="space-y-6">
+                    {/* Drive status banner */}
+                    {backupStatus && !backupStatus.driveConfigured && (
+                      <div className="rounded-2xl p-4 flex items-start gap-3" style={{ background: 'rgba(255,159,10,0.12)', border: '1px solid rgba(255,159,10,0.3)' }}>
+                        <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#FF9F0A' }} />
+                        <div>
+                          <p className="text-sm font-semibold" style={{ color: '#FF9F0A' }}>Google Drive not configured</p>
+                          <p className="text-xs mt-0.5" style={{ color: '#92400E' }}>
+                            Set <code className="font-mono bg-amber-100 px-1 rounded">GOOGLE_SERVICE_ACCOUNT_JSON</code> and <code className="font-mono bg-amber-100 px-1 rounded">GOOGLE_DRIVE_FOLDER_ID</code> in the mainframe-backend .env to enable Drive uploads.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Backup cards grid */}
+                    <div>
+                      <p className="text-[10px] font-bold tracking-widest uppercase mb-3" style={{ color: '#8E8E93' }}>Create Backup</p>
+                      <div className="grid grid-cols-1 gap-3">
+                        <BackupCard
+                          title="Mainframe Database"
+                          subtitle="All admin data, tenants, billing, users"
+                          icon={<Server className="w-5 h-5" />}
+                          gradient="linear-gradient(135deg,#5856D6,#AF52DE)"
+                          dlKey="mf-dl" driveKey="mf-drive"
+                          onDownload={() => runBackup('mf-dl', () => backupApi.backupMainframe(false), false, `mainframe-${new Date().toISOString().slice(0,10)}.sql`)}
+                          onDrive={() => runBackup('mf-drive', () => backupApi.backupMainframe(true), true, '')}
+                        />
+                        <BackupCard
+                          title="Full POS Database"
+                          subtitle="All tenants' sales, inventory, customers, repairs"
+                          icon={<Database className="w-5 h-5" />}
+                          gradient="linear-gradient(135deg,#007AFF,#5856D6)"
+                          dlKey="pos-dl" driveKey="pos-drive"
+                          onDownload={() => runBackup('pos-dl', () => backupApi.backupPosFull(false), false, `pos-full-${new Date().toISOString().slice(0,10)}.sql`)}
+                          onDrive={() => runBackup('pos-drive', () => backupApi.backupPosFull(true), true, '')}
+                        />
+                        {tenants.map(t => (
+                          <BackupCard
+                            key={t.id}
+                            title={t.businessName}
+                            subtitle={`${t.subdomain} — sales, customers, inventory, repairs`}
+                            icon={<span className="text-xs font-bold">{t.businessName.slice(0,2).toUpperCase()}</span>}
+                            gradient="linear-gradient(135deg,#FF9F0A,#FF6B35)"
+                            dlKey={`t-dl-${t.subdomain}`} driveKey={`t-drive-${t.subdomain}`}
+                            onDownload={() => runBackup(`t-dl-${t.subdomain}`, () => backupApi.backupTenant(t.subdomain, false), false, `${t.subdomain}-${new Date().toISOString().slice(0,10)}.json`)}
+                            onDrive={() => runBackup(`t-drive-${t.subdomain}`, () => backupApi.backupTenant(t.subdomain, true), true, '')}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Saved backup files */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: '#8E8E93' }}>Saved on Server ({backupFiles.length})</p>
+                        <motion.button whileTap={{ scale: 0.95 }} onClick={loadStatus}
+                          className="flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg"
+                          style={{ background: 'rgba(0,122,255,0.08)', color: '#007AFF' }}>
+                          <RefreshCw className="w-3 h-3" /> Refresh
+                        </motion.button>
+                      </div>
+                      {backupFiles.length === 0 ? (
+                        <div className="rounded-2xl p-8 flex flex-col items-center gap-2" style={{ background: 'rgba(255,255,255,0.6)' }}>
+                          <FolderOpen className="w-8 h-8" style={{ color: '#C7C7CC' }} />
+                          <p className="text-sm" style={{ color: '#8E8E93' }}>No backups saved on server yet</p>
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                                {['File', 'Size', 'Created', ''].map((h, i) => (
+                                  <th key={i} className={`px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider ${i === 3 ? 'text-right' : ''}`} style={{ color: '#6E6E73' }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {backupFiles.map(f => (
+                                <tr key={f.filename} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                                  <td className="px-4 py-3 font-mono text-xs" style={{ color: '#1D1D1F' }}>{f.filename}</td>
+                                  <td className="px-4 py-3 text-xs" style={{ color: '#6E6E73' }}>{fmtSize(f.size)}</td>
+                                  <td className="px-4 py-3 text-xs" style={{ color: '#6E6E73' }}>{fmtDate(f.createdAt)}</td>
+                                  <td className="px-4 py-3 text-right">
+                                    <button onClick={async () => {
+                                      if (!confirm(`Delete ${f.filename}?`)) return;
+                                      try { await backupApi.deleteFile(f.filename); await loadStatus(); toast.success('Deleted'); }
+                                      catch { toast.error('Failed to delete'); }
+                                    }} className="text-xs font-medium px-2 py-1 rounded-lg transition-colors hover:bg-red-50" style={{ color: '#FF3B30' }}>
+                                      Delete
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {activeView === 'settings' && (
                 <div className="grid grid-cols-2 gap-5">
                   <div className="rounded-2xl p-6 space-y-3" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.6)' }}>
