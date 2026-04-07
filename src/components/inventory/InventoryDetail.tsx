@@ -36,6 +36,7 @@ export interface InventoryItemDetails {
   description: string;
   price: number;
   cost: number;
+  weight?: number;
   quantity: number;
   threshold: number;
   supplier: string;
@@ -75,6 +76,7 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
     description: '',
     price: 0,
     cost: 0,
+    weight: undefined,
     quantity: 0,
     threshold: 0,
     supplier: '',
@@ -388,6 +390,20 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
             </div>
           </div>
           
+          <div className="space-y-2">
+            <Label htmlFor="weight">Weight (g)</Label>
+            <Input
+              id="weight"
+              name="weight"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="e.g. 3.75"
+              value={editedItem.weight ?? ''}
+              onChange={handleNumberChange}
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="quantity">Quantity</Label>

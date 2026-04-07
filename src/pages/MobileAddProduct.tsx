@@ -38,6 +38,7 @@ const emptyForm = {
   sku: '',
   price: '',
   cost: '',
+  weight: '',
   stock: '',
   minStockLevel: '1',
   category: '',
@@ -116,6 +117,7 @@ export default function MobileAddProduct() {
         category: form.category || '',
         material: form.material,
         description: form.description.trim() || undefined,
+        weight: form.weight ? Number(form.weight) : undefined,
       };
       (payload as any).condition = form.condition;
       if (form.brand) (payload as any).supplierName = form.brand;
@@ -366,6 +368,22 @@ export default function MobileAddProduct() {
                     className="flex-1 text-base text-gray-900 bg-transparent outline-none placeholder:text-gray-300"
                   />
                 </div>
+              </div>
+            </div>
+            <div className="px-4 py-3">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Weight (g)</label>
+              <div className="flex items-center gap-1 mt-1.5">
+                <span className="text-gray-400 text-base">g</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={form.weight}
+                  onChange={set('weight')}
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                  className="flex-1 text-base text-gray-900 bg-transparent outline-none placeholder:text-gray-300"
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 divide-x divide-gray-100">
