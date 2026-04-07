@@ -67,9 +67,11 @@ import { useToast } from '@/hooks/use-toast';
 import CustomerInfo from './CustomerInfo';
 import LiveGoldRate from './LiveGoldRate';
 import { repairService, Repair } from '@/services/repairService';
-import { salesService, CreateSaleData } from '@/services/salesService';
+import { salesService, CreateSaleData, Sale } from '@/services/salesService';
 import { customerService } from '@/services/customerService';
 import { productService } from '@/services/productService';
+import { useSettings } from '@/contexts/SettingsContext';
+import { printThermalReceipt } from '@/utils/thermalReceipt';
 import {
   Dialog,
   DialogContent,
@@ -103,7 +105,11 @@ interface TileBasedPOSProps {
 
 const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const { inventory, refreshInventory } = useInventory();
+  const { settings } = useSettings();
   const { toast } = useToast();
+
+  // Stores the last completed sale so we can show the print receipt screen
+  const [completedSale, setCompletedSale] = useState<Sale | null>(null);
 
   // Load cart from localStorage on mount
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -1250,6 +1256,50 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     setSearchQuery('');
   };
 
+  // Print thermal receipt for a completed sale
+  const handlePrintReceipt = (sale: Sale) => {
+    const cashReceived = sale.paymentMethod === 'CASH' && sale.notes
+      ? parseFloat(sale.notes.match(/Cash received: £([\d.]+)/)?.[1] || '0') || undefined
+      : undefined;
+    const change = cashReceived ? cashReceived - sale.totalAmount : undefined;
+
+    printThermalReceipt({
+      storeName: settings.general.storeName,
+      storeAddress: settings.general.address,
+      storePhone: settings.general.phone,
+      storeEmail: settings.general.email,
+      receiptNumber: sale.receiptNumber,
+      date: sale.createdAt,
+      cashierName: sale.cashierName || 'Staff',
+      customerName: sale.customerName || undefined,
+      items: (sale.items || []).map((item: any) => ({
+        name: item.productName || item.name || 'Item',
+        sku: item.productSku || item.sku,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discount: item.discount,
+        total: item.total,
+        isRepair: item.isRepair,
+      })),
+      subtotal: sale.subtotal,
+      discountAmount: sale.discountAmount,
+      taxAmount: sale.taxAmount,
+      totalAmount: sale.totalAmount,
+      paymentMethod: sale.paymentMethod,
+      cashReceived,
+      change,
+      footerMessage: settings.appearance.receiptTemplate
+        ? undefined
+        : 'Thank you for your purchase!',
+    });
+  };
+
+  // Close the post-sale screen and start a new sale
+  const handleNewSale = () => {
+    setCompletedSale(null);
+    setShowPaymentDialog(false);
+  };
+
   // Checkout - Open payment dialog
   const handleCheckout = () => {
     if (cart.length === 0) {
@@ -1388,34 +1438,25 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         }
       }
 
-      toast({
-        title: 'Payment Successful',
-        description: selectedPaymentMethod === 'CASH' && change > 0
-          ? `Change: £${change.toFixed(2)} | Receipt: ${createdSale.receiptNumber}`
-          : `Transaction completed | Receipt: ${createdSale.receiptNumber}`,
-      });
-
-      // Refresh repair list if repairs were in the cart
+      // Refresh repair list and inventory in background
       if (repairItems.length > 0) {
-        await fetchRepairs();
+        fetchRepairs().catch(() => {});
       }
+      refreshInventory().catch(() => {});
 
-      // Refresh inventory so stock quantities are up to date after the sale
-      await refreshInventory();
-
-      // Clear cart and close dialogs
+      // Clear cart state
       setCart([]);
       setSelectedCustomer(null);
-      setShowPaymentDialog(false);
       setDiscountPercentage(0);
       setCashAmount('');
       setSelectedPaymentMethod('CASH');
       setEditingRepairPrices({});
-
-      // Clear localStorage
       localStorage.removeItem('quickPosCart');
       localStorage.removeItem('quickPosCustomer');
       localStorage.removeItem('quickPosDiscount');
+
+      // Show the post-sale receipt screen inside the payment dialog
+      setCompletedSale(createdSale);
 
     } catch (error: any) {
       console.error('Payment failed:', error);
@@ -3160,8 +3201,50 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       </Dialog>
 
       {/* Payment Dialog */}
-      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+      <Dialog open={showPaymentDialog} onOpenChange={(open) => { if (!open) handleNewSale(); }}>
         <DialogContent className="max-w-md">
+
+          {/* ── POST-SALE SUCCESS SCREEN ── */}
+          {completedSale ? (
+            <div className="flex flex-col items-center gap-6 py-6 px-2 text-center">
+              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+                <CheckCircle2 className="w-9 h-9 text-green-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Payment Complete</h2>
+                <p className="text-sm text-gray-500 mt-1">Receipt #{completedSale.receiptNumber}</p>
+              </div>
+
+              {/* Change due */}
+              {completedSale.paymentMethod === 'CASH' && completedSale.notes?.includes('Change:') && (
+                <div className="bg-green-50 border border-green-200 rounded-xl px-6 py-4 w-full">
+                  <p className="text-sm text-green-700 font-medium">Change Due</p>
+                  <p className="text-3xl font-bold text-green-700 mt-1">
+                    £{completedSale.notes.match(/Change: £([\d.]+)/)?.[1] || '0.00'}
+                  </p>
+                </div>
+              )}
+
+              <div className="w-full">
+                <p className="text-2xl font-bold text-gray-900">£{completedSale.totalAmount.toFixed(2)}</p>
+                <p className="text-sm text-gray-500 mt-1">{completedSale.paymentMethod.replace('_', ' ')}</p>
+              </div>
+
+              <div className="flex flex-col gap-3 w-full">
+                <Button
+                  onClick={() => handlePrintReceipt(completedSale)}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                >
+                  <Printer className="w-4 h-4" />
+                  Print Receipt
+                </Button>
+                <Button variant="outline" onClick={handleNewSale} className="w-full">
+                  New Sale
+                </Button>
+              </div>
+            </div>
+          ) : (
+          <>
           <DialogHeader>
             <DialogTitle>Complete Payment</DialogTitle>
             <DialogDescription>Select payment method and complete transaction</DialogDescription>
@@ -3304,6 +3387,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
               </Button>
             </div>
           </div>
+          </>
+          )}
         </DialogContent>
       </Dialog>
 
