@@ -166,10 +166,13 @@ const transformFrontendToBackend = (frontendProduct: CreateProductData): Backend
   description: frontendProduct.description,
   sku: frontendProduct.sku,
   barcode: frontendProduct.barcode,
-  rfidTag: frontendProduct.rfidTag,
+  rfidTag: (frontendProduct as any).rfidTag || undefined,
   categoryId: frontendProduct.category || undefined,
-  supplierName: (frontendProduct as any).supplier || undefined,  // Map supplier to supplierName
-  material: frontendProduct.material as any, // Backend expects enum
+  supplierName: (frontendProduct as any).supplier || undefined,
+  // Send material only if it's a non-empty string — empty string fails @IsEnum on the backend
+  material: (frontendProduct.material || undefined) as any,
+  condition: (frontendProduct as any).condition || undefined,
+  location: (frontendProduct as any).location || undefined,
   weight: frontendProduct.weight,
   sellingPrice: frontendProduct.price,
   costPrice: frontendProduct.cost,
@@ -282,7 +285,10 @@ class ProductService {
       if (productData.rfidTag !== undefined) backendData.rfidTag = productData.rfidTag;
       if (productData.category !== undefined) backendData.categoryId = productData.category;
       if ((productData as any).supplier !== undefined) backendData.supplierName = (productData as any).supplier;
-      if (productData.material !== undefined) backendData.material = productData.material;
+      // Only send material if it's a non-empty value — empty string fails @IsEnum on the backend
+      if (productData.material) backendData.material = productData.material;
+      if ((productData as any).condition) backendData.condition = (productData as any).condition;
+      if ((productData as any).location !== undefined) backendData.location = (productData as any).location;
       if (productData.weight !== undefined) backendData.weight = productData.weight;
       if (productData.price !== undefined) backendData.sellingPrice = productData.price;
       if (productData.cost !== undefined) backendData.costPrice = productData.cost;

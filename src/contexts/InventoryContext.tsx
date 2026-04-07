@@ -74,9 +74,8 @@ const convertToCreateProductData = (item: Omit<InventoryItem, 'id' | 'createdAt'
   description: item.description,
   sku: item.sku,
   barcode: item.barcode,
-  // category is now categoryId (UUID) instead of category name
-  category: item.category, // Pass as category (productService will map to categoryId)
-  supplier: item.supplier, // Pass supplier name (productService will map to supplierName)
+  category: item.category,
+  supplier: item.supplier,
   material: item.material,
   weight: item.weight,
   dimensions: item.dimensions,
@@ -85,8 +84,12 @@ const convertToCreateProductData = (item: Omit<InventoryItem, 'id' | 'createdAt'
   stock: item.quantity,
   minStockLevel: item.threshold,
   images: [item.imageUrl, ...(item.additionalImages || [])].filter(Boolean) as string[],
-  tags: item.tags
-});
+  tags: item.tags,
+  // Pass these through so transformFrontendToBackend can send them to the backend
+  rfidTag: (item as any).rfidTag,
+  condition: (item as any).condition,
+  location: (item as any).location,
+} as any);
 
 
 // Define the context interface
@@ -218,6 +221,11 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (updates.quantity !== undefined) productUpdates.stock = updates.quantity;
       if (updates.threshold !== undefined) productUpdates.minStockLevel = updates.threshold;
       if (updates.isActive !== undefined) productUpdates.isActive = updates.isActive;
+      // Fields not in the Product interface but present on InventoryItemDetails at runtime
+      if ((updates as any).supplier !== undefined) (productUpdates as any).supplier = (updates as any).supplier;
+      if ((updates as any).rfidTag !== undefined) (productUpdates as any).rfidTag = (updates as any).rfidTag;
+      if ((updates as any).condition !== undefined) (productUpdates as any).condition = (updates as any).condition;
+      if ((updates as any).location !== undefined) (productUpdates as any).location = (updates as any).location;
       
       const updatedProduct = await productService.updateProduct(id, productUpdates);
       const updatedItem = convertProductToInventoryItem(updatedProduct);
