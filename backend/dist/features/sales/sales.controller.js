@@ -52,6 +52,9 @@ let SalesController = class SalesController {
     async update(id, updateSaleDto, tenantId, userId) {
         return this.salesService.update(id, updateSaleDto, tenantId, userId);
     }
+    async updateSaleItem(itemId, body, tenantId) {
+        return this.salesService.updateSaleItemNotes(itemId, body.notes, tenantId);
+    }
     async createRefund(id, createRefundDto, tenantId, userId) {
         return this.salesService.createRefund(id, createRefundDto, tenantId, userId);
     }
@@ -353,6 +356,16 @@ __decorate([
     __metadata("design:paramtypes", [String, sale_dto_1.UpdateSaleDto, String, String]),
     __metadata("design:returntype", Promise)
 ], SalesController.prototype, "update", null);
+__decorate([
+    (0, common_1.Patch)('items/:itemId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Update sale item notes (e.g. condition)' }),
+    __param(0, (0, common_1.Param)('itemId')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, tenant_decorator_1.TenantId)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, String]),
+    __metadata("design:returntype", Promise)
+], SalesController.prototype, "updateSaleItem", null);
 __decorate([
     (0, common_1.Post)(':id/refund'),
     (0, swagger_1.ApiOperation)({

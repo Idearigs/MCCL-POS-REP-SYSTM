@@ -174,7 +174,7 @@ router.post('/mainframe-db', async (req: Request, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     const stream = fs.createReadStream(filepath);
     stream.pipe(res);
-    stream.on('end', () => { try { fs.unlinkSync(filepath); } catch {} });
+    stream.on('end', () => { try { fs.unlinkSync(filepath); } catch (_e) { /* temp file already gone */ } });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -201,7 +201,7 @@ router.post('/pos-full', async (req: Request, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     const stream = fs.createReadStream(filepath);
     stream.pipe(res);
-    stream.on('end', () => { try { fs.unlinkSync(filepath); } catch {} });
+    stream.on('end', () => { try { fs.unlinkSync(filepath); } catch (_e) { /* temp file already gone */ } });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -239,7 +239,7 @@ router.post('/pos-tenant/:slug', async (req: Request, res: Response) => {
       const proxyReq = mod.request(options, (proxyRes) => {
         if ((proxyRes.statusCode || 200) >= 400) {
           fileStream.close();
-          try { fs.unlinkSync(filepath); } catch {}
+          try { fs.unlinkSync(filepath); } catch (_e) { /* temp file already gone */ }
           return reject(new Error(`POS export returned ${proxyRes.statusCode}`));
         }
         proxyRes.pipe(fileStream);
@@ -261,7 +261,7 @@ router.post('/pos-tenant/:slug', async (req: Request, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     const stream = fs.createReadStream(filepath);
     stream.pipe(res);
-    stream.on('end', () => { try { fs.unlinkSync(filepath); } catch {} });
+    stream.on('end', () => { try { fs.unlinkSync(filepath); } catch (_e) { /* temp file already gone */ } });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }

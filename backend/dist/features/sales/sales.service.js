@@ -354,6 +354,19 @@ let SalesService = SalesService_1 = class SalesService {
             throw error;
         }
     }
+    async updateSaleItemNotes(itemId, notes, tenantId) {
+        const item = await this.prismaService.sale_items.findFirst({
+            where: { id: itemId, sales: { tenantId } },
+        });
+        if (!item)
+            throw new common_1.NotFoundException(`Sale item ${itemId} not found`);
+        const updated = await this.prismaService.sale_items.update({
+            where: { id: itemId },
+            data: { notes },
+        });
+        await this.cacheService.delTenantData(tenantId, `sale:${item.saleId}`);
+        return updated;
+    }
     async update(id, updateSaleDto, tenantId, userId) {
         try {
             const existingSale = await this.prismaService.sales.findFirst({
@@ -682,7 +695,7 @@ let SalesService = SalesService_1 = class SalesService {
                 taxRate: 0,
                 taxAmount: 0,
                 totalPrice: Number(item.totalPrice),
-                notes: '',
+                notes: item.notes || '',
                 createdAt: sale.createdAt.toISOString(),
                 updatedAt: sale.updatedAt.toISOString(),
             })) || [],

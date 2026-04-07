@@ -10,14 +10,14 @@ interface UploadedFile {
 export declare class FileStorageController {
     private readonly fileStorageService;
     constructor(fileStorageService: FileStorageService);
-    uploadRepairImages(files: UploadedFile[], metadata: any): Promise<{
+    uploadRepairImages(files: UploadedFile[], metadata: any, tenantId: string): Promise<{
         results: FileUploadResult[];
         summary: any;
     }>;
-    uploadCustomerDocuments(files: UploadedFile[], metadata: any): Promise<{
+    uploadCustomerDocuments(files: UploadedFile[], metadata: any, tenantId: string): Promise<{
         results: FileUploadResult[];
     }>;
-    uploadProductImages(files: UploadedFile[], metadata: any): Promise<{
+    uploadProductImages(files: UploadedFile[], metadata: any, tenantId: string): Promise<{
         results: FileUploadResult[];
     }>;
     getStorageStatus(): {

@@ -67,6 +67,9 @@ let AuthController = class AuthController {
     async resetUserPassword(tenant, id, body) {
         return this.authService.resetUserPassword(tenant.id, id, body.password);
     }
+    async deleteUser(tenant, id) {
+        await this.authService.deleteUser(tenant.id, id);
+    }
     async provisionTenant(internalKey, body) {
         const expectedKey = process.env.INTERNAL_API_KEY;
         if (!expectedKey || internalKey !== expectedKey) {
@@ -317,6 +320,19 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "resetUserPassword", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Delete)('users/:id'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),
+    (0, swagger_1.ApiBearerAuth)('access-token'),
+    (0, swagger_1.ApiOperation)({ summary: 'Delete user', description: 'Permanently delete a cashier/user (admin only)' }),
+    (0, swagger_1.ApiResponse)({ status: 204, description: 'User deleted successfully' }),
+    __param(0, (0, tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "deleteUser", null);
 __decorate([
     (0, public_decorator_1.Public)(),
     (0, common_1.Post)('provision-tenant'),

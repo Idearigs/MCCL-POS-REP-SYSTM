@@ -23,6 +23,7 @@ const feature_requests_controller_1 = require("./controllers/feature-requests.co
 const feature_requests_service_1 = require("./services/feature-requests.service");
 const mainframe_admins_controller_1 = require("./controllers/mainframe-admins.controller");
 const mainframe_admins_service_1 = require("./services/mainframe-admins.service");
+const backup_controller_1 = require("./controllers/backup.controller");
 const subdomain_service_1 = require("./services/subdomain.service");
 const credentials_export_service_1 = require("./services/credentials-export.service");
 const prisma_module_1 = require("../../core/prisma/prisma.module");
@@ -40,6 +41,7 @@ exports.MainframeModule = MainframeModule = __decorate([
             bug_reports_controller_1.BugReportsController,
             feature_requests_controller_1.FeatureRequestsController,
             mainframe_admins_controller_1.MainframeAdminsController,
+            backup_controller_1.BackupController,
         ],
         providers: [
             customer_profiles_service_1.CustomerProfilesService,

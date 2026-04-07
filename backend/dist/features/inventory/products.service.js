@@ -686,6 +686,7 @@ let ProductsService = ProductsService_1 = class ProductsService {
                 buffer: file.buffer,
                 mimeType: file.mimetype,
                 category: 'product-images',
+                tenantId,
                 metadata: {
                     productId: id,
                     tenantId,

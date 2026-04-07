@@ -13,6 +13,7 @@ export interface FileUploadOptions {
     buffer: Buffer;
     mimeType: string;
     category: 'repair-images' | 'customer-documents' | 'product-images' | 'receipts';
+    tenantId?: string;
     metadata?: Record<string, any>;
 }
 export declare class FileStorageService {
@@ -21,6 +22,7 @@ export declare class FileStorageService {
     private driveClient;
     private isGoogleDriveAvailable;
     private uploadDirectory;
+    private googleDriveTenantIds;
     constructor(configService: ConfigService);
     private initializeStorageSystems;
     private ensureUploadDirectory;

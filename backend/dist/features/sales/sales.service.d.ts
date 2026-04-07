@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CacheService } from '../../core/cache/cache.service';
 import { ShiftsService } from '../shifts/shifts.service';
@@ -13,6 +14,16 @@ export declare class SalesService {
     private generateSaleNumber;
     findAll(query: SaleQueryDto, tenantId: string): Promise<PaginatedResponseDto<SaleResponseDto>>;
     findOne(id: string, tenantId: string): Promise<SaleResponseDto>;
+    updateSaleItemNotes(itemId: string, notes: string, tenantId: string): Promise<{
+        id: string;
+        notes: string | null;
+        quantity: number;
+        productId: string;
+        saleId: string;
+        unitPrice: Prisma.Decimal;
+        discount: Prisma.Decimal;
+        totalPrice: Prisma.Decimal;
+    }>;
     update(id: string, updateSaleDto: UpdateSaleDto, tenantId: string, userId: string): Promise<SaleResponseDto>;
     createRefund(id: string, createRefundDto: CreateRefundDto, tenantId: string, userId: string): Promise<SaleResponseDto>;
     getStats(tenantId: string): Promise<SalesStatsDto>;

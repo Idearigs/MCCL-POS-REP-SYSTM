@@ -144,6 +144,7 @@ export declare class ShiftsController {
                     };
                 } & {
                     id: string;
+                    notes: string | null;
                     quantity: number;
                     productId: string;
                     saleId: string;
@@ -227,6 +228,7 @@ export declare class ShiftsController {
                 };
             } & {
                 id: string;
+                notes: string | null;
                 quantity: number;
                 productId: string;
                 saleId: string;

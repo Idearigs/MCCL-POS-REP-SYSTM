@@ -10,6 +10,18 @@ export declare class SalesController {
     getTodaysSales(query: SaleQueryDto, tenantId: string): Promise<PaginatedResponseDto<SaleResponseDto>>;
     findOne(id: string, tenantId: string): Promise<SaleResponseDto>;
     update(id: string, updateSaleDto: UpdateSaleDto, tenantId: string, userId: string): Promise<SaleResponseDto>;
+    updateSaleItem(itemId: string, body: {
+        notes: string;
+    }, tenantId: string): Promise<{
+        id: string;
+        notes: string | null;
+        quantity: number;
+        productId: string;
+        saleId: string;
+        unitPrice: import("@prisma/client/runtime/library").Decimal;
+        discount: import("@prisma/client/runtime/library").Decimal;
+        totalPrice: import("@prisma/client/runtime/library").Decimal;
+    }>;
     createRefund(id: string, createRefundDto: CreateRefundDto, tenantId: string, userId: string): Promise<SaleResponseDto>;
     getReceiptData(id: string, tenantId: string): Promise<{
         saleNumber: string;

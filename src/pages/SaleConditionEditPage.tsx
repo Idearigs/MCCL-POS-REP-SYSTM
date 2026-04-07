@@ -65,11 +65,6 @@ export default function SaleConditionEditPage() {
   const { auth } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Restrict to buymejewellery tenant only
-  if (auth.tenantInfo && auth.tenantInfo.tenantSlug !== 'buymejewellery') {
-    return <Navigate to="/settings" replace />;
-  }
-
   // data
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,6 +98,11 @@ export default function SaleConditionEditPage() {
   }, []);
 
   useEffect(() => { fetchSales(page, search); }, [page, search, fetchSales]);
+
+  // Restrict to buymejewellery tenant only
+  if (auth.tenantInfo && auth.tenantInfo.tenantSlug !== 'buymejewellery') {
+    return <Navigate to="/settings" replace />;
+  }
 
   // ── editing handlers ───────────────────────────────────────────────────────
 

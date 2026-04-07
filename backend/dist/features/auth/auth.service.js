@@ -526,6 +526,18 @@ let AuthService = AuthService_1 = class AuthService {
             throw error;
         }
     }
+    async deleteUser(tenantId, userId) {
+        try {
+            await this.prismaService.users.delete({
+                where: { id: userId, tenantId },
+            });
+            this.logger.log(`User deleted: ${userId}`);
+        }
+        catch (error) {
+            this.logger.error(`Failed to delete user ${userId}:`, error.message);
+            throw error;
+        }
+    }
     async updateTenantStatus(data) {
         const tenant = await this.prismaService.tenants.findUnique({
             where: { subdomain: data.subdomain.toLowerCase() },

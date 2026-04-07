@@ -46,6 +46,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.FileStorageService = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
+const googleapis_1 = require("googleapis");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const stream_1 = require("stream");
@@ -55,9 +56,14 @@ let FileStorageService = FileStorageService_1 = class FileStorageService {
     driveClient = null;
     isGoogleDriveAvailable = false;
     uploadDirectory;
+    googleDriveTenantIds = new Set();
     constructor(configService) {
         this.configService = configService;
         this.uploadDirectory = path.join(process.cwd(), 'uploads');
+        const tenantIds = this.configService.get('GOOGLE_DRIVE_TENANT_IDS', '');
+        if (tenantIds) {
+            tenantIds.split(',').map(id => id.trim()).filter(Boolean).forEach(id => this.googleDriveTenantIds.add(id));
+        }
         this.initializeStorageSystems();
     }
     async initializeStorageSystems() {
@@ -88,16 +94,47 @@ let FileStorageService = FileStorageService_1 = class FileStorageService {
         }
     }
     async initializeGoogleDrive() {
-        this.logger.warn('⚠️ Google Drive integration temporarily disabled. Using local storage only.');
-        this.logger.log('📋 Reason: Waiting for client to complete Shared Drive setup');
-        this.logger.log('📁 All files will be stored locally until Google Drive is re-enabled');
-        this.isGoogleDriveAvailable = false;
+        if (this.googleDriveTenantIds.size === 0) {
+            this.logger.log('📁 No Google Drive tenants configured — all files use local VPS storage.');
+            this.isGoogleDriveAvailable = false;
+            return;
+        }
+        try {
+            const clientEmail = this.configService.get('GOOGLE_DRIVE_CLIENT_EMAIL');
+            const privateKey = this.configService.get('GOOGLE_DRIVE_PRIVATE_KEY');
+            const projectId = this.configService.get('GOOGLE_DRIVE_PROJECT_ID');
+            if (!clientEmail || !privateKey || !projectId) {
+                this.logger.warn('⚠️ Google Drive credentials not configured. Using local storage only.');
+                return;
+            }
+            const auth = new googleapis_1.google.auth.JWT({
+                email: clientEmail,
+                key: privateKey.replace(/\\n/g, '\n'),
+                scopes: [
+                    'https://www.googleapis.com/auth/drive',
+                    'https://www.googleapis.com/auth/drive.file',
+                    'https://www.googleapis.com/auth/drive.metadata',
+                ],
+            });
+            this.driveClient = googleapis_1.google.drive({ version: 'v3', auth });
+            await this.driveClient.about.get({ fields: 'user' });
+            this.isGoogleDriveAvailable = true;
+            this.logger.log(`✅ Google Drive initialized for tenants: ${[...this.googleDriveTenantIds].join(', ')}`);
+        }
+        catch (error) {
+            this.logger.warn(`⚠️ Google Drive initialization failed: ${error.message}`);
+            this.logger.log('📁 Falling back to local storage for all tenants');
+            this.isGoogleDriveAvailable = false;
+        }
     }
     async uploadFile(options) {
-        const { fileName, buffer, mimeType, category, metadata } = options;
-        this.logger.debug(`📤 Starting file upload: ${fileName} (${buffer.length} bytes)`);
+        const { fileName, buffer, mimeType, category, tenantId } = options;
+        this.logger.debug(`📤 Starting file upload: ${fileName} (${buffer.length} bytes) tenant=${tenantId}`);
         this.validateFile(fileName, buffer, mimeType, category);
-        if (this.isGoogleDriveAvailable) {
+        const useGoogleDrive = this.isGoogleDriveAvailable &&
+            !!tenantId &&
+            this.googleDriveTenantIds.has(tenantId);
+        if (useGoogleDrive) {
             try {
                 const driveResult = await this.uploadToGoogleDrive(options);
                 if (driveResult.success) {
@@ -106,7 +143,7 @@ let FileStorageService = FileStorageService_1 = class FileStorageService {
                 }
             }
             catch (error) {
-                this.logger.warn(`⚠️ Google Drive upload failed: ${error.message}`);
+                this.logger.warn(`⚠️ Google Drive upload failed, falling back to VPS: ${error.message}`);
             }
         }
         try {
@@ -236,24 +273,21 @@ let FileStorageService = FileStorageService_1 = class FileStorageService {
                 name: uniqueFileName,
                 description: `MPS Jewelry System - ${category} - ${metadata?.description || 'File upload'}`,
             };
-            const folderId = this.getSharedDriveFolderId(category);
-            if (folderId) {
-                try {
-                    await this.driveClient.files.get({
-                        fileId: folderId,
-                        supportsAllDrives: true,
-                    });
-                    fileMetadata.parents = [folderId];
-                    this.logger.debug(`Uploading to Shared Drive folder: ${category} (${folderId})`);
-                }
-                catch (folderError) {
-                    this.logger.warn(`Cannot access Shared Drive folder ${category}: ${folderError.message}`);
-                    throw new Error(`Shared Drive folder not accessible: ${category}`);
-                }
+            const folderId = this.getSharedDriveFolderId(category) ||
+                this.configService.get('GOOGLE_DRIVE_PARENT_FOLDER_ID');
+            if (!folderId) {
+                throw new Error('No Google Drive folder configured');
             }
-            else {
-                this.logger.warn(`No Shared Drive folder configured for category: ${category}`);
-                throw new Error(`No Shared Drive folder configured for category: ${category}`);
+            try {
+                await this.driveClient.files.get({
+                    fileId: folderId,
+                    supportsAllDrives: true,
+                });
+                fileMetadata.parents = [folderId];
+                this.logger.debug(`Uploading to Drive folder: ${category} (${folderId})`);
+            }
+            catch (folderError) {
+                throw new Error(`Drive folder not accessible: ${folderError.message}`);
             }
             const media = {
                 mimeType,
@@ -299,8 +333,8 @@ let FileStorageService = FileStorageService_1 = class FileStorageService {
             const categoryPath = path.join(this.uploadDirectory, category);
             const filePath = path.join(categoryPath, uniqueFileName);
             await fs.promises.writeFile(filePath, buffer);
-            const port = this.configService.get('PORT', 3002);
-            const baseUrl = `http://localhost:${port}`;
+            const appUrl = this.configService.get('APP_URL', `http://localhost:${this.configService.get('PORT', 3000)}`);
+            const baseUrl = appUrl.replace(/\/$/, '');
             const fileUrl = `${baseUrl}/uploads/${category}/${uniqueFileName}`;
             if (metadata) {
                 const metadataPath = filePath + '.meta.json';

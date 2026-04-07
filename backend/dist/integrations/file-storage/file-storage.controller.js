@@ -17,12 +17,13 @@ const common_1 = require("@nestjs/common");
 const platform_express_1 = require("@nestjs/platform-express");
 const swagger_1 = require("@nestjs/swagger");
 const file_storage_service_1 = require("./file-storage.service");
+const tenant_decorator_1 = require("../../shared/decorators/tenant.decorator");
 let FileStorageController = class FileStorageController {
     fileStorageService;
     constructor(fileStorageService) {
         this.fileStorageService = fileStorageService;
     }
-    async uploadRepairImages(files, metadata) {
+    async uploadRepairImages(files, metadata, tenantId) {
         if (!files || files.length === 0) {
             throw new common_1.BadRequestException('No files provided');
         }
@@ -34,6 +35,7 @@ let FileStorageController = class FileStorageController {
                     buffer: file.buffer,
                     mimeType: file.mimetype,
                     category: 'repair-images',
+                    tenantId,
                     metadata: {
                         repairId: metadata.repairId,
                         description: metadata.description,
@@ -65,7 +67,7 @@ let FileStorageController = class FileStorageController {
         };
         return { results, summary };
     }
-    async uploadCustomerDocuments(files, metadata) {
+    async uploadCustomerDocuments(files, metadata, tenantId) {
         if (!files || files.length === 0) {
             throw new common_1.BadRequestException('No files provided');
         }
@@ -76,6 +78,7 @@ let FileStorageController = class FileStorageController {
                 buffer: file.buffer,
                 mimeType: file.mimetype,
                 category: 'customer-documents',
+                tenantId,
                 metadata: {
                     customerId: metadata.customerId,
                     documentType: metadata.documentType,
@@ -86,7 +89,7 @@ let FileStorageController = class FileStorageController {
         }
         return { results };
     }
-    async uploadProductImages(files, metadata) {
+    async uploadProductImages(files, metadata, tenantId) {
         if (!files || files.length === 0) {
             throw new common_1.BadRequestException('No files provided');
         }
@@ -97,6 +100,7 @@ let FileStorageController = class FileStorageController {
                 buffer: file.buffer,
                 mimeType: file.mimetype,
                 category: 'product-images',
+                tenantId,
                 metadata: {
                     productId: metadata.productId,
                     imageType: metadata.imageType || 'product',
@@ -123,8 +127,9 @@ __decorate([
     (0, common_1.UseInterceptors)((0, platform_express_1.FilesInterceptor)('images', 10)),
     __param(0, (0, common_1.UploadedFiles)()),
     __param(1, (0, common_1.Body)()),
+    __param(2, (0, tenant_decorator_1.TenantId)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Array, Object]),
+    __metadata("design:paramtypes", [Array, Object, String]),
     __metadata("design:returntype", Promise)
 ], FileStorageController.prototype, "uploadRepairImages", null);
 __decorate([
@@ -134,8 +139,9 @@ __decorate([
     (0, common_1.UseInterceptors)((0, platform_express_1.FilesInterceptor)('documents', 5)),
     __param(0, (0, common_1.UploadedFiles)()),
     __param(1, (0, common_1.Body)()),
+    __param(2, (0, tenant_decorator_1.TenantId)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Array, Object]),
+    __metadata("design:paramtypes", [Array, Object, String]),
     __metadata("design:returntype", Promise)
 ], FileStorageController.prototype, "uploadCustomerDocuments", null);
 __decorate([
@@ -145,8 +151,9 @@ __decorate([
     (0, common_1.UseInterceptors)((0, platform_express_1.FilesInterceptor)('images', 10)),
     __param(0, (0, common_1.UploadedFiles)()),
     __param(1, (0, common_1.Body)()),
+    __param(2, (0, tenant_decorator_1.TenantId)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Array, Object]),
+    __metadata("design:paramtypes", [Array, Object, String]),
     __metadata("design:returntype", Promise)
 ], FileStorageController.prototype, "uploadProductImages", null);
 __decorate([

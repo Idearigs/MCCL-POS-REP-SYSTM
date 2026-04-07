@@ -39,6 +39,7 @@ export declare class AuthController {
     resetUserPassword(tenant: TenantInfo, id: string, body: {
         password: string;
     }): Promise<void>;
+    deleteUser(tenant: TenantInfo, id: string): Promise<void>;
     provisionTenant(internalKey: string, body: {
         tenantId: string;
         businessName: string;

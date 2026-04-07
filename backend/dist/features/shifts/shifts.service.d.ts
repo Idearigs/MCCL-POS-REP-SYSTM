@@ -152,6 +152,7 @@ export declare class ShiftsService {
                     };
                 } & {
                     id: string;
+                    notes: string | null;
                     quantity: number;
                     productId: string;
                     saleId: string;
@@ -235,6 +236,7 @@ export declare class ShiftsService {
                 };
             } & {
                 id: string;
+                notes: string | null;
                 quantity: number;
                 productId: string;
                 saleId: string;
