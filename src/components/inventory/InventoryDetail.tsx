@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { productService } from "@/services/productService";
 import { useAuth } from "@/contexts/AuthContext";
 
-const WATCH_BRANDS = ['Rosefeld', 'Roamer', 'Briston', 'Festina', 'Secondhand'];
+const WATCH_BRANDS = ['Rosefeild', 'Roamer', 'Briston', 'Festina', 'Secondhand watches'];
 
 export interface InventoryItemDetails {
   id: string;
@@ -93,6 +93,10 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Show watch brand picker whenever the selected category name contains "watch"
+  const selectedCategoryName = categories.find(c => c.id === editedItem.category)?.name || '';
+  const isWatchCategory = selectedCategoryName.toLowerCase().includes('watch');
 
   // Fetch categories from backend when dialog opens
   useEffect(() => {
@@ -314,8 +318,8 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
             </div>
           </div>
 
-          {/* Watch Brand — buymejewellery only */}
-          {isBuyme && (
+          {/* Watch Brand — visible when Watch category is selected */}
+          {isWatchCategory && (
             <div className="space-y-2">
               <Label>Watch Brand</Label>
               <div className="flex flex-wrap gap-2">
