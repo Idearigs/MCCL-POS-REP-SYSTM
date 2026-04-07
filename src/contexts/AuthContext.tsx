@@ -155,27 +155,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        const token = authService.getToken();
-        if (token && isTokenValid(token)) {
-          const me = await authService.getMe();
-          setAuth(prev => ({
-            ...prev,
-            user: {
-              id: me.id,
-              name: `${me.firstName} ${me.lastName}`.trim(),
-              email: me.email,
-              role: me.role,
-            },
-            tenantInfo: buildTenantInfo(me),
-            isAuthenticated: true,
-            loading: false,
-          }));
+        const accessToken = authService.getToken();
+        const refreshToken = localStorage.getItem('refreshToken');
+
+        // No credentials at all — skip the API call
+        if (!accessToken && !refreshToken) {
+          setAuth(prev => ({ ...prev, user: null, isAuthenticated: false, loading: false }));
           return;
         }
 
-        // No valid token — clear stale data
-        authService.clearAuth();
-        setAuth(prev => ({ ...prev, user: null, isAuthenticated: false, loading: false }));
+        // Call /auth/me. If the access token is expired the apiClient interceptor
+        // will automatically use the refresh token to get a new one and retry.
+        const me = await authService.getMe();
+        setAuth(prev => ({
+          ...prev,
+          user: {
+            id: me.id,
+            name: `${me.firstName} ${me.lastName}`.trim(),
+            email: me.email,
+            role: me.role,
+          },
+          tenantInfo: buildTenantInfo(me),
+          isAuthenticated: true,
+          loading: false,
+        }));
+        return;
       } catch (err: any) {
         // 403 TENANT_SUSPENDED — show the suspension screen without logging out
         if (err?.response?.status === 403 || err?.status === 403) {
