@@ -60,7 +60,7 @@ function buildReceiptHTML(data: ThermalReceiptData): string {
   const itemRows = data.items.map(item => {
     const nameDisplay = item.name.length > 22 ? item.name.slice(0, 22) + '…' : item.name;
     const qtyPrice = `${item.quantity} x ${fmt(item.unitPrice)}`;
-    let html = `
+    const html = `
       <div class="item">
         <div class="item-name">${nameDisplay}${item.isRepair ? ' <span class="repair-tag">[Repair]</span>' : ''}</div>
         <div class="item-sub">
