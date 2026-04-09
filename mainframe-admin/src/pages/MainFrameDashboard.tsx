@@ -296,7 +296,7 @@ interface Tenant {
   id: string; businessName: string; businessEmail: string; businessPhone?: string;
   subdomain: string; status: string; createdAt: string;
   contact?: { firstName: string; lastName: string; email: string; phone?: string };
-  subscription?: { plan: string; basePrice: number; currentUsers: number; nextBillingDate: string };
+  subscription?: { plan: string; basePrice: number; billingCycle?: string; currentUsers: number; nextBillingDate: string };
   users?: any[]; _count?: { customerUsers: number };
 }
 interface Feature {
@@ -394,7 +394,7 @@ const MainFrameDashboard: React.FC = () => {
   const [provisionResult, setProvisionResult] = useState<{ ownerEmail: string; ownerPassword: string; companyCode: string } | null>(null);
 
   // Forms
-  const [newTenant, setNewTenant] = useState({ businessName: '', businessEmail: '', subdomain: '', contactFirstName: '', contactLastName: '', contactEmail: '', contactPhone: '', plan: 'PROFESSIONAL', isExistingClient: false });
+  const [newTenant, setNewTenant] = useState({ businessName: '', businessEmail: '', subdomain: '', contactFirstName: '', contactLastName: '', contactEmail: '', contactPhone: '', plan: 'PROFESSIONAL', customPrice: '' as string | number, billingCycle: 'MONTHLY', isExistingClient: false });
   const [subdomainValid, setSubdomainValid] = useState<boolean | null>(null);
   const [subdomainChecking, setSubdomainChecking] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -464,6 +464,19 @@ const MainFrameDashboard: React.FC = () => {
       if (!tenantInvoices.length) {
         subscriptionsApi.getInvoices(selectedTenant.id).then(r => setTenantInvoices(r.data || [])).catch(() => {});
       }
+      // Pre-fill offer price from tenant's saved subscription
+      const subPrice = selectedTenant.subscription?.basePrice;
+      const subCycle = selectedTenant.subscription?.billingCycle;
+      const subPlan  = selectedTenant.subscription?.plan;
+      if (subPrice) {
+        setOffer(p => ({
+          ...p,
+          pricePerMonth: Number(subPrice),
+          billingCycle: subCycle ? subCycle.toLowerCase() as any : p.billingCycle,
+          plan: subPlan || p.plan,
+        }));
+      }
+
       // Load + auto-sync tenant features into the offer form
       const syncFeatures = (list: TenantFeature[]) => {
         const mapped = list
@@ -723,7 +736,7 @@ const MainFrameDashboard: React.FC = () => {
       const r = await customerProfilesApi.create(newTenant);
       const { posProvisioning } = r.data;
       setPanel('none');
-      setNewTenant({ businessName: '', businessEmail: '', subdomain: '', contactFirstName: '', contactLastName: '', contactEmail: '', contactPhone: '', plan: 'PROFESSIONAL', isExistingClient: false });
+      setNewTenant({ businessName: '', businessEmail: '', subdomain: '', contactFirstName: '', contactLastName: '', contactEmail: '', contactPhone: '', plan: 'PROFESSIONAL', customPrice: '', billingCycle: 'MONTHLY', isExistingClient: false });
       setSubdomainValid(null);
       if (posProvisioning?.status === 'success') {
         setProvisionResult({ ownerEmail: posProvisioning.ownerEmail, ownerPassword: posProvisioning.ownerPassword, companyCode: posProvisioning.companyCode });
@@ -2784,7 +2797,55 @@ const MainFrameDashboard: React.FC = () => {
               <option value="PROFESSIONAL">Professional — £79/month</option>
               <option value="BUSINESS">Business — £199/month</option>
               <option value="ENTERPRISE">Enterprise — £499/month</option>
+              <option value="CUSTOM">Custom — set price below</option>
             </select>
+
+            {/* Custom price — shown only when CUSTOM plan selected */}
+            {newTenant.plan === 'CUSTOM' && (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <p className="text-xs font-medium mb-1.5" style={{ color: '#8E8E93' }}>Custom price per month</p>
+                  <div className="flex items-center rounded-xl overflow-hidden" style={{ border: '1.5px solid rgba(124,58,237,0.45)', background: 'rgba(124,58,237,0.06)' }}>
+                    <span className="px-3 text-sm font-semibold" style={{ color: 'rgba(124,58,237,0.8)' }}>£</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newTenant.customPrice}
+                      onChange={e => setNewTenant(p => ({ ...p, customPrice: e.target.value }))}
+                      placeholder="0.00"
+                      className="flex-1 py-2.5 pr-3 text-sm outline-none"
+                      style={{ background: 'transparent', color: '#6d28d9' }}
+                    />
+                    <span className="pr-3 text-xs font-medium" style={{ color: 'rgba(124,58,237,0.5)' }}>/mo</span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium mb-1.5" style={{ color: '#8E8E93' }}>Billing cycle</p>
+                  <select value={newTenant.billingCycle} onChange={e => setNewTenant(p => ({ ...p, billingCycle: e.target.value }))}
+                    className="w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-pointer"
+                    style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}>
+                    <option value="MONTHLY">Monthly</option>
+                    <option value="QUARTERLY">Quarterly</option>
+                    <option value="YEARLY">Yearly</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* Billing cycle for non-custom plans */}
+            {newTenant.plan !== 'CUSTOM' && (
+              <div className="mt-3">
+                <p className="text-xs font-medium mb-1.5" style={{ color: '#8E8E93' }}>Billing cycle</p>
+                <select value={newTenant.billingCycle} onChange={e => setNewTenant(p => ({ ...p, billingCycle: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-pointer"
+                  style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}>
+                  <option value="MONTHLY">Monthly</option>
+                  <option value="QUARTERLY">Quarterly</option>
+                  <option value="YEARLY">Yearly</option>
+                </select>
+              </div>
+            )}
           </FormSection>
 
           <FormSection title="Client Type">

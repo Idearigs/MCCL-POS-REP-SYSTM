@@ -387,6 +387,10 @@ router.post('/', requireAuth, async (req, res) => {
     const plan = dto.plan || 'STARTER';
     const billingCycle = dto.billingCycle || 'MONTHLY';
     const planConfig = getPlanConfig(plan);
+    // Use admin-supplied custom price for CUSTOM plan, otherwise use plan default
+    const basePrice = (plan === 'CUSTOM' && dto.customPrice)
+      ? Number(dto.customPrice)
+      : planConfig.basePrice;
     const nextBillingDate = calcNextBillingDate(billingCycle);
 
     await prisma.mf_subscriptions.create({
@@ -394,7 +398,7 @@ router.post('/', requireAuth, async (req, res) => {
         customerProfileId: profile.id,
         plan: plan as any,
         billingCycle: billingCycle as any,
-        basePrice: planConfig.basePrice,
+        basePrice,
         perUserPrice: planConfig.perUserPrice,
         includedUsers: planConfig.includedUsers,
         maxUsers: planConfig.maxUsers,
