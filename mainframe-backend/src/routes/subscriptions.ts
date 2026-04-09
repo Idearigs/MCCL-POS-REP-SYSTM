@@ -286,6 +286,7 @@ router.post('/send-dev-invoice', requireAuth, async (req, res) => {
 
     await createMailTransport().sendMail({
       from: FROM(),
+      replyTo: process.env.SMTP_REPLY_TO || process.env.SMTP_USER,
       to:   profile.businessEmail,
       subject: `${title} — £${total.toFixed(2)} [Ref: ${invoiceRef}]`,
       html,
@@ -451,6 +452,7 @@ router.post('/send-offer', requireAuth, async (req, res) => {
 
     await createMailTransport().sendMail({
       from: FROM(),
+      replyTo: process.env.SMTP_REPLY_TO || process.env.SMTP_USER,
       to:   profile.businessEmail,
       subject: title,
       html,
