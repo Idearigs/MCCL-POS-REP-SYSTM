@@ -294,7 +294,13 @@ router.post('/send-dev-invoice', requireAuth, async (req, res) => {
     return res.json({ sent: true, to: profile.businessEmail, invoiceRef, total });
   } catch (err: any) {
     console.error('[send-dev-invoice]', err);
-    return res.status(500).json({ message: err.message || 'Failed to send invoice' });
+    const message = err.message || 'Failed to send invoice';
+    const isSmtpConfig = !process.env.SMTP_USER || !process.env.SMTP_PASS;
+    return res.status(500).json({
+      message: isSmtpConfig
+        ? 'SMTP not configured — set SMTP_HOST, SMTP_USER, SMTP_PASS in environment variables'
+        : message,
+    });
   }
 });
 
@@ -464,7 +470,14 @@ router.post('/send-offer', requireAuth, async (req, res) => {
     return res.json({ sent: true, to: profile.businessEmail });
   } catch (err: any) {
     console.error('[send-offer]', err);
-    return res.status(500).json({ message: err.message || 'Failed to send email' });
+    // Surface SMTP config errors clearly
+    const message = err.message || 'Failed to send email';
+    const isSmtpConfig = !process.env.SMTP_USER || !process.env.SMTP_PASS;
+    return res.status(500).json({
+      message: isSmtpConfig
+        ? 'SMTP not configured — set SMTP_HOST, SMTP_USER, SMTP_PASS in environment variables'
+        : message,
+    });
   }
 });
 
