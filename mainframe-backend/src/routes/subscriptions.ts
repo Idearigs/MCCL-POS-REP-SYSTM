@@ -173,6 +173,131 @@ router.post('/invoices/:invoiceId/mark-paid', requireAuth, async (req, res) => {
   }
 });
 
+// POST /mainframe/subscriptions/send-dev-invoice
+// Sends a formal development invoice email to the tenant for custom feature build costs.
+router.post('/send-dev-invoice', requireAuth, async (req, res) => {
+  const { profileId, title, description, checkoutUrl, items } = req.body;
+  // items: [{ name, description, cost }]
+
+  if (!profileId || !title || !checkoutUrl || !items?.length) {
+    return res.status(400).json({ message: 'profileId, title, checkoutUrl and items are required' });
+  }
+
+  try {
+    const profile = await prisma.mf_customer_profiles.findUnique({
+      where: { id: profileId },
+      select: { businessName: true, businessEmail: true, contactFirstName: true },
+    });
+    if (!profile) return res.status(404).json({ message: 'Profile not found' });
+
+    const total = items.reduce((sum: number, i: any) => sum + (Number(i.cost) || 0), 0);
+    const invoiceRef = `TRD-DEV-${Date.now().toString(36).toUpperCase()}`;
+
+    const itemRows = items.map((item: any, idx: number) => `
+      <tr>
+        <td style="padding:12px 20px;border-bottom:1px solid #f3f4f6;color:#374151;font-size:14px;">${idx + 1}. ${item.name}</td>
+        <td style="padding:12px 20px;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;">${item.description || ''}</td>
+        <td style="padding:12px 20px;border-bottom:1px solid #f3f4f6;text-align:right;font-weight:700;color:#d97706;font-size:14px;white-space:nowrap;">£${Number(item.cost).toFixed(2)}</td>
+      </tr>`).join('');
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#92400e 0%,#b45309 50%,#d97706 100%);border-radius:16px 16px 0 0;padding:36px 40px;text-align:center;">
+            <div style="font-size:12px;font-weight:600;letter-spacing:2px;color:rgba(255,255,255,0.6);text-transform:uppercase;margin-bottom:10px;">Development Invoice</div>
+            <h1 style="margin:0;font-size:26px;font-weight:700;color:#fff;">${title}</h1>
+            <div style="margin-top:12px;color:rgba(255,255,255,0.7);font-size:13px;">Ref: ${invoiceRef} · ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="background:#fff;padding:36px 40px;">
+            <p style="margin:0 0 8px;color:#6b7280;font-size:14px;">Hi ${profile.contactFirstName || profile.businessName},</p>
+            ${description ? `<p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.7;">${description}</p>` : '<p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.7;">Please find below the development invoice for your custom features.</p>'}
+
+            <!-- Line items table -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;margin-bottom:24px;">
+              <thead>
+                <tr style="background:#fef3c7;">
+                  <th style="padding:10px 20px;text-align:left;font-size:12px;font-weight:700;color:#92400e;letter-spacing:0.5px;text-transform:uppercase;">Feature / Service</th>
+                  <th style="padding:10px 20px;text-align:left;font-size:12px;font-weight:700;color:#92400e;letter-spacing:0.5px;text-transform:uppercase;">Details</th>
+                  <th style="padding:10px 20px;text-align:right;font-size:12px;font-weight:700;color:#92400e;letter-spacing:0.5px;text-transform:uppercase;">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemRows}
+                <tr style="background:#fefce8;">
+                  <td colspan="2" style="padding:14px 20px;font-weight:700;color:#374151;font-size:15px;">Total Due</td>
+                  <td style="padding:14px 20px;text-align:right;font-weight:800;color:#d97706;font-size:18px;">£${total.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- CTA -->
+            <div style="text-align:center;margin:32px 0;">
+              <a href="${checkoutUrl}"
+                 style="display:inline-block;background:linear-gradient(135deg,#d97706,#b45309);color:#fff;padding:16px 40px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;box-shadow:0 4px 14px rgba(217,119,6,0.35);">
+                Pay £${total.toFixed(2)} Now →
+              </a>
+              <p style="margin:12px 0 0;color:#9ca3af;font-size:12px;">Secure payment powered by LemonSqueezy</p>
+            </div>
+
+            <p style="margin:24px 0 0;color:#9ca3af;font-size:12px;text-align:center;">If you have any questions about this invoice, please reply to this email.</p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f9fafb;border-top:1px solid #e5e7eb;border-radius:0 0 16px 16px;padding:24px 40px;text-align:center;">
+            <p style="margin:0 0 4px;color:#9ca3af;font-size:12px;">Invoice ${invoiceRef} · TrueDesk for ${profile.businessName}</p>
+            <p style="margin:0;color:#9ca3af;font-size:12px;">© ${new Date().getFullYear()} TrueDesk · All rights reserved</p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    const transporter = nodemailer.createTransport({
+      host:   process.env.SMTP_HOST   || 'smtp.gmail.com',
+      port:   parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    });
+
+    await transporter.sendMail({
+      from: `"TrueDesk" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      to:   profile.businessEmail,
+      subject: `${title} — £${total.toFixed(2)} [Ref: ${invoiceRef}]`,
+      html,
+    });
+
+    await prisma.mf_activity_logs.create({
+      data: {
+        customerProfileId: profileId,
+        action: 'subscription.dev_invoice_sent',
+        description: `Development invoice sent: "${title}" — £${total.toFixed(2)} (${items.length} item${items.length !== 1 ? 's' : ''}) [${invoiceRef}]`,
+        actorType: 'admin',
+      },
+    });
+
+    return res.json({ sent: true, to: profile.businessEmail, invoiceRef, total });
+  } catch (err: any) {
+    console.error('[send-dev-invoice]', err);
+    return res.status(500).json({ message: err.message || 'Failed to send invoice' });
+  }
+});
+
 // POST /mainframe/subscriptions/send-offer
 // Sends a branded subscription offer email to the tenant with a LemonSqueezy checkout link.
 router.post('/send-offer', requireAuth, async (req, res) => {

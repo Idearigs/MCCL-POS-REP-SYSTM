@@ -367,6 +367,17 @@ const MainFrameDashboard: React.FC = () => {
   const [sendingOffer, setSendingOffer] = useState(false);
   const [showConfirmSend, setShowConfirmSend] = useState(false);
 
+  // Custom feature build invoice form
+  const defaultDevInvoice = {
+    title: 'Custom Feature Development Invoice',
+    description: '',
+    checkoutUrl: '',
+    items: [] as { id: string; name: string; description: string; cost: number }[],
+  };
+  const [devInvoice, setDevInvoice] = useState(defaultDevInvoice);
+  const [sendingDevInvoice, setSendingDevInvoice] = useState(false);
+  const [showConfirmDevSend, setShowConfirmDevSend] = useState(false);
+
   // Backup state
   const [backupStatus, setBackupStatus] = useState<any>(null);
   const [backupFiles, setBackupFiles] = useState<{ filename: string; size: number; createdAt: string }[]>([]);
@@ -447,8 +458,30 @@ const MainFrameDashboard: React.FC = () => {
     if (tab === 'users' && !tenantUsers.length) {
       customerUsersApi.getByProfile(selectedTenant.id).then(r => setTenantUsers(r.data || [])).catch(() => {});
     }
-    if (tab === 'billing' && !tenantInvoices.length) {
-      subscriptionsApi.getInvoices(selectedTenant.id).then(r => setTenantInvoices(r.data || [])).catch(() => {});
+    if (tab === 'billing') {
+      if (!tenantInvoices.length) {
+        subscriptionsApi.getInvoices(selectedTenant.id).then(r => setTenantInvoices(r.data || [])).catch(() => {});
+      }
+      // Load + auto-sync tenant features into the offer form
+      const syncFeatures = (list: TenantFeature[]) => {
+        const mapped = list
+          .filter(f => f.isEnabled)
+          .map(f => ({
+            id: f.featureId,
+            name: f.featureName,
+            description: f.description || '',
+            price: Number(f.additionalCost) || 0,
+            isCustom: f.category?.toLowerCase() === 'custom' || Number(f.additionalCost) > 0,
+          }));
+        setOffer(p => ({ ...p, features: mapped }));
+      };
+      if (!tenantFeatures.length) {
+        customerProfilesApi.getFeatures(selectedTenant.id)
+          .then(r => { setTenantFeatures(r.data || []); syncFeatures(r.data || []); })
+          .catch(() => {});
+      } else {
+        syncFeatures(tenantFeatures);
+      }
     }
     if (tab === 'activity' && !tenantActivity.length) {
       customerProfilesApi.getActivity(selectedTenant.id).then(r => setTenantActivity(r.data || [])).catch(() => {});
@@ -591,19 +624,75 @@ const MainFrameDashboard: React.FC = () => {
     }
   };
 
-  const addOfferFeature = (isCustom: boolean) => {
-    setOffer(p => ({
-      ...p,
-      features: [...p.features, { id: crypto.randomUUID(), name: '', description: '', price: 0, isCustom }],
-    }));
-  };
-
-  const updateOfferFeature = (id: string, field: string, value: string | number) => {
-    setOffer(p => ({ ...p, features: p.features.map(f => f.id === id ? { ...f, [field]: value } : f) }));
-  };
-
   const removeOfferFeature = (id: string) => {
     setOffer(p => ({ ...p, features: p.features.filter(f => f.id !== id) }));
+  };
+
+  const syncOfferFeatures = () => {
+    const mapped = tenantFeatures
+      .filter(f => f.isEnabled)
+      .map(f => ({
+        id: f.featureId,
+        name: f.featureName,
+        description: f.description || '',
+        price: Number(f.additionalCost) || 0,
+        isCustom: f.category?.toLowerCase() === 'custom' || Number(f.additionalCost) > 0,
+      }));
+    setOffer(p => ({ ...p, features: mapped }));
+    toast.success('Features synced from Features tab');
+  };
+
+  const sendDevInvoice = async () => {
+    if (!selectedTenant) return;
+    if (!devInvoice.title.trim()) { toast.error('Title is required'); return; }
+    if (!devInvoice.checkoutUrl.trim()) { toast.error('Checkout URL is required'); return; }
+    if (devInvoice.items.length === 0) { toast.error('Add at least one item'); return; }
+    setSendingDevInvoice(true);
+    setShowConfirmDevSend(false);
+    try {
+      const r = await subscriptionsApi.sendDevInvoice({
+        profileId: selectedTenant.id,
+        title: devInvoice.title,
+        description: devInvoice.description,
+        checkoutUrl: devInvoice.checkoutUrl,
+        items: devInvoice.items.map(({ name, description, cost }) => ({ name, description, cost })),
+      });
+      toast.success(`Invoice sent to ${r.data?.to || selectedTenant.businessEmail}`);
+      setDevInvoice(defaultDevInvoice);
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Failed to send');
+    } finally {
+      setSendingDevInvoice(false);
+    }
+  };
+
+  const addDevItem = () => {
+    // Pre-populate from custom features in tenantFeatures
+    const customFeats = tenantFeatures.filter(f => f.isEnabled && (f.category?.toLowerCase() === 'custom' || Number(f.additionalCost) > 0));
+    if (customFeats.length > 0 && devInvoice.items.length === 0) {
+      setDevInvoice(p => ({
+        ...p,
+        items: customFeats.map(f => ({
+          id: f.featureId,
+          name: f.featureName,
+          description: f.description || '',
+          cost: Number(f.additionalCost) || 0,
+        })),
+      }));
+    } else {
+      setDevInvoice(p => ({
+        ...p,
+        items: [...p.items, { id: crypto.randomUUID(), name: '', description: '', cost: 0 }],
+      }));
+    }
+  };
+
+  const updateDevItem = (id: string, field: string, value: string | number) => {
+    setDevInvoice(p => ({ ...p, items: p.items.map(i => i.id === id ? { ...i, [field]: value } : i) }));
+  };
+
+  const removeDevItem = (id: string) => {
+    setDevInvoice(p => ({ ...p, items: p.items.filter(i => i.id !== id) }));
   };
 
   // ── Create tenant ───────────────────────────────────────────────────────────
@@ -1404,74 +1493,62 @@ const MainFrameDashboard: React.FC = () => {
                                 </div>
                               </div>
 
-                              {/* Standard features */}
+                              {/* Features — auto-synced from Features tab */}
                               <div>
                                 <div className="flex items-center justify-between mb-2">
-                                  <label className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.45)' }}>Included features</label>
-                                  <button onClick={() => addOfferFeature(false)}
+                                  <div>
+                                    <label className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.45)' }}>Features</label>
+                                    <span className="ml-2 text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>auto-synced from Features tab</span>
+                                  </div>
+                                  <button onClick={syncOfferFeatures}
                                     className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg"
-                                    style={{ background: 'rgba(52,199,89,0.1)', color: '#34C759', border: '1px solid rgba(52,199,89,0.2)' }}>
-                                    <Plus className="w-3 h-3" /> Add
+                                    style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                    <RefreshCw className="w-3 h-3" /> Re-sync
                                   </button>
                                 </div>
-                                <div className="space-y-2">
-                                  {offer.features.filter(f => !f.isCustom).map(f => (
-                                    <div key={f.id} className="flex gap-2 items-start">
-                                      <div className="flex-1 grid grid-cols-2 gap-2">
-                                        <input value={f.name} onChange={e => updateOfferFeature(f.id, 'name', e.target.value)}
-                                          placeholder="Feature name"
-                                          className="px-3 py-2 rounded-lg text-xs outline-none"
-                                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)' }} />
-                                        <input value={f.description} onChange={e => updateOfferFeature(f.id, 'description', e.target.value)}
-                                          placeholder="Short description"
-                                          className="px-3 py-2 rounded-lg text-xs outline-none"
-                                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)' }} />
-                                      </div>
-                                      <button onClick={() => removeOfferFeature(f.id)} className="mt-1.5 p-1 rounded-lg" style={{ color: 'rgba(255,255,255,0.3)' }}><X className="w-3.5 h-3.5" /></button>
-                                    </div>
-                                  ))}
-                                  {offer.features.filter(f => !f.isCustom).length === 0 && (
-                                    <p className="text-xs py-2" style={{ color: 'rgba(255,255,255,0.2)' }}>No standard features added yet</p>
-                                  )}
-                                </div>
-                              </div>
 
-                              {/* Custom / tailored features */}
-                              <div>
-                                <div className="flex items-center justify-between mb-2">
-                                  <label className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.45)' }}>Custom / tailored features</label>
-                                  <button onClick={() => addOfferFeature(true)}
-                                    className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg"
-                                    style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.25)' }}>
-                                    <Plus className="w-3 h-3" /> Add Custom
-                                  </button>
-                                </div>
-                                <div className="space-y-2">
-                                  {offer.features.filter(f => f.isCustom).map(f => (
-                                    <div key={f.id} className="flex gap-2 items-start p-3 rounded-xl" style={{ background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.18)' }}>
-                                      <div className="flex-1 space-y-2">
-                                        <div className="grid grid-cols-2 gap-2">
-                                          <input value={f.name} onChange={e => updateOfferFeature(f.id, 'name', e.target.value)}
-                                            placeholder="Custom feature name"
-                                            className="px-3 py-2 rounded-lg text-xs outline-none"
-                                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(124,58,237,0.2)', color: 'rgba(255,255,255,0.8)' }} />
-                                          <input type="number" value={f.price || ''} onChange={e => updateOfferFeature(f.id, 'price', parseFloat(e.target.value) || 0)}
-                                            placeholder="Price £/mo (0 = included)"
-                                            className="px-3 py-2 rounded-lg text-xs outline-none"
-                                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(124,58,237,0.2)', color: 'rgba(255,255,255,0.8)' }} />
+                                {offer.features.length === 0 && (
+                                  <div className="py-4 text-center rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                                    <p className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>No features loaded — go to Features tab first, then come back</p>
+                                  </div>
+                                )}
+
+                                {/* Standard features */}
+                                {offer.features.filter(f => !f.isCustom).length > 0 && (
+                                  <div className="space-y-1 mb-3">
+                                    <p className="text-xs mb-1.5" style={{ color: 'rgba(255,255,255,0.3)' }}>Included in plan</p>
+                                    {offer.features.filter(f => !f.isCustom).map(f => (
+                                      <div key={f.id} className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(52,199,89,0.06)', border: '1px solid rgba(52,199,89,0.15)' }}>
+                                        <span style={{ color: '#34C759', fontSize: 13 }}>✓</span>
+                                        <div className="flex-1 min-w-0">
+                                          <span className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.8)' }}>{f.name}</span>
+                                          {f.description && <span className="text-xs ml-2" style={{ color: 'rgba(255,255,255,0.3)' }}>{f.description}</span>}
                                         </div>
-                                        <input value={f.description} onChange={e => updateOfferFeature(f.id, 'description', e.target.value)}
-                                          placeholder="Describe this tailored feature..."
-                                          className="w-full px-3 py-2 rounded-lg text-xs outline-none"
-                                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(124,58,237,0.2)', color: 'rgba(255,255,255,0.8)' }} />
+                                        <button onClick={() => removeOfferFeature(f.id)} className="p-0.5 rounded" style={{ color: 'rgba(255,255,255,0.2)' }}><X className="w-3 h-3" /></button>
                                       </div>
-                                      <button onClick={() => removeOfferFeature(f.id)} className="mt-0.5 p-1 rounded-lg" style={{ color: 'rgba(255,255,255,0.3)' }}><X className="w-3.5 h-3.5" /></button>
-                                    </div>
-                                  ))}
-                                  {offer.features.filter(f => f.isCustom).length === 0 && (
-                                    <p className="text-xs py-2" style={{ color: 'rgba(255,255,255,0.2)' }}>No custom features added yet</p>
-                                  )}
-                                </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Custom / highlighted features */}
+                                {offer.features.filter(f => f.isCustom).length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-xs mb-1.5" style={{ color: 'rgba(124,58,237,0.8)' }}>✦ Custom / tailored features</p>
+                                    {offer.features.filter(f => f.isCustom).map(f => (
+                                      <div key={f.id} className="flex items-center gap-2 px-3 py-2.5 rounded-lg" style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.28)' }}>
+                                        <span style={{ color: '#a78bfa', fontSize: 13 }}>✦</span>
+                                        <div className="flex-1 min-w-0">
+                                          <span className="text-xs font-semibold" style={{ color: '#c4b5fd' }}>{f.name}</span>
+                                          {f.description && <span className="text-xs ml-2" style={{ color: 'rgba(196,181,253,0.5)' }}>{f.description}</span>}
+                                        </div>
+                                        <span className="text-xs font-bold" style={{ color: '#a78bfa' }}>
+                                          {f.price > 0 ? `+£${f.price}/mo` : 'Included'}
+                                        </span>
+                                        <button onClick={() => removeOfferFeature(f.id)} className="p-0.5 rounded" style={{ color: 'rgba(167,139,250,0.4)' }}><X className="w-3 h-3" /></button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
 
                               {/* Confirmation modal section */}
@@ -1542,6 +1619,136 @@ const MainFrameDashboard: React.FC = () => {
                                   style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: '#fff', boxShadow: '0 4px 14px rgba(124,58,237,0.3)' }}>
                                   <CreditCard className="w-4 h-4" />
                                   Send Subscription Offer Email
+                                </motion.button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* ── Custom Feature Build Invoice ── */}
+                          <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,165,0,0.04)', border: '1px solid rgba(255,165,0,0.15)' }}>
+                            <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: '1px solid rgba(255,165,0,0.12)' }}>
+                              <Zap className="w-4 h-4" style={{ color: '#f59e0b' }} />
+                              <p className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>Custom Feature Build Invoice</p>
+                              <p className="text-xs ml-auto" style={{ color: 'rgba(255,255,255,0.3)' }}>Charge for development work</p>
+                            </div>
+
+                            <div className="p-5 space-y-4">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'rgba(255,255,255,0.45)' }}>Invoice title</label>
+                                  <input
+                                    value={devInvoice.title}
+                                    onChange={e => setDevInvoice(p => ({ ...p, title: e.target.value }))}
+                                    placeholder="Custom Feature Development Invoice"
+                                    className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,165,0,0.2)', color: 'rgba(255,255,255,0.85)' }}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'rgba(255,255,255,0.45)' }}>LemonSqueezy payment URL *</label>
+                                  <input
+                                    value={devInvoice.checkoutUrl}
+                                    onChange={e => setDevInvoice(p => ({ ...p, checkoutUrl: e.target.value }))}
+                                    placeholder="https://..."
+                                    className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,165,0,0.2)', color: 'rgba(255,255,255,0.85)' }}
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-medium mb-1.5" style={{ color: 'rgba(255,255,255,0.45)' }}>Message to client</label>
+                                <textarea
+                                  value={devInvoice.description}
+                                  onChange={e => setDevInvoice(p => ({ ...p, description: e.target.value }))}
+                                  rows={2}
+                                  placeholder="Please find below the development invoice for your custom features..."
+                                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none"
+                                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,165,0,0.2)', color: 'rgba(255,255,255,0.85)' }}
+                                />
+                              </div>
+
+                              {/* Line items — auto-populated from custom features */}
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <label className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.45)' }}>Invoice line items</label>
+                                  <button onClick={addDevItem}
+                                    className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg"
+                                    style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)' }}>
+                                    <Plus className="w-3 h-3" /> {devInvoice.items.length === 0 && tenantFeatures.some(f => f.isEnabled && (f.category?.toLowerCase() === 'custom' || Number(f.additionalCost) > 0)) ? 'Load Custom Features' : 'Add Item'}
+                                  </button>
+                                </div>
+
+                                <div className="space-y-2">
+                                  {devInvoice.items.map((item, idx) => (
+                                    <div key={item.id} className="p-3 rounded-xl space-y-2" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.18)' }}>
+                                      <div className="flex gap-2 items-center">
+                                        <span className="text-xs font-bold w-5 text-center" style={{ color: 'rgba(245,158,11,0.6)' }}>{idx + 1}</span>
+                                        <input value={item.name} onChange={e => updateDevItem(item.id, 'name', e.target.value)}
+                                          placeholder="Feature / service name"
+                                          className="flex-1 px-3 py-2 rounded-lg text-xs outline-none"
+                                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(245,158,11,0.2)', color: 'rgba(255,255,255,0.8)' }} />
+                                        <div className="flex items-center gap-1" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '4px 10px' }}>
+                                          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>£</span>
+                                          <input type="number" value={item.cost || ''} onChange={e => updateDevItem(item.id, 'cost', parseFloat(e.target.value) || 0)}
+                                            placeholder="0"
+                                            className="w-16 text-xs outline-none text-right"
+                                            style={{ background: 'transparent', color: '#f59e0b' }} />
+                                        </div>
+                                        <button onClick={() => removeDevItem(item.id)} className="p-1 rounded-lg" style={{ color: 'rgba(255,255,255,0.25)' }}><X className="w-3.5 h-3.5" /></button>
+                                      </div>
+                                      <input value={item.description} onChange={e => updateDevItem(item.id, 'description', e.target.value)}
+                                        placeholder="Description of the work done..."
+                                        className="w-full px-3 py-2 rounded-lg text-xs outline-none ml-7"
+                                        style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(245,158,11,0.12)', color: 'rgba(255,255,255,0.6)' }} />
+                                    </div>
+                                  ))}
+
+                                  {devInvoice.items.length === 0 && (
+                                    <p className="text-xs py-2 text-center" style={{ color: 'rgba(255,255,255,0.2)' }}>No items — click "Load Custom Features" or "Add Item"</p>
+                                  )}
+
+                                  {devInvoice.items.length > 0 && (
+                                    <div className="flex justify-end pt-1">
+                                      <div className="px-4 py-2 rounded-xl" style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                                        <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>Total: </span>
+                                        <span className="text-sm font-bold" style={{ color: '#f59e0b' }}>
+                                          £{devInvoice.items.reduce((sum, i) => sum + (i.cost || 0), 0).toFixed(2)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Send button */}
+                              {showConfirmDevSend ? (
+                                <div className="rounded-xl p-4 text-center space-y-3" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
+                                  <p className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>Send development invoice to {selectedTenant.businessEmail}?</p>
+                                  <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>Total: £{devInvoice.items.reduce((sum, i) => sum + (i.cost || 0), 0).toFixed(2)}</p>
+                                  <div className="flex gap-3 justify-center">
+                                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                                      onClick={() => setShowConfirmDevSend(false)}
+                                      className="px-4 py-2 rounded-xl text-sm font-medium"
+                                      style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                      Cancel
+                                    </motion.button>
+                                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                                      onClick={sendDevInvoice}
+                                      disabled={sendingDevInvoice}
+                                      className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold"
+                                      style={{ background: 'linear-gradient(135deg,#d97706,#b45309)', color: '#fff' }}>
+                                      {sendingDevInvoice ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Sending…</> : <><Check className="w-3.5 h-3.5" /> Yes, Send Invoice</>}
+                                    </motion.button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+                                  onClick={() => setShowConfirmDevSend(true)}
+                                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold"
+                                  style={{ background: 'linear-gradient(135deg,#d97706,#b45309)', color: '#fff', boxShadow: '0 4px 14px rgba(217,119,6,0.25)' }}>
+                                  <Zap className="w-4 h-4" />
+                                  Send Development Invoice Email
                                 </motion.button>
                               )}
                             </div>
