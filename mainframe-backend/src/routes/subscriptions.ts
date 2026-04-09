@@ -5,6 +5,22 @@ import nodemailer from 'nodemailer';
 
 const router = Router();
 
+// ── Shared mailer ────────────────────────────────────────────────────────────
+function createMailTransport() {
+  const port = parseInt(process.env.SMTP_PORT || '465');
+  return nodemailer.createTransport({
+    host:   process.env.SMTP_HOST || 'smtp.resend.com',
+    port,
+    secure: port === 465,          // true for 465, false for 587/TLS
+    auth: {
+      user: process.env.SMTP_USER || 'resend',
+      pass: process.env.SMTP_PASS,
+    },
+  });
+}
+
+const FROM = () => process.env.SMTP_FROM || `TrueDesk <noreply@idearigs.co.uk>`;
+
 function getPlanConfig(plan: string) {
   const configs: Record<string, any> = {
     STARTER: { basePrice: 29, perUserPrice: 10, includedUsers: 1, maxUsers: 3 },
@@ -268,15 +284,8 @@ router.post('/send-dev-invoice', requireAuth, async (req, res) => {
 </body>
 </html>`;
 
-    const transporter = nodemailer.createTransport({
-      host:   process.env.SMTP_HOST   || 'smtp.gmail.com',
-      port:   parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-
-    await transporter.sendMail({
-      from: `"TrueDesk" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+    await createMailTransport().sendMail({
+      from: FROM(),
       to:   profile.businessEmail,
       subject: `${title} — £${total.toFixed(2)} [Ref: ${invoiceRef}]`,
       html,
@@ -440,18 +449,8 @@ router.post('/send-offer', requireAuth, async (req, res) => {
 </body>
 </html>`;
 
-    const transporter = nodemailer.createTransport({
-      host:   process.env.SMTP_HOST   || 'smtp.gmail.com',
-      port:   parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    await transporter.sendMail({
-      from: `"TrueDesk" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+    await createMailTransport().sendMail({
+      from: FROM(),
       to:   profile.businessEmail,
       subject: title,
       html,
