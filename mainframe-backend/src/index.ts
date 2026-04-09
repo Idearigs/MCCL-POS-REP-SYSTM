@@ -14,6 +14,7 @@ import subdomainRouter from './routes/subdomain';
 import credentialsRouter from './routes/credentials';
 import tenantFeaturesRouter from './routes/tenant-features';
 import backupRouter from './routes/backup';
+import lemonsqueezyWebhookRouter from './routes/lemonsqueezy-webhook';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001');
@@ -33,6 +34,9 @@ app.use(cors({
   },
   credentials: true,
 }));
+
+// LemonSqueezy webhook needs raw body for signature verification — mount BEFORE express.json()
+app.use('/api/v1', express.raw({ type: 'application/json', limit: '1mb' }), lemonsqueezyWebhookRouter);
 
 app.use(express.json({ limit: '10mb' }));
 

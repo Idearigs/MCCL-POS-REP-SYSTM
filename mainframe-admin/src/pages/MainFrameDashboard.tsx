@@ -1662,13 +1662,28 @@ const MainFrameDashboard: React.FC = () => {
                                   </div>
                                 </div>
                               ) : (
-                                <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
-                                  onClick={() => setShowConfirmSend(true)}
-                                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold"
-                                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: '#fff', boxShadow: '0 4px 14px rgba(124,58,237,0.3)' }}>
-                                  <CreditCard className="w-4 h-4" />
-                                  Send Subscription Offer Email
-                                </motion.button>
+                                <div className="space-y-2">
+                                  {/* Copy link — works without email/SMTP */}
+                                  {offer.checkoutUrl && (
+                                    <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(offer.checkoutUrl);
+                                        toast.success('Checkout link copied — share via WhatsApp, SMS or any channel');
+                                      }}
+                                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium"
+                                      style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.12)' }}>
+                                      <Copy className="w-4 h-4" />
+                                      Copy Checkout Link
+                                    </motion.button>
+                                  )}
+                                  <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+                                    onClick={() => setShowConfirmSend(true)}
+                                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold"
+                                    style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: '#fff', boxShadow: '0 4px 14px rgba(124,58,237,0.3)' }}>
+                                    <CreditCard className="w-4 h-4" />
+                                    Send Subscription Offer Email
+                                  </motion.button>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -1792,13 +1807,27 @@ const MainFrameDashboard: React.FC = () => {
                                   </div>
                                 </div>
                               ) : (
-                                <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
-                                  onClick={() => setShowConfirmDevSend(true)}
-                                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold"
-                                  style={{ background: 'linear-gradient(135deg,#d97706,#b45309)', color: '#fff', boxShadow: '0 4px 14px rgba(217,119,6,0.25)' }}>
-                                  <Zap className="w-4 h-4" />
-                                  Send Development Invoice Email
-                                </motion.button>
+                                <div className="space-y-2">
+                                  {devInvoice.checkoutUrl && (
+                                    <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(devInvoice.checkoutUrl);
+                                        toast.success('Payment link copied — share via WhatsApp, SMS or any channel');
+                                      }}
+                                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium"
+                                      style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.12)' }}>
+                                      <Copy className="w-4 h-4" />
+                                      Copy Payment Link
+                                    </motion.button>
+                                  )}
+                                  <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+                                    onClick={() => setShowConfirmDevSend(true)}
+                                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold"
+                                    style={{ background: 'linear-gradient(135deg,#d97706,#b45309)', color: '#fff', boxShadow: '0 4px 14px rgba(217,119,6,0.25)' }}>
+                                    <Zap className="w-4 h-4" />
+                                    Send Development Invoice Email
+                                  </motion.button>
+                                </div>
                               )}
                             </div>
                           </div>
