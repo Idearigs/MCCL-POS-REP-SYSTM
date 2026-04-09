@@ -306,6 +306,8 @@ router.post('/send-offer', requireAuth, async (req, res) => {
     title,
     description,
     plan,
+    pricePerMonth,      // custom price set by admin
+    billingCycle,       // 'monthly' | 'quarterly' | 'yearly'
     checkoutUrl,
     features,           // [{ name, description, price, isCustom }]
     confirmModal,       // { title, message, buttonText, buttonLink }
@@ -379,7 +381,10 @@ router.post('/send-offer', requireAuth, async (req, res) => {
           <td style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);border-radius:16px 16px 0 0;padding:40px 40px 32px;text-align:center;">
             <div style="font-size:13px;font-weight:600;letter-spacing:2px;color:rgba(255,255,255,0.5);text-transform:uppercase;margin-bottom:12px;">TrueDesk POS</div>
             <h1 style="margin:0;font-size:28px;font-weight:700;color:#fff;line-height:1.3;">${title}</h1>
-            ${plan ? `<div style="display:inline-block;margin-top:16px;background:rgba(124,58,237,0.3);border:1px solid rgba(124,58,237,0.6);border-radius:20px;padding:4px 16px;color:#c4b5fd;font-size:13px;font-weight:600;">${planLabel} Plan</div>` : ''}
+            <div style="margin-top:20px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;">
+              ${plan ? `<div style="background:rgba(124,58,237,0.3);border:1px solid rgba(124,58,237,0.6);border-radius:20px;padding:4px 16px;color:#c4b5fd;font-size:13px;font-weight:600;">${planLabel} Plan</div>` : ''}
+              ${pricePerMonth ? `<div style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:20px;padding:6px 20px;color:#fff;font-size:22px;font-weight:800;">£${Number(pricePerMonth).toFixed(2)}<span style="font-size:13px;font-weight:500;opacity:0.7;">/${billingCycle || 'mo'}</span></div>` : ''}
+            </div>
           </td>
         </tr>
 
@@ -451,7 +456,7 @@ router.post('/send-offer', requireAuth, async (req, res) => {
       data: {
         customerProfileId: profileId,
         action: 'subscription.offer_sent',
-        description: `Subscription offer email sent: "${title}" (${planLabel} plan)`,
+        description: `Subscription offer email sent: "${title}" (${planLabel} plan${pricePerMonth ? ` — £${Number(pricePerMonth).toFixed(2)}/${billingCycle || 'mo'}` : ''})`,
         actorType: 'admin',
       },
     });

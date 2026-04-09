@@ -359,6 +359,8 @@ const MainFrameDashboard: React.FC = () => {
     title: '',
     description: '',
     plan: 'PROFESSIONAL',
+    pricePerMonth: '' as string | number,
+    billingCycle: 'monthly' as 'monthly' | 'quarterly' | 'yearly',
     checkoutUrl: '',
     features: [] as { id: string; name: string; description: string; price: number; isCustom: boolean }[],
     confirmModal: { title: 'Thanks for your order!', message: 'Your payment was successful. A receipt is on its way to your inbox.', buttonText: 'Access Your POS', buttonLink: '' },
@@ -611,6 +613,8 @@ const MainFrameDashboard: React.FC = () => {
         title: offer.title,
         description: offer.description,
         plan: offer.plan,
+        pricePerMonth: Number(offer.pricePerMonth) || 0,
+        billingCycle: offer.billingCycle,
         checkoutUrl: offer.checkoutUrl,
         features: offer.features.map(({ name, description, price, isCustom }) => ({ name, description, price, isCustom })),
         confirmModal: offer.confirmModal,
@@ -1466,8 +1470,8 @@ const MainFrameDashboard: React.FC = () => {
                                 />
                               </div>
 
-                              {/* Plan + Checkout URL */}
-                              <div className="grid grid-cols-2 gap-3">
+                              {/* Plan + Price + Billing cycle */}
+                              <div className="grid grid-cols-3 gap-3">
                                 <div>
                                   <label className="block text-xs font-medium mb-1.5" style={{ color: 'rgba(255,255,255,0.45)' }}>Plan</label>
                                   <select
@@ -1482,15 +1486,47 @@ const MainFrameDashboard: React.FC = () => {
                                   </select>
                                 </div>
                                 <div>
-                                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'rgba(255,255,255,0.45)' }}>LemonSqueezy checkout URL *</label>
-                                  <input
-                                    value={offer.checkoutUrl}
-                                    onChange={e => setOffer(p => ({ ...p, checkoutUrl: e.target.value }))}
-                                    placeholder="https://..."
+                                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'rgba(255,255,255,0.45)' }}>Custom price *</label>
+                                  <div className="flex items-center rounded-xl overflow-hidden" style={{ border: '1px solid rgba(124,58,237,0.4)', background: 'rgba(124,58,237,0.08)' }}>
+                                    <span className="px-3 text-sm font-semibold" style={{ color: 'rgba(167,139,250,0.8)' }}>£</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={offer.pricePerMonth}
+                                      onChange={e => setOffer(p => ({ ...p, pricePerMonth: e.target.value }))}
+                                      placeholder="0.00"
+                                      className="flex-1 py-2.5 pr-3 text-sm outline-none"
+                                      style={{ background: 'transparent', color: '#c4b5fd' }}
+                                    />
+                                    <span className="pr-3 text-xs" style={{ color: 'rgba(167,139,250,0.5)' }}>/mo</span>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'rgba(255,255,255,0.45)' }}>Billing cycle</label>
+                                  <select
+                                    value={offer.billingCycle}
+                                    onChange={e => setOffer(p => ({ ...p, billingCycle: e.target.value as any }))}
                                     className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
                                     style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)' }}
-                                  />
+                                  >
+                                    <option value="monthly" style={{ background: '#1a1a2e' }}>Monthly</option>
+                                    <option value="quarterly" style={{ background: '#1a1a2e' }}>Quarterly</option>
+                                    <option value="yearly" style={{ background: '#1a1a2e' }}>Yearly</option>
+                                  </select>
                                 </div>
+                              </div>
+
+                              {/* Checkout URL */}
+                              <div>
+                                <label className="block text-xs font-medium mb-1.5" style={{ color: 'rgba(255,255,255,0.45)' }}>LemonSqueezy checkout URL *</label>
+                                <input
+                                  value={offer.checkoutUrl}
+                                  onChange={e => setOffer(p => ({ ...p, checkoutUrl: e.target.value }))}
+                                  placeholder="https://yourstore.lemonsqueezy.com/buy/..."
+                                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)' }}
+                                />
                               </div>
 
                               {/* Features — auto-synced from Features tab */}
