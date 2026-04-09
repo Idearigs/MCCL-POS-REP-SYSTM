@@ -326,6 +326,19 @@ export const subscriptionsApi = {
     const response = await apiClient.get('/mainframe/subscriptions/stats');
     return response.data;
   },
+
+  sendOffer: async (data: {
+    profileId: string;
+    title: string;
+    description: string;
+    plan: string;
+    checkoutUrl: string;
+    features: { name: string; description: string; price: number; isCustom: boolean }[];
+    confirmModal: { title: string; message: string; buttonText: string; buttonLink: string };
+  }) => {
+    const response = await apiClient.post('/mainframe/subscriptions/send-offer', data);
+    return response.data;
+  },
 };
 
 // Bug Reports API

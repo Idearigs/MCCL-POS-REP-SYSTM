@@ -77,6 +77,7 @@ export const subscriptionsApi = {
   generateInvoice:(profileId: string)     => apiClient.post(`/mainframe/subscriptions/profile/${profileId}/generate-invoice`),
   getInvoices:    (profileId: string)     => apiClient.get(`/mainframe/subscriptions/profile/${profileId}/invoices`),
   markInvoicePaid:(invoiceId: string)     => apiClient.post(`/mainframe/subscriptions/invoices/${invoiceId}/mark-paid`),
+  sendOffer:      (data: any)             => apiClient.post('/mainframe/subscriptions/send-offer', data),
 };
 
 // ── Features ─────────────────────────────────────────────────────────────────

@@ -354,6 +354,19 @@ const MainFrameDashboard: React.FC = () => {
   const [tenantFeatures, setTenantFeatures] = useState<TenantFeature[]>([]);
   const [savingFeatures, setSavingFeatures] = useState(false);
 
+  // Subscription offer form
+  const defaultOffer = {
+    title: '',
+    description: '',
+    plan: 'PROFESSIONAL',
+    checkoutUrl: '',
+    features: [] as { id: string; name: string; description: string; price: number; isCustom: boolean }[],
+    confirmModal: { title: 'Thanks for your order!', message: 'Your payment was successful. A receipt is on its way to your inbox.', buttonText: 'Access Your POS', buttonLink: '' },
+  };
+  const [offer, setOffer] = useState(defaultOffer);
+  const [sendingOffer, setSendingOffer] = useState(false);
+  const [showConfirmSend, setShowConfirmSend] = useState(false);
+
   // Backup state
   const [backupStatus, setBackupStatus] = useState<any>(null);
   const [backupFiles, setBackupFiles] = useState<{ filename: string; size: number; createdAt: string }[]>([]);
@@ -551,6 +564,46 @@ const MainFrameDashboard: React.FC = () => {
       setTenantInvoices(p => p.map(i => i.id === id ? { ...i, status: 'PAID' } : i));
       toast.success('Marked as paid');
     } catch { toast.error('Failed'); }
+  };
+
+  const sendSubscriptionOffer = async () => {
+    if (!selectedTenant) return;
+    if (!offer.title.trim()) { toast.error('Title is required'); return; }
+    if (!offer.checkoutUrl.trim()) { toast.error('Checkout URL is required'); return; }
+    setSendingOffer(true);
+    setShowConfirmSend(false);
+    try {
+      const r = await subscriptionsApi.sendOffer({
+        profileId: selectedTenant.id,
+        title: offer.title,
+        description: offer.description,
+        plan: offer.plan,
+        checkoutUrl: offer.checkoutUrl,
+        features: offer.features.map(({ name, description, price, isCustom }) => ({ name, description, price, isCustom })),
+        confirmModal: offer.confirmModal,
+      });
+      toast.success(`Offer sent to ${r.data?.to || selectedTenant.businessEmail}`);
+      setOffer(defaultOffer);
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Failed to send');
+    } finally {
+      setSendingOffer(false);
+    }
+  };
+
+  const addOfferFeature = (isCustom: boolean) => {
+    setOffer(p => ({
+      ...p,
+      features: [...p.features, { id: crypto.randomUUID(), name: '', description: '', price: 0, isCustom }],
+    }));
+  };
+
+  const updateOfferFeature = (id: string, field: string, value: string | number) => {
+    setOffer(p => ({ ...p, features: p.features.map(f => f.id === id ? { ...f, [field]: value } : f) }));
+  };
+
+  const removeOfferFeature = (id: string) => {
+    setOffer(p => ({ ...p, features: p.features.filter(f => f.id !== id) }));
   };
 
   // ── Create tenant ───────────────────────────────────────────────────────────
@@ -957,7 +1010,7 @@ const MainFrameDashboard: React.FC = () => {
                     {([
                       { id: 'info',     label: 'Overview', icon: LayoutDashboard },
                       { id: 'users',    label: 'Users',    icon: Users },
-                      { id: 'billing',  label: 'Billing',  icon: CreditCard },
+                      { id: 'billing',  label: 'Subscription & Billing',  icon: CreditCard },
                       { id: 'activity', label: 'Activity', icon: Clock },
                       { id: 'features', label: 'Features', icon: Package },
                     ] as const).map(({ id, label, icon: Icon }) => {
@@ -1285,47 +1338,259 @@ const MainFrameDashboard: React.FC = () => {
                         </div>
                       )}
 
-                      {/* ── Billing tab ───────────────────────────────────── */}
+                      {/* ── Subscription & Billing tab ────────────────────── */}
                       {tenantTab === 'billing' && (
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>{tenantInvoices.length} invoices</p>
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-                              onClick={generateInvoice}
-                              className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium"
-                              style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.65)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                              <FileText className="w-3.5 h-3.5" /> Generate Invoice
-                            </motion.button>
-                          </div>
-                          {tenantInvoices.length === 0 && (
-                            <div className="flex flex-col items-center gap-3 py-10">
-                              <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                                <FileText className="w-7 h-7" style={{ color: 'rgba(255,255,255,0.18)' }} />
-                              </div>
-                              <p className="text-sm" style={{ color: 'rgba(255,255,255,0.25)' }}>No invoices yet</p>
+                        <div className="space-y-5">
+
+                          {/* ── Send Subscription Offer ── */}
+                          <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            {/* Section header */}
+                            <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                              <CreditCard className="w-4 h-4" style={{ color: '#7c3aed' }} />
+                              <p className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>Send Subscription Offer</p>
+                              <p className="text-xs ml-auto" style={{ color: 'rgba(255,255,255,0.3)' }}>Sends to {selectedTenant.businessEmail}</p>
                             </div>
-                          )}
-                          {tenantInvoices.map(inv => (
-                            <div key={inv.id} className="flex items-center justify-between p-4 rounded-2xl"
-                              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+
+                            <div className="p-5 space-y-4">
+                              {/* Title */}
                               <div>
-                                <p className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>{inv.invoiceNumber}</p>
-                                <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>Due {new Date(inv.dueDate).toLocaleDateString()}</p>
+                                <label className="block text-xs font-medium mb-1.5" style={{ color: 'rgba(255,255,255,0.45)' }}>Email title *</label>
+                                <input
+                                  value={offer.title}
+                                  onChange={e => setOffer(p => ({ ...p, title: e.target.value }))}
+                                  placeholder="Your MCCL POS Subscription"
+                                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)' }}
+                                />
                               </div>
-                              <div className="flex items-center gap-3">
-                                <p className="text-sm font-bold" style={{ color: 'rgba(255,255,255,0.85)' }}>£{inv.amount}</p>
-                                <StatusPill status={inv.status} />
-                                {inv.status !== 'PAID' && (
-                                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-                                    onClick={() => markPaid(inv.id)}
-                                    className="px-2.5 py-1 rounded-lg text-xs font-semibold"
-                                    style={{ background: 'rgba(52,199,89,0.12)', color: '#34C759', border: '1px solid rgba(52,199,89,0.22)' }}>
-                                    Mark Paid
-                                  </motion.button>
-                                )}
+
+                              {/* Description */}
+                              <div>
+                                <label className="block text-xs font-medium mb-1.5" style={{ color: 'rgba(255,255,255,0.45)' }}>Description / intro</label>
+                                <textarea
+                                  value={offer.description}
+                                  onChange={e => setOffer(p => ({ ...p, description: e.target.value }))}
+                                  rows={3}
+                                  placeholder="Welcome to TrueDesk POS! Here's your subscription details..."
+                                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none"
+                                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)' }}
+                                />
                               </div>
+
+                              {/* Plan + Checkout URL */}
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'rgba(255,255,255,0.45)' }}>Plan</label>
+                                  <select
+                                    value={offer.plan}
+                                    onChange={e => setOffer(p => ({ ...p, plan: e.target.value }))}
+                                    className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)' }}
+                                  >
+                                    {['STARTER','PROFESSIONAL','BUSINESS','ENTERPRISE','CUSTOM'].map(p => (
+                                      <option key={p} value={p} style={{ background: '#1a1a2e' }}>{p.charAt(0) + p.slice(1).toLowerCase()}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'rgba(255,255,255,0.45)' }}>LemonSqueezy checkout URL *</label>
+                                  <input
+                                    value={offer.checkoutUrl}
+                                    onChange={e => setOffer(p => ({ ...p, checkoutUrl: e.target.value }))}
+                                    placeholder="https://..."
+                                    className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)' }}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Standard features */}
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <label className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.45)' }}>Included features</label>
+                                  <button onClick={() => addOfferFeature(false)}
+                                    className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg"
+                                    style={{ background: 'rgba(52,199,89,0.1)', color: '#34C759', border: '1px solid rgba(52,199,89,0.2)' }}>
+                                    <Plus className="w-3 h-3" /> Add
+                                  </button>
+                                </div>
+                                <div className="space-y-2">
+                                  {offer.features.filter(f => !f.isCustom).map(f => (
+                                    <div key={f.id} className="flex gap-2 items-start">
+                                      <div className="flex-1 grid grid-cols-2 gap-2">
+                                        <input value={f.name} onChange={e => updateOfferFeature(f.id, 'name', e.target.value)}
+                                          placeholder="Feature name"
+                                          className="px-3 py-2 rounded-lg text-xs outline-none"
+                                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)' }} />
+                                        <input value={f.description} onChange={e => updateOfferFeature(f.id, 'description', e.target.value)}
+                                          placeholder="Short description"
+                                          className="px-3 py-2 rounded-lg text-xs outline-none"
+                                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)' }} />
+                                      </div>
+                                      <button onClick={() => removeOfferFeature(f.id)} className="mt-1.5 p-1 rounded-lg" style={{ color: 'rgba(255,255,255,0.3)' }}><X className="w-3.5 h-3.5" /></button>
+                                    </div>
+                                  ))}
+                                  {offer.features.filter(f => !f.isCustom).length === 0 && (
+                                    <p className="text-xs py-2" style={{ color: 'rgba(255,255,255,0.2)' }}>No standard features added yet</p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Custom / tailored features */}
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <label className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.45)' }}>Custom / tailored features</label>
+                                  <button onClick={() => addOfferFeature(true)}
+                                    className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg"
+                                    style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.25)' }}>
+                                    <Plus className="w-3 h-3" /> Add Custom
+                                  </button>
+                                </div>
+                                <div className="space-y-2">
+                                  {offer.features.filter(f => f.isCustom).map(f => (
+                                    <div key={f.id} className="flex gap-2 items-start p-3 rounded-xl" style={{ background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.18)' }}>
+                                      <div className="flex-1 space-y-2">
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <input value={f.name} onChange={e => updateOfferFeature(f.id, 'name', e.target.value)}
+                                            placeholder="Custom feature name"
+                                            className="px-3 py-2 rounded-lg text-xs outline-none"
+                                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(124,58,237,0.2)', color: 'rgba(255,255,255,0.8)' }} />
+                                          <input type="number" value={f.price || ''} onChange={e => updateOfferFeature(f.id, 'price', parseFloat(e.target.value) || 0)}
+                                            placeholder="Price £/mo (0 = included)"
+                                            className="px-3 py-2 rounded-lg text-xs outline-none"
+                                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(124,58,237,0.2)', color: 'rgba(255,255,255,0.8)' }} />
+                                        </div>
+                                        <input value={f.description} onChange={e => updateOfferFeature(f.id, 'description', e.target.value)}
+                                          placeholder="Describe this tailored feature..."
+                                          className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(124,58,237,0.2)', color: 'rgba(255,255,255,0.8)' }} />
+                                      </div>
+                                      <button onClick={() => removeOfferFeature(f.id)} className="mt-0.5 p-1 rounded-lg" style={{ color: 'rgba(255,255,255,0.3)' }}><X className="w-3.5 h-3.5" /></button>
+                                    </div>
+                                  ))}
+                                  {offer.features.filter(f => f.isCustom).length === 0 && (
+                                    <p className="text-xs py-2" style={{ color: 'rgba(255,255,255,0.2)' }}>No custom features added yet</p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Confirmation modal section */}
+                              <div className="rounded-xl p-4 space-y-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                                <p className="text-xs font-semibold" style={{ color: 'rgba(255,255,255,0.5)' }}>Post-purchase confirmation (shown after payment)</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="block text-xs mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Confirmation title</label>
+                                    <input value={offer.confirmModal.title}
+                                      onChange={e => setOffer(p => ({ ...p, confirmModal: { ...p.confirmModal, title: e.target.value } }))}
+                                      placeholder="Thanks for your order!"
+                                      className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)' }} />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Button text</label>
+                                    <input value={offer.confirmModal.buttonText}
+                                      onChange={e => setOffer(p => ({ ...p, confirmModal: { ...p.confirmModal, buttonText: e.target.value } }))}
+                                      placeholder="Access Your POS"
+                                      className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)' }} />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Confirmation message</label>
+                                  <textarea value={offer.confirmModal.message}
+                                    onChange={e => setOffer(p => ({ ...p, confirmModal: { ...p.confirmModal, message: e.target.value } }))}
+                                    rows={2}
+                                    placeholder="Your payment was successful. A receipt is on its way to your inbox."
+                                    className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-none"
+                                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)' }} />
+                                </div>
+                                <div>
+                                  <label className="block text-xs mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Button link (tenant POS URL)</label>
+                                  <input value={offer.confirmModal.buttonLink}
+                                    onChange={e => setOffer(p => ({ ...p, confirmModal: { ...p.confirmModal, buttonLink: e.target.value } }))}
+                                    placeholder={`https://${selectedTenant.subdomain}.truedesk.co.uk`}
+                                    className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)' }} />
+                                </div>
+                              </div>
+
+                              {/* Send button */}
+                              {showConfirmSend ? (
+                                <div className="rounded-xl p-4 text-center space-y-3" style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.25)' }}>
+                                  <p className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>Send offer to {selectedTenant.businessEmail}?</p>
+                                  <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>This will send an email with the subscription details and checkout link.</p>
+                                  <div className="flex gap-3 justify-center">
+                                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                                      onClick={() => setShowConfirmSend(false)}
+                                      className="px-4 py-2 rounded-xl text-sm font-medium"
+                                      style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                      Cancel
+                                    </motion.button>
+                                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                                      onClick={sendSubscriptionOffer}
+                                      disabled={sendingOffer}
+                                      className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold"
+                                      style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: '#fff' }}>
+                                      {sendingOffer ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Sending…</> : <><Check className="w-3.5 h-3.5" /> Yes, Send Email</>}
+                                    </motion.button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+                                  onClick={() => setShowConfirmSend(true)}
+                                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold"
+                                  style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', color: '#fff', boxShadow: '0 4px 14px rgba(124,58,237,0.3)' }}>
+                                  <CreditCard className="w-4 h-4" />
+                                  Send Subscription Offer Email
+                                </motion.button>
+                              )}
                             </div>
-                          ))}
+                          </div>
+
+                          {/* ── Invoice history ── */}
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <p className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>Invoice history ({tenantInvoices.length})</p>
+                              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                                onClick={generateInvoice}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium"
+                                style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                <FileText className="w-3 h-3" /> Generate Invoice
+                              </motion.button>
+                            </div>
+                            {tenantInvoices.length === 0 && (
+                              <div className="flex flex-col items-center gap-3 py-8">
+                                <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                                  <FileText className="w-6 h-6" style={{ color: 'rgba(255,255,255,0.15)' }} />
+                                </div>
+                                <p className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>No invoices yet</p>
+                              </div>
+                            )}
+                            <div className="space-y-2">
+                              {tenantInvoices.map(inv => (
+                                <div key={inv.id} className="flex items-center justify-between p-4 rounded-2xl"
+                                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                                  <div>
+                                    <p className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>{inv.invoiceNumber}</p>
+                                    <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>Due {new Date(inv.dueDate).toLocaleDateString()}</p>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <p className="text-sm font-bold" style={{ color: 'rgba(255,255,255,0.85)' }}>£{inv.amount}</p>
+                                    <StatusPill status={inv.status} />
+                                    {inv.status !== 'PAID' && (
+                                      <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                                        onClick={() => markPaid(inv.id)}
+                                        className="px-2.5 py-1 rounded-lg text-xs font-semibold"
+                                        style={{ background: 'rgba(52,199,89,0.12)', color: '#34C759', border: '1px solid rgba(52,199,89,0.22)' }}>
+                                        Mark Paid
+                                      </motion.button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
                         </div>
                       )}
 
