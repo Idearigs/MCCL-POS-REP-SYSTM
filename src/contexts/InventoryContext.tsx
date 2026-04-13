@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { productService, Product, CreateProductData, UpdateProductData } from '../services/productService';
 import { useAuth } from './AuthContext';
+import { normalizeImageUrl } from '@/lib/utils';
 
 // Extended InventoryItem interface that includes backend fields plus legacy UI fields
 export interface InventoryItem extends Omit<Product, 'stock' | 'minStockLevel'> {
@@ -29,19 +30,32 @@ const convertProductToInventoryItem = (product: Product): InventoryItem => {
   console.log('👤 Backend supplier:', product.supplier);
 
   // Extract image URLs from backend image objects
+  // Derive the uploads origin from the configured API base URL
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3007/api/v1') as string;
+  const uploadsOrigin = apiBase.replace(/\/api\/v1\/?$/, '');
+
   const imageUrls: string[] = [];
   if (product.images && Array.isArray(product.images)) {
     product.images.forEach((img: any) => {
-      // Use filePath for local storage, fallback to driveViewLink for Google Drive
-      const imagePath = img.filePath || img.driveViewLink;
-      if (imagePath) {
-        // Convert backend path to full URL
-        // If it's a relative path like '/uploads/...', prepend the API base URL
-        const fullUrl = imagePath.startsWith('/uploads')
-          ? `http://localhost:3002${imagePath}`
-          : imagePath;
-        imageUrls.push(fullUrl);
+      const imagePath: string | undefined = img.filePath || img.driveViewLink;
+      if (!imagePath) return;
+
+      let url = imagePath;
+
+      // Relative path (rare) — prefix with the API origin
+      if (url.startsWith('/uploads')) {
+        url = `${uploadsOrigin}${url}`;
       }
+      // Stored with a localhost origin (uploaded before APP_URL was configured) — rewrite to real API
+      else if (/^https?:\/\/localhost(:\d+)?\/uploads/.test(url)) {
+        url = url.replace(/^https?:\/\/localhost(:\d+)?/, uploadsOrigin);
+      }
+      // Google Drive webViewLink (/view) — convert to embeddable direct URL
+      else {
+        url = normalizeImageUrl(url) || url;
+      }
+
+      imageUrls.push(url);
     });
   }
 
