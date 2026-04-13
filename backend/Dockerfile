@@ -37,18 +37,13 @@ COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/prisma ./prisma
 COPY --from=builder --chown=node:node /app/package*.json ./
 
-# Create uploads directory owned by node user
-RUN mkdir -p /app/uploads && chown node:node /app/uploads
-
-USER node
+COPY --from=builder --chown=node:node /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 
 EXPOSE 3002
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3002/health', r => process.exit(r.statusCode === 200 ? 0 : 1))" || exit 1
 
-COPY --from=builder --chown=node:node /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
-
 ENTRYPOINT ["dumb-init", "--"]
-# Run pending migrations then start the app (migrations are idempotent)
+# Create upload subdirs (volume is root-owned so must run as root), migrate, then start
 CMD ["sh", "-c", "mkdir -p /app/uploads/product-images /app/uploads/repair-images /app/uploads/customer-documents /app/uploads/receipts && npx prisma migrate deploy && node dist/main"]
