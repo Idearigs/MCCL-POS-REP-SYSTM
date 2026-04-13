@@ -263,7 +263,9 @@ class ApiClient {
 
     const response: AxiosResponse<T> = await this.client.post(endpoint, formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        // Do NOT set Content-Type — browser/Axios must set it automatically
+        // so the multipart boundary is included (e.g. multipart/form-data; boundary=---XYZ)
+        'Content-Type': undefined,
       },
     });
 
