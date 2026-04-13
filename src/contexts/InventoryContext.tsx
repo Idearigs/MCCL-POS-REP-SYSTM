@@ -37,20 +37,26 @@ const convertProductToInventoryItem = (product: Product): InventoryItem => {
   const imageUrls: string[] = [];
   if (product.images && Array.isArray(product.images)) {
     product.images.forEach((img: any) => {
+      // 1. Best case: we have the raw Drive file ID — build proxy URL directly, no parsing needed
+      if (img.driveFileId) {
+        imageUrls.push(`${apiBase}/file-storage/drive/${img.driveFileId}`);
+        return;
+      }
+
       const imagePath: string | undefined = img.filePath || img.driveViewLink;
       if (!imagePath) return;
 
       let url = imagePath;
 
-      // Relative path (rare) — prefix with the API origin
+      // 2. Relative path (rare) — prefix with the API origin
       if (url.startsWith('/uploads')) {
         url = `${uploadsOrigin}${url}`;
       }
-      // Stored with a localhost origin (uploaded before APP_URL was configured) — rewrite to real API
+      // 3. Stored with a localhost origin — rewrite to real API
       else if (/^https?:\/\/localhost(:\d+)?\/uploads/.test(url)) {
         url = url.replace(/^https?:\/\/localhost(:\d+)?/, uploadsOrigin);
       }
-      // Google Drive URL (any format) — route through backend proxy
+      // 4. Any Google Drive URL (old /view, uc?export=view, or old proxy) — normalise to proxy
       else {
         url = normalizeImageUrl(url) || url;
       }

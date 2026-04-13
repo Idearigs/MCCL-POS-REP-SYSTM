@@ -236,6 +236,7 @@ export class ProductsService {
                 fileName: true,
                 filePath: true,
                 driveViewLink: true,
+                driveFileId: true,
                 isMain: true,
               },
             },
