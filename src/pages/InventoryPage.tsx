@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import MainLayout from '@/components/layout/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -794,27 +795,31 @@ const InventoryPage = () => {
           </div>
         </div>
 
-        {/* QR Code Modal */}
-        {isQRModalOpen && (
+        {/* QR Code Modal — rendered in a portal so it floats above everything */}
+        {isQRModalOpen && createPortal(
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '16px',
+              background: 'rgba(0,0,0,0.6)',
+              backdropFilter: 'blur(8px)',
+            }}
             onClick={() => setIsQRModalOpen(false)}
           >
             <div
-              className="relative bg-white rounded-3xl shadow-2xl overflow-hidden w-full max-w-sm"
+              style={{ width: '100%', maxWidth: '360px' }}
+              className="bg-white rounded-3xl shadow-2xl overflow-hidden"
               onClick={e => e.stopPropagation()}
             >
-              {/* Header gradient band */}
-              <div className="bg-gradient-to-br from-violet-600 to-violet-800 px-6 pt-6 pb-10 text-white text-center">
-                <div className="flex justify-end mb-2">
-                  <button
-                    onClick={() => setIsQRModalOpen(false)}
-                    className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors"
-                  >
-                    <X size={15} />
-                  </button>
-                </div>
+              {/* Gradient header */}
+              <div className="bg-gradient-to-br from-violet-600 to-violet-800 px-6 pt-5 pb-10 text-white text-center relative">
+                <button
+                  onClick={() => setIsQRModalOpen(false)}
+                  className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+                >
+                  <X size={15} />
+                </button>
                 <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center mx-auto mb-3">
                   <QrCode size={24} className="text-white" />
                 </div>
@@ -822,12 +827,12 @@ const InventoryPage = () => {
                 <p className="text-violet-200 text-sm mt-1">Scan with your phone camera</p>
               </div>
 
-              {/* QR code — overlaps the header */}
+              {/* QR card overlapping header */}
               <div className="flex justify-center -mt-8 px-6">
                 <div className="bg-white rounded-2xl shadow-lg p-4 border border-gray-100">
                   <QRCode
                     value={`${window.location.origin}/mobile/add-product`}
-                    size={220}
+                    size={210}
                     bgColor="#ffffff"
                     fgColor="#1e1b4b"
                   />
@@ -836,24 +841,23 @@ const InventoryPage = () => {
 
               {/* Footer */}
               <div className="px-6 pt-4 pb-6 text-center space-y-3">
-                <p className="text-sm font-medium text-gray-800">
+                <p className="text-xs font-mono text-gray-500 break-all">
                   {window.location.origin}/mobile/add-product
                 </p>
                 <p className="text-xs text-gray-400 leading-relaxed">
-                  Open your phone camera and point it at the code above.<br />
-                  No app needed — opens directly in your browser.
+                  Open your phone camera and point it at the code.<br />
+                  No app needed — opens in your browser.
                 </p>
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/mobile/add-product`);
-                  }}
-                  className="w-full mt-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                  onClick={() => navigator.clipboard.writeText(`${window.location.origin}/mobile/add-product`)}
+                  className="w-full py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
                 >
                   Copy Link
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* Inventory grid/table */}
