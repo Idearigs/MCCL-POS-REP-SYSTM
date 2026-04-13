@@ -50,7 +50,7 @@ const convertProductToInventoryItem = (product: Product): InventoryItem => {
       else if (/^https?:\/\/localhost(:\d+)?\/uploads/.test(url)) {
         url = url.replace(/^https?:\/\/localhost(:\d+)?/, uploadsOrigin);
       }
-      // Google Drive webViewLink (/view) — convert to embeddable direct URL
+      // Google Drive URL (any format) — route through backend proxy
       else {
         url = normalizeImageUrl(url) || url;
       }

@@ -2,12 +2,15 @@ import {
   Controller,
   Post,
   Get,
+  Param,
+  Res,
   UploadedFiles,
   UseInterceptors,
   BadRequestException,
   Body,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -160,6 +163,15 @@ export class FileStorageController {
     }
 
     return { results };
+  }
+
+  @Get('drive/:fileId')
+  @ApiOperation({ summary: 'Proxy a Google Drive file via service account' })
+  async streamDriveFile(
+    @Param('fileId') fileId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.fileStorageService.streamDriveFile(fileId, res);
   }
 
   @Get('status')

@@ -393,9 +393,10 @@ export class FileStorageService {
         `File uploaded to Shared Drive: ${file.id} in drive ${file.driveId}`,
       );
 
-      // Generate accessible URL - use direct download URL so it works as <img src>
-      // webViewLink is a viewer page (HTML), not a direct image — unusable as img src
-      const fileUrl = `https://drive.google.com/uc?export=view&id=${file.id}`;
+      // Use our backend proxy URL — the browser cannot access Shared Drive files
+      // directly (they are private). The proxy uses the service account to fetch the file.
+      const appUrl = this.configService.get('APP_URL', 'http://localhost:3000').replace(/\/$/, '');
+      const fileUrl = `${appUrl}/api/v1/file-storage/drive/${file.id}`;
 
       return {
         success: true,
@@ -491,6 +492,46 @@ export class FileStorageService {
       localStorageAvailable: fs.existsSync(this.uploadDirectory),
       preferredMethod: this.isGoogleDriveAvailable ? 'google-drive' : 'local',
     };
+  }
+
+  /**
+   * Proxy a Google Drive file through the backend using the service account.
+   * This is necessary because Shared Drive files are private — browsers cannot
+   * access them directly, but the service account can.
+   */
+  async streamDriveFile(
+    fileId: string,
+    res: import('express').Response,
+  ): Promise<void> {
+    if (!this.driveClient) {
+      res.status(503).json({ error: 'Google Drive not configured' });
+      return;
+    }
+
+    try {
+      // Get file metadata for content type
+      const meta = await this.driveClient.files.get({
+        fileId,
+        fields: 'mimeType,name',
+        supportsAllDrives: true,
+      });
+
+      const mimeType = meta.data.mimeType || 'image/jpeg';
+
+      // Fetch file content as stream
+      const fileRes = await this.driveClient.files.get(
+        { fileId, alt: 'media', supportsAllDrives: true },
+        { responseType: 'stream' },
+      );
+
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Cache-Control', 'public, max-age=86400'); // cache 1 day
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      (fileRes.data as NodeJS.ReadableStream).pipe(res);
+    } catch (error) {
+      this.logger.error(`Failed to proxy Drive file ${fileId}: ${error.message}`);
+      res.status(404).json({ error: 'File not found' });
+    }
   }
 
   /**
