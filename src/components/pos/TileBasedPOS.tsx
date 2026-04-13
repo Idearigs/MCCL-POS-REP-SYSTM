@@ -143,6 +143,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [repairs, setRepairs] = useState<Repair[]>([]);
   const [repairSearchQuery, setRepairSearchQuery] = useState('');
   const [loadingRepairs, setLoadingRepairs] = useState(false);
+  const [repairLoadingMore, setRepairLoadingMore] = useState(false);
+  const [repairPage, setRepairPage] = useState(1);
+  const [repairHasMore, setRepairHasMore] = useState(false);
   const [editingRepairPrices, setEditingRepairPrices] = useState<Record<string, number>>({});
   const [showNewRepairDialog, setShowNewRepairDialog] = useState(false);
   const [creatingRepair, setCreatingRepair] = useState(false);
@@ -408,37 +411,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     (categoryPage + 1) * CATEGORY_ITEMS_PER_PAGE
   );
 
-  // Filter repairs - supports customer name, phone, item description, problem, ID, and RMA
-  const filteredRepairs = useMemo(() => {
-    if (!repairSearchQuery) return repairs;
-
-    const query = repairSearchQuery.toLowerCase();
-    return repairs.filter(repair => {
-      // Search by customer name
-      if (repair.customerName.toLowerCase().includes(query)) return true;
-
-      // Search by item description (repair job title)
-      if (repair.itemDescription.toLowerCase().includes(query)) return true;
-
-      // Search by problem description
-      if (repair.problemDescription.toLowerCase().includes(query)) return true;
-
-      // Search by repair ID
-      if (repair.id.toLowerCase().includes(query)) return true;
-
-      // Search by RMA ID
-      if ((repair as any).rmaId?.toLowerCase().includes(query)) return true;
-
-      // Search by repair number
-      if (repair.repairNumber?.toLowerCase().includes(query)) return true;
-
-      // Search by phone number if available (check customer data or notes)
-      // Note: Phone might be in customer data, we'll handle it if the API provides it
-      if ((repair as any).customerPhone?.toLowerCase().includes(query)) return true;
-
-      return false;
-    });
-  }, [repairs, repairSearchQuery]);
+  // Repairs are fetched from backend with search — no local filter needed
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
@@ -480,12 +453,21 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     };
   }, []);
 
-  // Fetch repairs when repair view is opened
+  // Fetch repairs when repair view is opened (fresh load)
   useEffect(() => {
-    if (showRepairView && repairs.length === 0) {
-      fetchRepairs();
+    if (showRepairView) {
+      fetchRepairs(1, '');
     }
   }, [showRepairView]);
+
+  // Debounced backend search when repair search query changes
+  useEffect(() => {
+    if (!showRepairView) return;
+    const timer = setTimeout(() => {
+      fetchRepairs(1, repairSearchQuery);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [repairSearchQuery]);
 
   // When search query is typed on the main screen, switch to product grid view
   useEffect(() => {
@@ -540,19 +522,24 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     return () => clearTimeout(debounceTimer);
   }, [layawayCustomerSearch]);
 
-  const fetchRepairs = async () => {
-    setLoadingRepairs(true);
+  const fetchRepairs = async (page: number, search: string) => {
+    const isFirstPage = page === 1;
+    if (isFirstPage) setLoadingRepairs(true);
+    else setRepairLoadingMore(true);
+
     try {
-      // Fetch first page to get total, then fetch remaining pages in parallel
-      const firstResponse = await repairService.getRepairs(1, 100);
-      const totalPages = firstResponse.meta?.totalPages || 1;
-      const allRepairData = [...firstResponse.data];
-      if (totalPages > 1) {
-        const remaining = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
-        const results = await Promise.all(remaining.map(p => repairService.getRepairs(p, 100)));
-        for (const r of results) allRepairData.push(...r.data);
+      const filters: any = { search: search || undefined };
+      const response = await repairService.getRepairs(page, 10, filters);
+      const incoming = response.data ?? [];
+
+      if (isFirstPage) {
+        setRepairs(incoming);
+      } else {
+        setRepairs(prev => [...prev, ...incoming]);
       }
-      setRepairs(allRepairData);
+
+      setRepairPage(page);
+      setRepairHasMore(response.meta?.hasNextPage ?? false);
     } catch (error) {
       console.error('Failed to fetch repairs:', error);
       toast({
@@ -562,6 +549,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       });
     } finally {
       setLoadingRepairs(false);
+      setRepairLoadingMore(false);
     }
   };
 
@@ -688,6 +676,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     smoothTransition(() => {
       setShowRepairView(false);
       setRepairSearchQuery('');
+      setRepairs([]);
+      setRepairPage(1);
+      setRepairHasMore(false);
     });
   };
 
@@ -2189,97 +2180,118 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                     <p className="text-gray-600">Loading repairs...</p>
                   </div>
                 </div>
-              ) : filteredRepairs.length > 0 ? (
-                filteredRepairs.map(repair => (
-                  <div
-                    key={repair.id}
-                    className="w-full bg-white border-2 border-gray-200 rounded-xl p-4 hover:border-blue-500 hover:shadow-lg transition-all"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-gray-900 font-semibold text-lg">{repair.itemDescription}</h3>
-                          <Badge
-                            className={`${
-                              repair.status === 'COMPLETED' ? 'bg-green-500' :
-                              repair.status === 'IN_PROGRESS' ? 'bg-blue-500' :
-                              repair.status === 'READY_FOR_PICKUP' ? 'bg-purple-500' :
-                              'bg-gray-500'
-                            }`}
-                          >
-                            {repair.status.replace(/_/g, ' ')}
-                          </Badge>
-                          <Badge
-                            variant="outline"
-                            className={`${
-                              repair.priority === 'URGENT' ? 'border-red-500 text-red-600' :
-                              repair.priority === 'HIGH' ? 'border-orange-500 text-orange-600' :
-                              repair.priority === 'MEDIUM' ? 'border-yellow-500 text-yellow-600' :
-                              'border-green-500 text-green-600'
-                            }`}
-                          >
-                            {repair.priority}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
-                          <span className="flex items-center gap-1">
-                            <Users className="h-4 w-4" />
-                            {repair.customerName}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Package className="h-4 w-4" />
-                            {repair.repairType}
-                          </span>
-                          <span>ID: {repair.id.slice(0, 8)}</span>
-                        </div>
-                        <p className="text-gray-700 text-sm mb-2 line-clamp-2">{repair.problemDescription}</p>
-                        <div className="flex items-center gap-4 text-xs text-gray-500">
-                          <span>Received: {new Date(repair.dateReceived).toLocaleDateString()}</span>
-                          {repair.estimatedCompletion && (
-                            <span>Due: {new Date(repair.estimatedCompletion).toLocaleDateString()}</span>
-                          )}
-                          {repair.technicianName && (
-                            <span>Tech: {repair.technicianName}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-3 ml-6">
-                        <div className="text-right">
-                          <p className="text-gray-600 text-xs mb-1">Price</p>
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-700 font-medium">£</span>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={getRepairPrice(repair).toFixed(2)}
-                              onChange={(e) => handleRepairPriceChange(repair.id, e.target.value)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-24 h-9 text-right font-bold text-lg border-gray-300 focus:border-blue-500"
-                            />
+              ) : repairs.length > 0 ? (
+                <>
+                  {repairs.map(repair => (
+                    <div
+                      key={repair.id}
+                      className="w-full bg-white border-2 border-gray-200 rounded-xl p-4 hover:border-blue-500 hover:shadow-lg transition-all"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="text-gray-900 font-semibold text-lg">{repair.itemDescription}</h3>
+                            <Badge
+                              className={`${
+                                repair.status === 'COMPLETED' ? 'bg-green-500' :
+                                repair.status === 'IN_PROGRESS' ? 'bg-blue-500' :
+                                repair.status === 'READY_FOR_PICKUP' ? 'bg-purple-500' :
+                                'bg-gray-500'
+                              }`}
+                            >
+                              {repair.status.replace(/_/g, ' ')}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={`${
+                                repair.priority === 'URGENT' ? 'border-red-500 text-red-600' :
+                                repair.priority === 'HIGH' ? 'border-orange-500 text-orange-600' :
+                                repair.priority === 'MEDIUM' ? 'border-yellow-500 text-yellow-600' :
+                                'border-green-500 text-green-600'
+                              }`}
+                            >
+                              {repair.priority}
+                            </Badge>
                           </div>
-                          {repair.estimatedCost !== getRepairPrice(repair) && (
-                            <p className="text-gray-500 text-xs mt-1">
-                              Original: £{repair.estimatedCost.toFixed(2)}
-                            </p>
-                          )}
-                          {repair.actualCost && repair.actualCost !== repair.estimatedCost && (
-                            <p className="text-gray-500 text-xs">
-                              Actual: £{repair.actualCost.toFixed(2)}
-                            </p>
-                          )}
+                          <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                            <span className="flex items-center gap-1">
+                              <Users className="h-4 w-4" />
+                              {repair.customerName}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Package className="h-4 w-4" />
+                              {repair.repairType}
+                            </span>
+                            <span>ID: {repair.id.slice(0, 8)}</span>
+                          </div>
+                          <p className="text-gray-700 text-sm mb-2 line-clamp-2">{repair.problemDescription}</p>
+                          <div className="flex items-center gap-4 text-xs text-gray-500">
+                            <span>Received: {new Date(repair.dateReceived).toLocaleDateString()}</span>
+                            {repair.estimatedCompletion && (
+                              <span>Due: {new Date(repair.estimatedCompletion).toLocaleDateString()}</span>
+                            )}
+                            {repair.technicianName && (
+                              <span>Tech: {repair.technicianName}</span>
+                            )}
+                          </div>
                         </div>
-                        <Button
-                          size="sm"
-                          onClick={() => addRepairToCart(repair)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white w-full"
-                        >
-                          Add to Cart
-                        </Button>
+                        <div className="flex flex-col items-end gap-3 ml-6">
+                          <div className="text-right">
+                            <p className="text-gray-600 text-xs mb-1">Price</p>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-700 font-medium">£</span>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={getRepairPrice(repair).toFixed(2)}
+                                onChange={(e) => handleRepairPriceChange(repair.id, e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-24 h-9 text-right font-bold text-lg border-gray-300 focus:border-blue-500"
+                              />
+                            </div>
+                            {repair.estimatedCost !== getRepairPrice(repair) && (
+                              <p className="text-gray-500 text-xs mt-1">
+                                Original: £{repair.estimatedCost.toFixed(2)}
+                              </p>
+                            )}
+                            {repair.actualCost && repair.actualCost !== repair.estimatedCost && (
+                              <p className="text-gray-500 text-xs">
+                                Actual: £{repair.actualCost.toFixed(2)}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => addRepairToCart(repair)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white w-full"
+                          >
+                            Add to Cart
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+                  {repairHasMore && (
+                    <div className="flex justify-center pt-2 pb-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => fetchRepairs(repairPage + 1, repairSearchQuery)}
+                        disabled={repairLoadingMore}
+                        className="w-full max-w-xs border-gray-300 text-gray-600 hover:border-blue-500 hover:text-blue-600"
+                      >
+                        {repairLoadingMore ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2" />
+                            Loading...
+                          </>
+                        ) : (
+                          'Load More Repairs'
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="text-center py-12">
                   <Wrench className="h-16 w-16 mx-auto mb-4 text-gray-300" />
