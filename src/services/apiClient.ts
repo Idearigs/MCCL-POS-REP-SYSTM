@@ -44,6 +44,12 @@ class ApiClient {
         const tenantId = localStorage.getItem('tenantId') || API_CONFIG.TENANT_ID;
         config.headers['x-tenant-id'] = tenantId;
 
+        // For FormData uploads, remove Content-Type so the browser sets it
+        // automatically with the correct multipart boundary
+        if (config.data instanceof FormData) {
+          delete config.headers['Content-Type'];
+        }
+
         // Log request in development
         if (process.env.NODE_ENV === 'development') {
           console.log(`🔗 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
@@ -261,13 +267,7 @@ class ApiClient {
       });
     }
 
-    const response: AxiosResponse<T> = await this.client.post(endpoint, formData, {
-      headers: {
-        // Do NOT set Content-Type — browser/Axios must set it automatically
-        // so the multipart boundary is included (e.g. multipart/form-data; boundary=---XYZ)
-        'Content-Type': undefined,
-      },
-    });
+    const response: AxiosResponse<T> = await this.client.post(endpoint, formData);
 
     return response.data;
   }
