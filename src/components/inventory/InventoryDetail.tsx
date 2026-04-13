@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { X, Upload, Image as ImageIcon, Plus, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, normalizeImageUrl } from "@/lib/utils";
 import { productService } from "@/services/productService";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -112,10 +112,10 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
       console.log('🏢 Supplier:', item.supplier);
 
       setEditedItem(item);
-      // Reset preview URLs when item changes
+      // Reset preview URLs when item changes — normalize Google Drive URLs for display
       const urls: string[] = [];
-      if (item.imageUrl) urls.push(item.imageUrl);
-      if (item.additionalImages) urls.push(...item.additionalImages);
+      if (item.imageUrl) urls.push(normalizeImageUrl(item.imageUrl) || item.imageUrl);
+      if (item.additionalImages) urls.push(...item.additionalImages.map(u => normalizeImageUrl(u) || u));
       setPreviewUrls(urls);
 
       // IMPORTANT: Reset imageFiles when loading existing item (only URLs from DB, no File objects to upload)

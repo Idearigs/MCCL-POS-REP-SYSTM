@@ -393,9 +393,9 @@ export class FileStorageService {
         `File uploaded to Shared Drive: ${file.id} in drive ${file.driveId}`,
       );
 
-      // Generate accessible URL - for Shared Drive files
-      const fileUrl =
-        file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`;
+      // Generate accessible URL - use direct download URL so it works as <img src>
+      // webViewLink is a viewer page (HTML), not a direct image — unusable as img src
+      const fileUrl = `https://drive.google.com/uc?export=view&id=${file.id}`;
 
       return {
         success: true,

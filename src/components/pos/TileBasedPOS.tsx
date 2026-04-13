@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { normalizeImageUrl } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -2068,7 +2069,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                         <div className="aspect-square bg-gray-100 relative overflow-hidden">
                           {product.imageUrl ? (
                             <img
-                              src={product.imageUrl}
+                              src={normalizeImageUrl(product.imageUrl)}
                               alt={product.name}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />
@@ -2571,7 +2572,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                         <div className="aspect-square bg-gray-100 relative">
                           {product.imageUrl ? (
                             <img
-                              src={product.imageUrl}
+                              src={normalizeImageUrl(product.imageUrl)}
                               alt={product.name}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                             />

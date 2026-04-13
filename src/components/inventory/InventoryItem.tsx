@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit, Trash2, Tag, Image as ImageIcon } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { normalizeImageUrl } from "@/lib/utils";
 
 export interface InventoryItemProps {
   id: string;
@@ -57,7 +58,7 @@ const InventoryItem: React.FC<InventoryItemProps> = ({
           <div className="flex items-center gap-2">
             <Avatar className="h-10 w-10 rounded-xl border border-gray-100 shadow-sm overflow-hidden">
               {imageUrl ? (
-                <AvatarImage src={imageUrl} alt={name} />
+                <AvatarImage src={normalizeImageUrl(imageUrl)} alt={name} />
               ) : (
                 <AvatarFallback className="bg-gradient-to-br from-gray-50 to-gray-100">
                   <ImageIcon className="h-5 w-5 text-gray-400" />

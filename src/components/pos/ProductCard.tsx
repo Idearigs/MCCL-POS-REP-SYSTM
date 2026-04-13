@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { normalizeImageUrl } from '@/lib/utils';
 
 interface ProductCardProps {
   id: string;
@@ -47,7 +48,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
       <div className="aspect-square w-full bg-gray-100 relative overflow-hidden">
         {image ? (
           <img
-            src={image}
+            src={normalizeImageUrl(image)}
             alt={name}
             className="w-full h-full object-cover"
           />
