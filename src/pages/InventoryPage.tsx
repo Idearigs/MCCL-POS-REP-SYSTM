@@ -88,6 +88,12 @@ const InventoryPage = () => {
   const [isCSVImportDialogOpen, setIsCSVImportDialogOpen] = useState(false);
   const [isBulkRFIDDialogOpen, setIsBulkRFIDDialogOpen] = useState(false);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+  const [qrStep, setQrStep] = useState(0);
+  useEffect(() => {
+    if (!isQRModalOpen) { setQrStep(0); return; }
+    const t = setInterval(() => setQrStep(s => (s + 1) % 3), 2200);
+    return () => clearInterval(t);
+  }, [isQRModalOpen]);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [quickFilter, setQuickFilter] = useState<'lowStock' | 'outOfStock' | null>(null);
   const { toast } = useToast();
@@ -795,68 +801,175 @@ const InventoryPage = () => {
           </div>
         </div>
 
-        {/* QR Code Modal — rendered in a portal so it floats above everything */}
+        {/* QR Code Modal — portal-rendered, fully independent */}
         {isQRModalOpen && createPortal(
-          <div
-            style={{
-              position: 'fixed', inset: 0, zIndex: 9999,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: '16px',
-              background: 'rgba(0,0,0,0.6)',
-              backdropFilter: 'blur(8px)',
-            }}
-            onClick={() => setIsQRModalOpen(false)}
-          >
+          <>
+            <style>{`
+              @keyframes qr-modal-in {
+                from { opacity: 0; transform: scale(0.88) translateY(20px); }
+                to   { opacity: 1; transform: scale(1)    translateY(0); }
+              }
+              @keyframes qr-float {
+                0%,100% { transform: perspective(700px) rotateX(3deg) rotateY(-4deg) translateY(0px); }
+                50%     { transform: perspective(700px) rotateX(-2deg) rotateY(4deg) translateY(-5px); }
+              }
+              @keyframes qr-scan {
+                0%   { top: 2px;          opacity: 0; }
+                5%   { opacity: 1; }
+                92%  { top: calc(100% - 4px); opacity: 1; }
+                100% { top: calc(100% - 4px); opacity: 0; }
+              }
+              @keyframes corner-pulse {
+                0%,100% { opacity: 1; }
+                50%     { opacity: 0.4; }
+              }
+              @keyframes step-in {
+                from { opacity: 0; transform: translateY(8px); }
+                to   { opacity: 1; transform: translateY(0); }
+              }
+              .qr-modal-card  { animation: qr-modal-in 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+              .qr-float-card  { animation: qr-float 5s ease-in-out infinite; }
+              .qr-scan-line   {
+                animation: qr-scan 2.4s ease-in-out infinite;
+                position: absolute; left: 6px; right: 6px; height: 2px;
+                background: linear-gradient(90deg, transparent, #a78bfa, #7c3aed, #a78bfa, transparent);
+                box-shadow: 0 0 10px 3px rgba(124,58,237,0.55);
+                border-radius: 99px;
+              }
+              .qr-corner       { animation: corner-pulse 2.4s ease-in-out infinite; }
+              .qr-step-label   { animation: step-in 0.3s ease forwards; }
+            `}</style>
+
             <div
-              style={{ width: '100%', maxWidth: '360px' }}
-              className="bg-white rounded-3xl shadow-2xl"
-              onClick={e => e.stopPropagation()}
+              style={{
+                position: 'fixed', inset: 0, zIndex: 9999,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '16px',
+                background: 'rgba(15,10,40,0.7)',
+                backdropFilter: 'blur(10px)',
+              }}
+              onClick={() => setIsQRModalOpen(false)}
             >
-              {/* Gradient header — rounded top only */}
-              <div className="bg-gradient-to-br from-violet-600 to-violet-800 px-6 pt-5 pb-8 text-white text-center relative rounded-t-3xl">
-                <button
-                  onClick={() => setIsQRModalOpen(false)}
-                  className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors"
-                >
-                  <X size={15} />
-                </button>
-                <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center mx-auto mb-3">
-                  <QrCode size={24} className="text-white" />
-                </div>
-                <h2 className="text-lg font-bold tracking-tight">Mobile Quick-Add</h2>
-                <p className="text-violet-200 text-sm mt-1">Scan with your phone camera</p>
-              </div>
+              <div
+                className="qr-modal-card"
+                style={{ width: '100%', maxWidth: '360px', background: '#fff', borderRadius: '28px', boxShadow: '0 32px 80px rgba(0,0,0,0.35)' }}
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Gradient header */}
+                <div style={{
+                  background: 'linear-gradient(135deg, #7c3aed 0%, #4f23a8 100%)',
+                  borderRadius: '28px 28px 0 0',
+                  padding: '20px 24px 24px',
+                  textAlign: 'center',
+                  position: 'relative',
+                  color: '#fff',
+                }}>
+                  <button
+                    onClick={() => setIsQRModalOpen(false)}
+                    style={{
+                      position: 'absolute', top: 14, right: 14,
+                      width: 32, height: 32, borderRadius: '50%',
+                      background: 'rgba(255,255,255,0.18)',
+                      border: 'none', cursor: 'pointer', color: '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    <X size={15} />
+                  </button>
 
-              {/* QR code — flat against header, no overlap */}
-              <div className="flex justify-center px-6 pt-6">
-                <div className="bg-white rounded-2xl shadow-md p-4 border border-gray-100">
-                  <QRCode
-                    value={`${window.location.origin}/mobile/add-product`}
-                    size={220}
-                    bgColor="#ffffff"
-                    fgColor="#1e1b4b"
-                  />
+                  {/* Animated phone + camera icon */}
+                  <div style={{ fontSize: 36, marginBottom: 8, display: 'block' }}>📱</div>
+                  <h2 style={{ fontWeight: 700, fontSize: 18, margin: 0 }}>Mobile Quick-Add</h2>
+                  <p style={{ color: '#c4b5fd', fontSize: 13, marginTop: 4 }}>
+                    Use your phone camera — no app needed
+                  </p>
                 </div>
-              </div>
 
-              {/* Footer */}
-              <div className="px-6 pt-4 pb-6 text-center space-y-3">
-                <p className="text-xs font-mono text-gray-500 break-all">
-                  {window.location.origin}/mobile/add-product
-                </p>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Open your phone camera and point it at the code.<br />
-                  No app needed — opens in your browser.
-                </p>
-                <button
-                  onClick={() => navigator.clipboard.writeText(`${window.location.origin}/mobile/add-product`)}
-                  className="w-full py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-                >
-                  Copy Link
-                </button>
+                {/* QR code with 3D float + scanner overlay */}
+                <div style={{ padding: '20px 24px 8px', display: 'flex', justifyContent: 'center' }}>
+                  <div className="qr-float-card" style={{
+                    position: 'relative',
+                    background: '#fff',
+                    borderRadius: 20,
+                    padding: 14,
+                    boxShadow: '0 8px 32px rgba(124,58,237,0.15), 0 2px 8px rgba(0,0,0,0.08)',
+                    border: '1.5px solid #ede9fe',
+                  }}>
+                    <QRCode
+                      value={`${window.location.origin}/mobile/add-product`}
+                      size={210}
+                      bgColor="#ffffff"
+                      fgColor="#1e1b4b"
+                    />
+
+                    {/* Scanning laser line */}
+                    <div className="qr-scan-line" />
+
+                    {/* Viewfinder corners */}
+                    {[
+                      { top: 6, left: 6, borderTop: '3px solid #7c3aed', borderLeft: '3px solid #7c3aed' },
+                      { top: 6, right: 6, borderTop: '3px solid #7c3aed', borderRight: '3px solid #7c3aed' },
+                      { bottom: 6, left: 6, borderBottom: '3px solid #7c3aed', borderLeft: '3px solid #7c3aed' },
+                      { bottom: 6, right: 6, borderBottom: '3px solid #7c3aed', borderRight: '3px solid #7c3aed' },
+                    ].map((s, i) => (
+                      <div key={i} className="qr-corner" style={{
+                        position: 'absolute', width: 18, height: 18, borderRadius: 2, ...s,
+                      }} />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Animated step guide */}
+                <div style={{ padding: '12px 24px 0', textAlign: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 10 }}>
+                    {[0, 1, 2].map(i => (
+                      <div key={i} style={{
+                        width: qrStep === i ? 20 : 6,
+                        height: 6, borderRadius: 99,
+                        background: qrStep === i ? '#7c3aed' : '#e5e7eb',
+                        transition: 'all 0.3s ease',
+                      }} />
+                    ))}
+                  </div>
+                  <div key={qrStep} className="qr-step-label" style={{ minHeight: 44 }}>
+                    {qrStep === 0 && (
+                      <p style={{ fontSize: 13, color: '#374151', fontWeight: 500, margin: 0 }}>
+                        📷 <strong>Open your camera app</strong><br />
+                        <span style={{ color: '#9ca3af', fontWeight: 400 }}>No QR scanner needed — just your camera</span>
+                      </p>
+                    )}
+                    {qrStep === 1 && (
+                      <p style={{ fontSize: 13, color: '#374151', fontWeight: 500, margin: 0 }}>
+                        🎯 <strong>Point it at the code above</strong><br />
+                        <span style={{ color: '#9ca3af', fontWeight: 400 }}>Hold steady until a link appears</span>
+                      </p>
+                    )}
+                    {qrStep === 2 && (
+                      <p style={{ fontSize: 13, color: '#374151', fontWeight: 500, margin: 0 }}>
+                        ✅ <strong>Tap the link that pops up</strong><br />
+                        <span style={{ color: '#9ca3af', fontWeight: 400 }}>Opens the add-product form instantly</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Copy link */}
+                <div style={{ padding: '12px 24px 20px' }}>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/mobile/add-product`)}
+                    style={{
+                      width: '100%', padding: '10px 0', borderRadius: 14,
+                      border: '1.5px solid #ede9fe', background: '#faf5ff',
+                      color: '#7c3aed', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                      transition: 'background 0.2s',
+                    }}
+                  >
+                    Copy Link
+                  </button>
+                </div>
               </div>
             </div>
-          </div>,
+          </>,
           document.body
         )}
 
