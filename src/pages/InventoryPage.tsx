@@ -809,11 +809,11 @@ const InventoryPage = () => {
           >
             <div
               style={{ width: '100%', maxWidth: '360px' }}
-              className="bg-white rounded-3xl shadow-2xl overflow-hidden"
+              className="bg-white rounded-3xl shadow-2xl"
               onClick={e => e.stopPropagation()}
             >
-              {/* Gradient header */}
-              <div className="bg-gradient-to-br from-violet-600 to-violet-800 px-6 pt-5 pb-10 text-white text-center relative">
+              {/* Gradient header — rounded top only */}
+              <div className="bg-gradient-to-br from-violet-600 to-violet-800 px-6 pt-5 pb-8 text-white text-center relative rounded-t-3xl">
                 <button
                   onClick={() => setIsQRModalOpen(false)}
                   className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors"
@@ -827,12 +827,12 @@ const InventoryPage = () => {
                 <p className="text-violet-200 text-sm mt-1">Scan with your phone camera</p>
               </div>
 
-              {/* QR card overlapping header */}
-              <div className="flex justify-center -mt-8 px-6">
-                <div className="bg-white rounded-2xl shadow-lg p-4 border border-gray-100">
+              {/* QR code — flat against header, no overlap */}
+              <div className="flex justify-center px-6 pt-6">
+                <div className="bg-white rounded-2xl shadow-md p-4 border border-gray-100">
                   <QRCode
                     value={`${window.location.origin}/mobile/add-product`}
-                    size={210}
+                    size={220}
                     bgColor="#ffffff"
                     fgColor="#1e1b4b"
                   />
