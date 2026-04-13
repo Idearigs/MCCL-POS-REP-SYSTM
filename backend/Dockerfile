@@ -51,4 +51,4 @@ COPY --from=builder --chown=node:node /app/node_modules/.bin/prisma ./node_modul
 
 ENTRYPOINT ["dumb-init", "--"]
 # Run pending migrations then start the app (migrations are idempotent)
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "mkdir -p /app/uploads/product-images /app/uploads/repair-images /app/uploads/customer-documents /app/uploads/receipts && npx prisma migrate deploy && node dist/main"]
