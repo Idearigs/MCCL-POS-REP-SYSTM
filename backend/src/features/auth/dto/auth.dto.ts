@@ -6,12 +6,14 @@ import {
   MaxLength,
   IsOptional,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class LoginDto {
   @ApiProperty({
     description: 'User email address',
     example: 'admin@buymejewellery.co.uk',
   })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   @IsEmail({}, { message: 'Please provide a valid email address' })
   email: string;
 
@@ -32,6 +34,7 @@ export class LoginDto {
     required: false,
   })
   @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   @IsString()
   companySlug?: string;
 }
@@ -50,6 +53,7 @@ export class RegisterDto {
     description: 'User email address',
     example: 'john.doe@buymejewellery.co.uk',
   })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   @IsEmail({}, { message: 'Please provide a valid email address' })
   email: string;
 
