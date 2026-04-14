@@ -397,7 +397,7 @@ export class AuthService {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_SECRET'),
-        expiresIn: this.configService.get<string>('JWT_EXPIRATION', '15m'),
+        expiresIn: this.configService.get<string>('JWT_EXPIRATION', '7d'),
       }),
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
@@ -520,7 +520,7 @@ export class AuthService {
    * Get token expiration time in seconds
    */
   private getExpirationTime(): number {
-    const expiration = this.configService.get<string>('JWT_EXPIRATION', '15m');
+    const expiration = this.configService.get<string>('JWT_EXPIRATION', '7d');
 
     // Convert time string to seconds (e.g., '15m' -> 900)
     const timeValue = parseInt(expiration.slice(0, -1));
