@@ -44,12 +44,15 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MainframeAdminsService = void 0;
 const common_1 = require("@nestjs/common");
+const jwt_1 = require("@nestjs/jwt");
 const prisma_service_1 = require("../../../core/prisma/prisma.service");
 const crypto = __importStar(require("crypto"));
 let MainframeAdminsService = class MainframeAdminsService {
     prisma;
-    constructor(prisma) {
+    jwtService;
+    constructor(prisma, jwtService) {
         this.prisma = prisma;
+        this.jwtService = jwtService;
     }
     async create(data) {
         const existing = await this.prisma.mf_admins.findUnique({
@@ -110,6 +113,8 @@ let MainframeAdminsService = class MainframeAdminsService {
         return admin;
     }
     async login(email, password) {
+        if (!email || !password)
+            throw new common_1.UnauthorizedException('Email and password are required');
         const admin = await this.prisma.mf_admins.findUnique({
             where: { email: email.toLowerCase() },
         });
@@ -122,13 +127,20 @@ let MainframeAdminsService = class MainframeAdminsService {
             where: { id: admin.id },
             data: { lastLoginAt: new Date() },
         });
-        return {
+        const adminData = {
             id: admin.id,
             firstName: admin.firstName,
             lastName: admin.lastName,
             email: admin.email,
             role: admin.role,
         };
+        const token = this.jwtService.sign({
+            sub: admin.id,
+            email: admin.email,
+            role: admin.role,
+            type: 'mainframe_admin',
+        });
+        return { token, admin: adminData };
     }
     async update(id, data) {
         return this.prisma.mf_admins.update({
@@ -160,6 +172,7 @@ let MainframeAdminsService = class MainframeAdminsService {
 exports.MainframeAdminsService = MainframeAdminsService;
 exports.MainframeAdminsService = MainframeAdminsService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        jwt_1.JwtService])
 ], MainframeAdminsService);
 //# sourceMappingURL=mainframe-admins.service.js.map

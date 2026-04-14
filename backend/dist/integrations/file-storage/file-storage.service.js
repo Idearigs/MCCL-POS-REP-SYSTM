@@ -302,7 +302,8 @@ let FileStorageService = FileStorageService_1 = class FileStorageService {
             });
             const file = response.data;
             this.logger.debug(`File uploaded to Shared Drive: ${file.id} in drive ${file.driveId}`);
-            const fileUrl = file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`;
+            const appUrl = this.configService.get('APP_URL', 'http://localhost:3000').replace(/\/$/, '');
+            const fileUrl = `${appUrl}/api/v1/file-storage/drive/${file.id}`;
             return {
                 success: true,
                 fileUrl,
@@ -363,6 +364,29 @@ let FileStorageService = FileStorageService_1 = class FileStorageService {
             localStorageAvailable: fs.existsSync(this.uploadDirectory),
             preferredMethod: this.isGoogleDriveAvailable ? 'google-drive' : 'local',
         };
+    }
+    async streamDriveFile(fileId, res) {
+        if (!this.driveClient) {
+            res.status(503).json({ error: 'Google Drive not configured' });
+            return;
+        }
+        try {
+            const meta = await this.driveClient.files.get({
+                fileId,
+                fields: 'mimeType,name',
+                supportsAllDrives: true,
+            });
+            const mimeType = meta.data.mimeType || 'image/jpeg';
+            const fileRes = await this.driveClient.files.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'stream' });
+            res.setHeader('Content-Type', mimeType);
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+            fileRes.data.pipe(res);
+        }
+        catch (error) {
+            this.logger.error(`Failed to proxy Drive file ${fileId}: ${error.message}`);
+            res.status(404).json({ error: 'File not found' });
+        }
     }
     async deleteFile(fileId, uploadMethod) {
         try {

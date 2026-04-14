@@ -69,6 +69,8 @@ async function bootstrap() {
                 'https://pos.truedesk.co.uk',
                 'https://api.truedesk.co.uk',
                 'https://truedesk.co.uk',
+                'https://mainframe.truedesk.co.uk',
+                'https://apimainframe.truedesk.co.uk',
                 'https://pos.buymejewellery.co.uk',
                 'https://buymejewellery.co.uk',
                 'http://localhost:3000',

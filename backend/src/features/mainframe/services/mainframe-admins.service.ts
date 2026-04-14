@@ -4,12 +4,16 @@ import {
   ConflictException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class MainframeAdminsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService,
+  ) {}
 
   async create(data: {
     firstName: string;
@@ -79,6 +83,9 @@ export class MainframeAdminsService {
   }
 
   async login(email: string, password: string) {
+    if (!email || !password)
+      throw new UnauthorizedException('Email and password are required');
+
     const admin = await this.prisma.mf_admins.findUnique({
       where: { email: email.toLowerCase() },
     });
@@ -93,13 +100,23 @@ export class MainframeAdminsService {
       where: { id: admin.id },
       data: { lastLoginAt: new Date() },
     });
-    return {
+
+    const adminData = {
       id: admin.id,
       firstName: admin.firstName,
       lastName: admin.lastName,
       email: admin.email,
       role: admin.role,
     };
+
+    const token = this.jwtService.sign({
+      sub: admin.id,
+      email: admin.email,
+      role: admin.role,
+      type: 'mainframe_admin',
+    });
+
+    return { token, admin: adminData };
   }
 
   async update(

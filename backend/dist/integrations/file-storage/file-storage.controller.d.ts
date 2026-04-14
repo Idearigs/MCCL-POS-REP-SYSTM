@@ -1,3 +1,4 @@
+import type { Response } from 'express';
 import { FileStorageService, FileUploadResult } from './file-storage.service';
 interface UploadedFile {
     fieldname: string;
@@ -20,6 +21,7 @@ export declare class FileStorageController {
     uploadProductImages(files: UploadedFile[], metadata: any, tenantId: string): Promise<{
         results: FileUploadResult[];
     }>;
+    streamDriveFile(fileId: string, res: Response): Promise<void>;
     getStorageStatus(): {
         googleDriveAvailable: boolean;
         localStorageAvailable: boolean;

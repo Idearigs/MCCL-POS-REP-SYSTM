@@ -1,7 +1,9 @@
+import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 export declare class MainframeAdminsService {
     private prisma;
-    constructor(prisma: PrismaService);
+    private jwtService;
+    constructor(prisma: PrismaService, jwtService: JwtService);
     create(data: {
         firstName: string;
         lastName: string;
@@ -38,11 +40,14 @@ export declare class MainframeAdminsService {
         lastLoginAt: Date;
     }>;
     login(email: string, password: string): Promise<{
-        id: string;
-        firstName: string;
-        lastName: string;
-        email: string;
-        role: string;
+        token: string;
+        admin: {
+            id: string;
+            firstName: string;
+            lastName: string;
+            email: string;
+            role: string;
+        };
     }>;
     update(id: string, data: {
         firstName?: string;

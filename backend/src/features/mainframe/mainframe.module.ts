@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
 import { CustomerProfilesController } from './controllers/customer-profiles.controller';
 import { CustomerProfilesService } from './services/customer-profiles.service';
 import { CustomerUsersController } from './controllers/customer-users.controller';
@@ -20,7 +21,18 @@ import { CredentialsExportService } from './services/credentials-export.service'
 import { PrismaModule } from '../../core/prisma/prisma.module';
 
 @Module({
-  imports: [PrismaModule, ConfigModule],
+  imports: [
+    PrismaModule,
+    ConfigModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>('MAINFRAME_JWT_SECRET') || configService.get<string>('JWT_SECRET'),
+        signOptions: { expiresIn: '7d' },
+      }),
+      inject: [ConfigService],
+    }),
+  ],
   controllers: [
     CustomerProfilesController,
     CustomerUsersController,

@@ -111,6 +111,9 @@ let FileStorageController = class FileStorageController {
         }
         return { results };
     }
+    async streamDriveFile(fileId, res) {
+        await this.fileStorageService.streamDriveFile(fileId, res);
+    }
     getStorageStatus() {
         return this.fileStorageService.getStorageStatus();
     }
@@ -156,6 +159,15 @@ __decorate([
     __metadata("design:paramtypes", [Array, Object, String]),
     __metadata("design:returntype", Promise)
 ], FileStorageController.prototype, "uploadProductImages", null);
+__decorate([
+    (0, common_1.Get)('drive/:fileId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Proxy a Google Drive file via service account' }),
+    __param(0, (0, common_1.Param)('fileId')),
+    __param(1, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], FileStorageController.prototype, "streamDriveFile", null);
 __decorate([
     (0, common_1.Get)('status'),
     (0, swagger_1.ApiOperation)({ summary: 'Get storage system status' }),

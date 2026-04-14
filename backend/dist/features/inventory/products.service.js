@@ -148,6 +148,7 @@ let ProductsService = ProductsService_1 = class ProductsService {
                                 fileName: true,
                                 filePath: true,
                                 driveViewLink: true,
+                                driveFileId: true,
                                 isMain: true,
                             },
                         },

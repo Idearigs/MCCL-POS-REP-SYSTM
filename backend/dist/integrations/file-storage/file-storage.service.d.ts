@@ -38,6 +38,7 @@ export declare class FileStorageService {
         localStorageAvailable: boolean;
         preferredMethod: string;
     };
+    streamDriveFile(fileId: string, res: import('express').Response): Promise<void>;
     deleteFile(fileId: string, uploadMethod: 'google-drive' | 'local'): Promise<boolean>;
     testStorageMethods(): Promise<Record<string, any>>;
 }

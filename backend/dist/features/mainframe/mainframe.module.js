@@ -9,6 +9,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MainframeModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
+const jwt_1 = require("@nestjs/jwt");
 const customer_profiles_controller_1 = require("./controllers/customer-profiles.controller");
 const customer_profiles_service_1 = require("./services/customer-profiles.service");
 const customer_users_controller_1 = require("./controllers/customer-users.controller");
@@ -32,7 +33,18 @@ let MainframeModule = class MainframeModule {
 exports.MainframeModule = MainframeModule;
 exports.MainframeModule = MainframeModule = __decorate([
     (0, common_1.Module)({
-        imports: [prisma_module_1.PrismaModule, config_1.ConfigModule],
+        imports: [
+            prisma_module_1.PrismaModule,
+            config_1.ConfigModule,
+            jwt_1.JwtModule.registerAsync({
+                imports: [config_1.ConfigModule],
+                useFactory: (configService) => ({
+                    secret: configService.get('MAINFRAME_JWT_SECRET') || configService.get('JWT_SECRET'),
+                    signOptions: { expiresIn: '7d' },
+                }),
+                inject: [config_1.ConfigService],
+            }),
+        ],
         controllers: [
             customer_profiles_controller_1.CustomerProfilesController,
             customer_users_controller_1.CustomerUsersController,

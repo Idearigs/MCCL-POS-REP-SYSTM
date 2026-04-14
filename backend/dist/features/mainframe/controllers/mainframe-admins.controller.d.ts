@@ -20,11 +20,14 @@ export declare class MainframeAdminsController {
         email: string;
         password: string;
     }): Promise<{
-        id: string;
-        firstName: string;
-        lastName: string;
-        email: string;
-        role: string;
+        token: string;
+        admin: {
+            id: string;
+            firstName: string;
+            lastName: string;
+            email: string;
+            role: string;
+        };
     }>;
     findAll(): Promise<{
         email: string;

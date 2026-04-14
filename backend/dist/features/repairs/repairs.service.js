@@ -102,8 +102,16 @@ let RepairsService = RepairsService_1 = class RepairsService {
             where.OR = [
                 { repairNumber: { contains: queryDto.search, mode: 'insensitive' } },
                 { itemDescription: { contains: queryDto.search, mode: 'insensitive' } },
+                { issueDescription: { contains: queryDto.search, mode: 'insensitive' } },
                 {
-                    issueDescription: { contains: queryDto.search, mode: 'insensitive' },
+                    customers: {
+                        OR: [
+                            { firstName: { contains: queryDto.search, mode: 'insensitive' } },
+                            { lastName: { contains: queryDto.search, mode: 'insensitive' } },
+                            { phone: { contains: queryDto.search, mode: 'insensitive' } },
+                            { email: { contains: queryDto.search, mode: 'insensitive' } },
+                        ],
+                    },
                 },
             ];
         }
