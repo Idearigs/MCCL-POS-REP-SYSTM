@@ -20,7 +20,8 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '3001');
 
 // CORS — allow mainframe-admin frontend origins
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5174,http://localhost:5173,http://localhost:3000')
+const defaultOrigins = 'http://localhost:5174,http://localhost:5173,http://localhost:3000,https://mainframe.truedesk.co.uk';
+const allowedOrigins = (process.env.CORS_ORIGINS || defaultOrigins)
   .split(',')
   .map((o) => o.trim());
 
