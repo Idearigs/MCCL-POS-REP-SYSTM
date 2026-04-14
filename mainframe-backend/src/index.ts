@@ -36,8 +36,10 @@ app.use(cors({
   credentials: true,
 }));
 
-// LemonSqueezy webhook needs raw body for signature verification — mount BEFORE express.json()
-app.use('/api/v1', express.raw({ type: 'application/json', limit: '1mb' }), lemonsqueezyWebhookRouter);
+// LemonSqueezy webhook needs raw body for signature verification.
+// Scope express.raw() to ONLY the webhook path — not all of /api/v1 — so other
+// routes (e.g. login) still get their body parsed as JSON by express.json() below.
+app.use('/api/v1/webhooks/lemonsqueezy', express.raw({ type: 'application/json', limit: '1mb' }));
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -72,8 +74,9 @@ app.post('/setup', async (req, res) => {
   return res.json({ message: 'Admin created/reset', email: EMAIL, password: PASSWORD });
 });
 
-// API routes under /api/v1/mainframe/...
+// API routes under /api/v1/...
 const api = express.Router();
+api.use('/webhooks', lemonsqueezyWebhookRouter);
 api.use('/mainframe/admins', adminsRouter);
 api.use('/mainframe/customer-profiles', customerProfilesRouter);
 api.use('/mainframe/customer-users', customerUsersRouter);
