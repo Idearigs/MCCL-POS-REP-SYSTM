@@ -170,6 +170,10 @@ const Login = () => {
                           type="text"
                           placeholder="Company code"
                           className="pl-12 h-12 text-base bg-slate-50 border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          autoComplete="organization"
+                          spellCheck={false}
                           {...field}
                           disabled={isLoading}
                         />
@@ -195,6 +199,9 @@ const Login = () => {
                           type="email"
                           placeholder="Email address"
                           className="pl-12 h-12 text-base bg-slate-50 border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          autoComplete="email"
                           {...field}
                           disabled={isLoading}
                         />
