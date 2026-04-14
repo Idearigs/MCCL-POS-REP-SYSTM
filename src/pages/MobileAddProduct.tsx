@@ -453,7 +453,7 @@ export default function MobileAddProduct() {
         cost: Number(form.cost) || 0,
         stock: Number(form.stock),
         minStockLevel: Number(form.minStockLevel) || 1,
-        category: form.category || '',
+        category: form.category || undefined,
         material: form.material,
         description: form.description.trim() || undefined,
         weight: form.weight ? Number(form.weight) : undefined,
@@ -550,7 +550,7 @@ export default function MobileAddProduct() {
         cost: Number(editForm.cost) || 0,
         stock: Number(editForm.stock) || 0,
         minStockLevel: Number(editForm.minStockLevel) || 1,
-        category: editForm.category || '',
+        category: editForm.category || undefined,   // empty string → don't send → Prisma won't touch categoryId
         material: editForm.material,
         description: editForm.description.trim() || undefined,
         weight: editForm.weight ? Number(editForm.weight) : undefined,
