@@ -29,17 +29,33 @@ function extractDriveFileId(url: string): string | null {
   return null;
 }
 
+// Backend host derived from the API base URL (strips /api/v1 suffix)
+const BACKEND_HOST = API_BASE.replace(/\/api\/v1\/?$/, '');
+
 /**
- * Rewrite any Google Drive URL to use our backend proxy.
- * Shared Drive files are private — the browser cannot load them directly.
- * The proxy authenticates with the service account and streams the file.
+ * Normalise any image URL for display:
+ * - Google Drive URLs → backend proxy (Drive files are private)
+ * - Relative /uploads paths → prefixed with the real backend host
+ * - Stale localhost /uploads URLs (saved in DB) → rewritten to real backend host
+ * - Everything else (CDN, external) → returned as-is
  */
 export function normalizeImageUrl(url?: string | null): string | undefined {
   if (!url) return undefined;
 
+  // Google Drive → proxy
   const driveId = extractDriveFileId(url);
   if (driveId) {
     return `${API_BASE}/file-storage/drive/${driveId}`;
+  }
+
+  // Relative path e.g. /uploads/product-images/...
+  if (url.startsWith('/uploads')) {
+    return `${BACKEND_HOST}${url}`;
+  }
+
+  // Stale localhost URL stored in the database — rewrite to the real backend host
+  if (/^https?:\/\/localhost(:\d+)?\/uploads/.test(url)) {
+    return url.replace(/^https?:\/\/localhost(:\d+)?/, BACKEND_HOST);
   }
 
   return url;
