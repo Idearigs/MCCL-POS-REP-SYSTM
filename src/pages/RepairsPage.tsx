@@ -51,6 +51,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { repairService, Repair } from '@/services/repairService';
 import { customerService } from '@/services/customerService';
+import { rewriteImageUrls } from '@/utils/imageUrl';
 
 // Type mappings between UI and backend
 type UIRepairStatus = 'received' | 'in-progress' | 'completed' | 'collected';
@@ -105,15 +106,15 @@ const convertRepairToUI = (repair: Repair): UIRepairJob => ({
   email: '',
   notes: repair.notes || repair.internalNotes || repair.customerInstructions || '',
   createdAt: repair.createdAt,
-  images: [
+  images: rewriteImageUrls([
     ...(repair.beforeImages || []),
     ...(repair.afterImages || []),
     ...(repair.progressImages || []),
     ...(repair.images || [])
-  ],
-  beforeImages: repair.beforeImages || [],
-  afterImages: repair.afterImages || [],
-  progressImages: repair.progressImages || []
+  ]),
+  beforeImages: rewriteImageUrls(repair.beforeImages || []),
+  afterImages: rewriteImageUrls(repair.afterImages || []),
+  progressImages: rewriteImageUrls(repair.progressImages || [])
 });
 
 const PAGE_SIZE = 50;

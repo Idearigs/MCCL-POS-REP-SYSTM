@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { productService, Product, CreateProductData, UpdateProductData } from '../services/productService';
 import { useAuth } from './AuthContext';
+import { rewriteImageUrl } from '../utils/imageUrl';
 
 // Extended InventoryItem interface that includes backend fields plus legacy UI fields
 export interface InventoryItem extends Omit<Product, 'stock' | 'minStockLevel'> {
@@ -28,20 +29,15 @@ const convertProductToInventoryItem = (product: Product): InventoryItem => {
   console.log('📸 Backend images array:', product.images);
   console.log('👤 Backend supplier:', product.supplier);
 
-  // Extract image URLs from backend image objects
+  // Extract image URLs from backend image objects, rewriting localhost URLs to
+  // the real backend host so remote clients can load images stored on the server.
   const imageUrls: string[] = [];
   if (product.images && Array.isArray(product.images)) {
     product.images.forEach((img: any) => {
       // Use filePath for local storage, fallback to driveViewLink for Google Drive
       const imagePath = img.filePath || img.driveViewLink;
-      if (imagePath) {
-        // Convert backend path to full URL
-        // If it's a relative path like '/uploads/...', prepend the API base URL
-        const fullUrl = imagePath.startsWith('/uploads')
-          ? `http://localhost:3002${imagePath}`
-          : imagePath;
-        imageUrls.push(fullUrl);
-      }
+      const fullUrl = rewriteImageUrl(imagePath);
+      if (fullUrl) imageUrls.push(fullUrl);
     });
   }
 

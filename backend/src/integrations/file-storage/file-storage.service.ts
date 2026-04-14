@@ -457,8 +457,13 @@ export class FileStorageService {
       await fs.promises.writeFile(filePath, buffer);
 
       // Create accessible URL (assuming server serves static files)
+      // SERVER_BASE_URL must be set in production to the public-facing backend URL
+      // e.g. https://api.truedesk.co.uk  (no trailing slash)
       const port = this.configService.get('PORT', 3002);
-      const baseUrl = `http://localhost:${port}`;
+      const baseUrl = this.configService.get(
+        'SERVER_BASE_URL',
+        `http://localhost:${port}`,
+      );
       const fileUrl = `${baseUrl}/uploads/${category}/${uniqueFileName}`;
 
       // Save metadata if provided
