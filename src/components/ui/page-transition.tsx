@@ -33,6 +33,7 @@ const PageTransition: React.FC<PageTransitionProps> = ({
     return () => {
       clearTimeout(loadingTimeout);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   useEffect(() => {

@@ -20,7 +20,8 @@ export class BackupController {
 
   private checkKey(key: string | undefined) {
     const expected = process.env.INTERNAL_API_KEY;
-    if (!expected || key !== expected) throw new UnauthorizedException('Invalid internal key');
+    if (!expected || key !== expected)
+      throw new UnauthorizedException('Invalid internal key');
   }
 
   /** Export all data for one tenant as a .json file download */
@@ -43,7 +44,18 @@ export class BackupController {
       repairPhotos,
     ] = await Promise.all([
       this.prisma.tenants.findUnique({ where: { id: tenantId } }),
-      this.prisma.users.findMany({ where: { tenantId }, select: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true, createdAt: true } }),
+      this.prisma.users.findMany({
+        where: { tenantId },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          isActive: true,
+          createdAt: true,
+        },
+      }),
       this.prisma.customers.findMany({ where: { tenantId } }),
       this.prisma.products.findMany({ where: { tenantId } }),
       this.prisma.sales.findMany({ where: { tenantId } }),
@@ -65,7 +77,9 @@ export class BackupController {
       repairPhotos,
     };
 
-    const subdomain = (tenant as any)?.subdomain || tenantId.slice(0, 8);
+    const subdomain =
+      (tenant as { subdomain?: string } | null)?.subdomain ||
+      tenantId.slice(0, 8);
     const filename = `${subdomain}-${new Date().toISOString().slice(0, 10)}.json`;
 
     res.setHeader('Content-Type', 'application/json');

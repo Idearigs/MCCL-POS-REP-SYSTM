@@ -242,8 +242,11 @@ export class AuthService {
         },
         expiresIn: this.getExpirationTime(),
       };
-    } catch (error) {
-      this.logger.error(`Registration failed for ${email}:`, (error as Error).message);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Registration failed for ${email}:`,
+        error instanceof Error ? error.message : String(error),
+      );
       throw error;
     }
   }

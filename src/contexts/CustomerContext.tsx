@@ -287,6 +287,7 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
 };
 
 // Custom hook to use the customer context
+// eslint-disable-next-line react-refresh/only-export-components
 export const useCustomers = () => {
   const context = useContext(CustomerContext);
   if (context === undefined) {

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { apiClient } from '../services/apiClient';
 
 // Core features are ALWAYS enabled regardless of mainframe configuration.
+// eslint-disable-next-line react-refresh/only-export-components
 export const CORE_FEATURES = new Set([
   'pos',        // Point of Sale terminal
   'inventory',  // Inventory Management

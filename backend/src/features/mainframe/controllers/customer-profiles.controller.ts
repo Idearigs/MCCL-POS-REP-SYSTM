@@ -96,7 +96,8 @@ export class CustomerProfilesController {
   @Patch(':id/status')
   async updateStatus(
     @Param('id') id: string,
-    @Body() body: { status: string; suspendedReason?: string; billingDueDate?: string },
+    @Body()
+    body: { status: string; suspendedReason?: string; billingDueDate?: string },
   ) {
     return this.customerProfilesService.updateStatus(id, body.status, {
       suspendedReason: body.suspendedReason,
