@@ -80,11 +80,12 @@ export class AuthService {
       // Check tenant status
       const tenantStatus = user.tenants.status;
       if (tenantStatus === 'SUSPENDED') {
+        const tenantData = user.tenants as { status: string; suspendedReason?: string };
         throw new ForbiddenException({
           code: 'TENANT_SUSPENDED',
-          reason: (user.tenants as any).suspendedReason || 'MANUAL',
+          reason: tenantData.suspendedReason || 'MANUAL',
           message:
-            (user.tenants as any).suspendedReason === 'PAYMENT_OVERDUE'
+            tenantData.suspendedReason === 'PAYMENT_OVERDUE'
               ? 'Account suspended due to overdue payment. Please contact MCCL to restore access.'
               : 'Account has been deactivated. Please contact MCCL for more information.',
         });
@@ -123,7 +124,9 @@ export class AuthService {
 
       // Ensure all default categories exist for this tenant (idempotent — safe to run on every login)
       this.seedDefaultCategories(user.tenantId).catch((err) =>
-        this.logger.warn(`Failed to seed categories on login for ${user.tenantId}: ${err.message}`),
+        this.logger.warn(
+          `Failed to seed categories on login for ${user.tenantId}: ${err.message}`,
+        ),
       );
 
       return {
@@ -460,7 +463,11 @@ export class AuthService {
     if (existingUser) {
       await this.prismaService.users.update({
         where: { id: existingUser.id },
-        data: { password: hashedPassword, isActive: true, updatedAt: new Date() },
+        data: {
+          password: hashedPassword,
+          isActive: true,
+          updatedAt: new Date(),
+        },
       });
       userId = existingUser.id;
     } else {
@@ -482,7 +489,9 @@ export class AuthService {
     // Seed default jewellery categories if the tenant has none
     await this.seedDefaultCategories(data.tenantId);
 
-    this.logger.log(`Tenant provisioned: ${data.tenantId} (${data.businessName})`);
+    this.logger.log(
+      `Tenant provisioned: ${data.tenantId} (${data.businessName})`,
+    );
     return { tenantId: data.tenantId, userId };
   }
 
@@ -491,8 +500,14 @@ export class AuthService {
    */
   async seedDefaultCategories(tenantId: string): Promise<void> {
     const DEFAULT_CATEGORIES = [
-      'Rings', 'Necklaces', 'Bracelets', 'Earrings',
-      'Pendants', 'Watches', 'Chains', 'Other',
+      'Rings',
+      'Necklaces',
+      'Bracelets',
+      'Earrings',
+      'Pendants',
+      'Watches',
+      'Chains',
+      'Other',
     ];
 
     const existing = await this.prismaService.categories.findMany({

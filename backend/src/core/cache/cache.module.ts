@@ -11,18 +11,18 @@ import { CacheService } from './cache.service';
     CacheModule.registerAsync({
       imports: [ConfigModule],
 
-      useFactory: (configService: ConfigService): any => {
+      useFactory: (configService: ConfigService): Record<string, unknown> => {
         const isRedisEnabled =
           configService.get('REDIS_HOST') && configService.get('REDIS_PORT');
 
         if (isRedisEnabled) {
           return {
             store: redisStore,
-            host: configService.get('REDIS_HOST', 'localhost'),
-            port: configService.get('REDIS_PORT', 6379),
-            password: configService.get('REDIS_PASSWORD'),
-            ttl: 60 * 60, // 1 hour default TTL
-            max: 1000, // maximum number of items in cache
+            host: configService.get<string>('REDIS_HOST', 'localhost'),
+            port: configService.get<number>('REDIS_PORT', 6379),
+            password: configService.get<string>('REDIS_PASSWORD'),
+            ttl: 60 * 60,
+            max: 1000,
             retryDelayOnFailover: 100,
             enableReadyCheck: false,
             maxRetriesPerRequest: 3,

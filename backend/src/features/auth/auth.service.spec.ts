@@ -161,8 +161,10 @@ describe('AuthService', () => {
 
       await service.login(loginDto, 'tenant-001');
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       expect(mockPrismaService.users.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           where: expect.objectContaining({
             email: 'admin@test.com',
             tenantId: 'tenant-001',

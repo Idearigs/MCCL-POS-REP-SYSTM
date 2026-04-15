@@ -50,6 +50,7 @@ const HeldBillsDialog: React.FC<HeldBillsDialogProps> = ({
     if (open) {
       loadHeldBills();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const loadHeldBills = async () => {

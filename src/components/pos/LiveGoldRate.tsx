@@ -234,6 +234,7 @@ const LiveGoldRate: React.FC<LiveGoldRateProps> = ({ onPriceUpdate, compact = fa
   // Initial load
   useEffect(() => {
     fetchGoldPrice();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Price change indicator

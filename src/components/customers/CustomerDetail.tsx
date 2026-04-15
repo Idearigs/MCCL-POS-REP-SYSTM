@@ -42,6 +42,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
     if (isOpen && customer.id) {
       loadCustomerRepairs();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, customer.id]);
 
   const loadCustomerRepairs = async () => {

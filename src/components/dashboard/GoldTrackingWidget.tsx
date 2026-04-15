@@ -276,6 +276,7 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
   // Initial load
   useEffect(() => {
     fetchGoldPrice();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Price change calculations

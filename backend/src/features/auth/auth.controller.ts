@@ -253,7 +253,8 @@ export class AuthController {
   async getUserById(
     @CurrentTenant() tenant: TenantInfo,
     @Param('id') id: string,
-  ) {
+  ): Promise<unknown> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return this.authService.getUserById(tenant.id, id);
   }
 
@@ -272,7 +273,8 @@ export class AuthController {
     @CurrentTenant() tenant: TenantInfo,
     @Param('id') id: string,
     @Body() updateData: Record<string, unknown>,
-  ) {
+  ): Promise<unknown> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return this.authService.updateUser(tenant.id, id, updateData);
   }
 
@@ -299,7 +301,10 @@ export class AuthController {
   @Delete('users/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Delete user', description: 'Permanently delete a cashier/user (admin only)' })
+  @ApiOperation({
+    summary: 'Delete user',
+    description: 'Permanently delete a cashier/user (admin only)',
+  })
   @ApiResponse({ status: 204, description: 'User deleted successfully' })
   async deleteUser(
     @CurrentTenant() tenant: TenantInfo,
@@ -315,7 +320,11 @@ export class AuthController {
   @Public()
   @Post('provision-tenant')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Provision new tenant (internal)', description: 'Called by Mainframe to create a new customer tenant and owner account' })
+  @ApiOperation({
+    summary: 'Provision new tenant (internal)',
+    description:
+      'Called by Mainframe to create a new customer tenant and owner account',
+  })
   @ApiResponse({ status: 201, description: 'Tenant provisioned successfully' })
   async provisionTenant(
     @Headers('x-internal-key') internalKey: string,
@@ -343,12 +352,21 @@ export class AuthController {
   @Public()
   @Patch('tenant-status')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Update tenant status (internal)', description: 'Called by Mainframe to sync tenant suspension or billing status' })
+  @ApiOperation({
+    summary: 'Update tenant status (internal)',
+    description:
+      'Called by Mainframe to sync tenant suspension or billing status',
+  })
   async updateTenantStatus(
     @Headers('x-internal-key') internalKey: string,
     @Body() body: {
       subdomain: string;
-      status: 'ACTIVE' | 'PAYMENT_DUE' | 'PAYMENT_WARNING' | 'SUSPENDED' | 'INACTIVE';
+      status:
+        | 'ACTIVE'
+        | 'PAYMENT_DUE'
+        | 'PAYMENT_WARNING'
+        | 'SUSPENDED'
+        | 'INACTIVE';
       suspendedReason?: string;
       billingDueDate?: string;
     },

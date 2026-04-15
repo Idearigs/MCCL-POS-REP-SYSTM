@@ -127,6 +127,7 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
       setPreviewUrls([]);
       setImageFiles([]);  // Also reset for new items
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item, isNew]);
   
   // Clean up object URLs when component unmounts
@@ -138,6 +139,7 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
         }
       });
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {

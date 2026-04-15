@@ -299,6 +299,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     }
 
     return weight * basePrice * purity * payoutMultiplier;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tradeInWeight, tradeInGoldPrice, tradeInMetal, tradeInPayoutPercent]);
 
   // Get categories with product counts from inventory
@@ -458,6 +459,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     if (showRepairView) {
       fetchRepairs(1, '');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showRepairView]);
 
   // Debounced backend search when repair search query changes

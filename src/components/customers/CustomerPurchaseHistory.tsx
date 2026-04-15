@@ -44,6 +44,7 @@ const CustomerPurchaseHistory: React.FC<CustomerPurchaseHistoryProps> = ({
 
   useEffect(() => {
     loadCustomerSales();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId]);
 
   const loadCustomerSales = async () => {
