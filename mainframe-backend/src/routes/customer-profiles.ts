@@ -3,6 +3,7 @@ import https from 'https';
 import http from 'http';
 import crypto from 'crypto';
 import prisma from '../lib/prisma';
+import { buildHmacHeaders } from '../lib/hmac';
 import { requireAuth } from '../middleware/auth';
 
 function generateTempPassword(): string {
@@ -31,7 +32,6 @@ const MF_TO_POS_STATUS: Record<string, string> = {
  */
 async function syncStatusToPOS(subdomain: string, mfStatus: string, opts?: { suspendedReason?: string }): Promise<void> {
   const posBackendUrl = process.env.POS_BACKEND_URL || 'http://localhost:3002/api/v1';
-  const internalKey   = process.env.INTERNAL_API_KEY || '';
   const posStatus     = MF_TO_POS_STATUS[mfStatus] ?? 'INACTIVE';
 
   const body = JSON.stringify({
@@ -53,7 +53,7 @@ async function syncStatusToPOS(subdomain: string, mfStatus: string, opts?: { sus
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(body),
-          'x-internal-key': internalKey,
+          ...buildHmacHeaders(body),
         },
       },
       (res) => {
@@ -92,7 +92,6 @@ async function provisionPosTenant(data: {
   ownerPassword: string;
 }): Promise<void> {
   const posBackendUrl = process.env.POS_BACKEND_URL || 'http://localhost:3002/api/v1';
-  const internalKey = process.env.INTERNAL_API_KEY || '';
 
   return new Promise((resolve, reject) => {
     const body = JSON.stringify(data);
@@ -108,7 +107,7 @@ async function provisionPosTenant(data: {
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(body),
-          'x-internal-key': internalKey,
+          ...buildHmacHeaders(body),
         },
       },
       (res) => {

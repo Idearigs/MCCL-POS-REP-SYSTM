@@ -13,7 +13,10 @@ import {
   Param,
   Headers,
   UnauthorizedException,
+  Req,
 } from '@nestjs/common';
+import type { RawBodyRequest } from '@nestjs/common';
+import type { Request as ExpressRequest } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -23,6 +26,7 @@ import {
 } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
+import { verifyInternalHmac } from '../../shared/utils/hmac-verify';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
 import { Public } from './decorators/public.decorator';
@@ -325,7 +329,9 @@ export class AuthController {
   })
   @ApiResponse({ status: 201, description: 'Tenant provisioned successfully' })
   async provisionTenant(
-    @Headers('x-internal-key') internalKey: string,
+    @Headers('x-internal-timestamp') timestamp: string,
+    @Headers('x-internal-signature') signature: string,
+    @Req() req: RawBodyRequest<ExpressRequest>,
     @Body()
     body: {
       tenantId: string;
@@ -337,10 +343,7 @@ export class AuthController {
       ownerPassword: string;
     },
   ) {
-    const expectedKey = process.env.INTERNAL_API_KEY;
-    if (!expectedKey || internalKey !== expectedKey) {
-      throw new UnauthorizedException('Invalid internal API key');
-    }
+    verifyInternalHmac(signature, timestamp, req.rawBody?.toString() ?? '');
     return this.authService.provisionTenant(body);
   }
 
@@ -357,7 +360,9 @@ export class AuthController {
       'Called by Mainframe to sync tenant suspension or billing status',
   })
   async updateTenantStatus(
-    @Headers('x-internal-key') internalKey: string,
+    @Headers('x-internal-timestamp') timestamp: string,
+    @Headers('x-internal-signature') signature: string,
+    @Req() req: RawBodyRequest<ExpressRequest>,
     @Body()
     body: {
       subdomain: string;
@@ -371,10 +376,7 @@ export class AuthController {
       billingDueDate?: string;
     },
   ) {
-    const expectedKey = process.env.INTERNAL_API_KEY;
-    if (!expectedKey || internalKey !== expectedKey) {
-      throw new UnauthorizedException('Invalid internal API key');
-    }
+    verifyInternalHmac(signature, timestamp, req.rawBody?.toString() ?? '');
     return this.authService.updateTenantStatus(body);
   }
 

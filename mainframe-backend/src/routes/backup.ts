@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
 import * as http from 'http';
+import { buildHmacHeaders } from '../lib/hmac';
 // googleapis loaded lazily so a missing package doesn't crash the server
 let googleLib: typeof import('googleapis') | null = null;
 async function getGoogle() {
@@ -22,7 +23,6 @@ router.use(requireAuth);
 
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(process.cwd(), 'backups');
 const POS_BACKEND_URL = process.env.POS_BACKEND_URL || 'http://localhost:3000/api/v1';
-const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
 const MAINFRAME_DB_URL = process.env.DATABASE_URL || '';
 const POS_DB_URL = process.env.POS_DATABASE_URL || '';
 const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID || '';
@@ -88,7 +88,7 @@ function callPOS<T>(urlPath: string): Promise<T> {
       port: url.port ? parseInt(url.port) : (url.protocol === 'https:' ? 443 : 80),
       path: url.pathname + url.search,
       method: 'GET',
-      headers: { 'x-internal-key': INTERNAL_API_KEY },
+      headers: { ...buildHmacHeaders('') },
       timeout: 30000,
     };
     const req = mod.request(options, (res) => {
@@ -233,7 +233,7 @@ router.post('/pos-tenant/:slug', async (req: Request, res: Response) => {
         port: url.port ? parseInt(url.port) : (url.protocol === 'https:' ? 443 : 80),
         path: url.pathname,
         method: 'GET',
-        headers: { 'x-internal-key': INTERNAL_API_KEY },
+        headers: { ...buildHmacHeaders('') },
         timeout: 60000,
       };
       const proxyReq = mod.request(options, (proxyRes) => {

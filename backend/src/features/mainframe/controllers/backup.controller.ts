@@ -4,34 +4,28 @@ import {
   Param,
   Res,
   Headers,
-  UnauthorizedException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { PrismaService } from '../../../core/prisma/prisma.service';
+import { verifyInternalHmac } from '../../../shared/utils/hmac-verify';
 
 /**
  * Internal backup endpoint — called by the Mainframe backend only.
- * Protected by x-internal-key header (same shared secret).
- * Returns all data for a given tenant as a JSON export.
+ * Protected by HMAC-SHA256 signature (x-internal-timestamp + x-internal-signature headers).
  */
 @Controller('internal/backup')
 export class BackupController {
   constructor(private readonly prisma: PrismaService) {}
 
-  private checkKey(key: string | undefined) {
-    const expected = process.env.INTERNAL_API_KEY;
-    if (!expected || key !== expected)
-      throw new UnauthorizedException('Invalid internal key');
-  }
-
   /** Export all data for one tenant as a .json file download */
   @Get('tenant/:tenantId')
   async exportTenant(
     @Param('tenantId') tenantId: string,
-    @Headers('x-internal-key') key: string,
+    @Headers('x-internal-timestamp') timestamp: string,
+    @Headers('x-internal-signature') signature: string,
     @Res() res: Response,
   ) {
-    this.checkKey(key);
+    verifyInternalHmac(signature, timestamp, '');
 
     const [
       tenant,
@@ -89,8 +83,11 @@ export class BackupController {
 
   /** List all tenant IDs + slugs (used by mainframe to enumerate targets) */
   @Get('tenants')
-  async listTenants(@Headers('x-internal-key') key: string) {
-    this.checkKey(key);
+  async listTenants(
+    @Headers('x-internal-timestamp') timestamp: string,
+    @Headers('x-internal-signature') signature: string,
+  ) {
+    verifyInternalHmac(signature, timestamp, '');
     return this.prisma.tenants.findMany({
       select: { id: true, subdomain: true, name: true },
       orderBy: { name: 'asc' },
