@@ -72,12 +72,8 @@ function showBrandMessage() {
     'background: #1e40af; color: #fff; font-size: 20px; font-weight: bold; padding: 6px 16px; border-radius: 6px;',
   );
   _originals.log(
-    '%cHey there! Nothing to see here.\nIf you\'re a developer, type this in the console:\n\n  enableDebug(\'mps-dev-2026\')\n\nto unlock debug logs for this session.',
+    '%cHey there! Nothing to see here. Move along 👀',
     'color: #64748b; font-size: 13px; line-height: 1.6;',
-  );
-  _originals.log(
-    '%c(and if you\'re just curious — respect 👀)',
-    'color: #94a3b8; font-size: 11px; font-style: italic;',
   );
 }
 
