@@ -80,15 +80,11 @@ export class AuthService {
       // Check tenant status
       const tenantStatus = user.tenants.status;
       if (tenantStatus === 'SUSPENDED') {
-        const tenantData = user.tenants as {
-          status: string;
-          suspendedReason?: string;
-        };
         throw new ForbiddenException({
           code: 'TENANT_SUSPENDED',
-          reason: tenantData.suspendedReason || 'MANUAL',
+          reason: user.tenants.suspendedReason || 'MANUAL',
           message:
-            tenantData.suspendedReason === 'PAYMENT_OVERDUE'
+            user.tenants.suspendedReason === 'PAYMENT_OVERDUE'
               ? 'Account suspended due to overdue payment. Please contact MCCL to restore access.'
               : 'Account has been deactivated. Please contact MCCL for more information.',
         });
@@ -128,7 +124,7 @@ export class AuthService {
       // Ensure all default categories exist for this tenant (idempotent — safe to run on every login)
       this.seedDefaultCategories(user.tenantId).catch((err: unknown) =>
         this.logger.warn(
-          `Failed to seed categories on login for ${user.tenantId}: ${err instanceof Error ? err.message : String(err)}`,
+          `Failed to seed categories on login for ${user.tenantId}: ${err instanceof Error ? err.message : 'Unknown error'}`,
         ),
       );
 
@@ -148,7 +144,7 @@ export class AuthService {
     } catch (error: unknown) {
       this.logger.error(
         `Login failed for ${email}:`,
-        error instanceof Error ? error.message : String(error),
+        error instanceof Error ? error.message : 'Unknown error',
       );
       throw error;
     }
@@ -248,7 +244,7 @@ export class AuthService {
     } catch (error: unknown) {
       this.logger.error(
         `Registration failed for ${email}:`,
-        error instanceof Error ? error.message : String(error),
+        error instanceof Error ? error.message : 'Unknown error',
       );
       throw error;
     }
@@ -284,13 +280,9 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
       if (user.tenants.status === 'SUSPENDED') {
-        const tenantData = user.tenants as {
-          status: string;
-          suspendedReason?: string;
-        };
         throw new ForbiddenException({
           code: 'TENANT_SUSPENDED',
-          reason: tenantData.suspendedReason || 'MANUAL',
+          reason: user.tenants.suspendedReason || 'MANUAL',
           message: 'Account suspended. Please contact MCCL.',
         });
       }

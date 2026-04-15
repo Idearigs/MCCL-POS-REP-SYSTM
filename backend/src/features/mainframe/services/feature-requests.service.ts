@@ -42,7 +42,9 @@ export class FeatureRequestsService {
           });
           customerProfileId = profile?.id;
         }
-      } catch { /* non-critical — request still goes through without tenant link */ }
+      } catch {
+        /* non-critical — request still goes through without tenant link */
+      }
     }
 
     // Forward to mainframe backend so it appears in the admin dashboard

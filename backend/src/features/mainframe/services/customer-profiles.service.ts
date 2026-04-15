@@ -68,7 +68,7 @@ export class CustomerProfilesService {
     } catch (err: unknown) {
       // Log but don't fail the mainframe operation — tenant table row may not exist yet
       this.logger.error(
-        `Failed to sync tenant status for '${subdomain}': ${err instanceof Error ? err.message : String(err)}`,
+        `Failed to sync tenant status for '${subdomain}': ${err instanceof Error ? err.message : 'Unknown error'}`,
       );
     }
   }

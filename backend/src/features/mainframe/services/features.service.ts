@@ -17,7 +17,8 @@ export class FeaturesService {
     private config: ConfigService,
   ) {
     this.mainframeUrl =
-      this.config.get<string>('MAINFRAME_BACKEND_URL') || 'http://localhost:3001/api/v1';
+      this.config.get<string>('MAINFRAME_BACKEND_URL') ||
+      'http://localhost:3001/api/v1';
     this.internalKey =
       this.config.get<string>('INTERNAL_API_KEY') || 'local-dev-internal-key';
   }
@@ -26,7 +27,9 @@ export class FeaturesService {
    *  The x-tenant-id header may contain either the subdomain (e.g. "buymejewellery") or
    *  the internal tenant CUID (e.g. "cmgjqfaxy0000o72w07x7d1yk"). The mainframe always
    *  expects the subdomain, so we resolve it from the tenants table first. */
-  async getTenantFeatures(tenantIdOrSubdomain: string): Promise<{ features: string[]; _source?: string }> {
+  async getTenantFeatures(
+    tenantIdOrSubdomain: string,
+  ): Promise<{ features: string[]; _source?: string }> {
     // Resolve the real subdomain — look up the tenant by its internal ID first.
     // If not found (already a subdomain), use the value as-is.
     let subdomain = tenantIdOrSubdomain;

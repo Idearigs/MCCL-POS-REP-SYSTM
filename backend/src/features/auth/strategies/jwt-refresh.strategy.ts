@@ -59,13 +59,9 @@ export class JwtRefreshStrategy extends PassportStrategy(
 
       const tenantStatus = user.tenants.status;
       if (tenantStatus === 'SUSPENDED') {
-        const tenantData = user.tenants as {
-          status: string;
-          suspendedReason?: string;
-        };
         throw new ForbiddenException({
           code: 'TENANT_SUSPENDED',
-          reason: tenantData.suspendedReason || 'MANUAL',
+          reason: user.tenants.suspendedReason || 'MANUAL',
           message: 'Account suspended. Please contact MCCL.',
         });
       }
