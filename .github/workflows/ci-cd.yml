@@ -62,6 +62,29 @@ jobs:
     needs: changes
     if: needs.changes.outputs.pos-backend == 'true'
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     defaults:
       run:
         working-directory: backend
@@ -83,12 +106,12 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      - name: Run ESLint
-        run: npm run lint
-        continue-on-error: false
+      - name: Run ESLint (check only — no auto-fix)
+        run: npx eslint "{src,apps,libs,test}/**/*.ts"
 
       - name: Run unit tests with coverage
         run: npm run test:cov
+        timeout-minutes: 10
         env:
           NODE_ENV: test
           DATABASE_URL: "postgresql://test:test@localhost:5432/test"
@@ -247,6 +270,22 @@ jobs:
           fi
           echo "POS backend deployment triggered"
 
+      - name: Health check — wait for backend to come up
+        run: |
+          echo "Waiting 45s for Coolify to pull and restart the container..."
+          sleep 45
+          for i in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://api.truedesk.co.uk/api/v1/health || echo "000")
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "Backend is healthy."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "ERROR: Backend health check failed after deployment."
+          exit 1
+
   # -------------------------------------------------------------------
   # JOB 6 — Deploy POS Frontend (only when frontend files changed)
   # -------------------------------------------------------------------
@@ -284,6 +323,22 @@ jobs:
             exit 1
           fi
           echo "POS frontend deployment triggered"
+
+      - name: Health check — wait for frontend to come up
+        run: |
+          echo "Waiting 45s for Coolify to pull and restart the container..."
+          sleep 45
+          for i in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://pos.buymejewellery.co.uk || echo "000")
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "Frontend is healthy."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "ERROR: Frontend health check failed after deployment."
+          exit 1
 
   # -------------------------------------------------------------------
   # JOB 7 — Deploy Mainframe Backend (only when mainframe-backend changed)
