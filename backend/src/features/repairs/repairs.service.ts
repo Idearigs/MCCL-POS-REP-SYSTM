@@ -138,8 +138,18 @@ export class RepairsService {
     if (queryDto.search) {
       where.OR = [
         { repairNumber: { contains: queryDto.search, mode: 'insensitive' } },
-        { itemDescription: { contains: queryDto.search, mode: 'insensitive' } },
-        { issueDescription: { contains: queryDto.search, mode: 'insensitive' } },
+        {
+          itemDescription: {
+            contains: queryDto.search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          issueDescription: {
+            contains: queryDto.search,
+            mode: 'insensitive',
+          },
+        },
         {
           customers: {
             OR: [

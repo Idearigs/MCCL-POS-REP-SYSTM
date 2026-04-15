@@ -50,10 +50,17 @@ export class FeaturesService {
         { headers: { 'x-internal-key': this.internalKey }, timeout: 5000 },
       );
       return { ...data, _source: 'mainframe' };
-    } catch (err: any) {
-      const status = err?.response?.status;
-      const message = err?.response?.data?.message || err?.message || 'unknown';
-      console.error(`[FeaturesService] getTenantFeatures FAILED for "${subdomain}" → ${url} → ${status ?? 'no-response'}: ${message}`);
+    } catch (err: unknown) {
+      const errObj = err as {
+        response?: { status?: number; data?: { message?: string } };
+        message?: string;
+      };
+      const status = errObj?.response?.status;
+      const message =
+        errObj?.response?.data?.message || errObj?.message || 'unknown';
+      console.error(
+        `[FeaturesService] getTenantFeatures FAILED for "${subdomain}" → ${url} → ${status ?? 'no-response'}: ${message}`,
+      );
       // Fail open — frontend will show all features when mainframe is unreachable
       return { features: [], _source: 'error' };
     }
@@ -254,24 +261,136 @@ export class FeaturesService {
   async seedDefaultFeatures() {
     const defaultFeatures = [
       // Core features — always on, included in base plan
-      { featureKey: 'pos', featureName: 'Point of Sale', category: 'Core', description: 'Main POS terminal for sales and transactions', isIncludedInBase: true, additionalCost: 0 },
-      { featureKey: 'inventory', featureName: 'Inventory Management', category: 'Core', description: 'Product and stock management', isIncludedInBase: true, additionalCost: 0 },
-      { featureKey: 'customers', featureName: 'Customer Management', category: 'Core', description: 'Customer database and history', isIncludedInBase: true, additionalCost: 0 },
-      { featureKey: 'sales', featureName: 'Sales & Transactions', category: 'Core', description: 'Sales processing and reporting', isIncludedInBase: true, additionalCost: 0 },
-      { featureKey: 'repairs', featureName: 'Repair Management', category: 'Core', description: 'Repair job tracking and management', isIncludedInBase: true, additionalCost: 0 },
-      { featureKey: 'cashiers', featureName: 'Staff & Cashiers', category: 'Core', description: 'Staff and cashier management', isIncludedInBase: true, additionalCost: 0 },
+      {
+        featureKey: 'pos',
+        featureName: 'Point of Sale',
+        category: 'Core',
+        description: 'Main POS terminal for sales and transactions',
+        isIncludedInBase: true,
+        additionalCost: 0,
+      },
+      {
+        featureKey: 'inventory',
+        featureName: 'Inventory Management',
+        category: 'Core',
+        description: 'Product and stock management',
+        isIncludedInBase: true,
+        additionalCost: 0,
+      },
+      {
+        featureKey: 'customers',
+        featureName: 'Customer Management',
+        category: 'Core',
+        description: 'Customer database and history',
+        isIncludedInBase: true,
+        additionalCost: 0,
+      },
+      {
+        featureKey: 'sales',
+        featureName: 'Sales & Transactions',
+        category: 'Core',
+        description: 'Sales processing and reporting',
+        isIncludedInBase: true,
+        additionalCost: 0,
+      },
+      {
+        featureKey: 'repairs',
+        featureName: 'Repair Management',
+        category: 'Core',
+        description: 'Repair job tracking and management',
+        isIncludedInBase: true,
+        additionalCost: 0,
+      },
+      {
+        featureKey: 'cashiers',
+        featureName: 'Staff & Cashiers',
+        category: 'Core',
+        description: 'Staff and cashier management',
+        isIncludedInBase: true,
+        additionalCost: 0,
+      },
       // Standard features — Professional plan+
-      { featureKey: 'shifts', featureName: 'Shift Management', category: 'Standard', description: 'Staff shift tracking and handover', isIncludedInBase: false, additionalCost: 0 },
-      { featureKey: 'float_management', featureName: 'Float Management', category: 'Standard', description: 'Cash drawer float management', isIncludedInBase: false, additionalCost: 0 },
-      { featureKey: 'petty_cash', featureName: 'Petty Cash', category: 'Standard', description: 'Petty cash tracking and management', isIncludedInBase: false, additionalCost: 0 },
-      { featureKey: 'stock_taking', featureName: 'Stock Taking', category: 'Standard', description: 'Stock audit and reconciliation', isIncludedInBase: false, additionalCost: 0 },
-      { featureKey: 'calendar', featureName: 'Calendar', category: 'Standard', description: 'Appointments and scheduling', isIncludedInBase: false, additionalCost: 0 },
-      { featureKey: 'tasks', featureName: 'Tasks', category: 'Standard', description: 'Task and workflow management', isIncludedInBase: false, additionalCost: 0 },
-      { featureKey: 'history', featureName: 'Transaction History', category: 'Standard', description: 'Full transaction history and audit trail', isIncludedInBase: false, additionalCost: 0 },
+      {
+        featureKey: 'shifts',
+        featureName: 'Shift Management',
+        category: 'Standard',
+        description: 'Staff shift tracking and handover',
+        isIncludedInBase: false,
+        additionalCost: 0,
+      },
+      {
+        featureKey: 'float_management',
+        featureName: 'Float Management',
+        category: 'Standard',
+        description: 'Cash drawer float management',
+        isIncludedInBase: false,
+        additionalCost: 0,
+      },
+      {
+        featureKey: 'petty_cash',
+        featureName: 'Petty Cash',
+        category: 'Standard',
+        description: 'Petty cash tracking and management',
+        isIncludedInBase: false,
+        additionalCost: 0,
+      },
+      {
+        featureKey: 'stock_taking',
+        featureName: 'Stock Taking',
+        category: 'Standard',
+        description: 'Stock audit and reconciliation',
+        isIncludedInBase: false,
+        additionalCost: 0,
+      },
+      {
+        featureKey: 'calendar',
+        featureName: 'Calendar',
+        category: 'Standard',
+        description: 'Appointments and scheduling',
+        isIncludedInBase: false,
+        additionalCost: 0,
+      },
+      {
+        featureKey: 'tasks',
+        featureName: 'Tasks',
+        category: 'Standard',
+        description: 'Task and workflow management',
+        isIncludedInBase: false,
+        additionalCost: 0,
+      },
+      {
+        featureKey: 'history',
+        featureName: 'Transaction History',
+        category: 'Standard',
+        description: 'Full transaction history and audit trail',
+        isIncludedInBase: false,
+        additionalCost: 0,
+      },
       // Premium features — Business plan+
-      { featureKey: 'financial_intelligence', featureName: 'Financial Intelligence', category: 'Premium', description: 'Advanced financial analytics and reporting', isIncludedInBase: false, additionalCost: 20 },
-      { featureKey: 'chatbot', featureName: 'AI Business Insights', category: 'Premium', description: 'AI-powered business insights and recommendations', isIncludedInBase: false, additionalCost: 20 },
-      { featureKey: 'google_drive', featureName: 'Google Drive Integration', category: 'Premium', description: 'Cloud storage and document management', isIncludedInBase: false, additionalCost: 20 },
+      {
+        featureKey: 'financial_intelligence',
+        featureName: 'Financial Intelligence',
+        category: 'Premium',
+        description: 'Advanced financial analytics and reporting',
+        isIncludedInBase: false,
+        additionalCost: 20,
+      },
+      {
+        featureKey: 'chatbot',
+        featureName: 'AI Business Insights',
+        category: 'Premium',
+        description: 'AI-powered business insights and recommendations',
+        isIncludedInBase: false,
+        additionalCost: 20,
+      },
+      {
+        featureKey: 'google_drive',
+        featureName: 'Google Drive Integration',
+        category: 'Premium',
+        description: 'Cloud storage and document management',
+        isIncludedInBase: false,
+        additionalCost: 20,
+      },
     ];
 
     for (const feature of defaultFeatures) {

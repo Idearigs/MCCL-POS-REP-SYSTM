@@ -158,7 +158,10 @@ export class SalesController {
     summary: 'Get per-cashier sales statistics',
     description: 'Retrieve sales statistics broken down by cashier/staff member',
   })
-  @ApiResponse({ status: 200, description: 'Cashier stats retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cashier stats retrieved successfully',
+  })
   async getCashierStats(@TenantId() tenantId: string): Promise<any[]> {
     return this.salesService.getCashierStats(tenantId);
   }

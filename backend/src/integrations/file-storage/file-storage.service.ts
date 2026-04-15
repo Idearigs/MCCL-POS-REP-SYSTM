@@ -38,9 +38,16 @@ export class FileStorageService {
 
   constructor(private configService: ConfigService) {
     this.uploadDirectory = path.join(process.cwd(), 'uploads');
-    const tenantIds = this.configService.get<string>('GOOGLE_DRIVE_TENANT_IDS', '');
+    const tenantIds = this.configService.get<string>(
+      'GOOGLE_DRIVE_TENANT_IDS',
+      '',
+    );
     if (tenantIds) {
-      tenantIds.split(',').map(id => id.trim()).filter(Boolean).forEach(id => this.googleDriveTenantIds.add(id));
+      tenantIds
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean)
+        .forEach((id) => this.googleDriveTenantIds.add(id));
     }
     this.initializeStorageSystems();
   }
@@ -84,7 +91,9 @@ export class FileStorageService {
 
   private async initializeGoogleDrive() {
     if (this.googleDriveTenantIds.size === 0) {
-      this.logger.log('📁 No Google Drive tenants configured — all files use local VPS storage.');
+      this.logger.log(
+        '📁 No Google Drive tenants configured — all files use local VPS storage.',
+      );
       this.isGoogleDriveAvailable = false;
       return;
     }
@@ -95,7 +104,9 @@ export class FileStorageService {
       const projectId = this.configService.get('GOOGLE_DRIVE_PROJECT_ID');
 
       if (!clientEmail || !privateKey || !projectId) {
-        this.logger.warn('⚠️ Google Drive credentials not configured. Using local storage only.');
+        this.logger.warn(
+          '⚠️ Google Drive credentials not configured. Using local storage only.',
+        );
         return;
       }
 
@@ -119,7 +130,9 @@ export class FileStorageService {
         `✅ Google Drive initialized for tenants: ${[...this.googleDriveTenantIds].join(', ')}`,
       );
     } catch (error) {
-      this.logger.warn(`⚠️ Google Drive initialization failed: ${error.message}`);
+      this.logger.warn(
+        `⚠️ Google Drive initialization failed: ${error.message}`,
+      );
       this.logger.log('📁 Falling back to local storage for all tenants');
       this.isGoogleDriveAvailable = false;
     }
@@ -152,7 +165,9 @@ export class FileStorageService {
           return driveResult;
         }
       } catch (error) {
-        this.logger.warn(`⚠️ Google Drive upload failed, falling back to VPS: ${error.message}`);
+        this.logger.warn(
+          `⚠️ Google Drive upload failed, falling back to VPS: ${error.message}`,
+        );
       }
     }
 
@@ -395,7 +410,9 @@ export class FileStorageService {
 
       // Use our backend proxy URL — the browser cannot access Shared Drive files
       // directly (they are private). The proxy uses the service account to fetch the file.
-      const appUrl = this.configService.get('APP_URL', 'http://localhost:3000').replace(/\/$/, '');
+      const appUrl = this.configService
+        .get('APP_URL', 'http://localhost:3000')
+        .replace(/\/$/, '');
       const fileUrl = `${appUrl}/api/v1/file-storage/drive/${file.id}`;
 
       return {
@@ -453,7 +470,11 @@ export class FileStorageService {
       await fs.promises.writeFile(filePath, buffer);
 
       // Create accessible URL using APP_URL env var (production domain) or fallback to localhost
-      const appUrl = this.configService.get('APP_URL', `http://localhost:${this.configService.get('PORT', 3000)}`);
+      const port = this.configService.get('PORT', 3000);
+      const appUrl = this.configService.get(
+        'APP_URL',
+        `http://localhost:${port}`,
+      );
       const baseUrl = appUrl.replace(/\/$/, ''); // strip trailing slash
       const fileUrl = `${baseUrl}/uploads/${category}/${uniqueFileName}`;
 
@@ -529,7 +550,9 @@ export class FileStorageService {
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       (fileRes.data as NodeJS.ReadableStream).pipe(res);
     } catch (error) {
-      this.logger.error(`Failed to proxy Drive file ${fileId}: ${error.message}`);
+      this.logger.error(
+        `Failed to proxy Drive file ${fileId}: ${error.message}`,
+      );
       res.status(404).json({ error: 'File not found' });
     }
   }
