@@ -48,6 +48,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
               subdomain: true,
               status: true,
               subscriptionPlan: true,
+              suspendedReason: true,
             },
           },
         },
