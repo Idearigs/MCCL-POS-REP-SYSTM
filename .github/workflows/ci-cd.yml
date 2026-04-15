@@ -329,7 +329,7 @@ jobs:
           echo "Waiting 45s for Coolify to pull and restart the container..."
           sleep 45
           for i in 1 2 3; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://pos.buymejewellery.co.uk || echo "000")
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://pos.truedesk.co.uk || echo "000")
             echo "Attempt $i: HTTP $STATUS"
             if [ "$STATUS" = "200" ]; then
               echo "Frontend is healthy."
