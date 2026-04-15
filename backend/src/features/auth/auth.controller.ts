@@ -254,7 +254,6 @@ export class AuthController {
     @CurrentTenant() tenant: TenantInfo,
     @Param('id') id: string,
   ): Promise<unknown> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return this.authService.getUserById(tenant.id, id);
   }
 
@@ -274,7 +273,6 @@ export class AuthController {
     @Param('id') id: string,
     @Body() updateData: Record<string, unknown>,
   ): Promise<unknown> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return this.authService.updateUser(tenant.id, id, updateData);
   }
 
@@ -328,7 +326,8 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'Tenant provisioned successfully' })
   async provisionTenant(
     @Headers('x-internal-key') internalKey: string,
-    @Body() body: {
+    @Body()
+    body: {
       tenantId: string;
       businessName: string;
       subdomain: string;
@@ -359,7 +358,8 @@ export class AuthController {
   })
   async updateTenantStatus(
     @Headers('x-internal-key') internalKey: string,
-    @Body() body: {
+    @Body()
+    body: {
       subdomain: string;
       status:
         | 'ACTIVE'

@@ -195,16 +195,15 @@ export class AuthService {
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
       // Create user
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const user = await this.prismaService.users.create({
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         data: {
           id: generateId(),
           email: email.toLowerCase(),
           password: hashedPassword,
           firstName,
           lastName,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
           role: role as any,
           tenantId,
           updatedAt: new Date(),
@@ -260,9 +259,15 @@ export class AuthService {
 
     try {
       // Verify refresh token
-      const payload = this.jwtService.verify(refreshToken, {
+      const rawPayload: unknown = this.jwtService.verify(refreshToken, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      }) as { sub: string; email: string; tenantId: string; role: string };
+      });
+      const payload = rawPayload as {
+        sub: string;
+        email: string;
+        tenantId: string;
+        role: string;
+      };
 
       // Find user with matching refresh token
       const user = await this.prismaService.users.findFirst({
