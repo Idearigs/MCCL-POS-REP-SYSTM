@@ -126,9 +126,9 @@ export class AuthService {
       this.logger.log(`User logged in: ${email} (${user.id})`);
 
       // Ensure all default categories exist for this tenant (idempotent — safe to run on every login)
-      this.seedDefaultCategories(user.tenantId).catch((err: Error) =>
+      this.seedDefaultCategories(user.tenantId).catch((err: unknown) =>
         this.logger.warn(
-          `Failed to seed categories on login for ${user.tenantId}: ${err.message}`,
+          `Failed to seed categories on login for ${user.tenantId}: ${err instanceof Error ? err.message : String(err)}`,
         ),
       );
 
@@ -145,8 +145,11 @@ export class AuthService {
         },
         expiresIn: this.getExpirationTime(),
       };
-    } catch (error) {
-      this.logger.error(`Login failed for ${email}:`, (error as Error).message);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Login failed for ${email}:`,
+        error instanceof Error ? error.message : String(error),
+      );
       throw error;
     }
   }

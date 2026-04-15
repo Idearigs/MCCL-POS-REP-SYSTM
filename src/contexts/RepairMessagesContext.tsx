@@ -111,6 +111,7 @@ export const RepairMessagesProvider: React.FC<{ children: ReactNode }> = ({ chil
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useRepairMessages = () => {
   const context = useContext(RepairMessagesContext);
   if (context === undefined) {

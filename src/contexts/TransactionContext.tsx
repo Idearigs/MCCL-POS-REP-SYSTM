@@ -220,6 +220,7 @@ export const TransactionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 };
 
 // Custom hook to use the transaction context
+// eslint-disable-next-line react-refresh/only-export-components
 export const useTransactions = () => {
   const context = useContext(TransactionContext);
   if (context === undefined) {

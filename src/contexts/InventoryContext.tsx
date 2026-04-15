@@ -189,6 +189,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Clear inventory when user logs out
       setInventory([]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.isAuthenticated, auth.loading]);
 
   // Get an item by ID
@@ -417,6 +418,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
 };
 
 // Custom hook to use the inventory context
+// eslint-disable-next-line react-refresh/only-export-components
 export const useInventory = () => {
   const context = useContext(InventoryContext);
   if (context === undefined) {

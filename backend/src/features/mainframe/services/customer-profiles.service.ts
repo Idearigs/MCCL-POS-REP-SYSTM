@@ -53,15 +53,23 @@ export class CustomerProfilesService {
         data: {
           status: posStatus as any,
           suspendedAt: isSuspended ? new Date() : null,
-          suspendedReason: isSuspended ? (opts?.suspendedReason || 'MANUAL') : null,
-          billingDueDate: opts?.billingDueDate ? new Date(opts.billingDueDate) : undefined,
+          suspendedReason: isSuspended
+            ? opts?.suspendedReason || 'MANUAL'
+            : null,
+          billingDueDate: opts?.billingDueDate
+            ? new Date(opts.billingDueDate)
+            : undefined,
           updatedAt: new Date(),
         },
       });
-      this.logger.log(`Tenant '${subdomain}' status synced: ${mfStatus} → ${posStatus}`);
-    } catch (err) {
+      this.logger.log(
+        `Tenant '${subdomain}' status synced: ${mfStatus} → ${posStatus}`,
+      );
+    } catch (err: unknown) {
       // Log but don't fail the mainframe operation — tenant table row may not exist yet
-      this.logger.error(`Failed to sync tenant status for '${subdomain}': ${err.message}`);
+      this.logger.error(
+        `Failed to sync tenant status for '${subdomain}': ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
