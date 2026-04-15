@@ -41,11 +41,13 @@ export class SmsService {
    */
   async sendRepairStatusSMS(data: RepairStatusSMSData): Promise<SMSResult> {
     try {
-      console.log(`🔧 === USING CENTRALIZED SMS PROCESSOR ===`);
-      console.log(`👤 Customer: ${data.customerName}`);
-      console.log(`📞 Phone: ${data.customerPhone}`);
-      console.log(`🔖 Repair: ${data.repairNumber}`);
-      console.log(`🔄 Status Change: ${data.oldStatus} → ${data.newStatus}`);
+      this.logger.log(`🔧 === USING CENTRALIZED SMS PROCESSOR ===`);
+      this.logger.log(`👤 Customer: ${data.customerName}`);
+      this.logger.log(`📞 Phone: ${data.customerPhone}`);
+      this.logger.log(`🔖 Repair: ${data.repairNumber}`);
+      this.logger.log(
+        `🔄 Status Change: ${data.oldStatus} → ${data.newStatus}`,
+      );
 
       // Use the centralized SMS processor with working format
       const result = await this.smsProcessor.sendRepairStatusSMS({
@@ -60,17 +62,17 @@ export class SmsService {
         shopPhone: data.shopPhone,
       });
 
-      console.log(
+      this.logger.log(
         `🎯 Centralized SMS Result: ${result.success ? 'SUCCESS' : 'FAILED'}`,
       );
       if (result.success) {
-        console.log(`   ✅ Message delivered to ${data.customerName}`);
-        console.log(`   📊 Credits used: ${result.creditsUsed}`);
-        console.log(`   💰 Credits remaining: ${result.creditsRemaining}`);
+        this.logger.log(`   ✅ Message delivered to ${data.customerName}`);
+        this.logger.log(`   📊 Credits used: ${result.creditsUsed}`);
+        this.logger.log(`   💰 Credits remaining: ${result.creditsRemaining}`);
       } else {
-        console.log(`   ❌ SMS failed: ${result.error}`);
+        this.logger.warn(`   ❌ SMS failed: ${result.error}`);
       }
-      console.log(`=== END CENTRALIZED SMS PROCESSOR ===\n`);
+      this.logger.log(`=== END CENTRALIZED SMS PROCESSOR ===`);
 
       return {
         success: result.success,
@@ -81,8 +83,6 @@ export class SmsService {
       };
     } catch (error) {
       this.logger.error(`Centralized SMS processor failed: ${error.message}`);
-      console.log(`❌ CENTRALIZED SMS EXCEPTION: ${error.message}`);
-      console.log(`=== END CENTRALIZED SMS PROCESSOR ===\n`);
       return {
         success: false,
         error: error.message,
@@ -136,28 +136,13 @@ export class SmsService {
       // Parse VoodooSMS REST API response
       const result = response.data;
 
-      // Enhanced console logging for SMS status tracking
-      console.log(`📱 === SMS DELIVERY REPORT ===`);
-      console.log(`📞 Phone: ${cleanPhone} (original: ${params.to})`);
-      console.log(`📋 Reference: ${params.reference || 'N/A'}`);
-      console.log(`📡 Response Status: ${response.status}`);
-      console.log(`📊 API Response:`, JSON.stringify(result, null, 2));
+      this.logger.debug(
+        `📱 SMS response for ${cleanPhone}: status=${response.status} data=${JSON.stringify(result, null, 2)}`,
+      );
 
       // VoodooSMS REST API returns different format
       if (response.status === 200 && result) {
         this.logger.log(`✅ SMS sent successfully to ${cleanPhone}`);
-        console.log(`✅ SMS DELIVERY SUCCESS:`);
-        console.log(
-          `   - Message ID: ${result.message_id || result.id || 'sent'}`,
-        );
-        console.log(
-          `   - Credits Used: ${result.credits_used || result.message_count || 1}`,
-        );
-        console.log(
-          `   - Credits Remaining: ${result.credits_remaining || 'Unknown'}`,
-        );
-        console.log(`   - Message Length: ${params.message.length} characters`);
-        console.log(`=== END SMS REPORT ===\n`);
 
         return {
           success: true,
@@ -167,12 +152,6 @@ export class SmsService {
         };
       } else {
         this.logger.warn(`❌ SMS failed: ${result.error || 'Unknown error'}`);
-        console.log(`❌ SMS DELIVERY FAILED:`);
-        console.log(
-          `   - Error: ${result.error || result.message || 'Unknown error'}`,
-        );
-        console.log(`   - Response Code: ${result.code || 'N/A'}`);
-        console.log(`=== END SMS REPORT ===\n`);
 
         return {
           success: false,
@@ -180,18 +159,9 @@ export class SmsService {
         };
       }
     } catch (error) {
-      this.logger.error(`SMS sending failed: ${error.message}`);
-      console.log(`❌ SMS DELIVERY EXCEPTION:`);
-      console.log(`   - Error Message: ${error.message}`);
-      console.log(`   - Error Code: ${error.code || 'N/A'}`);
-      if (error.response) {
-        console.log(`   - HTTP Status: ${error.response.status}`);
-        console.log(
-          `   - Response Data:`,
-          JSON.stringify(error.response.data, null, 2),
-        );
-      }
-      console.log(`=== END SMS REPORT ===\n`);
+      this.logger.error(
+        `SMS sending failed: ${error.message}${error.response ? ` (HTTP ${error.response.status})` : ''}`,
+      );
 
       return {
         success: false,
@@ -252,48 +222,28 @@ export class SmsService {
       'LK',
     );
 
-    console.log(`🔧 Phone number formatting debug:`, {
-      original: phone,
-      cleaned: clean,
-      defaultCountry: defaultCountry,
-    });
+    this.logger.debug(
+      `🔧 Phone formatting: original=${phone} cleaned=${clean} country=${defaultCountry}`,
+    );
 
     if (defaultCountry === 'LK') {
       // Sri Lankan numbers - remove country code if present
       if (clean.startsWith('94')) {
-        const formatted = clean.substring(2); // Remove '94' prefix
-        console.log(`🇱🇰 Sri Lanka format: ${formatted}`);
-        return formatted;
+        return clean.substring(2); // Remove '94' prefix
       } else if (clean.startsWith('0')) {
-        const formatted = clean.substring(1); // Remove leading '0'
-        console.log(`🇱🇰 Sri Lanka format (removed 0): ${formatted}`);
-        return formatted;
+        return clean.substring(1); // Remove leading '0'
       }
-      console.log(`🇱🇰 Sri Lanka format (as-is): ${clean}`);
       return clean; // Return as is if already in correct format
     } else if (defaultCountry === 'UK') {
       // UK numbers - try different formats for VoodooSMS
       if (clean.startsWith('44')) {
-        // Try with + prefix
-        const formatted = '+' + clean;
-        console.log(`🇬🇧 UK format (international with +): ${formatted}`);
-        return formatted;
+        return '+' + clean;
       } else if (clean.startsWith('0')) {
-        // Convert to international format with +
-        const formatted = '+44' + clean.substring(1);
-        console.log(
-          `🇬🇧 UK format (converted to international with +): ${formatted}`,
-        );
-        return formatted;
+        return '+44' + clean.substring(1);
       } else {
-        // Add UK country code with +
-        const formatted = '+44' + clean;
-        console.log(`🇬🇧 UK format (added country code with +): ${formatted}`);
-        return formatted;
+        return '+44' + clean;
       }
     }
-
-    console.log(`🌍 Generic format: ${clean}`);
     return clean;
   }
 

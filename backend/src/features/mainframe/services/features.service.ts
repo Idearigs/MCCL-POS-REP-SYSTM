@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
@@ -9,6 +10,7 @@ import { PrismaService } from '../../../core/prisma/prisma.service';
 
 @Injectable()
 export class FeaturesService {
+  private readonly logger = new Logger(FeaturesService.name);
   private readonly mainframeUrl: string;
   private readonly internalKey: string;
 
@@ -58,7 +60,7 @@ export class FeaturesService {
       const status = errObj?.response?.status;
       const message =
         errObj?.response?.data?.message || errObj?.message || 'unknown';
-      console.error(
+      this.logger.error(
         `[FeaturesService] getTenantFeatures FAILED for "${subdomain}" → ${url} → ${status ?? 'no-response'}: ${message}`,
       );
       // Fail open — frontend will show all features when mainframe is unreachable

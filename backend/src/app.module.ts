@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, Logger } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { CacheModule } from '@nestjs/cache-manager';
@@ -25,7 +25,6 @@ import { FinancialIntelligenceModule } from './features/financial-intelligence/f
 import { ChatbotModule } from './features/chatbot/chatbot.module';
 import { MainframeModule } from './features/mainframe/mainframe.module';
 import { TasksModule } from './features/tasks/tasks.module';
-// import { ExternalRepairersModule } from './features/external-repairers/external-repairers.module'; // TODO: Enable after running Prisma migrations
 
 // External integrations
 import {
@@ -55,6 +54,8 @@ import { OpenAIModule } from './integrations/openai/openai.module';
     CacheModule.registerAsync({
       isGlobal: true,
       useFactory: async () => {
+        const logger = new Logger('AppModule');
+        const isProduction = process.env.NODE_ENV === 'production';
         try {
           // Try to connect to Redis
           const store = await redisStore({
@@ -66,17 +67,21 @@ import { OpenAIModule } from './integrations/openai/openai.module';
             database: parseInt(process.env.REDIS_DB || '0'),
           });
 
-          console.log('✅ Connected to Redis cache');
+          logger.log('✅ Connected to Redis cache');
           return {
             store: store as any,
             ttl: 300000, // 5 minutes in milliseconds
           };
         } catch (error) {
-          console.warn(
-            '⚠️  Redis connection failed, using in-memory cache:',
-            (error as Error).message,
+          if (isProduction) {
+            logger.error(
+              `❌ Redis required in production but unavailable: ${(error as Error).message}`,
+            );
+            throw error;
+          }
+          logger.warn(
+            `⚠️  Redis unavailable, using in-memory cache (dev only): ${(error as Error).message}`,
           );
-          // Fallback to in-memory cache
           return {
             store: 'memory',
             max: 1000,
@@ -107,7 +112,6 @@ import { OpenAIModule } from './integrations/openai/openai.module';
     ChatbotModule,
     MainframeModule,
     TasksModule,
-    // ExternalRepairersModule, // TODO: Enable after running Prisma migrations
   ],
   controllers: [AppController],
   providers: [AppService, CacheService],

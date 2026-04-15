@@ -96,12 +96,13 @@ export class AuthService {
 
       // Generate tokens
       const tokens = await this.generateTokens(user);
+      const hashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 10);
 
-      // Update user with refresh token and last login
+      // Store hashed refresh token — never persist the raw token
       await this.prismaService.users.update({
         where: { id: user.id },
         data: {
-          refreshToken: tokens.refreshToken,
+          refreshToken: hashedRefreshToken,
           lastLogin: new Date(),
         },
       });
@@ -215,12 +216,13 @@ export class AuthService {
 
       // Generate tokens
       const tokens = await this.generateTokens(user);
+      const hashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 10);
 
-      // Update user with refresh token
+      // Store hashed refresh token — never persist the raw token
       await this.prismaService.users.update({
         where: { id: user.id },
         data: {
-          refreshToken: tokens.refreshToken,
+          refreshToken: hashedRefreshToken,
           lastLogin: new Date(),
         },
       });
@@ -269,11 +271,10 @@ export class AuthService {
         role: string;
       };
 
-      // Find user with matching refresh token
+      // Find user by ID — compare token with bcrypt (token stored as hash)
       const user = await this.prismaService.users.findFirst({
         where: {
           id: payload.sub,
-          refreshToken,
           isActive: true,
         },
         include: {
@@ -281,7 +282,11 @@ export class AuthService {
         },
       });
 
-      if (!user) {
+      if (
+        !user ||
+        !user.refreshToken ||
+        !(await bcrypt.compare(refreshToken, user.refreshToken))
+      ) {
         throw new UnauthorizedException('Invalid refresh token');
       }
       if (user.tenants.status === 'SUSPENDED') {
@@ -297,12 +302,13 @@ export class AuthService {
 
       // Generate new tokens
       const tokens = await this.generateTokens(user);
+      const hashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 10);
 
-      // Update user with new refresh token
+      // Store hashed refresh token — never persist the raw token
       await this.prismaService.users.update({
         where: { id: user.id },
         data: {
-          refreshToken: tokens.refreshToken,
+          refreshToken: hashedRefreshToken,
         },
       });
 

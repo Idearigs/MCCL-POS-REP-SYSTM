@@ -32,24 +32,24 @@ export class SmsProcessorService {
     try {
       const apiKey = this.configService.get('VOODOOSMS_API_KEY');
 
-      console.log(`🚨 === SMS PROCESSOR CALLED ===`);
-      console.log(`🔑 API Key configured: ${apiKey ? 'YES' : 'NO'}`);
+      this.logger.log(`🚨 === SMS PROCESSOR CALLED ===`);
+      this.logger.log(`🔑 API Key configured: ${apiKey ? 'YES' : 'NO'}`);
 
       if (!apiKey) {
-        console.error('❌ VoodooSMS API key not configured in environment');
+        this.logger.error('❌ VoodooSMS API key not configured in environment');
         throw new Error('VoodooSMS API key not configured');
       }
 
       // Use the EXACT working phone format from test script (without + prefix)
       const cleanPhone = this.formatPhoneForVoodoo(data.to);
 
-      console.log(`📱 === CENTRALIZED SMS PROCESSOR ===`);
-      console.log(`📞 Original phone: ${data.to}`);
-      console.log(`📞 Formatted phone: ${cleanPhone}`);
-      console.log(
+      this.logger.log(`📱 === CENTRALIZED SMS PROCESSOR ===`);
+      this.logger.log(`📞 Original phone: ${data.to}`);
+      this.logger.log(`📞 Formatted phone: ${cleanPhone}`);
+      this.logger.log(
         `💬 Message: "${data.message.substring(0, 100)}${data.message.length > 100 ? '...' : ''}"`,
       );
-      console.log(`🔖 Reference: ${data.reference || 'none'}`);
+      this.logger.log(`🔖 Reference: ${data.reference || 'none'}`);
 
       // Use EXACT format from working test script
       const requestData = {
@@ -59,8 +59,10 @@ export class SmsProcessorService {
         external_reference: data.reference || `mps_${Date.now()}`, // Reference for tracking
       };
 
-      console.log(`📤 Request payload:`, JSON.stringify(requestData, null, 2));
-      console.log(`📤 Sending to VoodooSMS API: ${this.voodooApiUrl}`);
+      this.logger.log(
+        `📤 Request payload: ${JSON.stringify(requestData, null, 2)}`,
+      );
+      this.logger.log(`📤 Sending to VoodooSMS API: ${this.voodooApiUrl}`);
 
       const response = await axios.post(this.voodooApiUrl, requestData, {
         headers: {
@@ -70,10 +72,9 @@ export class SmsProcessorService {
         timeout: 15000, // Increased timeout
       });
 
-      console.log(`📊 VoodooSMS Response Status: ${response.status}`);
-      console.log(
-        `📊 VoodooSMS Response Data:`,
-        JSON.stringify(response.data, null, 2),
+      this.logger.log(`📊 VoodooSMS Response Status: ${response.status}`);
+      this.logger.log(
+        `📊 VoodooSMS Response Data: ${JSON.stringify(response.data, null, 2)}`,
       );
 
       // Process response based on VoodooSMS REST API format
@@ -83,17 +84,17 @@ export class SmsProcessorService {
           response.data.count > 0 || response.data.messages || response.data.id;
 
         if (hasSuccess) {
-          console.log(`✅ SMS SENT SUCCESSFULLY!`);
-          console.log(
+          this.logger.log(`✅ SMS SENT SUCCESSFULLY!`);
+          this.logger.log(
             `   - Message ID: ${response.data.messages?.[0]?.id || response.data.id || 'sent'}`,
           );
-          console.log(
+          this.logger.log(
             `   - Credits Used: ${response.data.credits || response.data.count || 1}`,
           );
-          console.log(
+          this.logger.log(
             `   - Credits Remaining: ${response.data.balance || 'Check dashboard'}`,
           );
-          console.log(`=== END CENTRALIZED SMS PROCESSOR ===\n`);
+          this.logger.log(`=== END CENTRALIZED SMS PROCESSOR ===`);
 
           return {
             success: true,
@@ -105,10 +106,10 @@ export class SmsProcessorService {
             creditsRemaining: response.data.balance,
           };
         } else {
-          console.log(
+          this.logger.warn(
             `❌ SMS FAILED: ${response.data.error || response.data.message || 'Unknown error'}`,
           );
-          console.log(`=== END CENTRALIZED SMS PROCESSOR ===\n`);
+          this.logger.log(`=== END CENTRALIZED SMS PROCESSOR ===`);
 
           return {
             success: false,
@@ -119,10 +120,10 @@ export class SmsProcessorService {
           };
         }
       } else {
-        console.log(
+        this.logger.warn(
           `❌ SMS FAILED: Invalid response status ${response.status}`,
         );
-        console.log(`=== END CENTRALIZED SMS PROCESSOR ===\n`);
+        this.logger.log(`=== END CENTRALIZED SMS PROCESSOR ===`);
 
         return {
           success: false,
@@ -130,34 +131,34 @@ export class SmsProcessorService {
         };
       }
     } catch (error) {
-      console.error(`❌ SMS PROCESSOR EXCEPTION: ${error.message}`);
+      this.logger.error(`❌ SMS PROCESSOR EXCEPTION: ${error.message}`);
 
       if (error.response) {
-        console.error(`   - HTTP Status: ${error.response.status}`);
-        console.error(
-          `   - Response Headers:`,
-          JSON.stringify(error.response.headers, null, 2),
+        this.logger.error(`   - HTTP Status: ${error.response.status}`);
+        this.logger.error(
+          `   - Response Headers: ${JSON.stringify(error.response.headers, null, 2)}`,
         );
-        console.error(
-          `   - Response Data:`,
-          JSON.stringify(error.response.data, null, 2),
+        this.logger.error(
+          `   - Response Data: ${JSON.stringify(error.response.data, null, 2)}`,
         );
 
         // Handle specific VoodooSMS errors
         if (error.response.status === 401) {
-          console.error(`   - Authentication failed - check API key`);
+          this.logger.error(`   - Authentication failed - check API key`);
         } else if (error.response.status === 400) {
-          console.error(
+          this.logger.error(
             `   - Bad request - check phone number format and message`,
           );
         }
       } else if (error.code === 'ECONNREFUSED') {
-        console.error(`   - Connection refused - check internet connection`);
+        this.logger.error(
+          `   - Connection refused - check internet connection`,
+        );
       } else if (error.code === 'TIMEOUT') {
-        console.error(`   - Request timeout - VoodooSMS API might be slow`);
+        this.logger.error(`   - Request timeout - VoodooSMS API might be slow`);
       }
 
-      console.log(`=== END CENTRALIZED SMS PROCESSOR ===\n`);
+      this.logger.log(`=== END CENTRALIZED SMS PROCESSOR ===`);
 
       return {
         success: false,

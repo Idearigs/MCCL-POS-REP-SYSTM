@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 
 @Injectable()
 export class BugReportsService {
+  private readonly logger = new Logger(BugReportsService.name);
   private readonly mainframeUrl: string;
   private readonly internalKey: string;
 
@@ -59,7 +60,7 @@ export class BugReportsService {
       return created;
     } catch (err: any) {
       // Fall back to storing locally if mainframe is unreachable
-      console.error(
+      this.logger.error(
         '[BugReports] Failed to forward to mainframe, storing locally:',
         err?.message,
       );

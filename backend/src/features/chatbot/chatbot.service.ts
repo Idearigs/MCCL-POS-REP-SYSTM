@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { OpenAIService } from '../../integrations/openai/openai.service';
 import { QuickActionType, ChatMessage, ChatResponse } from './dto/chatbot.dto';
@@ -19,6 +19,7 @@ import {
 
 @Injectable()
 export class ChatbotService {
+  private readonly logger = new Logger(ChatbotService.name);
   private conversationHistory = new Map<string, ChatMessage[]>();
 
   constructor(
@@ -712,7 +713,7 @@ export class ChatbotService {
 
       return response;
     } catch (error) {
-      console.error('Error generating AI response:', error);
+      this.logger.error('Error generating AI response:', error);
       // Fallback to pattern matching
       return this.formatMessagesForSimpleResponse(messages);
     }

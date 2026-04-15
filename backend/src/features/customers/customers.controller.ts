@@ -10,6 +10,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -41,6 +42,8 @@ import { PaginatedResponseDto } from '../../shared/dto/pagination.dto';
 @UseGuards(ThrottlerGuard, JwtAuthGuard, TenantGuard)
 @ApiBearerAuth('access-token')
 export class CustomersController {
+  private readonly logger = new Logger(CustomersController.name);
+
   constructor(private readonly customersService: CustomersService) {}
 
   @Post()
@@ -224,7 +227,7 @@ export class CustomersController {
     @CurrentUser('id') userId: string,
   ) {
     // Log GDPR export request for audit
-    console.log(
+    this.logger.log(
       `GDPR Export requested by user ${userId} for customer ${gdprExportDto.customerId} in tenant ${tenantId}`,
     );
 
@@ -263,7 +266,7 @@ export class CustomersController {
     }
 
     // Log GDPR deletion request for audit
-    console.warn(
+    this.logger.warn(
       `GDPR PERMANENT DELETION requested by user ${userId} for customer ${gdprDeleteDto.customerId} in tenant ${tenantId}`,
     );
 

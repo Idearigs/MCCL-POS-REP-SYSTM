@@ -195,7 +195,7 @@ export class CustomerProfilesService {
     // Provision subdomain (async - don't wait)
     this.subdomainService
       .provisionSubdomain(profile.id, dto.subdomain.toLowerCase())
-      .catch((err) => console.error('Subdomain provisioning failed:', err));
+      .catch((err) => this.logger.error('Subdomain provisioning failed:', err));
 
     return this.findOne(profile.id);
   }

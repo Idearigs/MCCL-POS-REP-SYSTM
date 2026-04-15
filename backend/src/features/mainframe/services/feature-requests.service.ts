@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 
 @Injectable()
 export class FeatureRequestsService {
+  private readonly logger = new Logger(FeatureRequestsService.name);
   private readonly mainframeUrl: string;
   private readonly internalKey: string;
 
@@ -66,7 +67,7 @@ export class FeatureRequestsService {
       );
       return created;
     } catch (err: any) {
-      console.error(
+      this.logger.error(
         '[FeatureRequests] Failed to forward to mainframe, storing locally:',
         err?.message,
       );

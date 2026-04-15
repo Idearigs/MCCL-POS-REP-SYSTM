@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import {
@@ -18,6 +19,8 @@ import {
 
 @Injectable()
 export class StockTakingService {
+  private readonly logger = new Logger(StockTakingService.name);
+
   constructor(private prisma: PrismaService) {}
 
   // Create a new stock take session
@@ -591,13 +594,13 @@ export class StockTakingService {
           }
         }
 
-        console.log(
+        this.logger.log(
           `✅ Stock take applied: ${updatedCount} products updated, ${adjustmentCount} adjustments made`,
         );
       });
     } catch (error) {
       // Transaction failed - inventory remains unchanged
-      console.error('❌ Stock take application failed:', error.message);
+      this.logger.error('❌ Stock take application failed:', error.message);
       throw new BadRequestException(
         `Failed to apply stock take to inventory: ${error.message}. All changes have been rolled back.`,
       );

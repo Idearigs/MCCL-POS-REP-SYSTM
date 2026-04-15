@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, BadRequestException } from '@nestjs/common';
+import { ValidationPipe, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -9,6 +9,7 @@ import { join } from 'path';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  const logger = new Logger('Bootstrap');
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
   });
@@ -207,23 +208,18 @@ async function bootstrap() {
 
   const environment = configService.get('NODE_ENV', 'development');
 
-  console.log(`
-🚀 MPS Jewelry SaaS API started successfully!
-🌐 Environment: ${environment}
-🔗 API Endpoint: http://localhost:${port}/api/v1
-📚 Documentation: http://localhost:${port}/api/docs
-🔒 Security: Helmet + CORS + Rate Limiting enabled
-🛡️  Validation: Global validation pipes active
-🗄️  Database: PostgreSQL with Prisma ORM
-📁 File Storage: Google Drive integration ready
-`);
+  logger.log(`🚀 MPS Jewelry SaaS API started successfully!`);
+  logger.log(`🌐 Environment: ${environment}`);
+  logger.log(`🔗 API Endpoint: http://localhost:${port}/api/v1`);
+  logger.log(`📚 Documentation: http://localhost:${port}/api/docs`);
 
   if (environment === 'development') {
-    console.log('🔧 Development mode - Swagger docs available at /api/docs');
+    logger.log('🔧 Development mode - Swagger docs available at /api/docs');
   }
 }
 
 bootstrap().catch((error) => {
-  console.error('❌ Failed to start MPS Jewelry SaaS API:', error);
+  const logger = new Logger('Bootstrap');
+  logger.error('❌ Failed to start MPS Jewelry SaaS API:', error);
   process.exit(1);
 });

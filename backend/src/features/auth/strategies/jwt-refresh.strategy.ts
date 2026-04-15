@@ -8,6 +8,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 import { Request } from 'express';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(
@@ -32,11 +33,10 @@ export class JwtRefreshStrategy extends PassportStrategy(
     try {
       const refreshToken = req.body.refreshToken;
 
-      // Find user with matching refresh token
+      // Find user by ID — compare token against bcrypt hash stored in DB
       const user = await this.prismaService.users.findFirst({
         where: {
           id: payload.sub,
-          refreshToken: refreshToken,
           isActive: true,
         },
         include: {
@@ -54,7 +54,11 @@ export class JwtRefreshStrategy extends PassportStrategy(
         },
       });
 
-      if (!user) {
+      if (
+        !user ||
+        !user.refreshToken ||
+        !(await bcrypt.compare(refreshToken, user.refreshToken))
+      ) {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
