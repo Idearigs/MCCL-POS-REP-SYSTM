@@ -469,6 +469,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       fetchRepairs(1, repairSearchQuery);
     }, 400);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repairSearchQuery]);
 
   // When search query is typed on the main screen, switch to product grid view

@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
@@ -55,13 +59,19 @@ export class JwtRefreshStrategy extends PassportStrategy(
 
       const tenantStatus = user.tenants.status;
       if (tenantStatus === 'SUSPENDED') {
+        const tenantData = user.tenants as {
+          status: string;
+          suspendedReason?: string;
+        };
         throw new ForbiddenException({
           code: 'TENANT_SUSPENDED',
-          reason: (user.tenants as any).suspendedReason || 'MANUAL',
+          reason: tenantData.suspendedReason || 'MANUAL',
           message: 'Account suspended. Please contact MCCL.',
         });
       }
-      if (!['ACTIVE', 'PAYMENT_DUE', 'PAYMENT_WARNING'].includes(tenantStatus)) {
+      if (
+        !['ACTIVE', 'PAYMENT_DUE', 'PAYMENT_WARNING'].includes(tenantStatus)
+      ) {
         throw new UnauthorizedException('Tenant account is not active');
       }
 

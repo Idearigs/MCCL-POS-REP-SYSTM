@@ -53,6 +53,7 @@ const ShiftReminder: React.FC<ShiftReminderProps> = ({
       setShowLongShiftWarning(false);
       setShowIdleWarning(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeShift]);
 
   // No active shift reminder

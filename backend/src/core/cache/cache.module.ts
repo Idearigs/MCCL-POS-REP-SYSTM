@@ -13,7 +13,8 @@ import { CacheService } from './cache.service';
 
       useFactory: (configService: ConfigService): Record<string, unknown> => {
         const isRedisEnabled =
-          configService.get('REDIS_HOST') && configService.get('REDIS_PORT');
+          configService.get<string>('REDIS_HOST') &&
+          configService.get<string>('REDIS_PORT');
 
         if (isRedisEnabled) {
           return {

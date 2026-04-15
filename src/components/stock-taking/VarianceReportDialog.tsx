@@ -69,6 +69,7 @@ export const VarianceReportDialog: React.FC<VarianceReportDialogProps> = ({
     if (isOpen && sessionId) {
       fetchVarianceReport();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, sessionId]);
 
   const fetchVarianceReport = async () => {

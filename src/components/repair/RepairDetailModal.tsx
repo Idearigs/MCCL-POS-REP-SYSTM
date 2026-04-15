@@ -156,6 +156,7 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
     };
 
     fetchCustomerData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repair?.customerId, isOpen]);
 
   // Debug: Log tags and current repair tagId
@@ -167,7 +168,8 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
       const currentTag = tags.find(tag => tag.id === currentRepair.tagId);
       console.log('🏷️ Current tag found:', currentTag);
     }
-  }, [tags, currentRepair?.tagId, tags]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tags, currentRepair?.tagId]);
 
   // Early return AFTER all hooks have been called
   if (!currentRepair) return null;

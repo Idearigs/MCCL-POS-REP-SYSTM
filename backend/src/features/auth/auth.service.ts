@@ -80,7 +80,10 @@ export class AuthService {
       // Check tenant status
       const tenantStatus = user.tenants.status;
       if (tenantStatus === 'SUSPENDED') {
-        const tenantData = user.tenants as { status: string; suspendedReason?: string };
+        const tenantData = user.tenants as {
+          status: string;
+          suspendedReason?: string;
+        };
         throw new ForbiddenException({
           code: 'TENANT_SUSPENDED',
           reason: tenantData.suspendedReason || 'MANUAL',
@@ -123,7 +126,7 @@ export class AuthService {
       this.logger.log(`User logged in: ${email} (${user.id})`);
 
       // Ensure all default categories exist for this tenant (idempotent — safe to run on every login)
-      this.seedDefaultCategories(user.tenantId).catch((err) =>
+      this.seedDefaultCategories(user.tenantId).catch((err: Error) =>
         this.logger.warn(
           `Failed to seed categories on login for ${user.tenantId}: ${err.message}`,
         ),
@@ -193,13 +196,16 @@ export class AuthService {
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
       // Create user
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const user = await this.prismaService.users.create({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
         data: {
           id: generateId(),
           email: email.toLowerCase(),
           password: hashedPassword,
           firstName,
           lastName,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           role: role as any,
           tenantId,
           updatedAt: new Date(),
@@ -237,7 +243,7 @@ export class AuthService {
         expiresIn: this.getExpirationTime(),
       };
     } catch (error) {
-      this.logger.error(`Registration failed for ${email}:`, error.message);
+      this.logger.error(`Registration failed for ${email}:`, (error as Error).message);
       throw error;
     }
   }
@@ -254,7 +260,7 @@ export class AuthService {
       // Verify refresh token
       const payload = this.jwtService.verify(refreshToken, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      });
+      }) as { sub: string; email: string; tenantId: string; role: string };
 
       // Find user with matching refresh token
       const user = await this.prismaService.users.findFirst({
@@ -272,9 +278,13 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
       if (user.tenants.status === 'SUSPENDED') {
+        const tenantData = user.tenants as {
+          status: string;
+          suspendedReason?: string;
+        };
         throw new ForbiddenException({
           code: 'TENANT_SUSPENDED',
-          reason: (user.tenants as any).suspendedReason || 'MANUAL',
+          reason: tenantData.suspendedReason || 'MANUAL',
           message: 'Account suspended. Please contact MCCL.',
         });
       }
@@ -522,7 +532,13 @@ export class AuthService {
     if (toCreate.length > 0) {
       for (const name of toCreate) {
         await this.prismaService.categories.create({
-          data: { id: generateId(), name, tenantId, isActive: true, updatedAt: new Date() },
+          data: {
+            id: generateId(),
+            name,
+            tenantId,
+            isActive: true,
+            updatedAt: new Date(),
+          },
         });
       }
       this.logger.log(
@@ -741,7 +757,12 @@ export class AuthService {
    */
   async updateTenantStatus(data: {
     subdomain: string;
-    status: 'ACTIVE' | 'PAYMENT_DUE' | 'PAYMENT_WARNING' | 'SUSPENDED' | 'INACTIVE';
+    status:
+      | 'ACTIVE'
+      | 'PAYMENT_DUE'
+      | 'PAYMENT_WARNING'
+      | 'SUSPENDED'
+      | 'INACTIVE';
     suspendedReason?: string;
     billingDueDate?: string;
   }): Promise<{ tenantId: string; status: string }> {

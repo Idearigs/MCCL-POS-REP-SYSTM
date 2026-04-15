@@ -54,6 +54,7 @@ const ShiftReport: React.FC<ShiftReportProps> = ({ open, onClose, shiftId }) => 
     if (open && shiftId) {
       loadShiftReport();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, shiftId]);
 
   const loadShiftReport = async () => {
