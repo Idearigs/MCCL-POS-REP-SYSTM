@@ -156,7 +156,8 @@ export class SalesController {
   @Get('stats/cashiers')
   @ApiOperation({
     summary: 'Get per-cashier sales statistics',
-    description: 'Retrieve sales statistics broken down by cashier/staff member',
+    description:
+      'Retrieve sales statistics broken down by cashier/staff member',
   })
   @ApiResponse({
     status: 200,

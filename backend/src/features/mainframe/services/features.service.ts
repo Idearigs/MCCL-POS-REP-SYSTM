@@ -45,10 +45,10 @@ export class FeaturesService {
 
     const url = `${this.mainframeUrl}/mainframe/tenant-features/${subdomain}`;
     try {
-      const { data } = await axios.get<{ features: string[] }>(
-        url,
-        { headers: { 'x-internal-key': this.internalKey }, timeout: 5000 },
-      );
+      const { data } = await axios.get<{ features: string[] }>(url, {
+        headers: { 'x-internal-key': this.internalKey },
+        timeout: 5000,
+      });
       return { ...data, _source: 'mainframe' };
     } catch (err: unknown) {
       const errObj = err as {
