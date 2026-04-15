@@ -1037,6 +1037,67 @@ export class SalesService {
   }
 
   /**
+   * Get sales statistics broken down per cashier/user
+   */
+  async getCashierStats(tenantId: string): Promise<any[]> {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(startOfDay);
+    startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Get all users for this tenant
+    const users = await this.prismaService.users.findMany({
+      where: { tenantId },
+      select: { id: true, firstName: true, lastName: true },
+    });
+
+    // Aggregate sales per user
+    const results = await Promise.all(
+      users.map(async (user) => {
+        const base = { tenantId, createdBy: user.id, status: PrismaSaleStatus.COMPLETED };
+
+        const [totalSales, totalRevAgg, todaySales, todayRevAgg, weekSales, weekRevAgg, monthSales, monthRevAgg, lastSale] =
+          await Promise.all([
+            this.prismaService.sales.count({ where: { tenantId, createdBy: user.id } }),
+            this.prismaService.sales.aggregate({ where: base, _sum: { totalAmount: true } }),
+            this.prismaService.sales.count({ where: { ...base, createdAt: { gte: startOfDay } } }),
+            this.prismaService.sales.aggregate({ where: { ...base, createdAt: { gte: startOfDay } }, _sum: { totalAmount: true } }),
+            this.prismaService.sales.count({ where: { ...base, createdAt: { gte: startOfWeek } } }),
+            this.prismaService.sales.aggregate({ where: { ...base, createdAt: { gte: startOfWeek } }, _sum: { totalAmount: true } }),
+            this.prismaService.sales.count({ where: { ...base, createdAt: { gte: startOfMonth } } }),
+            this.prismaService.sales.aggregate({ where: { ...base, createdAt: { gte: startOfMonth } }, _sum: { totalAmount: true } }),
+            this.prismaService.sales.findFirst({
+              where: { tenantId, createdBy: user.id },
+              orderBy: { createdAt: 'desc' },
+              select: { createdAt: true },
+            }),
+          ]);
+
+        const totalRev = Number(totalRevAgg._sum.totalAmount || 0);
+        const completedCount = await this.prismaService.sales.count({ where: base });
+
+        return {
+          cashierId: user.id,
+          cashierName: `${user.firstName} ${user.lastName}`.trim(),
+          todaySales,
+          todayRevenue: Number(todayRevAgg._sum.totalAmount || 0),
+          weekSales,
+          weekRevenue: Number(weekRevAgg._sum.totalAmount || 0),
+          monthSales,
+          monthRevenue: Number(monthRevAgg._sum.totalAmount || 0),
+          totalSales,
+          totalRevenue: totalRev,
+          averageOrderValue: completedCount > 0 ? totalRev / completedCount : 0,
+          lastSaleDate: lastSale?.createdAt?.toISOString() || null,
+        };
+      }),
+    );
+
+    return results;
+  }
+
+  /**
    * Delete a sale
    * This will restore inventory for sold items and mark the sale as deleted
    */
