@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../../core/prisma/prisma.service';
+import { CustomersRepository } from './customers.repository';
 import { CacheService } from '../../core/cache/cache.service';
 import { generateId } from '../../shared/utils/id-generator';
 import {
@@ -23,7 +23,7 @@ export class CustomersService {
   private readonly logger = new Logger(CustomersService.name);
 
   constructor(
-    private prismaService: PrismaService,
+    private customerRepo: CustomersRepository,
     private cacheService: CacheService,
   ) {}
 
@@ -37,7 +37,7 @@ export class CustomersService {
     try {
       // Check if customer already exists with same email in tenant
       if (createCustomerDto.email) {
-        const existingCustomer = await this.prismaService.customers.findFirst({
+        const existingCustomer = await this.customerRepo.findFirst({
           where: {
             email: createCustomerDto.email,
             tenantId,
@@ -52,13 +52,12 @@ export class CustomersService {
       }
 
       // Check if customer already exists with same phone in tenant
-      const existingPhoneCustomer =
-        await this.prismaService.customers.findFirst({
-          where: {
-            phone: createCustomerDto.phone,
-            tenantId,
-          },
-        });
+      const existingPhoneCustomer = await this.customerRepo.findFirst({
+        where: {
+          phone: createCustomerDto.phone,
+          tenantId,
+        },
+      });
 
       if (existingPhoneCustomer) {
         throw new ConflictException(
@@ -73,7 +72,7 @@ export class CustomersService {
         );
       }
 
-      const customer = await this.prismaService.customers.create({
+      const customer = await this.customerRepo.create({
         data: {
           id: generateId(),
           ...createCustomerDto,
@@ -163,13 +162,13 @@ export class CustomersService {
 
       // Get customers and total count
       const [customers, total] = await Promise.all([
-        this.prismaService.customers.findMany({
+        this.customerRepo.findMany({
           where,
           skip,
           take: limit,
           orderBy: { [sortBy]: sortOrder },
         }),
-        this.prismaService.customers.count({ where }),
+        this.customerRepo.count({ where }),
       ]);
 
       const result = new PaginatedResponseDto(
@@ -210,7 +209,7 @@ export class CustomersService {
         return cachedCustomer;
       }
 
-      const customer = await this.prismaService.customers.findFirst({
+      const customer = await this.customerRepo.findFirst({
         where: { id, tenantId },
         include: {
           sales: {
@@ -250,7 +249,7 @@ export class CustomersService {
   ): Promise<CustomerResponseDto> {
     try {
       // Check if customer exists
-      const existingCustomer = await this.prismaService.customers.findFirst({
+      const existingCustomer = await this.customerRepo.findFirst({
         where: { id, tenantId },
       });
 
@@ -263,7 +262,7 @@ export class CustomersService {
         updateCustomerDto.email &&
         updateCustomerDto.email !== existingCustomer.email
       ) {
-        const emailConflict = await this.prismaService.customers.findFirst({
+        const emailConflict = await this.customerRepo.findFirst({
           where: {
             email: updateCustomerDto.email,
             tenantId,
@@ -283,7 +282,7 @@ export class CustomersService {
         updateCustomerDto.phone &&
         updateCustomerDto.phone !== existingCustomer.phone
       ) {
-        const phoneConflict = await this.prismaService.customers.findFirst({
+        const phoneConflict = await this.customerRepo.findFirst({
           where: {
             phone: updateCustomerDto.phone,
             tenantId,
@@ -298,7 +297,7 @@ export class CustomersService {
         }
       }
 
-      const customer = await this.prismaService.customers.update({
+      const customer = await this.customerRepo.update({
         where: { id },
         data: {
           ...updateCustomerDto,
@@ -334,7 +333,7 @@ export class CustomersService {
         `🗑️ PERMANENT DELETE requested for customer: ${id} in tenant ${tenantId}`,
       );
 
-      const customer = await this.prismaService.customers.findFirst({
+      const customer = await this.customerRepo.findFirst({
         where: { id, tenantId },
       });
 
@@ -348,7 +347,7 @@ export class CustomersService {
       );
 
       // Permanent delete - remove related records first to avoid constraint errors
-      await this.prismaService.$transaction(async (prisma) => {
+      await this.customerRepo.$transaction(async (prisma) => {
         // Delete related documents
         await prisma.documents.deleteMany({ where: { customerId: id } });
 
@@ -373,7 +372,7 @@ export class CustomersService {
       );
 
       // Verify deletion
-      const deletedCheck = await this.prismaService.customers.findUnique({
+      const deletedCheck = await this.customerRepo.findUnique({
         where: { id },
       });
       if (deletedCheck) {
@@ -450,14 +449,14 @@ export class CustomersService {
         emailConsentCount,
         smsConsentCount,
       ] = await Promise.all([
-        this.prismaService.customers.count({ where: { tenantId } }),
-        this.prismaService.customers.count({
+        this.customerRepo.count({ where: { tenantId } }),
+        this.customerRepo.count({
           where: { tenantId, isActive: true },
         }),
-        this.prismaService.customers.count({
+        this.customerRepo.count({
           where: { tenantId, redFlag: true },
         }),
-        this.prismaService.customers.count({
+        this.customerRepo.count({
           where: {
             tenantId,
             createdAt: {
@@ -465,14 +464,14 @@ export class CustomersService {
             },
           },
         }),
-        this.prismaService.customers.aggregate({
+        this.customerRepo.aggregate({
           where: { tenantId },
           _sum: { totalSpent: true },
         }),
-        this.prismaService.customers.count({
+        this.customerRepo.count({
           where: { tenantId, marketingEmail: true },
         }),
-        this.prismaService.customers.count({
+        this.customerRepo.count({
           where: { tenantId, marketingSms: true },
         }),
       ]);
@@ -507,7 +506,7 @@ export class CustomersService {
    */
   async exportCustomerData(customerId: string, tenantId: string): Promise<any> {
     try {
-      const customer = await this.prismaService.customers.findFirst({
+      const customer = (await this.customerRepo.findFirst({
         where: { id: customerId, tenantId },
         include: {
           sales: {
@@ -522,7 +521,7 @@ export class CustomersService {
           repairs: true,
           documents: true,
         },
-      });
+      })) as any;
 
       if (!customer) {
         throw new NotFoundException(`Customer with ID ${customerId} not found`);
@@ -592,7 +591,7 @@ export class CustomersService {
     tenantId: string,
   ): Promise<void> {
     try {
-      const customer = await this.prismaService.customers.findFirst({
+      const customer = await this.customerRepo.findFirst({
         where: { id: customerId, tenantId },
       });
 
@@ -602,7 +601,7 @@ export class CustomersService {
 
       // This is a permanent deletion - use with extreme caution
       // In practice, you might want to anonymize instead of delete
-      await this.prismaService.$transaction(async (prisma) => {
+      await this.customerRepo.$transaction(async (prisma) => {
         // Delete related records first
         await prisma.documents.deleteMany({ where: { customerId } });
         await prisma.repairs.deleteMany({ where: { customerId } });
@@ -618,7 +617,10 @@ export class CustomersService {
       });
 
       // Clear cache
-      await this.cacheService.delTenantData(tenantId, `customer:${customerId}`);
+      await this.cacheService.delTenantData(
+        tenantId,
+        `customer:${customerId}`,
+      );
       await this.cacheService.delTenantData(tenantId, 'customers:list');
       await this.cacheService.delTenantData(tenantId, 'customers:stats');
 

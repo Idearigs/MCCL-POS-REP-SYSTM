@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
+import { SalesRepository } from './sales.repository';
 import { CacheService } from '../../core/cache/cache.service';
 import { ShiftsService } from '../shifts/shifts.service';
 import {
@@ -33,6 +34,7 @@ export class SalesService {
   private readonly logger = new Logger(SalesService.name);
 
   constructor(
+    private salesRepo: SalesRepository,
     private prismaService: PrismaService,
     private cacheService: CacheService,
     private shiftsService: ShiftsService,
@@ -432,7 +434,7 @@ export class SalesService {
 
       // Get sales and total count
       const [sales, total] = await Promise.all([
-        this.prismaService.sales.findMany({
+        this.salesRepo.findMany({
           where,
           skip,
           take: limit,
@@ -448,7 +450,7 @@ export class SalesService {
             // users: true, // Temporarily disabled to debug
           },
         }),
-        this.prismaService.sales.count({ where }),
+        this.salesRepo.count({ where }),
       ]);
 
       const result = new PaginatedResponseDto(
@@ -486,7 +488,7 @@ export class SalesService {
         return cachedSale;
       }
 
-      const sale = await this.prismaService.sales.findFirst({
+      const sale = await this.salesRepo.findFirst({
         where: { id, tenantId },
         include: {
           sale_items: {
@@ -520,11 +522,11 @@ export class SalesService {
    * Update a single sale item's notes (used for condition edits etc.)
    */
   async updateSaleItemNotes(itemId: string, notes: string, tenantId: string) {
-    const item = await this.prismaService.sale_items.findFirst({
+    const item = await this.salesRepo.findFirstSaleItem({
       where: { id: itemId, sales: { tenantId } },
     });
     if (!item) throw new NotFoundException(`Sale item ${itemId} not found`);
-    const updated = await this.prismaService.sale_items.update({
+    const updated = await this.salesRepo.updateSaleItem({
       where: { id: itemId },
       data: { notes },
     });
@@ -544,7 +546,7 @@ export class SalesService {
   ): Promise<SaleResponseDto> {
     try {
       // Check if sale exists
-      const existingSale = await this.prismaService.sales.findFirst({
+      const existingSale = await this.salesRepo.findFirst({
         where: { id, tenantId },
       });
 
@@ -571,7 +573,7 @@ export class SalesService {
         }
       }
 
-      const sale = await this.prismaService.sales.update({
+      const sale = await this.salesRepo.update({
         where: { id },
         data: {
           notes: updateSaleDto.notes,
@@ -800,35 +802,35 @@ export class SalesService {
         topProducts,
         hourlySales,
       ] = await Promise.all([
-        this.prismaService.sales.count({ where: { tenantId } }),
-        this.prismaService.sales.count({
+        this.salesRepo.count({ where: { tenantId } }),
+        this.salesRepo.count({
           where: { tenantId, status: 'COMPLETED' },
         }),
         // PENDING status doesn't exist in SaleStatus enum - using DRAFT instead
-        this.prismaService.sales.count({
+        this.salesRepo.count({
           where: { tenantId, status: 'DRAFT' },
         }),
-        this.prismaService.sales.count({
+        this.salesRepo.count({
           where: { tenantId, status: 'CANCELLED' },
         }),
-        this.prismaService.sales.aggregate({
+        this.salesRepo.aggregate({
           where: { tenantId, status: 'COMPLETED' },
           _sum: { totalAmount: true },
         }),
-        this.prismaService.sales.aggregate({
+        this.salesRepo.aggregate({
           where: { tenantId },
           _sum: { refundedAmount: true },
         }),
-        this.prismaService.sales.count({
+        this.salesRepo.count({
           where: { tenantId, createdAt: { gte: startOfDay } },
         }),
-        this.prismaService.sales.count({
+        this.salesRepo.count({
           where: { tenantId, createdAt: { gte: startOfMonth } },
         }),
-        this.prismaService.sales.count({
+        this.salesRepo.count({
           where: { tenantId, createdAt: { gte: startOfYear } },
         }),
-        this.prismaService.sales.aggregate({
+        this.salesRepo.aggregate({
           where: {
             tenantId,
             status: SaleStatus.COMPLETED,
@@ -836,7 +838,7 @@ export class SalesService {
           },
           _sum: { totalAmount: true },
         }),
-        this.prismaService.sales.aggregate({
+        this.salesRepo.aggregate({
           where: {
             tenantId,
             status: SaleStatus.COMPLETED,
@@ -844,7 +846,7 @@ export class SalesService {
           },
           _sum: { totalAmount: true },
         }),
-        this.prismaService.sales.aggregate({
+        this.salesRepo.aggregate({
           where: {
             tenantId,
             status: SaleStatus.COMPLETED,
@@ -871,7 +873,7 @@ export class SalesService {
           take: 10,
         }),
         // Hourly sales for today
-        this.prismaService.sales.findMany({
+        this.salesRepo.findMany({
           where: {
             tenantId,
             status: PrismaSaleStatus.COMPLETED,
@@ -1076,35 +1078,35 @@ export class SalesService {
           monthRevAgg,
           lastSale,
         ] = await Promise.all([
-          this.prismaService.sales.count({
+          this.salesRepo.count({
             where: { tenantId, createdBy: user.id },
           }),
-          this.prismaService.sales.aggregate({
+          this.salesRepo.aggregate({
             where: base,
             _sum: { totalAmount: true },
           }),
-          this.prismaService.sales.count({
+          this.salesRepo.count({
             where: { ...base, createdAt: { gte: startOfDay } },
           }),
-          this.prismaService.sales.aggregate({
+          this.salesRepo.aggregate({
             where: { ...base, createdAt: { gte: startOfDay } },
             _sum: { totalAmount: true },
           }),
-          this.prismaService.sales.count({
+          this.salesRepo.count({
             where: { ...base, createdAt: { gte: startOfWeek } },
           }),
-          this.prismaService.sales.aggregate({
+          this.salesRepo.aggregate({
             where: { ...base, createdAt: { gte: startOfWeek } },
             _sum: { totalAmount: true },
           }),
-          this.prismaService.sales.count({
+          this.salesRepo.count({
             where: { ...base, createdAt: { gte: startOfMonth } },
           }),
-          this.prismaService.sales.aggregate({
+          this.salesRepo.aggregate({
             where: { ...base, createdAt: { gte: startOfMonth } },
             _sum: { totalAmount: true },
           }),
-          this.prismaService.sales.findFirst({
+          this.salesRepo.findFirst({
             where: { tenantId, createdBy: user.id },
             orderBy: { createdAt: 'desc' },
             select: { createdAt: true },
@@ -1112,7 +1114,7 @@ export class SalesService {
         ]);
 
         const totalRev = Number(totalRevAgg._sum.totalAmount || 0);
-        const completedCount = await this.prismaService.sales.count({
+        const completedCount = await this.salesRepo.count({
           where: base,
         });
 

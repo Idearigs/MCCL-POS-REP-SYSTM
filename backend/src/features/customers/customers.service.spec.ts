@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { CustomersService } from './customers.service';
-import { PrismaService } from '../../core/prisma/prisma.service';
+import { CustomersRepository } from './customers.repository';
 import { CacheService } from '../../core/cache/cache.service';
 import type {
   CustomerQueryDto,
@@ -35,16 +35,17 @@ const mockCustomer = {
   updatedAt: new Date('2026-01-01'),
 };
 
-const mockPrismaService = {
-  customers: {
-    findMany: jest.fn(),
-    findFirst: jest.fn(),
-    findUnique: jest.fn(),
-    create: jest.fn(),
-    update: jest.fn(),
-    delete: jest.fn(),
-    count: jest.fn(),
-  },
+const mockCustomersRepository = {
+  findMany: jest.fn(),
+  findFirst: jest.fn(),
+  findUnique: jest.fn(),
+  create: jest.fn(),
+  update: jest.fn(),
+  delete: jest.fn(),
+  count: jest.fn(),
+  aggregate: jest.fn(),
+  groupBy: jest.fn(),
+  $transaction: jest.fn(),
 };
 
 const mockCacheService = {
@@ -68,7 +69,7 @@ describe('CustomersService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomersService,
-        { provide: PrismaService, useValue: mockPrismaService },
+        { provide: CustomersRepository, useValue: mockCustomersRepository },
         { provide: CacheService, useValue: mockCacheService },
       ],
     }).compile();
@@ -86,8 +87,8 @@ describe('CustomersService', () => {
 
   describe('findAll()', () => {
     it('should return a paginated list of customers', async () => {
-      mockPrismaService.customers.findMany.mockResolvedValue([mockCustomer]);
-      mockPrismaService.customers.count.mockResolvedValue(1);
+      mockCustomersRepository.findMany.mockResolvedValue([mockCustomer]);
+      mockCustomersRepository.count.mockResolvedValue(1);
 
       const result = await service.findAll(
         { page: 1, limit: 10 } as CustomerQueryDto,
@@ -99,19 +100,19 @@ describe('CustomersService', () => {
     });
 
     it('should scope results to the tenantId', async () => {
-      mockPrismaService.customers.findMany.mockResolvedValue([]);
-      mockPrismaService.customers.count.mockResolvedValue(0);
+      mockCustomersRepository.findMany.mockResolvedValue([]);
+      mockCustomersRepository.count.mockResolvedValue(0);
 
       await service.findAll({} as CustomerQueryDto, 'tenant-xyz');
 
       const findManyCall =
-        mockPrismaService.customers.findMany.mock.calls[0][0];
+        mockCustomersRepository.findMany.mock.calls[0][0];
       expect(findManyCall.where.tenantId).toBe('tenant-xyz');
     });
 
     it('should apply search filter when provided', async () => {
-      mockPrismaService.customers.findMany.mockResolvedValue([]);
-      mockPrismaService.customers.count.mockResolvedValue(0);
+      mockCustomersRepository.findMany.mockResolvedValue([]);
+      mockCustomersRepository.count.mockResolvedValue(0);
 
       await service.findAll(
         { search: 'jane' } as CustomerQueryDto,
@@ -119,7 +120,7 @@ describe('CustomersService', () => {
       );
 
       const findManyCall =
-        mockPrismaService.customers.findMany.mock.calls[0][0];
+        mockCustomersRepository.findMany.mock.calls[0][0];
       expect(findManyCall.where.OR).toBeDefined();
     });
   });
@@ -130,7 +131,7 @@ describe('CustomersService', () => {
 
   describe('findOne()', () => {
     it('should return a customer by ID', async () => {
-      mockPrismaService.customers.findFirst.mockResolvedValue(mockCustomer);
+      mockCustomersRepository.findFirst.mockResolvedValue(mockCustomer);
 
       const result = await service.findOne('cust-001', 'tenant-001');
 
@@ -139,7 +140,7 @@ describe('CustomersService', () => {
     });
 
     it('should throw NotFoundException when customer does not exist', async () => {
-      mockPrismaService.customers.findFirst.mockResolvedValue(null);
+      mockCustomersRepository.findFirst.mockResolvedValue(null);
 
       await expect(
         service.findOne('nonexistent', 'tenant-001'),
@@ -161,7 +162,8 @@ describe('CustomersService', () => {
     };
 
     it('should create and return a new customer', async () => {
-      mockPrismaService.customers.create.mockResolvedValue({
+      mockCustomersRepository.findFirst.mockResolvedValue(null);
+      mockCustomersRepository.create.mockResolvedValue({
         ...mockCustomer,
         id: 'cust-new',
         firstName: 'Bob',
@@ -172,11 +174,10 @@ describe('CustomersService', () => {
       const result = await service.create(
         createDto as CreateCustomerDto,
         'tenant-001',
-        'user-001',
       );
 
       expect(result).toHaveProperty('firstName', 'Bob');
-      expect(mockPrismaService.customers.create).toHaveBeenCalled();
+      expect(mockCustomersRepository.create).toHaveBeenCalled();
     });
   });
 
@@ -186,10 +187,10 @@ describe('CustomersService', () => {
 
   describe('update()', () => {
     it('should update and return the customer', async () => {
-      mockPrismaService.customers.findFirst
+      mockCustomersRepository.findFirst
         .mockResolvedValueOnce(mockCustomer) // existing customer
         .mockResolvedValueOnce(null); // no phone conflict
-      mockPrismaService.customers.update.mockResolvedValue({
+      mockCustomersRepository.update.mockResolvedValue({
         ...mockCustomer,
         phone: '+44 7700 999999',
       });
@@ -198,23 +199,17 @@ describe('CustomersService', () => {
         'cust-001',
         { phone: '+44 7700 999999' } as UpdateCustomerDto,
         'tenant-001',
-        'user-001',
       );
 
       expect(result).toBeDefined();
-      expect(mockPrismaService.customers.update).toHaveBeenCalled();
+      expect(mockCustomersRepository.update).toHaveBeenCalled();
     });
 
     it('should throw NotFoundException when customer does not exist', async () => {
-      mockPrismaService.customers.findFirst.mockResolvedValue(null);
+      mockCustomersRepository.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.update(
-          'nonexistent',
-          {} as UpdateCustomerDto,
-          'tenant-001',
-          'user-001',
-        ),
+        service.update('nonexistent', {} as UpdateCustomerDto, 'tenant-001'),
       ).rejects.toThrow(NotFoundException);
     });
   });

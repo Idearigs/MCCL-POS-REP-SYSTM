@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { SalesService } from './sales.service';
+import { SalesRepository } from './sales.repository';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CacheService } from '../../core/cache/cache.service';
 import { ShiftsService } from '../shifts/shifts.service';
@@ -94,18 +95,22 @@ const mockPrismaTransaction = jest.fn().mockImplementation(async (fn) => {
   return fn(prismaMock);
 });
 
+// SalesRepository mock — used for findAll, findOne, update, getStats
+const mockSalesRepository = {
+  findFirst: jest.fn().mockResolvedValue(mockSale),
+  findMany: jest.fn().mockResolvedValue([mockSale]),
+  count: jest.fn().mockResolvedValue(1),
+  update: jest.fn().mockResolvedValue(mockSale),
+  aggregate: jest
+    .fn()
+    .mockResolvedValue({ _sum: { totalAmount: 0, refundedAmount: 0 } }),
+  findFirstSaleItem: jest.fn().mockResolvedValue(null),
+  updateSaleItem: jest.fn(),
+};
+
+// PrismaService mock — used for $transaction (create/refund) and cross-model queries
 const mockPrismaService = {
   $transaction: mockPrismaTransaction,
-  sales: {
-    findFirst: jest.fn().mockResolvedValue(mockSale),
-    findMany: jest.fn().mockResolvedValue([mockSale]),
-    count: jest.fn().mockResolvedValue(1),
-    update: jest.fn().mockResolvedValue(mockSale),
-    create: jest.fn().mockResolvedValue(mockSale),
-    aggregate: jest
-      .fn()
-      .mockResolvedValue({ _sum: { totalAmount: 0, refundedAmount: 0 } }),
-  },
   products: {
     findFirst: jest.fn().mockResolvedValue(mockProduct),
     update: jest.fn().mockResolvedValue(mockProduct),
@@ -118,6 +123,9 @@ const mockPrismaService = {
   },
   payments: {
     groupBy: jest.fn().mockResolvedValue([]),
+  },
+  users: {
+    findMany: jest.fn().mockResolvedValue([]),
   },
 };
 
@@ -147,6 +155,7 @@ describe('SalesService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SalesService,
+        { provide: SalesRepository, useValue: mockSalesRepository },
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: CacheService, useValue: mockCacheService },
         { provide: ShiftsService, useValue: mockShiftsService },
@@ -166,8 +175,8 @@ describe('SalesService', () => {
 
   describe('findAll()', () => {
     it('should return paginated sales', async () => {
-      mockPrismaService.sales.findMany.mockResolvedValue([mockSale]);
-      mockPrismaService.sales.count.mockResolvedValue(1);
+      mockSalesRepository.findMany.mockResolvedValue([mockSale]);
+      mockSalesRepository.count.mockResolvedValue(1);
 
       const result = await service.findAll(
         { page: 1, limit: 10 } as any,
@@ -179,25 +188,25 @@ describe('SalesService', () => {
     });
 
     it('should scope results to the tenant', async () => {
-      mockPrismaService.sales.findMany.mockResolvedValue([]);
-      mockPrismaService.sales.count.mockResolvedValue(0);
+      mockSalesRepository.findMany.mockResolvedValue([]);
+      mockSalesRepository.count.mockResolvedValue(0);
 
       await service.findAll({} as any, 'tenant-abc');
 
-      const findManyCall = mockPrismaService.sales.findMany.mock.calls[0][0];
+      const findManyCall = mockSalesRepository.findMany.mock.calls[0][0];
       expect(findManyCall.where.tenantId).toBe('tenant-abc');
     });
 
     it('should filter by date range when provided', async () => {
-      mockPrismaService.sales.findMany.mockResolvedValue([]);
-      mockPrismaService.sales.count.mockResolvedValue(0);
+      mockSalesRepository.findMany.mockResolvedValue([]);
+      mockSalesRepository.count.mockResolvedValue(0);
 
       await service.findAll(
         { startDate: '2026-01-01', endDate: '2026-03-31' } as any,
         'tenant-001',
       );
 
-      const findManyCall = mockPrismaService.sales.findMany.mock.calls[0][0];
+      const findManyCall = mockSalesRepository.findMany.mock.calls[0][0];
       expect(findManyCall.where.createdAt).toBeDefined();
     });
   });
@@ -208,7 +217,7 @@ describe('SalesService', () => {
 
   describe('findOne()', () => {
     it('should return a sale by ID', async () => {
-      mockPrismaService.sales.findFirst.mockResolvedValue(mockSale);
+      mockSalesRepository.findFirst.mockResolvedValue(mockSale);
 
       const result = await service.findOne('sale-001', 'tenant-001');
 
@@ -216,7 +225,7 @@ describe('SalesService', () => {
     });
 
     it('should throw NotFoundException when sale does not exist', async () => {
-      mockPrismaService.sales.findFirst.mockResolvedValue(null);
+      mockSalesRepository.findFirst.mockResolvedValue(null);
 
       await expect(
         service.findOne('nonexistent', 'tenant-001'),
@@ -230,11 +239,11 @@ describe('SalesService', () => {
 
   describe('getStats()', () => {
     it('should return sales statistics', async () => {
-      mockPrismaService.sales.count
+      mockSalesRepository.count
         .mockResolvedValueOnce(100) // total sales
         .mockResolvedValueOnce(5); // today sales
 
-      mockPrismaService.sales.findMany.mockResolvedValue([
+      mockSalesRepository.findMany.mockResolvedValue([
         {
           totalAmount: 200,
           paymentMethod: 'CASH',
