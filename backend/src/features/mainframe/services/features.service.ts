@@ -7,12 +7,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { PrismaService } from '../../../core/prisma/prisma.service';
+import { buildHmacHeaders } from '../../../shared/utils/hmac-build';
 
 @Injectable()
 export class FeaturesService {
   private readonly logger = new Logger(FeaturesService.name);
   private readonly mainframeUrl: string;
-  private readonly internalKey: string;
 
   constructor(
     private prisma: PrismaService,
@@ -21,8 +21,6 @@ export class FeaturesService {
     this.mainframeUrl =
       this.config.get<string>('MAINFRAME_BACKEND_URL') ||
       'http://localhost:3001/api/v1';
-    this.internalKey =
-      this.config.get<string>('INTERNAL_API_KEY') || 'local-dev-internal-key';
   }
 
   /** Called by the POS frontend on login to know which features are enabled for this tenant.
@@ -48,7 +46,7 @@ export class FeaturesService {
     const url = `${this.mainframeUrl}/mainframe/tenant-features/${subdomain}`;
     try {
       const { data } = await axios.get<{ features: string[] }>(url, {
-        headers: { 'x-internal-key': this.internalKey },
+        headers: { ...buildHmacHeaders('') },
         timeout: 5000,
       });
       return { ...data, _source: 'mainframe' };

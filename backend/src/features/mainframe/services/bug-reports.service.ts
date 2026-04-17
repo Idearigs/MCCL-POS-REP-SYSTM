@@ -2,12 +2,12 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { PrismaService } from '../../../core/prisma/prisma.service';
+import { buildHmacHeaders } from '../../../shared/utils/hmac-build';
 
 @Injectable()
 export class BugReportsService {
   private readonly logger = new Logger(BugReportsService.name);
   private readonly mainframeUrl: string;
-  private readonly internalKey: string;
 
   constructor(
     private prisma: PrismaService,
@@ -16,8 +16,6 @@ export class BugReportsService {
     this.mainframeUrl =
       this.config.get<string>('MAINFRAME_BACKEND_URL') ||
       'http://localhost:3001/api/v1';
-    this.internalKey =
-      this.config.get<string>('INTERNAL_API_KEY') || 'local-dev-internal-key';
   }
 
   async create(data: {
@@ -42,17 +40,19 @@ export class BugReportsService {
     // Forward the bug report to the mainframe backend so it appears
     // in the centralised mainframe admin dashboard.
     try {
+      const payload = {
+        ...data,
+        priority: data.priority || 'MEDIUM',
+        screenshots: data.screenshots || [],
+      };
+      const bodyStr = JSON.stringify(payload);
       const { data: created } = await axios.post(
         `${this.mainframeUrl}/mainframe/bug-reports`,
-        {
-          ...data,
-          priority: data.priority || 'MEDIUM',
-          screenshots: data.screenshots || [],
-        },
+        bodyStr,
         {
           headers: {
             'Content-Type': 'application/json',
-            'x-internal-key': this.internalKey,
+            ...buildHmacHeaders(bodyStr),
           },
           timeout: 8000,
         },

@@ -2,12 +2,12 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { PrismaService } from '../../../core/prisma/prisma.service';
+import { buildHmacHeaders } from '../../../shared/utils/hmac-build';
 
 @Injectable()
 export class FeatureRequestsService {
   private readonly logger = new Logger(FeatureRequestsService.name);
   private readonly mainframeUrl: string;
-  private readonly internalKey: string;
 
   constructor(
     private prisma: PrismaService,
@@ -16,8 +16,6 @@ export class FeatureRequestsService {
     this.mainframeUrl =
       this.config.get<string>('MAINFRAME_BACKEND_URL') ||
       'http://localhost:3001/api/v1';
-    this.internalKey =
-      this.config.get<string>('INTERNAL_API_KEY') || 'local-dev-internal-key';
   }
 
   async create(data: {
@@ -50,17 +48,15 @@ export class FeatureRequestsService {
 
     // Forward to mainframe backend so it appears in the admin dashboard
     try {
+      const payload = { ...data, customerProfileId, priority: data.priority || 'MEDIUM' };
+      const bodyStr = JSON.stringify(payload);
       const { data: created } = await axios.post(
         `${this.mainframeUrl}/mainframe/feature-requests`,
-        {
-          ...data,
-          customerProfileId,
-          priority: data.priority || 'MEDIUM',
-        },
+        bodyStr,
         {
           headers: {
             'Content-Type': 'application/json',
-            'x-internal-key': this.internalKey,
+            ...buildHmacHeaders(bodyStr),
           },
           timeout: 8000,
         },

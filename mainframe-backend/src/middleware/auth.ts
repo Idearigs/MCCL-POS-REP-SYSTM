@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { verifyInternalHmac } from '../lib/hmac-verify';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'mainframe-jwt-secret-change-in-production';
-const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || 'local-dev-internal-key';
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
@@ -20,12 +20,24 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-/** Accepts either a mainframe JWT or the shared internal API key.
+/** Accepts either a mainframe JWT or an HMAC-signed internal request.
  *  Used for endpoints that the POS backend calls on behalf of tenants. */
-export function requireAuthOrInternalKey(req: Request, res: Response, next: NextFunction) {
-  // Internal key path (server-to-server)
-  const internalKey = req.headers['x-internal-key'];
-  if (internalKey === INTERNAL_API_KEY) return next();
+export function requireAuthOrInternalKey(
+  req: Request & { rawBody?: string },
+  res: Response,
+  next: NextFunction,
+) {
+  const signature = req.headers['x-internal-signature'] as string | undefined;
+  const timestamp = req.headers['x-internal-timestamp'] as string | undefined;
+
+  if (signature && timestamp) {
+    try {
+      verifyInternalHmac(signature, timestamp, req.rawBody ?? '');
+      return next();
+    } catch {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+  }
 
   // Mainframe JWT path (admin UI)
   return requireAuth(req, res, next);

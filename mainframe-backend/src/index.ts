@@ -41,7 +41,10 @@ app.use(cors({
 // routes (e.g. login) still get their body parsed as JSON by express.json() below.
 app.use('/api/v1/webhooks/lemonsqueezy', express.raw({ type: 'application/json', limit: '1mb' }));
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '10mb',
+  verify: (req: any, _res, buf) => { req.rawBody = buf.toString(); },
+}));
 
 // Health check (no auth)
 app.get('/health', async (_req, res) => {
