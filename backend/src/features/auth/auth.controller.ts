@@ -29,6 +29,8 @@ import { AuthService } from './auth.service';
 import { verifyInternalHmac } from '../../shared/utils/hmac-verify';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
+import { RolesGuard } from '../../shared/guards/roles.guard';
+import { Roles } from '../../shared/decorators/roles.decorator';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from '../../shared/decorators/user.decorator';
 import {
@@ -216,17 +218,16 @@ export class AuthController {
     await this.authService.changePassword(userId, changePasswordDto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Roles('OWNER', 'MANAGER')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Get('users')
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Get all users',
-    description: 'Get list of all users/cashiers (admin only)',
+    description: 'Get list of all users/cashiers — OWNER and MANAGER only',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Users retrieved successfully',
-  })
+  @ApiResponse({ status: 200, description: 'Users retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient role' })
   async getUsers(
     @CurrentTenant() tenant: TenantInfo,
     @Query('role') role?: string,
@@ -243,17 +244,16 @@ export class AuthController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Roles('OWNER', 'MANAGER')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Get('users/:id')
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Get user by ID',
-    description: 'Get a specific user by their ID',
+    description: 'Get a specific user by their ID — OWNER and MANAGER only',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'User retrieved successfully',
-  })
+  @ApiResponse({ status: 200, description: 'User retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient role' })
   async getUserById(
     @CurrentTenant() tenant: TenantInfo,
     @Param('id') id: string,
@@ -261,17 +261,16 @@ export class AuthController {
     return this.authService.getUserById(tenant.id, id);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Roles('OWNER')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Patch('users/:id')
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Update user',
-    description: 'Update user details (admin only)',
+    description: 'Update user details — OWNER only',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'User updated successfully',
-  })
+  @ApiResponse({ status: 200, description: 'User updated successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient role' })
   async updateUser(
     @CurrentTenant() tenant: TenantInfo,
     @Param('id') id: string,
@@ -280,17 +279,16 @@ export class AuthController {
     return this.authService.updateUser(tenant.id, id, updateData);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Roles('OWNER')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Patch('users/:id/password')
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Reset user password',
-    description: 'Reset password for a user (admin only)',
+    description: 'Reset password for any user — OWNER only',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Password reset successfully',
-  })
+  @ApiResponse({ status: 200, description: 'Password reset successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient role' })
   async resetUserPassword(
     @CurrentTenant() tenant: TenantInfo,
     @Param('id') id: string,
@@ -299,15 +297,17 @@ export class AuthController {
     return this.authService.resetUserPassword(tenant.id, id, body.password);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Roles('OWNER')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Delete('users/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Delete user',
-    description: 'Permanently delete a cashier/user (admin only)',
+    description: 'Permanently delete a user — OWNER only',
   })
   @ApiResponse({ status: 204, description: 'User deleted successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient role' })
   async deleteUser(
     @CurrentTenant() tenant: TenantInfo,
     @Param('id') id: string,
