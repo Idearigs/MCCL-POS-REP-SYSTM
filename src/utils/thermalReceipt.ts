@@ -45,8 +45,8 @@ const PAYMENT_LABELS: Record<string, string> = {
   INSTALLMENT: 'Installment',
 };
 
-function fmt(amount: number): string {
-  return `£${amount.toFixed(2)}`;
+function fmt(amount: number | undefined | null): string {
+  return `£${(amount ?? 0).toFixed(2)}`;
 }
 
 function formatDate(isoString: string): string {
