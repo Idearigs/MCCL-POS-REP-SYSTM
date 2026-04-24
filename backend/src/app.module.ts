@@ -57,15 +57,18 @@ import { OpenAIModule } from './integrations/openai/openai.module';
         const logger = new Logger('AppModule');
         const isProduction = process.env.NODE_ENV === 'production';
         try {
-          // Try to connect to Redis
-          const store = await redisStore({
-            socket: {
-              host: process.env.REDIS_HOST || 'localhost',
-              port: parseInt(process.env.REDIS_PORT || '6379'),
-            },
-            password: process.env.REDIS_PASSWORD,
-            database: parseInt(process.env.REDIS_DB || '0'),
-          });
+          // Try to connect to Redis — prefer REDIS_URL, fall back to host/port/password
+          const redisConfig = process.env.REDIS_URL
+            ? { url: process.env.REDIS_URL }
+            : {
+                socket: {
+                  host: process.env.REDIS_HOST || 'localhost',
+                  port: parseInt(process.env.REDIS_PORT || '6379'),
+                },
+                password: process.env.REDIS_PASSWORD,
+                database: parseInt(process.env.REDIS_DB || '0'),
+              };
+          const store = await redisStore(redisConfig);
 
           logger.log('✅ Connected to Redis cache');
           return {
