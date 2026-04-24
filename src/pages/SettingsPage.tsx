@@ -138,16 +138,16 @@ const SettingsPage = () => {
       await connectQZ();
       const found = await listPrinters();
       setAvailablePrinters(found);
-      if (found.length === 0) toast({ title: 'No printers found', description: 'Make sure QZ Tray is running on this PC.', variant: 'destructive' });
+      if (found.length === 0) toast.error('No printers found — make sure QZ Tray is running on this PC.');
     } catch {
-      toast({ title: 'QZ Tray not available', description: 'Install and start QZ Tray on this PC first.', variant: 'destructive' });
+      toast.error('QZ Tray not available — install and start QZ Tray on this PC first.');
     } finally {
       setLoadingPrinters(false);
     }
   };
 
   const handleTestPrint = async () => {
-    if (!printerName) { toast({ title: 'No printer selected', description: 'Enter or pick a printer name first.', variant: 'destructive' }); return; }
+    if (!printerName) { toast.error('Enter or pick a printer name first.'); return; }
     setTestPrinting(true);
     try {
       const { printThermalReceipt } = await import('@/utils/thermalReceipt');
@@ -168,9 +168,9 @@ const SettingsPage = () => {
         { model: printerModel, copies: 1 },
         printerName,
       );
-      toast({ title: 'Test print sent!' });
+      toast.success('Test print sent!');
     } catch (e: any) {
-      toast({ title: 'Print failed', description: e?.message ?? 'Unknown error', variant: 'destructive' });
+      toast.error(`Print failed: ${e?.message ?? 'Unknown error'}`);
     } finally {
       setTestPrinting(false);
     }
