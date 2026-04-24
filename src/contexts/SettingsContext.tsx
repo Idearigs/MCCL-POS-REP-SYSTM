@@ -29,6 +29,7 @@ export type PrinterModel = 'ONIX' | 'EPSON' | 'OTHER';
 
 export interface PrinterSettings {
   model: PrinterModel;
+  printerName: string;   // Windows printer name as shown in QZ Tray / Control Panel
   autoPrint: boolean;
   copies: 1 | 2;
   footerText: string;
@@ -87,6 +88,7 @@ Visit us again soon.`,
   },
   printer: {
     model: 'EPSON',
+    printerName: '',
     autoPrint: false,
     copies: 1,
     footerText: 'Thank you for your purchase!\nPlease keep this receipt for your records.',

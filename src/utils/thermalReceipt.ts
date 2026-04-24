@@ -306,10 +306,25 @@ function buildReceiptHTML(data: ThermalReceiptData, options: PrintOptions): stri
 </html>`;
 }
 
-export function printThermalReceipt(
+// Main entry point — tries QZ Tray (silent, direct ESC/POS) then falls back to iframe
+export async function printThermalReceipt(
   data: ThermalReceiptData,
   options: PrintOptions = {},
-): void {
+  printerName?: string,
+): Promise<void> {
+  if (printerName) {
+    try {
+      const { printReceiptQZ } = await import('./qzBridge');
+      await printReceiptQZ(printerName, data, options);
+      return; // success — done, no dialog shown
+    } catch (err) {
+      console.warn('[ThermalReceipt] QZ Tray failed, falling back to iframe:', err);
+    }
+  }
+  printIframeFallback(data, options);
+}
+
+function printIframeFallback(data: ThermalReceiptData, options: PrintOptions): void {
   const html = buildReceiptHTML(data, options);
 
   // Iframe approach — works without popup permissions.

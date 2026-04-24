@@ -119,12 +119,61 @@ const SettingsPage = () => {
 
   // Printer settings (local state — no react-hook-form needed for this simple form)
   const [printerModel, setPrinterModel] = useState<'ONIX' | 'EPSON' | 'OTHER'>(settings.printer.model);
+  const [printerName, setPrinterName] = useState(settings.printer.printerName ?? '');
   const [autoPrint, setAutoPrint] = useState(settings.printer.autoPrint);
   const [copies, setCopies] = useState<1 | 2>(settings.printer.copies);
   const [footerText, setFooterText] = useState(settings.printer.footerText);
+  const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
+  const [loadingPrinters, setLoadingPrinters] = useState(false);
+  const [testPrinting, setTestPrinting] = useState(false);
 
   const onSubmitPrinter = async () => {
-    await updatePrinterSettings({ model: printerModel, autoPrint, copies, footerText });
+    await updatePrinterSettings({ model: printerModel, printerName, autoPrint, copies, footerText });
+  };
+
+  const handleFindPrinters = async () => {
+    setLoadingPrinters(true);
+    try {
+      const { listPrinters, connectQZ } = await import('@/utils/qzBridge');
+      await connectQZ();
+      const found = await listPrinters();
+      setAvailablePrinters(found);
+      if (found.length === 0) toast({ title: 'No printers found', description: 'Make sure QZ Tray is running on this PC.', variant: 'destructive' });
+    } catch {
+      toast({ title: 'QZ Tray not available', description: 'Install and start QZ Tray on this PC first.', variant: 'destructive' });
+    } finally {
+      setLoadingPrinters(false);
+    }
+  };
+
+  const handleTestPrint = async () => {
+    if (!printerName) { toast({ title: 'No printer selected', description: 'Enter or pick a printer name first.', variant: 'destructive' }); return; }
+    setTestPrinting(true);
+    try {
+      const { printThermalReceipt } = await import('@/utils/thermalReceipt');
+      await printThermalReceipt(
+        {
+          storeName: settings.general.storeName || 'Test Store',
+          storeAddress: settings.general.address,
+          storePhone: settings.general.phone,
+          storeEmail: settings.general.email,
+          receiptNumber: 'TEST-001',
+          date: new Date().toISOString(),
+          cashierName: 'Staff',
+          items: [{ name: 'Test Item', quantity: 1, unitPrice: 1.00, total: 1.00 }],
+          subtotal: 1.00, discountAmount: 0, taxAmount: 0, totalAmount: 1.00,
+          paymentMethod: 'CASH',
+          footerMessage: footerText,
+        },
+        { model: printerModel, copies: 1 },
+        printerName,
+      );
+      toast({ title: 'Test print sent!' });
+    } catch (e: any) {
+      toast({ title: 'Print failed', description: e?.message ?? 'Unknown error', variant: 'destructive' });
+    } finally {
+      setTestPrinting(false);
+    }
   };
 
   // Security settings form
@@ -572,6 +621,46 @@ const SettingsPage = () => {
               </CardHeader>
               <CardContent className="space-y-6">
 
+                {/* QZ Tray — Printer Name */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Windows Printer Name (QZ Tray)</label>
+                  <p className="text-xs text-muted-foreground">
+                    The exact printer name as it appears in Windows. Click <strong>Find Printers</strong> to detect automatically — requires <a href="https://qz.io/download" target="_blank" rel="noreferrer" className="underline text-blue-600">QZ Tray</a> running on this PC.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={printerName}
+                      onChange={(e) => setPrinterName(e.target.value)}
+                      placeholder="e.g. EPSON TM-T20III"
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleFindPrinters}
+                      disabled={loadingPrinters}
+                      className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {loadingPrinters ? 'Searching…' : 'Find Printers'}
+                    </button>
+                  </div>
+                  {availablePrinters.length > 0 && (
+                    <div className="mt-2 rounded-lg border border-gray-200 divide-y">
+                      {availablePrinters.map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setPrinterName(p)}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${printerName === p ? 'bg-blue-50 text-blue-700 font-medium' : ''}`}
+                        >
+                          {p}
+                          {printerName === p && <span className="ml-2 text-xs">✓ selected</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {/* Printer Model */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Printer Model</label>
@@ -655,7 +744,7 @@ const SettingsPage = () => {
                   />
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-2 flex items-center gap-3">
                   <Button
                     onClick={onSubmitPrinter}
                     disabled={loading}
@@ -663,6 +752,16 @@ const SettingsPage = () => {
                   >
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                     Save Printer Settings
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleTestPrint}
+                    disabled={testPrinting || !printerName}
+                    className="flex items-center gap-2"
+                  >
+                    <Printer className="h-4 w-4" />
+                    {testPrinting ? 'Printing…' : 'Test Print'}
                   </Button>
                 </div>
 

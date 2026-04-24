@@ -73,6 +73,7 @@ import { customerService } from '@/services/customerService';
 import { productService } from '@/services/productService';
 import { useSettings } from '@/contexts/SettingsContext';
 import { printThermalReceipt } from '@/utils/thermalReceipt';
+import { PrinterStatusBadge } from './PrinterStatusBadge';
 import {
   Dialog,
   DialogContent,
@@ -1252,14 +1253,14 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   };
 
   // Print thermal receipt for a completed sale
-  const handlePrintReceipt = (sale: Sale) => {
+  const handlePrintReceipt = async (sale: Sale) => {
     const cashMatch = sale.notes?.match(/Cash received: £([\d.]+)/);
     const cashReceived = sale.paymentMethod === 'CASH' && cashMatch
       ? parseFloat(cashMatch[1]) || undefined
       : undefined;
     const change = cashReceived ? cashReceived - sale.totalAmount : undefined;
 
-    printThermalReceipt(
+    await printThermalReceipt(
       {
         storeName: settings.general.storeName,
         storeAddress: settings.general.address,
@@ -1291,6 +1292,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         model: settings.printer.model,
         copies: settings.printer.copies,
       },
+      settings.printer.printerName || undefined,
     );
   };
 
@@ -1518,6 +1520,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 }}
               />
             )}
+
+            <PrinterStatusBadge />
 
             {/* Search - hidden in category view and appraisal view */}
             {!showCategoryView && !showAppraisalView && (
