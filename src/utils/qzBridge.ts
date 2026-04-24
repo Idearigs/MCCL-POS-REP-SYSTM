@@ -2,6 +2,7 @@
 // QZ Tray must be installed and running on the till PC: https://qz.io
 import type { ThermalReceiptData, PrintOptions } from './thermalReceipt';
 import { buildEscPos } from './escpos';
+import { buildReceiptHTML } from './thermalReceipt';
 
 export type QZStatus = 'disconnected' | 'connecting' | 'connected' | 'unavailable';
 
@@ -114,10 +115,17 @@ export async function printReceiptQZ(
     throw new Error('QZ Tray is not running on this PC.');
   }
 
-  const escpos = buildEscPos(data, options.copies ?? 1);
-  const config = _qz.configs.create(printerName, { scaleContent: false });
+  const isThermal = options.model === 'ONIX' || options.model === 'EPSON';
 
-  await _qz.print(config, [
-    { type: 'raw', format: 'plain', data: escpos },
-  ]);
+  if (isThermal) {
+    // Raw ESC/POS — thermal printers only
+    const escpos = buildEscPos(data, options.copies ?? 1);
+    const config = _qz.configs.create(printerName, { scaleContent: false });
+    await _qz.print(config, [{ type: 'raw', format: 'plain', data: escpos }]);
+  } else {
+    // HTML — works on any printer (A4 laser/inkjet, PDF, etc.)
+    const html = buildReceiptHTML(data, options);
+    const config = _qz.configs.create(printerName);
+    await _qz.print(config, [{ type: 'html', format: 'plain', data: html }]);
+  }
 }

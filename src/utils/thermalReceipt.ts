@@ -143,7 +143,7 @@ function buildCopyHTML(data: ThermalReceiptData, copyLabel?: string): string {
   </div>`;
 }
 
-function buildReceiptHTML(data: ThermalReceiptData, options: PrintOptions): string {
+export function buildReceiptHTML(data: ThermalReceiptData, options: PrintOptions): string {
   const copies = options.copies ?? 1;
 
   const copy1 = buildCopyHTML(data, copies > 1 ? 'CUSTOMER COPY' : undefined);
