@@ -1265,7 +1265,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         storeAddress: settings.general.address,
         storePhone: settings.general.phone,
         storeEmail: settings.general.email,
-        receiptNumber: sale.receiptNumber,
+        receiptNumber: (sale as any).saleNumber ?? sale.receiptNumber ?? 'N/A',
         date: sale.createdAt,
         cashierName: sale.cashierName || 'Staff',
         customerName: sale.customerName || undefined,

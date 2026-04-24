@@ -158,11 +158,16 @@ function buildReceiptHTML(data: ThermalReceiptData, options: PrintOptions): stri
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    html {
+      height: auto;
+    }
+
     body {
       font-family: 'Courier New', Courier, monospace;
       font-size: 11px;
       width: 80mm;
       max-width: 80mm;
+      height: auto;
       color: #000;
       background: #fff;
     }
@@ -278,11 +283,17 @@ function buildReceiptHTML(data: ThermalReceiptData, options: PrintOptions): stri
     }
 
     @media print {
-      body { width: 80mm; }
+      html, body {
+        width: 80mm;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+      }
       .cut-line { color: #000; }
       @page {
         size: 80mm auto;
         margin: 0;
+        padding: 0;
       }
     }
   </style>
