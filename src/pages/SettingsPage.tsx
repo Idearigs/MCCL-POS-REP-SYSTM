@@ -126,6 +126,20 @@ const SettingsPage = () => {
   const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
   const [loadingPrinters, setLoadingPrinters] = useState(false);
   const [testPrinting, setTestPrinting] = useState(false);
+  const [qzProfileId, setQzProfileId] = useState<string>(
+    () => localStorage.getItem('qz_profile_id') ?? 'dev',
+  );
+  const qzProfiles = [
+    { id: 'dev', label: 'Developer PC (Sri Lanka)', configured: true },
+    { id: 'customer', label: 'Customer PC (UK)', configured: false },
+  ];
+
+  const handleSetQZProfile = async (id: string) => {
+    setQzProfileId(id);
+    const { setActiveQZProfile } = await import('@/utils/qzBridge');
+    setActiveQZProfile(id);
+    toast.success(`Switched to ${qzProfiles.find(p => p.id === id)?.label ?? id}`);
+  };
 
   const onSubmitPrinter = async () => {
     await updatePrinterSettings({ model: printerModel, printerName, autoPrint, copies, footerText });
@@ -620,6 +634,37 @@ const SettingsPage = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+
+                {/* QZ Tray — Machine Profile */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Machine Profile</label>
+                  <p className="text-xs text-muted-foreground">
+                    Select this PC's QZ Tray keypair so "Remember this decision" works permanently.
+                    Each PC needs its own profile generated via QZ Tray → Site Manager → +.
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    {qzProfiles.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleSetQZProfile(p.id)}
+                        className={`flex items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-medium transition-colors ${
+                          qzProfileId === p.id
+                            ? 'border-blue-600 bg-blue-50 text-blue-700'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-2 w-2 rounded-full ${p.configured ? 'bg-green-500' : 'bg-gray-300'}`}
+                        />
+                        {p.label}
+                        {!p.configured && <span className="text-xs text-amber-600">(not set up)</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
 
                 {/* QZ Tray — Printer Name */}
                 <div className="space-y-2">
