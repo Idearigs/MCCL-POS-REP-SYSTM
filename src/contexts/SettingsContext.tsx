@@ -25,10 +25,20 @@ export interface AppearanceSettings {
   receiptTemplate: string;
 }
 
+export type PrinterModel = 'ONIX' | 'EPSON' | 'OTHER';
+
+export interface PrinterSettings {
+  model: PrinterModel;
+  autoPrint: boolean;
+  copies: 1 | 2;
+  footerText: string;
+}
+
 export interface AllSettings {
   general: GeneralSettings;
   notifications: NotificationSettings;
   appearance: AppearanceSettings;
+  printer: PrinterSettings;
 }
 
 interface SettingsContextType {
@@ -37,6 +47,7 @@ interface SettingsContextType {
   updateGeneralSettings: (settings: GeneralSettings) => Promise<boolean>;
   updateNotificationSettings: (settings: NotificationSettings) => Promise<boolean>;
   updateAppearanceSettings: (settings: AppearanceSettings) => Promise<boolean>;
+  updatePrinterSettings: (settings: PrinterSettings) => Promise<boolean>;
   toggleDarkMode: () => void;
   toggleCompactView: () => void;
   resetToDefaults: () => void;
@@ -74,6 +85,12 @@ Date: {DATE}
 We appreciate your business!
 Visit us again soon.`,
   },
+  printer: {
+    model: 'EPSON',
+    autoPrint: false,
+    copies: 1,
+    footerText: 'Thank you for your purchase!\nPlease keep this receipt for your records.',
+  },
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -90,6 +107,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           general: { ...defaultSettings.general, ...parsed.general },
           notifications: { ...defaultSettings.notifications, ...parsed.notifications },
           appearance: { ...defaultSettings.appearance, ...parsed.appearance },
+          printer: { ...defaultSettings.printer, ...parsed.printer },
         };
       }
     } catch (error) {
@@ -206,6 +224,23 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  // Update printer settings
+  const updatePrinterSettings = async (newSettings: PrinterSettings): Promise<boolean> => {
+    setLoading(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 200));
+      setSettings(prev => ({ ...prev, printer: newSettings }));
+      toast.success('Printer settings saved');
+      return true;
+    } catch (error) {
+      console.error('Error updating printer settings:', error);
+      toast.error('Failed to save printer settings');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Toggle dark mode - applies immediately
   const toggleDarkMode = () => {
     const newValue = !settings.appearance.darkMode;
@@ -250,6 +285,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updateGeneralSettings,
         updateNotificationSettings,
         updateAppearanceSettings,
+        updatePrinterSettings,
         toggleDarkMode,
         toggleCompactView,
         resetToDefaults,

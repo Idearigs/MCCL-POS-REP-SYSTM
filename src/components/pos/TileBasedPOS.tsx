@@ -1253,40 +1253,45 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
   // Print thermal receipt for a completed sale
   const handlePrintReceipt = (sale: Sale) => {
-    const cashReceived = sale.paymentMethod === 'CASH' && sale.notes
-      ? parseFloat(sale.notes.match(/Cash received: £([\d.]+)/)?.[1] || '0') || undefined
+    const cashMatch = sale.notes?.match(/Cash received: £([\d.]+)/);
+    const cashReceived = sale.paymentMethod === 'CASH' && cashMatch
+      ? parseFloat(cashMatch[1]) || undefined
       : undefined;
     const change = cashReceived ? cashReceived - sale.totalAmount : undefined;
 
-    printThermalReceipt({
-      storeName: settings.general.storeName,
-      storeAddress: settings.general.address,
-      storePhone: settings.general.phone,
-      storeEmail: settings.general.email,
-      receiptNumber: sale.receiptNumber,
-      date: sale.createdAt,
-      cashierName: sale.cashierName || 'Staff',
-      customerName: sale.customerName || undefined,
-      items: (sale.items || []).map((item: any) => ({
-        name: item.productName || item.name || 'Item',
-        sku: item.productSku || item.sku,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        discount: item.discount,
-        total: item.total,
-        isRepair: item.isRepair,
-      })),
-      subtotal: sale.subtotal,
-      discountAmount: sale.discountAmount,
-      taxAmount: sale.taxAmount,
-      totalAmount: sale.totalAmount,
-      paymentMethod: sale.paymentMethod,
-      cashReceived,
-      change,
-      footerMessage: settings.appearance.receiptTemplate
-        ? undefined
-        : 'Thank you for your purchase!',
-    });
+    printThermalReceipt(
+      {
+        storeName: settings.general.storeName,
+        storeAddress: settings.general.address,
+        storePhone: settings.general.phone,
+        storeEmail: settings.general.email,
+        receiptNumber: sale.receiptNumber,
+        date: sale.createdAt,
+        cashierName: sale.cashierName || 'Staff',
+        customerName: sale.customerName || undefined,
+        items: (sale.items || []).map((item: any) => ({
+          name: item.productName || item.name || 'Item',
+          sku: item.productSku || item.sku,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discount: item.discount,
+          total: item.total,
+          isRepair: item.isRepair,
+        })),
+        subtotal: sale.subtotal,
+        discountAmount: sale.discountAmount,
+        taxAmount: sale.taxAmount,
+        totalAmount: sale.totalAmount,
+        paymentMethod: sale.paymentMethod,
+        cashReceived,
+        change,
+        footerMessage: settings.printer.footerText || 'Thank you for your purchase!',
+      },
+      {
+        model: settings.printer.model,
+        copies: settings.printer.copies,
+      },
+    );
   };
 
   // Close the post-sale screen and start a new sale
@@ -1452,6 +1457,12 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
       // Show the post-sale receipt screen inside the payment dialog
       setCompletedSale(createdSale);
+
+      // Auto-print if enabled in printer settings
+      if (settings.printer.autoPrint) {
+        // Small delay so the success screen renders first
+        setTimeout(() => handlePrintReceipt(createdSale), 400);
+      }
 
     } catch (error: any) {
       console.error('Payment failed:', error);

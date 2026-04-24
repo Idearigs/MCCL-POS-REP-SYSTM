@@ -4,7 +4,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Save, Lock, Eye, EyeOff, RotateCcw, Loader2, UserCircle } from 'lucide-react';
+import { Save, Lock, Eye, EyeOff, RotateCcw, Loader2, UserCircle, Printer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -76,7 +76,7 @@ const SettingsPage = () => {
   const navigate = useNavigate();
   const { changePassword, auth } = useAuth();
   const isBuyme = auth.tenantInfo?.tenantSlug === 'buymejewellery';
-  const { settings, loading, updateGeneralSettings, updateNotificationSettings, updateAppearanceSettings, resetToDefaults, toggleDarkMode, toggleCompactView } = useSettings();
+  const { settings, loading, updateGeneralSettings, updateNotificationSettings, updateAppearanceSettings, updatePrinterSettings, resetToDefaults, toggleDarkMode, toggleCompactView } = useSettings();
 
   // Password visibility states
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -116,6 +116,16 @@ const SettingsPage = () => {
       receiptTemplate: settings.appearance.receiptTemplate,
     },
   });
+
+  // Printer settings (local state — no react-hook-form needed for this simple form)
+  const [printerModel, setPrinterModel] = useState<'ONIX' | 'EPSON' | 'OTHER'>(settings.printer.model);
+  const [autoPrint, setAutoPrint] = useState(settings.printer.autoPrint);
+  const [copies, setCopies] = useState<1 | 2>(settings.printer.copies);
+  const [footerText, setFooterText] = useState(settings.printer.footerText);
+
+  const onSubmitPrinter = async () => {
+    await updatePrinterSettings({ model: printerModel, autoPrint, copies, footerText });
+  };
 
   // Security settings form
   const securityForm = useForm<SecurityFormValues>({
@@ -244,10 +254,11 @@ const SettingsPage = () => {
         <Separator className="my-6" />
 
         <Tabs defaultValue="general" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
+            <TabsTrigger value="printer">Printer</TabsTrigger>
             <TabsTrigger value="repair-tags">Repair Tags</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
           </TabsList>
@@ -545,6 +556,118 @@ const SettingsPage = () => {
           {/* Repair Tags Tab */}
           <TabsContent value="repair-tags">
             <RepairTagsSettings />
+          </TabsContent>
+
+          {/* Printer Settings Tab */}
+          <TabsContent value="printer">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Printer className="h-5 w-5" />
+                  Thermal Printer Settings
+                </CardTitle>
+                <CardDescription>
+                  Configure your 80mm thermal receipt printer (ONIX or EPSON).
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+
+                {/* Printer Model */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Printer Model</label>
+                  <p className="text-sm text-muted-foreground">
+                    Both ONIX and EPSON use 80mm paper. Select your model for optimal settings.
+                  </p>
+                  <div className="flex gap-3 mt-2">
+                    {(['EPSON', 'ONIX', 'OTHER'] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setPrinterModel(m)}
+                        className={`flex-1 rounded-lg border-2 py-3 text-sm font-semibold transition-colors ${
+                          printerModel === m
+                            ? 'border-blue-600 bg-blue-50 text-blue-700'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        {m === 'OTHER' ? 'Other 80mm' : m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Auto-print */}
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <label className="text-sm font-medium">Auto-print after sale</label>
+                    <p className="text-sm text-muted-foreground">
+                      Automatically send to printer when a payment is completed, without clicking the button.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={autoPrint}
+                    onCheckedChange={setAutoPrint}
+                  />
+                </div>
+
+                <Separator />
+
+                {/* Number of copies */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Number of Copies</label>
+                  <p className="text-sm text-muted-foreground">
+                    Print 2 copies (customer + merchant) separated by a cut line.
+                  </p>
+                  <div className="flex gap-3 mt-2">
+                    {([1, 2] as const).map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setCopies(n)}
+                        className={`w-20 rounded-lg border-2 py-3 text-sm font-semibold transition-colors ${
+                          copies === n
+                            ? 'border-blue-600 bg-blue-50 text-blue-700'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        {n === 1 ? '1 Copy' : '2 Copies'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Footer text */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Receipt Footer Message</label>
+                  <p className="text-sm text-muted-foreground">
+                    Printed at the bottom of every receipt. Use \\n for a new line.
+                  </p>
+                  <textarea
+                    value={footerText}
+                    onChange={(e) => setFooterText(e.target.value)}
+                    rows={3}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder="Thank you for your purchase!"
+                  />
+                </div>
+
+                <div className="pt-2">
+                  <Button
+                    onClick={onSubmitPrinter}
+                    disabled={loading}
+                    className="flex items-center gap-2"
+                  >
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    Save Printer Settings
+                  </Button>
+                </div>
+
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Security Settings Tab */}
