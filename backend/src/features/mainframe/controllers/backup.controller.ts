@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Res,
-  Headers,
-} from '@nestjs/common';
+import { Controller, Get, Param, Res, Headers } from '@nestjs/common';
 import type { Response } from 'express';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 import { verifyInternalHmac } from '../../../shared/utils/hmac-verify';

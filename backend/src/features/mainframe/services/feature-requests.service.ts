@@ -48,7 +48,11 @@ export class FeatureRequestsService {
 
     // Forward to mainframe backend so it appears in the admin dashboard
     try {
-      const payload = { ...data, customerProfileId, priority: data.priority || 'MEDIUM' };
+      const payload = {
+        ...data,
+        customerProfileId,
+        priority: data.priority || 'MEDIUM',
+      };
       const bodyStr = JSON.stringify(payload);
       const { data: created } = await axios.post(
         `${this.mainframeUrl}/mainframe/feature-requests`,

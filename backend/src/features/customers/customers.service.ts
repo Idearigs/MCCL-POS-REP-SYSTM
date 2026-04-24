@@ -617,10 +617,7 @@ export class CustomersService {
       });
 
       // Clear cache
-      await this.cacheService.delTenantData(
-        tenantId,
-        `customer:${customerId}`,
-      );
+      await this.cacheService.delTenantData(tenantId, `customer:${customerId}`);
       await this.cacheService.delTenantData(tenantId, 'customers:list');
       await this.cacheService.delTenantData(tenantId, 'customers:stats');
 

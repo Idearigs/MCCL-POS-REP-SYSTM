@@ -3,8 +3,13 @@ import { Reflector } from '@nestjs/core';
 import { RolesGuard } from './roles.guard';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 
-function makeContext(role: string | undefined, handlerRoles: string[] | undefined): ExecutionContext {
-  const mockReflector = { getAllAndOverride: jest.fn().mockReturnValue(handlerRoles) } as any;
+function makeContext(
+  role: string | undefined,
+  handlerRoles: string[] | undefined,
+): ExecutionContext {
+  const mockReflector = {
+    getAllAndOverride: jest.fn().mockReturnValue(handlerRoles),
+  } as any;
   const mockRequest = { user: role !== undefined ? { role } : undefined };
 
   return {

@@ -45,9 +45,7 @@ export class RepairsRepository {
     return this.prisma.repair_status_history.create(args);
   }
 
-  deleteManyStatusHistory(
-    args: Prisma.repair_status_historyDeleteManyArgs,
-  ) {
+  deleteManyStatusHistory(args: Prisma.repair_status_historyDeleteManyArgs) {
     return this.prisma.repair_status_history.deleteMany(args);
   }
 

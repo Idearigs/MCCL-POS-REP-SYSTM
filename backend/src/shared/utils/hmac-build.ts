@@ -18,5 +18,8 @@ export function buildHmacHeaders(body: string): {
     .createHmac('sha256', secret)
     .update(`${timestamp}:${body}`)
     .digest('hex');
-  return { 'x-internal-timestamp': timestamp, 'x-internal-signature': signature };
+  return {
+    'x-internal-timestamp': timestamp,
+    'x-internal-signature': signature,
+  };
 }

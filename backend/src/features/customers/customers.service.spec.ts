@@ -105,8 +105,7 @@ describe('CustomersService', () => {
 
       await service.findAll({} as CustomerQueryDto, 'tenant-xyz');
 
-      const findManyCall =
-        mockCustomersRepository.findMany.mock.calls[0][0];
+      const findManyCall = mockCustomersRepository.findMany.mock.calls[0][0];
       expect(findManyCall.where.tenantId).toBe('tenant-xyz');
     });
 
@@ -119,8 +118,7 @@ describe('CustomersService', () => {
         'tenant-001',
       );
 
-      const findManyCall =
-        mockCustomersRepository.findMany.mock.calls[0][0];
+      const findManyCall = mockCustomersRepository.findMany.mock.calls[0][0];
       expect(findManyCall.where.OR).toBeDefined();
     });
   });
