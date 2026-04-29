@@ -11,52 +11,62 @@ import {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const MATERIALS = [
-  'YELLOW_GOLD', 'WHITE_GOLD', 'ROSE_GOLD',
-  'SILVER', 'PLATINUM', 'DIAMOND',
-  'PEARL', 'GEMSTONE', 'STAINLESS_STEEL', 'OTHER',
-];
-
-const GOLD_TYPES = new Set(['YELLOW_GOLD', 'WHITE_GOLD', 'ROSE_GOLD']);
-const GOLD_CARATS = ['9CT', '14CT', '18CT', '22CT', '24CT'];
+const METAL_TYPES_MOB = ['YELLOW_GOLD', 'WHITE_GOLD', 'ROSE_GOLD', 'SILVER', 'PLATINUM', 'STAINLESS_STEEL'];
+const STONE_TYPES_MOB = ['DIAMOND', 'LAB_DIAMOND', 'MOISSANITE', 'CZ', 'SAPPHIRE', 'RUBY', 'EMERALD', 'AMETHYST', 'PEARL', 'AQUAMARINE', 'TOPAZ', 'OPAL', 'GARNET', 'TOURMALINE'];
+const GOLD_TYPES_MOB = new Set(['YELLOW_GOLD', 'WHITE_GOLD', 'ROSE_GOLD']);
+const GOLD_CARATS_MOB = ['9CT', '14CT', '18CT', '22CT', '24CT'];
+const DIAMOND_CUTS_MOB = ['Round', 'Princess', 'Oval', 'Pear', 'Cushion', 'Emerald Cut', 'Marquise', 'Radiant', 'Asscher', 'Heart', 'Trillion'];
 
 const WATCH_BRANDS = ['Rosefeld', 'Roamer', 'Briston', 'Festina', 'Secondhand'];
-
 const CONDITIONS = ['BRAND_NEW', 'USED'];
 
-const MATERIAL_LABELS: Record<string, string> = {
+const MATERIAL_LABELS_MOB: Record<string, string> = {
   YELLOW_GOLD: 'Yellow Gold', WHITE_GOLD: 'White Gold', ROSE_GOLD: 'Rose Gold',
-  GOLD: 'Gold',
-  SILVER: 'Silver', PLATINUM: 'Platinum', DIAMOND: 'Diamond',
-  PEARL: 'Pearl', GEMSTONE: 'Gemstone', STAINLESS_STEEL: 'Stainless Steel', OTHER: 'Other',
+  SILVER: 'Silver', PLATINUM: 'Platinum', STAINLESS_STEEL: 'Stainless Steel',
+  DIAMOND: 'Diamond', LAB_DIAMOND: 'Lab Diamond', MOISSANITE: 'Moissanite', CZ: 'CZ',
+  SAPPHIRE: 'Sapphire', RUBY: 'Ruby', EMERALD: 'Emerald', AMETHYST: 'Amethyst',
+  PEARL: 'Pearl', AQUAMARINE: 'Aquamarine', TOPAZ: 'Topaz', OPAL: 'Opal',
+  GARNET: 'Garnet', TOURMALINE: 'Tourmaline',
 };
 
-const CARAT_LABELS: Record<string, string> = {
-  '9CT': '9ct', '14CT': '14ct', '18CT': '18ct', '22CT': '22ct', '24CT': '24ct',
+const GEM_TO_PRISMA_MOB: Record<string, string> = {
+  LAB_DIAMOND: 'DIAMOND', MOISSANITE: 'GEMSTONE', CZ: 'GEMSTONE',
+  SAPPHIRE: 'GEMSTONE', RUBY: 'GEMSTONE', EMERALD: 'GEMSTONE', AMETHYST: 'GEMSTONE',
+  AQUAMARINE: 'GEMSTONE', TOPAZ: 'GEMSTONE', OPAL: 'GEMSTONE', GARNET: 'GEMSTONE', TOURMALINE: 'GEMSTONE',
 };
 
-function parseMaterial(raw: string): { baseMaterial: string; carat: string } {
+interface MobMaterialEntry { base: string; carat?: string; detail?: string; }
+
+function mobMaterialLabel(e: MobMaterialEntry): string {
+  const base = MATERIAL_LABELS_MOB[e.base] ?? e.base;
+  const suffix = [e.carat, e.detail].filter(Boolean).join(' · ');
+  return suffix ? `${base} ${suffix}` : base;
+}
+
+function parseLegacyMaterialMob(raw: string): MobMaterialEntry {
   for (const base of ['YELLOW_GOLD', 'WHITE_GOLD', 'ROSE_GOLD']) {
-    for (const ct of GOLD_CARATS) {
-      if (raw === `${base}_${ct}`) return { baseMaterial: base, carat: ct };
+    for (const ct of GOLD_CARATS_MOB) {
+      if (raw === `${base}_${ct}`) return { base, carat: ct };
     }
-    if (raw === base) return { baseMaterial: base, carat: '' };
+    if (raw === base) return { base };
   }
-  if (raw === 'GOLD') return { baseMaterial: 'YELLOW_GOLD', carat: '' };
-  return { baseMaterial: raw, carat: '' };
+  if (raw === 'GOLD') return { base: 'YELLOW_GOLD' };
+  return { base: raw || 'YELLOW_GOLD' };
 }
 
-function combineMaterial(baseMaterial: string, carat: string): string {
-  if (GOLD_TYPES.has(baseMaterial) && carat) return `${baseMaterial}_${carat}`;
-  return baseMaterial;
+function primaryMaterialStrMob(selected: MobMaterialEntry[]): string {
+  const primary = selected.find(m => METAL_TYPES_MOB.includes(m.base)) ?? selected[0];
+  if (!primary) return '';
+  const prismaBase = GEM_TO_PRISMA_MOB[primary.base] ?? primary.base;
+  return primary.carat && GOLD_TYPES_MOB.has(prismaBase) ? `${prismaBase}_${primary.carat}` : prismaBase;
 }
 
-function generateSKU(name: string, material: string): string {
-  const prefix = material.startsWith('YELLOW_GOLD') ? 'YGD'
-    : material.startsWith('WHITE_GOLD') ? 'WGD'
-    : material.startsWith('ROSE_GOLD') ? 'RGD'
-    : material === 'OTHER' ? 'JWL'
-    : material.slice(0, 3);
+function generateSKU(name: string, selected: MobMaterialEntry[]): string {
+  const top = selected[0]?.base ?? '';
+  const prefix = top.startsWith('YELLOW_GOLD') ? 'YGD'
+    : top.startsWith('WHITE_GOLD') ? 'WGD'
+    : top.startsWith('ROSE_GOLD') ? 'RGD'
+    : top ? top.slice(0, 3) : 'JWL';
   const nameCode = name.replace(/\s+/g, '-').toUpperCase().slice(0, 8);
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `${prefix}-${nameCode}-${rand}`;
@@ -67,7 +77,7 @@ interface Category { id: string; name: string; }
 const emptyForm = {
   name: '', sku: '', price: '', cost: '', weight: '',
   stock: '', minStockLevel: '1', category: '',
-  material: 'YELLOW_GOLD', carat: '', condition: 'BRAND_NEW', description: '', brand: '',
+  condition: 'BRAND_NEW', description: '', brand: '',
 };
 
 type View = 'add' | 'list' | 'edit';
@@ -167,9 +177,23 @@ interface ProductFormFieldsProps {
   onAutoSKU: () => void;
   categories: Category[];
   isBuyme: boolean;
+  selectedMaterials: MobMaterialEntry[];
+  setSelectedMaterials: React.Dispatch<React.SetStateAction<MobMaterialEntry[]>>;
+  pendingBase: string | null;
+  setPendingBase: React.Dispatch<React.SetStateAction<string | null>>;
+  pendingCarat: string;
+  setPendingCarat: React.Dispatch<React.SetStateAction<string>>;
+  pendingCut: string;
+  setPendingCut: React.Dispatch<React.SetStateAction<string>>;
 }
 
-function ProductFormFields({ form, set, onAutoSKU, categories, isBuyme }: ProductFormFieldsProps) {
+function ProductFormFields({
+  form, set, onAutoSKU, categories, isBuyme,
+  selectedMaterials, setSelectedMaterials,
+  pendingBase, setPendingBase,
+  pendingCarat, setPendingCarat,
+  pendingCut, setPendingCut,
+}: ProductFormFieldsProps) {
   return (
     <>
       {/* Product Info */}
@@ -288,48 +312,114 @@ function ProductFormFields({ form, set, onAutoSKU, categories, isBuyme }: Produc
               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
-          <div className="px-4 py-3">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Material</label>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {MATERIALS.map(m => (
-                <span
-                  key={m}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium cursor-pointer select-none transition-colors ${
-                    form.material === m ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 active:bg-gray-200'
-                  }`}
-                  onClick={() => {
-                    const synthetic = { target: { value: m } } as React.ChangeEvent<HTMLInputElement>;
-                    set('material')(synthetic);
-                    if (!GOLD_TYPES.has(m)) {
-                      const clear = { target: { value: '' } } as React.ChangeEvent<HTMLInputElement>;
-                      set('carat')(clear);
-                    }
-                  }}
-                >
-                  {MATERIAL_LABELS[m]}
-                </span>
-              ))}
+          <div className="px-4 py-3 space-y-3">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Materials</label>
+
+            {/* Selected pills */}
+            {selectedMaterials.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {selectedMaterials.map((entry, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-600 text-white">
+                    {mobMaterialLabel(entry)}
+                    <button type="button" onClick={() => setSelectedMaterials(prev => prev.filter((_, idx) => idx !== i))} className="ml-0.5 active:opacity-70">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Metals */}
+            <p className="text-xs text-gray-400 font-medium">Metals</p>
+            <div className="flex flex-wrap gap-2">
+              {METAL_TYPES_MOB.map(m => {
+                const isSelected = selectedMaterials.some(e => e.base === m);
+                const isPending = pendingBase === m;
+                return (
+                  <span key={m} className={`px-3 py-1.5 rounded-full text-sm font-medium cursor-pointer select-none transition-colors ${isSelected || isPending ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 active:bg-gray-200'}`}
+                    onClick={() => {
+                      if (GOLD_TYPES_MOB.has(m)) {
+                        setPendingBase(isPending ? null : m);
+                        setPendingCarat(''); setPendingCut('');
+                      } else {
+                        setSelectedMaterials(prev => isSelected ? prev.filter(e => e.base !== m) : [...prev, { base: m }]);
+                      }
+                    }}
+                  >{MATERIAL_LABELS_MOB[m]}</span>
+                );
+              })}
             </div>
 
-            {/* Carat picker — only when a gold type is selected */}
-            {GOLD_TYPES.has(form.material) && (
-              <div className="mt-3">
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Carat</label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {GOLD_CARATS.map(ct => (
-                    <span
-                      key={ct}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium cursor-pointer select-none transition-colors ${
-                        form.carat === ct ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 active:bg-gray-200'
-                      }`}
-                      onClick={() => {
-                        const synthetic = { target: { value: form.carat === ct ? '' : ct } } as React.ChangeEvent<HTMLInputElement>;
-                        set('carat')(synthetic);
-                      }}
-                    >
-                      {CARAT_LABELS[ct]}
-                    </span>
+            {/* Carat picker for pending gold */}
+            {pendingBase && GOLD_TYPES_MOB.has(pendingBase) && (
+              <div className="pl-2 border-l-2 border-indigo-200 space-y-2">
+                <p className="text-xs text-gray-400 font-medium">Carat</p>
+                <div className="flex flex-wrap gap-2">
+                  {GOLD_CARATS_MOB.map(ct => (
+                    <span key={ct} className={`px-3 py-1.5 rounded-full text-sm font-medium cursor-pointer select-none ${pendingCarat === ct ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 active:bg-gray-200'}`}
+                      onClick={() => setPendingCarat(prev => prev === ct ? '' : ct)}
+                    >{ct}</span>
                   ))}
+                </div>
+                <div className="flex gap-2">
+                  <span className={`px-4 py-1.5 rounded-full text-sm font-medium cursor-pointer select-none ${pendingCarat ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-400'}`}
+                    onClick={() => {
+                      if (!pendingCarat) return;
+                      const entry: MobMaterialEntry = { base: pendingBase, carat: pendingCarat };
+                      setSelectedMaterials(prev => [...prev.filter(e => e.base !== pendingBase), entry]);
+                      setPendingBase(null); setPendingCarat('');
+                    }}
+                  >Add</span>
+                  <span className="px-4 py-1.5 rounded-full text-sm text-gray-400 cursor-pointer select-none active:bg-gray-100"
+                    onClick={() => { setPendingBase(null); setPendingCarat(''); }}
+                  >Cancel</span>
+                </div>
+              </div>
+            )}
+
+            {/* Stones */}
+            <p className="text-xs text-gray-400 font-medium pt-1">Diamonds &amp; Stones</p>
+            <div className="flex flex-wrap gap-2">
+              {STONE_TYPES_MOB.map(m => {
+                const isSelected = selectedMaterials.some(e => e.base === m);
+                const isPending = pendingBase === m;
+                const needsCut = m === 'DIAMOND' || m === 'LAB_DIAMOND';
+                return (
+                  <span key={m} className={`px-3 py-1.5 rounded-full text-sm font-medium cursor-pointer select-none transition-colors ${isSelected || isPending ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 active:bg-gray-200'}`}
+                    onClick={() => {
+                      if (needsCut) {
+                        setPendingBase(isPending ? null : m); setPendingCarat(''); setPendingCut('');
+                      } else {
+                        setSelectedMaterials(prev => isSelected ? prev.filter(e => e.base !== m) : [...prev, { base: m }]);
+                      }
+                    }}
+                  >{MATERIAL_LABELS_MOB[m]}</span>
+                );
+              })}
+            </div>
+
+            {/* Cut picker for pending diamond */}
+            {pendingBase && (pendingBase === 'DIAMOND' || pendingBase === 'LAB_DIAMOND') && (
+              <div className="pl-2 border-l-2 border-purple-200 space-y-2">
+                <p className="text-xs text-gray-400 font-medium">Cut (optional)</p>
+                <div className="flex flex-wrap gap-2">
+                  {DIAMOND_CUTS_MOB.map(cut => (
+                    <span key={cut} className={`px-3 py-1.5 rounded-full text-sm font-medium cursor-pointer select-none ${pendingCut === cut ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 active:bg-gray-200'}`}
+                      onClick={() => setPendingCut(prev => prev === cut ? '' : cut)}
+                    >{cut}</span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <span className="px-4 py-1.5 rounded-full text-sm font-medium cursor-pointer select-none bg-purple-600 text-white active:bg-purple-700"
+                    onClick={() => {
+                      const entry: MobMaterialEntry = { base: pendingBase, ...(pendingCut ? { detail: pendingCut } : {}) };
+                      setSelectedMaterials(prev => [...prev.filter(e => e.base !== pendingBase), entry]);
+                      setPendingBase(null); setPendingCut('');
+                    }}
+                  >Add</span>
+                  <span className="px-4 py-1.5 rounded-full text-sm text-gray-400 cursor-pointer select-none active:bg-gray-100"
+                    onClick={() => { setPendingBase(null); setPendingCut(''); }}
+                  >Cancel</span>
                 </div>
               </div>
             )}
@@ -407,6 +497,12 @@ export default function MobileAddProduct() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Add material state
+  const [addMaterials, setAddMaterials] = useState<MobMaterialEntry[]>([]);
+  const [addPendingBase, setAddPendingBase] = useState<string | null>(null);
+  const [addPendingCarat, setAddPendingCarat] = useState('');
+  const [addPendingCut, setAddPendingCut] = useState('');
+
   // ── List view state
   const [searchQuery, setSearchQuery] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
@@ -424,6 +520,12 @@ export default function MobileAddProduct() {
   const [editSuccess, setEditSuccess] = useState(false);
   const editCameraRef = useRef<HTMLInputElement>(null);
   const editGalleryRef = useRef<HTMLInputElement>(null);
+
+  // ── Edit material state
+  const [editMaterials, setEditMaterials] = useState<MobMaterialEntry[]>([]);
+  const [editPendingBase, setEditPendingBase] = useState<string | null>(null);
+  const [editPendingCarat, setEditPendingCarat] = useState('');
+  const [editPendingCut, setEditPendingCut] = useState('');
 
   // ── Load categories on mount
   useEffect(() => {
@@ -503,7 +605,7 @@ export default function MobileAddProduct() {
 
   const autoSKU = () => {
     if (!form.name) return;
-    setForm(f => ({ ...f, sku: generateSKU(f.name, f.material) }));
+    setForm(f => ({ ...f, sku: generateSKU(f.name, addMaterials) }));
   };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -534,11 +636,12 @@ export default function MobileAddProduct() {
         stock: Number(form.stock),
         minStockLevel: Number(form.minStockLevel) || 1,
         category: form.category || undefined,
-        material: combineMaterial(form.material, form.carat),
+        material: primaryMaterialStrMob(addMaterials) || undefined,
         description: form.description.trim() || undefined,
         weight: form.weight ? Number(form.weight) : undefined,
       };
       (payload as any).condition = form.condition;
+      (payload as any).materials = addMaterials.length > 0 ? JSON.stringify(addMaterials) : undefined;
       if (form.brand) (payload as any).supplierName = form.brand;
 
       const created = await productService.createProduct(payload);
@@ -555,7 +658,8 @@ export default function MobileAddProduct() {
       setAddedCount(c => c + 1);
       setSuccessFlash(true);
       setTimeout(() => setSuccessFlash(false), 1800);
-      setForm(f => ({ ...emptyForm, material: f.material, carat: f.carat, condition: f.condition, category: f.category, brand: f.brand }));
+      setForm(f => ({ ...emptyForm, condition: f.condition, category: f.category, brand: f.brand }));
+      // Keep material selection for next add
       setPhotoFile(null);
       setPhotoPreview(null);
     } catch (err: any) {
@@ -575,7 +679,7 @@ export default function MobileAddProduct() {
 
   const autoEditSKU = () => {
     if (!editForm.name) return;
-    setEditForm(f => ({ ...f, sku: generateSKU(f.name, f.material) }));
+    setEditForm(f => ({ ...f, sku: generateSKU(f.name, editMaterials) }));
   };
 
   const handleEditPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -597,7 +701,18 @@ export default function MobileAddProduct() {
     setEditPhotoPreview(null);
     setEditError(null);
     setEditSuccess(false);
-    const { baseMaterial, carat } = parseMaterial(product.material ?? 'YELLOW_GOLD');
+    // Parse multi-material from new JSON field or legacy single material
+    const rawMaterials = (product as any).materials;
+    if (rawMaterials) {
+      try { setEditMaterials(JSON.parse(rawMaterials)); }
+      catch { setEditMaterials([]); }
+    } else if (product.material) {
+      setEditMaterials([parseLegacyMaterialMob(product.material)]);
+    } else {
+      setEditMaterials([]);
+    }
+    setEditPendingBase(null); setEditPendingCarat(''); setEditPendingCut('');
+
     setEditForm({
       name: product.name ?? '',
       sku: product.sku ?? '',
@@ -607,8 +722,6 @@ export default function MobileAddProduct() {
       stock: product.stock != null ? String(product.stock) : '',
       minStockLevel: product.minStockLevel != null ? String(product.minStockLevel) : '1',
       category: product.category ?? '',
-      material: baseMaterial,
-      carat,
       condition: (product as any).condition ?? 'BRAND_NEW',
       description: product.description ?? '',
       brand: product.supplierName ?? '',
@@ -633,10 +746,11 @@ export default function MobileAddProduct() {
         stock: Number(editForm.stock) || 0,
         minStockLevel: Number(editForm.minStockLevel) || 1,
         category: editForm.category || undefined,
-        material: combineMaterial(editForm.material, editForm.carat),
+        material: primaryMaterialStrMob(editMaterials) || undefined,
         description: editForm.description.trim() || undefined,
         weight: editForm.weight ? Number(editForm.weight) : undefined,
         ...(editForm.condition ? { condition: editForm.condition } as any : {}),
+        ...(editMaterials.length > 0 ? { materials: JSON.stringify(editMaterials) } as any : {}),
         ...(editForm.brand ? { supplier: editForm.brand } as any : {}),
       });
 
@@ -780,6 +894,14 @@ export default function MobileAddProduct() {
             onAutoSKU={autoSKU}
             categories={categories}
             isBuyme={isBuyme}
+            selectedMaterials={addMaterials}
+            setSelectedMaterials={setAddMaterials}
+            pendingBase={addPendingBase}
+            setPendingBase={setAddPendingBase}
+            pendingCarat={addPendingCarat}
+            setPendingCarat={setAddPendingCarat}
+            pendingCut={addPendingCut}
+            setPendingCut={setAddPendingCut}
           />
         </form>
       )}
@@ -896,6 +1018,14 @@ export default function MobileAddProduct() {
             onAutoSKU={autoEditSKU}
             categories={categories}
             isBuyme={isBuyme}
+            selectedMaterials={editMaterials}
+            setSelectedMaterials={setEditMaterials}
+            pendingBase={editPendingBase}
+            setPendingBase={setEditPendingBase}
+            pendingCarat={editPendingCarat}
+            setPendingCarat={setEditPendingCarat}
+            pendingCut={editPendingCut}
+            setPendingCut={setEditPendingCut}
           />
         </div>
       )}

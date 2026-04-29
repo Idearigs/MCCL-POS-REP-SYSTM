@@ -48,6 +48,7 @@ export declare class CreateProductDto {
     color?: string;
     size?: string;
     location?: string;
+    materials?: string;
 }
 declare const UpdateProductDto_base: import("@nestjs/common").Type<Partial<CreateProductDto>>;
 export declare class UpdateProductDto extends UpdateProductDto_base {
@@ -110,6 +111,7 @@ export declare class ProductResponseDto {
     color?: string;
     size?: string;
     location?: string;
+    materials?: string;
     isActive: boolean;
     isDamaged: boolean;
     damageNotes?: string;

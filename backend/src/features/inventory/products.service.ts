@@ -1283,6 +1283,7 @@ export class ProductsService {
       condition: product.condition,
       weight: product.weight ? Number(product.weight) : undefined,
       purity: product.purity,
+      materials: product.materials,
       gemstone: product.gemstone,
       certification: product.certification,
       color: product.color,

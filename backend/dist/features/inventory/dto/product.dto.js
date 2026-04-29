@@ -66,6 +66,7 @@ class CreateProductDto {
     color;
     size;
     location;
+    materials;
 }
 exports.CreateProductDto = CreateProductDto;
 __decorate([
@@ -323,6 +324,15 @@ __decorate([
     (0, class_validator_1.MaxLength)(50, { message: 'Location must not exceed 50 characters' }),
     __metadata("design:type", String)
 ], CreateProductDto.prototype, "location", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({
+        description: 'JSON array of material entries (multi-material support)',
+        example: '[{"base":"YELLOW_GOLD","carat":"18CT"},{"base":"DIAMOND","detail":"Round"}]',
+    }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateProductDto.prototype, "materials", void 0);
 class UpdateProductDto extends (0, swagger_1.PartialType)(CreateProductDto) {
     isActive;
     isDamaged;
@@ -676,6 +686,7 @@ class ProductResponseDto {
     color;
     size;
     location;
+    materials;
     isActive;
     isDamaged;
     damageNotes;
@@ -781,6 +792,10 @@ __decorate([
     (0, swagger_1.ApiPropertyOptional)({ example: 'Display Case A1' }),
     __metadata("design:type", String)
 ], ProductResponseDto.prototype, "location", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: '[{"base":"YELLOW_GOLD","carat":"18CT"},{"base":"DIAMOND"}]' }),
+    __metadata("design:type", String)
+], ProductResponseDto.prototype, "materials", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ example: true }),
     __metadata("design:type", Boolean)

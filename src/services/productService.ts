@@ -16,6 +16,7 @@ export interface BackendProduct {
   material?: string;
   condition?: string;
   purity?: string;
+  materials?: string;
   weight?: number;
   location?: string;
   sellingPrice: number;
@@ -46,6 +47,7 @@ export interface Product {
   material: string;
   purity?: string;  // For jewelry purity/karat
   condition?: string;
+  materials?: string;  // JSON array of multi-material entries
   weight?: number;
   dimensions?: string;
   location?: string;
@@ -73,6 +75,7 @@ export interface BackendCreateProductData {
   material?: string;
   purity?: string;
   condition?: string;
+  materials?: string;
   location?: string;
   weight?: number;
   sellingPrice: number;
@@ -178,6 +181,7 @@ const transformBackendToFrontend = (backendProduct: BackendProduct): Product => 
   material: buildCompoundMaterial(backendProduct.material, backendProduct.purity),
   purity: backendProduct.purity,
   condition: backendProduct.condition,
+  materials: backendProduct.materials,
   weight: backendProduct.weight,
   dimensions: undefined, // Not available in backend
   location: backendProduct.location || '',
@@ -210,6 +214,7 @@ const transformFrontendToBackend = (frontendProduct: CreateProductData): Backend
     // Carat info (e.g. 18CT) stored in the purity String field — undefined is omitted from JSON
     purity: purity || (frontendProduct as any).purity || undefined,
     condition: (frontendProduct as any).condition || undefined,
+    materials: (frontendProduct as any).materials || undefined,
     location: (frontendProduct as any).location || undefined,
     weight: frontendProduct.weight,
     sellingPrice: frontendProduct.price,
@@ -333,6 +338,7 @@ class ProductService {
       }
       // condition: send whenever present (undefined = not set by user, null shouldn't occur)
       if ((productData as any).condition !== undefined) backendData.condition = (productData as any).condition;
+      if ((productData as any).materials !== undefined) backendData.materials = (productData as any).materials;
       if ((productData as any).location !== undefined) backendData.location = (productData as any).location;
       if (productData.weight !== undefined) backendData.weight = productData.weight;
       if (productData.price !== undefined) backendData.sellingPrice = productData.price;

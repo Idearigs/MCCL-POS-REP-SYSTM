@@ -283,6 +283,14 @@ export class CreateProductDto {
   @IsString()
   @MaxLength(50, { message: 'Location must not exceed 50 characters' })
   location?: string;
+
+  @ApiPropertyOptional({
+    description: 'JSON array of material entries (multi-material support)',
+    example: '[{"base":"YELLOW_GOLD","carat":"18CT"},{"base":"DIAMOND","detail":"Round"}]',
+  })
+  @IsOptional()
+  @IsString()
+  materials?: string;
 }
 
 export class UpdateProductDto extends PartialType(CreateProductDto) {
@@ -626,6 +634,9 @@ export class ProductResponseDto {
 
   @ApiPropertyOptional({ example: 'Display Case A1' })
   location?: string;
+
+  @ApiPropertyOptional({ example: '[{"base":"YELLOW_GOLD","carat":"18CT"},{"base":"DIAMOND"}]' })
+  materials?: string;
 
   @ApiProperty({ example: true })
   isActive: boolean;

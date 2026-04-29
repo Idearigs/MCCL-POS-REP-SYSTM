@@ -108,6 +108,7 @@ const convertToCreateProductData = (item: Omit<InventoryItem, 'id' | 'createdAt'
   // Pass these through so transformFrontendToBackend can send them to the backend
   rfidTag: (item as any).rfidTag,
   condition: (item as any).condition,
+  materials: (item as any).materials,
   location: (item as any).location,
 } as any);
 
@@ -246,6 +247,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
       if ((updates as any).supplier !== undefined) (productUpdates as any).supplier = (updates as any).supplier;
       if ((updates as any).rfidTag !== undefined) (productUpdates as any).rfidTag = (updates as any).rfidTag;
       if ((updates as any).condition !== undefined) (productUpdates as any).condition = (updates as any).condition;
+      if ((updates as any).materials !== undefined) (productUpdates as any).materials = (updates as any).materials;
       if ((updates as any).location !== undefined) (productUpdates as any).location = (updates as any).location;
       
       const updatedProduct = await productService.updateProduct(id, productUpdates);

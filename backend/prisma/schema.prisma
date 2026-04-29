@@ -193,6 +193,7 @@ model products {
   taxRate        Decimal?          @default(0)
   condition      ProductCondition? @default(BRAND_NEW)
   rfidTag        String?
+  materials      String?
   inventory_logs inventory_logs[]
   product_images product_images[]
   categories     categories?       @relation(fields: [categoryId], references: [id])
