@@ -10,6 +10,7 @@ exports.RepairsModule = void 0;
 const common_1 = require("@nestjs/common");
 const repairs_service_1 = require("./repairs.service");
 const repairs_controller_1 = require("./repairs.controller");
+const repairs_repository_1 = require("./repairs.repository");
 const cache_module_1 = require("../../core/cache/cache.module");
 const file_storage_module_1 = require("../../integrations/file-storage/file-storage.module");
 const sms_module_1 = require("../../integrations/sms/sms.module");
@@ -20,7 +21,7 @@ exports.RepairsModule = RepairsModule = __decorate([
     (0, common_1.Module)({
         imports: [cache_module_1.CacheServiceModule, file_storage_module_1.FileStorageModule, sms_module_1.SmsModule],
         controllers: [repairs_controller_1.RepairsController],
-        providers: [repairs_service_1.RepairsService],
+        providers: [repairs_repository_1.RepairsRepository, repairs_service_1.RepairsService],
         exports: [repairs_service_1.RepairsService],
     })
 ], RepairsModule);

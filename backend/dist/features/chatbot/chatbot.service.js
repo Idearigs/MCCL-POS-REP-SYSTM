@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var ChatbotService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatbotService = void 0;
 const common_1 = require("@nestjs/common");
@@ -16,9 +17,10 @@ const openai_service_1 = require("../../integrations/openai/openai.service");
 const chatbot_dto_1 = require("./dto/chatbot.dto");
 const id_generator_1 = require("../../shared/utils/id-generator");
 const date_fns_1 = require("date-fns");
-let ChatbotService = class ChatbotService {
+let ChatbotService = ChatbotService_1 = class ChatbotService {
     prisma;
     openAIService;
+    logger = new common_1.Logger(ChatbotService_1.name);
     conversationHistory = new Map();
     constructor(prisma, openAIService) {
         this.prisma = prisma;
@@ -500,7 +502,7 @@ let ChatbotService = class ChatbotService {
             return response;
         }
         catch (error) {
-            console.error('Error generating AI response:', error);
+            this.logger.error('Error generating AI response:', error);
             return this.formatMessagesForSimpleResponse(messages);
         }
     }
@@ -760,7 +762,7 @@ Be helpful, be human, be brilliant.`;
     }
 };
 exports.ChatbotService = ChatbotService;
-exports.ChatbotService = ChatbotService = __decorate([
+exports.ChatbotService = ChatbotService = ChatbotService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         openai_service_1.OpenAIService])

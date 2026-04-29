@@ -3,6 +3,7 @@ import { CreateCustomerDto, UpdateCustomerDto, CustomerQueryDto, CustomerRespons
 import { PaginatedResponseDto } from '../../shared/dto/pagination.dto';
 export declare class CustomersController {
     private readonly customersService;
+    private readonly logger;
     constructor(customersService: CustomersService);
     create(createCustomerDto: CreateCustomerDto, tenantId: string): Promise<CustomerResponseDto>;
     findAll(query: CustomerQueryDto, tenantId: string): Promise<PaginatedResponseDto<CustomerResponseDto>>;

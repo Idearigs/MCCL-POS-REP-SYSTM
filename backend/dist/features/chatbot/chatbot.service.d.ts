@@ -4,6 +4,7 @@ import { QuickActionType, ChatResponse } from './dto/chatbot.dto';
 export declare class ChatbotService {
     private prisma;
     private openAIService;
+    private readonly logger;
     private conversationHistory;
     constructor(prisma: PrismaService, openAIService: OpenAIService);
     sendMessage(userId: string, tenantId: string, message: string, conversationId?: string): Promise<ChatResponse>;

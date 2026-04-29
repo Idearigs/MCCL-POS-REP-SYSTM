@@ -13,6 +13,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SalesService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../core/prisma/prisma.service");
+const sales_repository_1 = require("./sales.repository");
 const cache_service_1 = require("../../core/cache/cache.service");
 const shifts_service_1 = require("../shifts/shifts.service");
 const client_1 = require("@prisma/client");
@@ -20,11 +21,13 @@ const sale_dto_1 = require("./dto/sale.dto");
 const pagination_dto_1 = require("../../shared/dto/pagination.dto");
 const id_generator_1 = require("../../shared/utils/id-generator");
 let SalesService = SalesService_1 = class SalesService {
+    salesRepo;
     prismaService;
     cacheService;
     shiftsService;
     logger = new common_1.Logger(SalesService_1.name);
-    constructor(prismaService, cacheService, shiftsService) {
+    constructor(salesRepo, prismaService, cacheService, shiftsService) {
+        this.salesRepo = salesRepo;
         this.prismaService = prismaService;
         this.cacheService = cacheService;
         this.shiftsService = shiftsService;
@@ -294,7 +297,7 @@ let SalesService = SalesService_1 = class SalesService {
                 return cachedResult;
             }
             const [sales, total] = await Promise.all([
-                this.prismaService.sales.findMany({
+                this.salesRepo.findMany({
                     where,
                     skip,
                     take: limit,
@@ -309,7 +312,7 @@ let SalesService = SalesService_1 = class SalesService {
                         customers: true,
                     },
                 }),
-                this.prismaService.sales.count({ where }),
+                this.salesRepo.count({ where }),
             ]);
             const result = new pagination_dto_1.PaginatedResponseDto(sales.map((sale) => this.mapToResponseDto(sale)), page, limit, total);
             await this.cacheService.setTenantData(tenantId, cacheKey, result, 300);
@@ -329,7 +332,7 @@ let SalesService = SalesService_1 = class SalesService {
             if (cachedSale) {
                 return cachedSale;
             }
-            const sale = await this.prismaService.sales.findFirst({
+            const sale = await this.salesRepo.findFirst({
                 where: { id, tenantId },
                 include: {
                     sale_items: {
@@ -355,12 +358,12 @@ let SalesService = SalesService_1 = class SalesService {
         }
     }
     async updateSaleItemNotes(itemId, notes, tenantId) {
-        const item = await this.prismaService.sale_items.findFirst({
+        const item = await this.salesRepo.findFirstSaleItem({
             where: { id: itemId, sales: { tenantId } },
         });
         if (!item)
             throw new common_1.NotFoundException(`Sale item ${itemId} not found`);
-        const updated = await this.prismaService.sale_items.update({
+        const updated = await this.salesRepo.updateSaleItem({
             where: { id: itemId },
             data: { notes },
         });
@@ -369,7 +372,7 @@ let SalesService = SalesService_1 = class SalesService {
     }
     async update(id, updateSaleDto, tenantId, userId) {
         try {
-            const existingSale = await this.prismaService.sales.findFirst({
+            const existingSale = await this.salesRepo.findFirst({
                 where: { id, tenantId },
             });
             if (!existingSale) {
@@ -381,7 +384,7 @@ let SalesService = SalesService_1 = class SalesService {
                     throw new common_1.BadRequestException('Only notes and delivery dates can be updated for completed sales');
                 }
             }
-            const sale = await this.prismaService.sales.update({
+            const sale = await this.salesRepo.update({
                 where: { id },
                 data: {
                     notes: updateSaleDto.notes,
@@ -522,34 +525,34 @@ let SalesService = SalesService_1 = class SalesService {
             const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
             const startOfYear = new Date(today.getFullYear(), 0, 1);
             const [totalSales, completedSales, pendingSales, cancelledSales, totalSalesAmount, totalRefundedAmount, salesToday, salesThisMonth, salesThisYear, revenueToday, revenueThisMonth, revenueThisYear, paymentMethods, topProducts, hourlySales,] = await Promise.all([
-                this.prismaService.sales.count({ where: { tenantId } }),
-                this.prismaService.sales.count({
+                this.salesRepo.count({ where: { tenantId } }),
+                this.salesRepo.count({
                     where: { tenantId, status: 'COMPLETED' },
                 }),
-                this.prismaService.sales.count({
+                this.salesRepo.count({
                     where: { tenantId, status: 'DRAFT' },
                 }),
-                this.prismaService.sales.count({
+                this.salesRepo.count({
                     where: { tenantId, status: 'CANCELLED' },
                 }),
-                this.prismaService.sales.aggregate({
+                this.salesRepo.aggregate({
                     where: { tenantId, status: 'COMPLETED' },
                     _sum: { totalAmount: true },
                 }),
-                this.prismaService.sales.aggregate({
+                this.salesRepo.aggregate({
                     where: { tenantId },
                     _sum: { refundedAmount: true },
                 }),
-                this.prismaService.sales.count({
+                this.salesRepo.count({
                     where: { tenantId, createdAt: { gte: startOfDay } },
                 }),
-                this.prismaService.sales.count({
+                this.salesRepo.count({
                     where: { tenantId, createdAt: { gte: startOfMonth } },
                 }),
-                this.prismaService.sales.count({
+                this.salesRepo.count({
                     where: { tenantId, createdAt: { gte: startOfYear } },
                 }),
-                this.prismaService.sales.aggregate({
+                this.salesRepo.aggregate({
                     where: {
                         tenantId,
                         status: sale_dto_1.SaleStatus.COMPLETED,
@@ -557,7 +560,7 @@ let SalesService = SalesService_1 = class SalesService {
                     },
                     _sum: { totalAmount: true },
                 }),
-                this.prismaService.sales.aggregate({
+                this.salesRepo.aggregate({
                     where: {
                         tenantId,
                         status: sale_dto_1.SaleStatus.COMPLETED,
@@ -565,7 +568,7 @@ let SalesService = SalesService_1 = class SalesService {
                     },
                     _sum: { totalAmount: true },
                 }),
-                this.prismaService.sales.aggregate({
+                this.salesRepo.aggregate({
                     where: {
                         tenantId,
                         status: sale_dto_1.SaleStatus.COMPLETED,
@@ -589,7 +592,7 @@ let SalesService = SalesService_1 = class SalesService {
                     orderBy: { _sum: { totalPrice: 'desc' } },
                     take: 10,
                 }),
-                this.prismaService.sales.findMany({
+                this.salesRepo.findMany({
                     where: {
                         tenantId,
                         status: client_1.SaleStatus.COMPLETED,
@@ -724,6 +727,78 @@ let SalesService = SalesService_1 = class SalesService {
             updatedAt: sale.updatedAt.toISOString(),
         };
     }
+    async getCashierStats(tenantId) {
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startOfWeek = new Date(startOfDay);
+        startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay());
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const users = await this.prismaService.users.findMany({
+            where: { tenantId },
+            select: { id: true, firstName: true, lastName: true },
+        });
+        const results = await Promise.all(users.map(async (user) => {
+            const base = {
+                tenantId,
+                createdBy: user.id,
+                status: client_1.SaleStatus.COMPLETED,
+            };
+            const [totalSales, totalRevAgg, todaySales, todayRevAgg, weekSales, weekRevAgg, monthSales, monthRevAgg, lastSale,] = await Promise.all([
+                this.salesRepo.count({
+                    where: { tenantId, createdBy: user.id },
+                }),
+                this.salesRepo.aggregate({
+                    where: base,
+                    _sum: { totalAmount: true },
+                }),
+                this.salesRepo.count({
+                    where: { ...base, createdAt: { gte: startOfDay } },
+                }),
+                this.salesRepo.aggregate({
+                    where: { ...base, createdAt: { gte: startOfDay } },
+                    _sum: { totalAmount: true },
+                }),
+                this.salesRepo.count({
+                    where: { ...base, createdAt: { gte: startOfWeek } },
+                }),
+                this.salesRepo.aggregate({
+                    where: { ...base, createdAt: { gte: startOfWeek } },
+                    _sum: { totalAmount: true },
+                }),
+                this.salesRepo.count({
+                    where: { ...base, createdAt: { gte: startOfMonth } },
+                }),
+                this.salesRepo.aggregate({
+                    where: { ...base, createdAt: { gte: startOfMonth } },
+                    _sum: { totalAmount: true },
+                }),
+                this.salesRepo.findFirst({
+                    where: { tenantId, createdBy: user.id },
+                    orderBy: { createdAt: 'desc' },
+                    select: { createdAt: true },
+                }),
+            ]);
+            const totalRev = Number(totalRevAgg._sum.totalAmount || 0);
+            const completedCount = await this.salesRepo.count({
+                where: base,
+            });
+            return {
+                cashierId: user.id,
+                cashierName: `${user.firstName} ${user.lastName}`.trim(),
+                todaySales,
+                todayRevenue: Number(todayRevAgg._sum.totalAmount || 0),
+                weekSales,
+                weekRevenue: Number(weekRevAgg._sum.totalAmount || 0),
+                monthSales,
+                monthRevenue: Number(monthRevAgg._sum.totalAmount || 0),
+                totalSales,
+                totalRevenue: totalRev,
+                averageOrderValue: completedCount > 0 ? totalRev / completedCount : 0,
+                lastSaleDate: lastSale?.createdAt?.toISOString() || null,
+            };
+        }));
+        return results;
+    }
     async remove(id, tenantId, userId) {
         try {
             await this.prismaService.$transaction(async (prisma) => {
@@ -784,7 +859,8 @@ let SalesService = SalesService_1 = class SalesService {
 exports.SalesService = SalesService;
 exports.SalesService = SalesService = SalesService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+    __metadata("design:paramtypes", [sales_repository_1.SalesRepository,
+        prisma_service_1.PrismaService,
         cache_service_1.CacheService,
         shifts_service_1.ShiftsService])
 ], SalesService);

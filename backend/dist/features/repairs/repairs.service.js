@@ -14,17 +14,20 @@ exports.RepairsService = void 0;
 const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../../core/prisma/prisma.service");
+const repairs_repository_1 = require("./repairs.repository");
 const cache_service_1 = require("../../core/cache/cache.service");
 const file_storage_service_1 = require("../../integrations/file-storage/file-storage.service");
 const sms_service_1 = require("../../integrations/sms/sms.service");
 const id_generator_1 = require("../../shared/utils/id-generator");
 let RepairsService = RepairsService_1 = class RepairsService {
+    repairsRepo;
     prismaService;
     cacheService;
     fileStorageService;
     smsService;
     logger = new common_1.Logger(RepairsService_1.name);
-    constructor(prismaService, cacheService, fileStorageService, smsService) {
+    constructor(repairsRepo, prismaService, cacheService, fileStorageService, smsService) {
+        this.repairsRepo = repairsRepo;
         this.prismaService = prismaService;
         this.cacheService = cacheService;
         this.fileStorageService = fileStorageService;
@@ -51,7 +54,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
                     ? `${combinedNotes}\n\nItems:\n${repairTypes.join('\n')}`
                     : `Items:\n${repairTypes.join('\n')}`;
             }
-            const repair = await this.prismaService.repairs.create({
+            const repair = await this.repairsRepo.create({
                 data: {
                     id: (0, id_generator_1.generateId)(),
                     repairNumber,
@@ -101,8 +104,18 @@ let RepairsService = RepairsService_1 = class RepairsService {
         if (queryDto.search) {
             where.OR = [
                 { repairNumber: { contains: queryDto.search, mode: 'insensitive' } },
-                { itemDescription: { contains: queryDto.search, mode: 'insensitive' } },
-                { issueDescription: { contains: queryDto.search, mode: 'insensitive' } },
+                {
+                    itemDescription: {
+                        contains: queryDto.search,
+                        mode: 'insensitive',
+                    },
+                },
+                {
+                    issueDescription: {
+                        contains: queryDto.search,
+                        mode: 'insensitive',
+                    },
+                },
                 {
                     customers: {
                         OR: [
@@ -116,7 +129,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
             ];
         }
         const [data, total] = await Promise.all([
-            this.prismaService.repairs.findMany({
+            this.repairsRepo.findMany({
                 where,
                 skip,
                 take: limit,
@@ -133,7 +146,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
                     users: { select: { firstName: true, lastName: true } },
                 },
             }),
-            this.prismaService.repairs.count({ where }),
+            this.repairsRepo.count({ where }),
         ]);
         return {
             data: data.map((repair) => this.mapToResponseDto(repair)),
@@ -148,7 +161,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
         };
     }
     async findOne(id, tenantId) {
-        const repair = await this.prismaService.repairs.findFirst({
+        const repair = await this.repairsRepo.findFirst({
             where: { id, tenantId },
             include: {
                 customers: true,
@@ -163,13 +176,13 @@ let RepairsService = RepairsService_1 = class RepairsService {
         return this.mapToResponseDto(repair);
     }
     async update(id, updateRepairDto, tenantId, userId) {
-        const existingRepair = await this.prismaService.repairs.findFirst({
+        const existingRepair = await this.repairsRepo.findFirst({
             where: { id, tenantId },
         });
         if (!existingRepair) {
             throw new common_1.NotFoundException('Repair not found');
         }
-        const repair = await this.prismaService.repairs.update({
+        const repair = await this.repairsRepo.update({
             where: { id },
             data: {
                 status: updateRepairDto.status || existingRepair.status,
@@ -204,7 +217,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
         });
         if (updateRepairDto.status &&
             updateRepairDto.status !== existingRepair.status) {
-            await this.prismaService.repair_status_history.create({
+            await this.repairsRepo.createStatusHistory({
                 data: {
                     id: (0, id_generator_1.generateId)(),
                     repairId: id,
@@ -220,27 +233,27 @@ let RepairsService = RepairsService_1 = class RepairsService {
     }
     async getStats(tenantId) {
         const [totalRepairs, activeRepairs, completedRepairs, overdueRepairs, allRepairs,] = await Promise.all([
-            this.prismaService.repairs.count({ where: { tenantId } }),
-            this.prismaService.repairs.count({
+            this.repairsRepo.count({ where: { tenantId } }),
+            this.repairsRepo.count({
                 where: {
                     tenantId,
                     status: { notIn: ['COMPLETED', 'COLLECTED', 'CANCELLED'] },
                 },
             }),
-            this.prismaService.repairs.count({
+            this.repairsRepo.count({
                 where: {
                     tenantId,
                     status: { in: ['COMPLETED', 'COLLECTED'] },
                 },
             }),
-            this.prismaService.repairs.count({
+            this.repairsRepo.count({
                 where: {
                     tenantId,
                     status: { notIn: ['COMPLETED', 'COLLECTED', 'CANCELLED'] },
                     estimatedDueDate: { lt: new Date() },
                 },
             }),
-            this.prismaService.repairs.findMany({
+            this.repairsRepo.findMany({
                 where: { tenantId },
                 select: { status: true, finalCost: true, createdAt: true },
             }),
@@ -313,7 +326,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
     async generateRepairNumber(tenantId) {
         const year = new Date().getFullYear();
         const month = String(new Date().getMonth() + 1).padStart(2, '0');
-        const lastRepair = await this.prismaService.repairs.findFirst({
+        const lastRepair = await this.repairsRepo.findFirst({
             where: {
                 tenantId,
                 repairNumber: {
@@ -336,7 +349,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
         return `REP-${year}${month}-${sequenceStr}`;
     }
     async getOverdueRepairs(tenantId) {
-        const repairs = await this.prismaService.repairs.findMany({
+        const repairs = await this.repairsRepo.findMany({
             where: {
                 tenantId,
                 status: { notIn: ['COMPLETED', 'COLLECTED', 'CANCELLED'] },
@@ -350,7 +363,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
         return repairs.map((repair) => this.mapToResponseDto(repair));
     }
     async addNote(id, createNoteDto, tenantId, userId) {
-        return await this.prismaService.repair_status_history.create({
+        return await this.repairsRepo.createStatusHistory({
             data: {
                 id: (0, id_generator_1.generateId)(),
                 repairId: id,
@@ -362,7 +375,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
         });
     }
     async cancel(id, reason, tenantId, userId) {
-        const repair = await this.prismaService.repairs.update({
+        const repair = await this.repairsRepo.update({
             where: { id },
             data: {
                 status: 'CANCELLED',
@@ -372,7 +385,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
                 users: true,
             },
         });
-        await this.prismaService.repair_status_history.create({
+        await this.repairsRepo.createStatusHistory({
             data: {
                 id: (0, id_generator_1.generateId)(),
                 repairId: id,
@@ -385,18 +398,18 @@ let RepairsService = RepairsService_1 = class RepairsService {
         return this.mapToResponseDto(repair);
     }
     async changeStatus(id, newStatus, notes, tenantId, userId, sendSMS = true) {
-        const existingRepair = await this.prismaService.repairs.findFirst({
+        const existingRepair = (await this.repairsRepo.findFirst({
             where: { id, tenantId },
             include: {
                 customers: true,
                 users: true,
             },
-        });
+        }));
         if (!existingRepair) {
             throw new common_1.NotFoundException('Repair not found');
         }
         const oldStatus = existingRepair.status;
-        const updatedRepair = await this.prismaService.repairs.update({
+        const updatedRepair = await this.repairsRepo.update({
             where: { id },
             data: {
                 status: newStatus,
@@ -408,7 +421,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
                 users: true,
             },
         });
-        await this.prismaService.repair_status_history.create({
+        await this.repairsRepo.createStatusHistory({
             data: {
                 id: (0, id_generator_1.generateId)(),
                 repairId: id,
@@ -436,7 +449,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
                 const smsResult = await this.smsService.sendRepairStatusSMS(smsData);
                 if (smsResult.success) {
                     this.logger.log(`✅ SMS notification sent to customer for repair ${existingRepair.repairNumber}`);
-                    await this.prismaService.repair_status_history.create({
+                    await this.repairsRepo.createStatusHistory({
                         data: {
                             id: (0, id_generator_1.generateId)(),
                             repairId: id,
@@ -461,7 +474,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
     async uploadImages(repairId, files, metadata, tenantId, userId) {
         try {
             this.logger.log(`Starting image upload for repair ${repairId}, ${files?.length || 0} files`);
-            const repair = await this.prismaService.repairs.findFirst({
+            const repair = await this.repairsRepo.findFirst({
                 where: { id: repairId, tenantId },
             });
             if (!repair) {
@@ -500,7 +513,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
                         },
                     });
                     if (uploadResult.success) {
-                        await this.prismaService.repair_photos.create({
+                        await this.repairsRepo.createPhoto({
                             data: {
                                 id: (0, id_generator_1.generateId)(),
                                 repairId: repairId,
@@ -552,13 +565,13 @@ let RepairsService = RepairsService_1 = class RepairsService {
         }
     }
     async getRepairImages(repairId, tenantId) {
-        const repair = await this.prismaService.repairs.findFirst({
+        const repair = await this.repairsRepo.findFirst({
             where: { id: repairId, tenantId },
         });
         if (!repair) {
             throw new common_1.NotFoundException('Repair not found');
         }
-        const images = await this.prismaService.repair_photos.findMany({
+        const images = await this.repairsRepo.findManyPhotos({
             where: { repairId },
             orderBy: { createdAt: 'desc' },
         });
@@ -574,13 +587,13 @@ let RepairsService = RepairsService_1 = class RepairsService {
         }));
     }
     async delete(id, tenantId, userId) {
-        const repair = await this.prismaService.repairs.findFirst({
+        const repair = (await this.repairsRepo.findFirst({
             where: { id, tenantId },
             include: {
                 repair_photos: true,
                 repair_status_history: true,
             },
-        });
+        }));
         if (!repair) {
             throw new common_1.NotFoundException('Repair not found');
         }
@@ -599,14 +612,14 @@ let RepairsService = RepairsService_1 = class RepairsService {
                         this.logger.warn(`Failed to delete file for photo ${photo.id}: ${fileError.message}`);
                     }
                 }
-                await this.prismaService.repair_photos.deleteMany({
+                await this.repairsRepo.deleteManyPhotos({
                     where: { repairId: id },
                 });
             }
-            await this.prismaService.repair_status_history.deleteMany({
+            await this.repairsRepo.deleteManyStatusHistory({
                 where: { repairId: id },
             });
-            await this.prismaService.repairs.delete({
+            await this.repairsRepo.delete({
                 where: { id },
             });
             this.logger.log(`✅ Deleted repair ${repair.repairNumber} and all related records`);
@@ -621,13 +634,13 @@ let RepairsService = RepairsService_1 = class RepairsService {
         }
     }
     async deleteRepairImage(repairId, imageId, tenantId, userId) {
-        const repair = await this.prismaService.repairs.findFirst({
+        const repair = await this.repairsRepo.findFirst({
             where: { id: repairId, tenantId },
         });
         if (!repair) {
             throw new common_1.NotFoundException('Repair not found');
         }
-        const image = await this.prismaService.repair_photos.findFirst({
+        const image = await this.repairsRepo.findFirstPhoto({
             where: { id: imageId, repairId },
         });
         if (!image) {
@@ -640,7 +653,7 @@ let RepairsService = RepairsService_1 = class RepairsService {
             else if (image.filePath) {
                 await this.fileStorageService.deleteFile(image.filePath, 'local');
             }
-            await this.prismaService.repair_photos.delete({
+            await this.repairsRepo.deletePhoto({
                 where: { id: imageId },
             });
             this.logger.log(`Deleted image ${imageId} from repair ${repair.repairNumber}`);
@@ -766,7 +779,8 @@ let RepairsService = RepairsService_1 = class RepairsService {
 exports.RepairsService = RepairsService;
 exports.RepairsService = RepairsService = RepairsService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+    __metadata("design:paramtypes", [repairs_repository_1.RepairsRepository,
+        prisma_service_1.PrismaService,
         cache_service_1.CacheService,
         file_storage_service_1.FileStorageService,
         sms_service_1.SmsService])

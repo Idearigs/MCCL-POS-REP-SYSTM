@@ -11,24 +11,25 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
+var FeaturesService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.FeaturesService = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const axios_1 = __importDefault(require("axios"));
 const prisma_service_1 = require("../../../core/prisma/prisma.service");
-let FeaturesService = class FeaturesService {
+const hmac_build_1 = require("../../../shared/utils/hmac-build");
+let FeaturesService = FeaturesService_1 = class FeaturesService {
     prisma;
     config;
+    logger = new common_1.Logger(FeaturesService_1.name);
     mainframeUrl;
-    internalKey;
     constructor(prisma, config) {
         this.prisma = prisma;
         this.config = config;
         this.mainframeUrl =
-            this.config.get('MAINFRAME_BACKEND_URL') || 'http://localhost:3001/api/v1';
-        this.internalKey =
-            this.config.get('INTERNAL_API_KEY') || 'local-dev-internal-key';
+            this.config.get('MAINFRAME_BACKEND_URL') ||
+                'http://localhost:3001/api/v1';
     }
     async getTenantFeatures(tenantIdOrSubdomain) {
         let subdomain = tenantIdOrSubdomain;
@@ -44,13 +45,17 @@ let FeaturesService = class FeaturesService {
         }
         const url = `${this.mainframeUrl}/mainframe/tenant-features/${subdomain}`;
         try {
-            const { data } = await axios_1.default.get(url, { headers: { 'x-internal-key': this.internalKey }, timeout: 5000 });
+            const { data } = await axios_1.default.get(url, {
+                headers: { ...(0, hmac_build_1.buildHmacHeaders)('') },
+                timeout: 5000,
+            });
             return { ...data, _source: 'mainframe' };
         }
         catch (err) {
-            const status = err?.response?.status;
-            const message = err?.response?.data?.message || err?.message || 'unknown';
-            console.error(`[FeaturesService] getTenantFeatures FAILED for "${subdomain}" → ${url} → ${status ?? 'no-response'}: ${message}`);
+            const errObj = err;
+            const status = errObj?.response?.status;
+            const message = errObj?.response?.data?.message || errObj?.message || 'unknown';
+            this.logger.error(`[FeaturesService] getTenantFeatures FAILED for "${subdomain}" → ${url} → ${status ?? 'no-response'}: ${message}`);
             return { features: [], _source: 'error' };
         }
     }
@@ -197,22 +202,134 @@ let FeaturesService = class FeaturesService {
     }
     async seedDefaultFeatures() {
         const defaultFeatures = [
-            { featureKey: 'pos', featureName: 'Point of Sale', category: 'Core', description: 'Main POS terminal for sales and transactions', isIncludedInBase: true, additionalCost: 0 },
-            { featureKey: 'inventory', featureName: 'Inventory Management', category: 'Core', description: 'Product and stock management', isIncludedInBase: true, additionalCost: 0 },
-            { featureKey: 'customers', featureName: 'Customer Management', category: 'Core', description: 'Customer database and history', isIncludedInBase: true, additionalCost: 0 },
-            { featureKey: 'sales', featureName: 'Sales & Transactions', category: 'Core', description: 'Sales processing and reporting', isIncludedInBase: true, additionalCost: 0 },
-            { featureKey: 'repairs', featureName: 'Repair Management', category: 'Core', description: 'Repair job tracking and management', isIncludedInBase: true, additionalCost: 0 },
-            { featureKey: 'cashiers', featureName: 'Staff & Cashiers', category: 'Core', description: 'Staff and cashier management', isIncludedInBase: true, additionalCost: 0 },
-            { featureKey: 'shifts', featureName: 'Shift Management', category: 'Standard', description: 'Staff shift tracking and handover', isIncludedInBase: false, additionalCost: 0 },
-            { featureKey: 'float_management', featureName: 'Float Management', category: 'Standard', description: 'Cash drawer float management', isIncludedInBase: false, additionalCost: 0 },
-            { featureKey: 'petty_cash', featureName: 'Petty Cash', category: 'Standard', description: 'Petty cash tracking and management', isIncludedInBase: false, additionalCost: 0 },
-            { featureKey: 'stock_taking', featureName: 'Stock Taking', category: 'Standard', description: 'Stock audit and reconciliation', isIncludedInBase: false, additionalCost: 0 },
-            { featureKey: 'calendar', featureName: 'Calendar', category: 'Standard', description: 'Appointments and scheduling', isIncludedInBase: false, additionalCost: 0 },
-            { featureKey: 'tasks', featureName: 'Tasks', category: 'Standard', description: 'Task and workflow management', isIncludedInBase: false, additionalCost: 0 },
-            { featureKey: 'history', featureName: 'Transaction History', category: 'Standard', description: 'Full transaction history and audit trail', isIncludedInBase: false, additionalCost: 0 },
-            { featureKey: 'financial_intelligence', featureName: 'Financial Intelligence', category: 'Premium', description: 'Advanced financial analytics and reporting', isIncludedInBase: false, additionalCost: 20 },
-            { featureKey: 'chatbot', featureName: 'AI Business Insights', category: 'Premium', description: 'AI-powered business insights and recommendations', isIncludedInBase: false, additionalCost: 20 },
-            { featureKey: 'google_drive', featureName: 'Google Drive Integration', category: 'Premium', description: 'Cloud storage and document management', isIncludedInBase: false, additionalCost: 20 },
+            {
+                featureKey: 'pos',
+                featureName: 'Point of Sale',
+                category: 'Core',
+                description: 'Main POS terminal for sales and transactions',
+                isIncludedInBase: true,
+                additionalCost: 0,
+            },
+            {
+                featureKey: 'inventory',
+                featureName: 'Inventory Management',
+                category: 'Core',
+                description: 'Product and stock management',
+                isIncludedInBase: true,
+                additionalCost: 0,
+            },
+            {
+                featureKey: 'customers',
+                featureName: 'Customer Management',
+                category: 'Core',
+                description: 'Customer database and history',
+                isIncludedInBase: true,
+                additionalCost: 0,
+            },
+            {
+                featureKey: 'sales',
+                featureName: 'Sales & Transactions',
+                category: 'Core',
+                description: 'Sales processing and reporting',
+                isIncludedInBase: true,
+                additionalCost: 0,
+            },
+            {
+                featureKey: 'repairs',
+                featureName: 'Repair Management',
+                category: 'Core',
+                description: 'Repair job tracking and management',
+                isIncludedInBase: true,
+                additionalCost: 0,
+            },
+            {
+                featureKey: 'cashiers',
+                featureName: 'Staff & Cashiers',
+                category: 'Core',
+                description: 'Staff and cashier management',
+                isIncludedInBase: true,
+                additionalCost: 0,
+            },
+            {
+                featureKey: 'shifts',
+                featureName: 'Shift Management',
+                category: 'Standard',
+                description: 'Staff shift tracking and handover',
+                isIncludedInBase: false,
+                additionalCost: 0,
+            },
+            {
+                featureKey: 'float_management',
+                featureName: 'Float Management',
+                category: 'Standard',
+                description: 'Cash drawer float management',
+                isIncludedInBase: false,
+                additionalCost: 0,
+            },
+            {
+                featureKey: 'petty_cash',
+                featureName: 'Petty Cash',
+                category: 'Standard',
+                description: 'Petty cash tracking and management',
+                isIncludedInBase: false,
+                additionalCost: 0,
+            },
+            {
+                featureKey: 'stock_taking',
+                featureName: 'Stock Taking',
+                category: 'Standard',
+                description: 'Stock audit and reconciliation',
+                isIncludedInBase: false,
+                additionalCost: 0,
+            },
+            {
+                featureKey: 'calendar',
+                featureName: 'Calendar',
+                category: 'Standard',
+                description: 'Appointments and scheduling',
+                isIncludedInBase: false,
+                additionalCost: 0,
+            },
+            {
+                featureKey: 'tasks',
+                featureName: 'Tasks',
+                category: 'Standard',
+                description: 'Task and workflow management',
+                isIncludedInBase: false,
+                additionalCost: 0,
+            },
+            {
+                featureKey: 'history',
+                featureName: 'Transaction History',
+                category: 'Standard',
+                description: 'Full transaction history and audit trail',
+                isIncludedInBase: false,
+                additionalCost: 0,
+            },
+            {
+                featureKey: 'financial_intelligence',
+                featureName: 'Financial Intelligence',
+                category: 'Premium',
+                description: 'Advanced financial analytics and reporting',
+                isIncludedInBase: false,
+                additionalCost: 20,
+            },
+            {
+                featureKey: 'chatbot',
+                featureName: 'AI Business Insights',
+                category: 'Premium',
+                description: 'AI-powered business insights and recommendations',
+                isIncludedInBase: false,
+                additionalCost: 20,
+            },
+            {
+                featureKey: 'google_drive',
+                featureName: 'Google Drive Integration',
+                category: 'Premium',
+                description: 'Cloud storage and document management',
+                isIncludedInBase: false,
+                additionalCost: 20,
+            },
         ];
         for (const feature of defaultFeatures) {
             await this.prisma.mf_features.upsert({
@@ -242,7 +359,7 @@ let FeaturesService = class FeaturesService {
     }
 };
 exports.FeaturesService = FeaturesService;
-exports.FeaturesService = FeaturesService = __decorate([
+exports.FeaturesService = FeaturesService = FeaturesService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         config_1.ConfigService])

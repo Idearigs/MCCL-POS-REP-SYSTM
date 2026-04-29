@@ -10,6 +10,7 @@ exports.SalesModule = void 0;
 const common_1 = require("@nestjs/common");
 const sales_service_1 = require("./sales.service");
 const sales_controller_1 = require("./sales.controller");
+const sales_repository_1 = require("./sales.repository");
 const cache_module_1 = require("../../core/cache/cache.module");
 const shifts_module_1 = require("../shifts/shifts.module");
 let SalesModule = class SalesModule {
@@ -19,7 +20,7 @@ exports.SalesModule = SalesModule = __decorate([
     (0, common_1.Module)({
         imports: [cache_module_1.CacheServiceModule, shifts_module_1.ShiftsModule],
         controllers: [sales_controller_1.SalesController],
-        providers: [sales_service_1.SalesService],
+        providers: [sales_repository_1.SalesRepository, sales_service_1.SalesService],
         exports: [sales_service_1.SalesService],
     })
 ], SalesModule);

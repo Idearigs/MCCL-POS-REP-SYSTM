@@ -14,6 +14,8 @@ export interface BackendProduct {
   supplierId?: string;
   supplierName?: string;
   material?: string;
+  condition?: string;
+  purity?: string;
   weight?: number;
   location?: string;
   sellingPrice: number;
@@ -21,7 +23,7 @@ export interface BackendProduct {
   stockQuantity: number;
   minStockLevel: number;
   isActive: boolean;
-  images?: Array<{ filePath?: string; driveViewLink?: string; isMain: boolean }>;
+  images?: Array<{ filePath?: string; driveViewLink?: string; driveFileId?: string; isMain: boolean }>;
   supplier?: { id: string; name: string };
   category?: { id: string; name: string };
   tenantId?: string;
@@ -43,6 +45,7 @@ export interface Product {
   supplierName?: string;  // Supplier display name
   material: string;
   purity?: string;  // For jewelry purity/karat
+  condition?: string;
   weight?: number;
   dimensions?: string;
   location?: string;
@@ -68,6 +71,9 @@ export interface BackendCreateProductData {
   categoryId?: string;
   supplierName?: string;
   material?: string;
+  purity?: string;
+  condition?: string;
+  location?: string;
   weight?: number;
   sellingPrice: number;
   costPrice?: number;
@@ -128,6 +134,31 @@ export interface ProductStats {
   topMaterials?: Array<{ material: string; count: number; value: number }>;
 }
 
+// Gold material base types that can have a carat suffix stored in purity
+const GOLD_BASE_TYPES = ['YELLOW_GOLD', 'WHITE_GOLD', 'ROSE_GOLD', 'GOLD'];
+
+// Split a compound frontend material value (e.g. "YELLOW_GOLD_18CT") into
+// the base enum value ("YELLOW_GOLD") and carat string ("18CT") for the backend.
+function splitCompoundMaterial(material: string | undefined): { base: string | undefined; purity: string | undefined } {
+  if (!material) return { base: undefined, purity: undefined };
+  const carats = ['9CT', '14CT', '18CT', '22CT', '24CT'];
+  const goldBases = ['YELLOW_GOLD', 'WHITE_GOLD', 'ROSE_GOLD'];
+  for (const base of goldBases) {
+    for (const ct of carats) {
+      if (material === `${base}_${ct}`) return { base, purity: ct };
+    }
+    if (material === base) return { base, purity: undefined };
+  }
+  return { base: material, purity: undefined };
+}
+
+// Reconstruction: combine base material + purity back into the compound frontend value
+function buildCompoundMaterial(material: string | undefined, purity: string | undefined): string {
+  if (!material) return '';
+  if (purity && GOLD_BASE_TYPES.includes(material)) return `${material}_${purity}`;
+  return material;
+}
+
 // Transformation functions
 const transformBackendToFrontend = (backendProduct: BackendProduct): Product => ({
   id: backendProduct.id,
@@ -143,8 +174,10 @@ const transformBackendToFrontend = (backendProduct: BackendProduct): Product => 
   // Store supplier info
   supplier: backendProduct.supplierName || '',
   supplierName: backendProduct.supplierName || backendProduct.supplier?.name || '',
-  material: backendProduct.material || '',
-  purity: (backendProduct as any).purity || undefined,
+  // Reconstruct compound material (e.g. YELLOW_GOLD + 18CT → YELLOW_GOLD_18CT)
+  material: buildCompoundMaterial(backendProduct.material, backendProduct.purity),
+  purity: backendProduct.purity,
+  condition: backendProduct.condition,
   weight: backendProduct.weight,
   dimensions: undefined, // Not available in backend
   location: backendProduct.location || '',
@@ -161,24 +194,30 @@ const transformBackendToFrontend = (backendProduct: BackendProduct): Product => 
   updatedAt: backendProduct.updatedAt,
 });
 
-const transformFrontendToBackend = (frontendProduct: CreateProductData): BackendCreateProductData => ({
-  name: frontendProduct.name,
-  description: frontendProduct.description,
-  sku: frontendProduct.sku,
-  barcode: frontendProduct.barcode,
-  rfidTag: (frontendProduct as any).rfidTag || undefined,
-  categoryId: frontendProduct.category || undefined,
-  supplierName: (frontendProduct as any).supplier || undefined,
-  // Send material only if it's a non-empty string — empty string fails @IsEnum on the backend
-  material: (frontendProduct.material || undefined) as any,
-  condition: (frontendProduct as any).condition || undefined,
-  location: (frontendProduct as any).location || undefined,
-  weight: frontendProduct.weight,
-  sellingPrice: frontendProduct.price,
-  costPrice: frontendProduct.cost,
-  stockQuantity: frontendProduct.stock,
-  minStockLevel: frontendProduct.minStockLevel,
-});
+const transformFrontendToBackend = (frontendProduct: CreateProductData): BackendCreateProductData => {
+  // Split compound material like "YELLOW_GOLD_18CT" into base enum + purity string
+  const { base: materialBase, purity } = splitCompoundMaterial(frontendProduct.material);
+  return {
+    name: frontendProduct.name,
+    description: frontendProduct.description,
+    sku: frontendProduct.sku,
+    barcode: frontendProduct.barcode,
+    rfidTag: (frontendProduct as any).rfidTag || undefined,
+    categoryId: frontendProduct.category || undefined,
+    supplierName: (frontendProduct as any).supplier || undefined,
+    // Send base material only (e.g. YELLOW_GOLD) — empty string fails @IsEnum on the backend
+    material: (materialBase || undefined) as any,
+    // Carat info (e.g. 18CT) stored in the purity String field — undefined is omitted from JSON
+    purity: purity || (frontendProduct as any).purity || undefined,
+    condition: (frontendProduct as any).condition || undefined,
+    location: (frontendProduct as any).location || undefined,
+    weight: frontendProduct.weight,
+    sellingPrice: frontendProduct.price,
+    costPrice: frontendProduct.cost,
+    stockQuantity: frontendProduct.stock,
+    minStockLevel: frontendProduct.minStockLevel,
+  };
+};
 
 export interface StockAdjustment {
   type: 'SALE' | 'PURCHASE' | 'ADJUSTMENT' | 'DAMAGE' | 'RETURN' | 'TRANSFER';
@@ -285,9 +324,15 @@ class ProductService {
       if (productData.rfidTag !== undefined) backendData.rfidTag = productData.rfidTag;
       if (productData.category !== undefined) backendData.categoryId = productData.category;
       if ((productData as any).supplier !== undefined) backendData.supplierName = (productData as any).supplier;
-      // Only send material if it's a non-empty value — empty string fails @IsEnum on the backend
-      if (productData.material) backendData.material = productData.material;
-      if ((productData as any).condition) backendData.condition = (productData as any).condition;
+      // Split compound material (e.g. "YELLOW_GOLD_18CT") into base enum + purity string
+      if (productData.material) {
+        const { base: materialBase, purity } = splitCompoundMaterial(productData.material);
+        if (materialBase) backendData.material = materialBase;
+        // Only send purity when present (undefined means "leave DB value unchanged")
+        if (purity) backendData.purity = purity;
+      }
+      // condition: send whenever present (undefined = not set by user, null shouldn't occur)
+      if ((productData as any).condition !== undefined) backendData.condition = (productData as any).condition;
       if ((productData as any).location !== undefined) backendData.location = (productData as any).location;
       if (productData.weight !== undefined) backendData.weight = productData.weight;
       if (productData.price !== undefined) backendData.sellingPrice = productData.price;

@@ -12,22 +12,22 @@ var CustomersService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CustomersService = void 0;
 const common_1 = require("@nestjs/common");
-const prisma_service_1 = require("../../core/prisma/prisma.service");
+const customers_repository_1 = require("./customers.repository");
 const cache_service_1 = require("../../core/cache/cache.service");
 const id_generator_1 = require("../../shared/utils/id-generator");
 const pagination_dto_1 = require("../../shared/dto/pagination.dto");
 let CustomersService = CustomersService_1 = class CustomersService {
-    prismaService;
+    customerRepo;
     cacheService;
     logger = new common_1.Logger(CustomersService_1.name);
-    constructor(prismaService, cacheService) {
-        this.prismaService = prismaService;
+    constructor(customerRepo, cacheService) {
+        this.customerRepo = customerRepo;
         this.cacheService = cacheService;
     }
     async create(createCustomerDto, tenantId) {
         try {
             if (createCustomerDto.email) {
-                const existingCustomer = await this.prismaService.customers.findFirst({
+                const existingCustomer = await this.customerRepo.findFirst({
                     where: {
                         email: createCustomerDto.email,
                         tenantId,
@@ -37,7 +37,7 @@ let CustomersService = CustomersService_1 = class CustomersService {
                     throw new common_1.ConflictException('Customer already exists with this email');
                 }
             }
-            const existingPhoneCustomer = await this.prismaService.customers.findFirst({
+            const existingPhoneCustomer = await this.customerRepo.findFirst({
                 where: {
                     phone: createCustomerDto.phone,
                     tenantId,
@@ -49,7 +49,7 @@ let CustomersService = CustomersService_1 = class CustomersService {
             if (!createCustomerDto.dataProcessingConsent) {
                 throw new common_1.BadRequestException('Data processing consent is required for GDPR compliance');
             }
-            const customer = await this.prismaService.customers.create({
+            const customer = await this.customerRepo.create({
                 data: {
                     id: (0, id_generator_1.generateId)(),
                     ...createCustomerDto,
@@ -104,13 +104,13 @@ let CustomersService = CustomersService_1 = class CustomersService {
             }
             this.logger.debug(`🔍 Fetching fresh customers from database for tenant ${tenantId}`);
             const [customers, total] = await Promise.all([
-                this.prismaService.customers.findMany({
+                this.customerRepo.findMany({
                     where,
                     skip,
                     take: limit,
                     orderBy: { [sortBy]: sortOrder },
                 }),
-                this.prismaService.customers.count({ where }),
+                this.customerRepo.count({ where }),
             ]);
             const result = new pagination_dto_1.PaginatedResponseDto(customers.map((customer) => this.mapToResponseDto(customer)), page, limit, total);
             this.logger.debug(`✅ Returning ${customers.length} customers from database (total: ${total})`);
@@ -128,7 +128,7 @@ let CustomersService = CustomersService_1 = class CustomersService {
             if (cachedCustomer) {
                 return cachedCustomer;
             }
-            const customer = await this.prismaService.customers.findFirst({
+            const customer = await this.customerRepo.findFirst({
                 where: { id, tenantId },
                 include: {
                     sales: {
@@ -150,7 +150,7 @@ let CustomersService = CustomersService_1 = class CustomersService {
     }
     async update(id, updateCustomerDto, tenantId) {
         try {
-            const existingCustomer = await this.prismaService.customers.findFirst({
+            const existingCustomer = await this.customerRepo.findFirst({
                 where: { id, tenantId },
             });
             if (!existingCustomer) {
@@ -158,7 +158,7 @@ let CustomersService = CustomersService_1 = class CustomersService {
             }
             if (updateCustomerDto.email &&
                 updateCustomerDto.email !== existingCustomer.email) {
-                const emailConflict = await this.prismaService.customers.findFirst({
+                const emailConflict = await this.customerRepo.findFirst({
                     where: {
                         email: updateCustomerDto.email,
                         tenantId,
@@ -171,7 +171,7 @@ let CustomersService = CustomersService_1 = class CustomersService {
             }
             if (updateCustomerDto.phone &&
                 updateCustomerDto.phone !== existingCustomer.phone) {
-                const phoneConflict = await this.prismaService.customers.findFirst({
+                const phoneConflict = await this.customerRepo.findFirst({
                     where: {
                         phone: updateCustomerDto.phone,
                         tenantId,
@@ -182,7 +182,7 @@ let CustomersService = CustomersService_1 = class CustomersService {
                     throw new common_1.ConflictException('Another customer already exists with this phone number');
                 }
             }
-            const customer = await this.prismaService.customers.update({
+            const customer = await this.customerRepo.update({
                 where: { id },
                 data: {
                     ...updateCustomerDto,
@@ -208,7 +208,7 @@ let CustomersService = CustomersService_1 = class CustomersService {
     async remove(id, tenantId) {
         try {
             this.logger.log(`🗑️ PERMANENT DELETE requested for customer: ${id} in tenant ${tenantId}`);
-            const customer = await this.prismaService.customers.findFirst({
+            const customer = await this.customerRepo.findFirst({
                 where: { id, tenantId },
             });
             if (!customer) {
@@ -216,7 +216,7 @@ let CustomersService = CustomersService_1 = class CustomersService {
                 throw new common_1.NotFoundException(`Customer with ID ${id} not found`);
             }
             this.logger.log(`✅ Customer found: ${customer.firstName} ${customer.lastName} (${customer.email})`);
-            await this.prismaService.$transaction(async (prisma) => {
+            await this.customerRepo.$transaction(async (prisma) => {
                 await prisma.documents.deleteMany({ where: { customerId: id } });
                 await prisma.sales.updateMany({
                     where: { customerId: id },
@@ -229,7 +229,7 @@ let CustomersService = CustomersService_1 = class CustomersService {
                 await prisma.customers.delete({ where: { id } });
             });
             this.logger.log(`🗑️ Transaction completed - Customer ${id} permanently deleted from database`);
-            const deletedCheck = await this.prismaService.customers.findUnique({
+            const deletedCheck = await this.customerRepo.findUnique({
                 where: { id },
             });
             if (deletedCheck) {
@@ -270,14 +270,14 @@ let CustomersService = CustomersService_1 = class CustomersService {
                 return cachedStats;
             }
             const [totalCustomers, activeCustomers, redFlaggedCustomers, newCustomersThisMonth, totalSpent, emailConsentCount, smsConsentCount,] = await Promise.all([
-                this.prismaService.customers.count({ where: { tenantId } }),
-                this.prismaService.customers.count({
+                this.customerRepo.count({ where: { tenantId } }),
+                this.customerRepo.count({
                     where: { tenantId, isActive: true },
                 }),
-                this.prismaService.customers.count({
+                this.customerRepo.count({
                     where: { tenantId, redFlag: true },
                 }),
-                this.prismaService.customers.count({
+                this.customerRepo.count({
                     where: {
                         tenantId,
                         createdAt: {
@@ -285,14 +285,14 @@ let CustomersService = CustomersService_1 = class CustomersService {
                         },
                     },
                 }),
-                this.prismaService.customers.aggregate({
+                this.customerRepo.aggregate({
                     where: { tenantId },
                     _sum: { totalSpent: true },
                 }),
-                this.prismaService.customers.count({
+                this.customerRepo.count({
                     where: { tenantId, marketingEmail: true },
                 }),
-                this.prismaService.customers.count({
+                this.customerRepo.count({
                     where: { tenantId, marketingSms: true },
                 }),
             ]);
@@ -319,7 +319,7 @@ let CustomersService = CustomersService_1 = class CustomersService {
     }
     async exportCustomerData(customerId, tenantId) {
         try {
-            const customer = await this.prismaService.customers.findFirst({
+            const customer = (await this.customerRepo.findFirst({
                 where: { id: customerId, tenantId },
                 include: {
                     sales: {
@@ -334,7 +334,7 @@ let CustomersService = CustomersService_1 = class CustomersService {
                     repairs: true,
                     documents: true,
                 },
-            });
+            }));
             if (!customer) {
                 throw new common_1.NotFoundException(`Customer with ID ${customerId} not found`);
             }
@@ -391,13 +391,13 @@ let CustomersService = CustomersService_1 = class CustomersService {
     }
     async deleteCustomerDataPermanently(customerId, tenantId) {
         try {
-            const customer = await this.prismaService.customers.findFirst({
+            const customer = await this.customerRepo.findFirst({
                 where: { id: customerId, tenantId },
             });
             if (!customer) {
                 throw new common_1.NotFoundException(`Customer with ID ${customerId} not found`);
             }
-            await this.prismaService.$transaction(async (prisma) => {
+            await this.customerRepo.$transaction(async (prisma) => {
                 await prisma.documents.deleteMany({ where: { customerId } });
                 await prisma.repairs.deleteMany({ where: { customerId } });
                 await prisma.sales.updateMany({
@@ -450,7 +450,7 @@ let CustomersService = CustomersService_1 = class CustomersService {
 exports.CustomersService = CustomersService;
 exports.CustomersService = CustomersService = CustomersService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+    __metadata("design:paramtypes", [customers_repository_1.CustomersRepository,
         cache_service_1.CacheService])
 ], CustomersService);
 //# sourceMappingURL=customers.service.js.map

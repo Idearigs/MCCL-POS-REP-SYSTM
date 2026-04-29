@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var CustomersController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CustomersController = void 0;
 const common_1 = require("@nestjs/common");
@@ -23,8 +24,9 @@ const user_decorator_1 = require("../../shared/decorators/user.decorator");
 const tenant_decorator_1 = require("../../shared/decorators/tenant.decorator");
 const customer_dto_1 = require("./dto/customer.dto");
 const pagination_dto_1 = require("../../shared/dto/pagination.dto");
-let CustomersController = class CustomersController {
+let CustomersController = CustomersController_1 = class CustomersController {
     customersService;
+    logger = new common_1.Logger(CustomersController_1.name);
     constructor(customersService) {
         this.customersService = customersService;
     }
@@ -47,14 +49,14 @@ let CustomersController = class CustomersController {
         return this.customersService.remove(id, tenantId);
     }
     async exportCustomerData(gdprExportDto, tenantId, userId) {
-        console.log(`GDPR Export requested by user ${userId} for customer ${gdprExportDto.customerId} in tenant ${tenantId}`);
+        this.logger.log(`GDPR Export requested by user ${userId} for customer ${gdprExportDto.customerId} in tenant ${tenantId}`);
         return this.customersService.exportCustomerData(gdprExportDto.customerId, tenantId);
     }
     async deleteCustomerDataPermanently(gdprDeleteDto, tenantId, userId) {
         if (!gdprDeleteDto.confirmDelete) {
             throw new Error('Delete confirmation required');
         }
-        console.warn(`GDPR PERMANENT DELETION requested by user ${userId} for customer ${gdprDeleteDto.customerId} in tenant ${tenantId}`);
+        this.logger.warn(`GDPR PERMANENT DELETION requested by user ${userId} for customer ${gdprDeleteDto.customerId} in tenant ${tenantId}`);
         return this.customersService.deleteCustomerDataPermanently(gdprDeleteDto.customerId, tenantId);
     }
     async getCustomerSalesHistory(id, tenantId) {
@@ -336,7 +338,7 @@ __decorate([
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", Promise)
 ], CustomersController.prototype, "getCustomerRepairHistory", null);
-exports.CustomersController = CustomersController = __decorate([
+exports.CustomersController = CustomersController = CustomersController_1 = __decorate([
     (0, swagger_1.ApiTags)('Customers'),
     (0, common_1.Controller)('customers'),
     (0, common_1.UseGuards)(throttler_1.ThrottlerGuard, jwt_auth_guard_1.JwtAuthGuard, tenant_guard_1.TenantGuard),

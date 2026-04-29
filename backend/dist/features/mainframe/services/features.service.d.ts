@@ -3,8 +3,8 @@ import { PrismaService } from '../../../core/prisma/prisma.service';
 export declare class FeaturesService {
     private prisma;
     private config;
+    private readonly logger;
     private readonly mainframeUrl;
-    private readonly internalKey;
     constructor(prisma: PrismaService, config: ConfigService);
     getTenantFeatures(tenantIdOrSubdomain: string): Promise<{
         features: string[];

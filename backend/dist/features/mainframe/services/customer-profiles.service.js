@@ -42,15 +42,19 @@ let CustomerProfilesService = CustomerProfilesService_1 = class CustomerProfiles
                 data: {
                     status: posStatus,
                     suspendedAt: isSuspended ? new Date() : null,
-                    suspendedReason: isSuspended ? (opts?.suspendedReason || 'MANUAL') : null,
-                    billingDueDate: opts?.billingDueDate ? new Date(opts.billingDueDate) : undefined,
+                    suspendedReason: isSuspended
+                        ? opts?.suspendedReason || 'MANUAL'
+                        : null,
+                    billingDueDate: opts?.billingDueDate
+                        ? new Date(opts.billingDueDate)
+                        : undefined,
                     updatedAt: new Date(),
                 },
             });
             this.logger.log(`Tenant '${subdomain}' status synced: ${mfStatus} → ${posStatus}`);
         }
         catch (err) {
-            this.logger.error(`Failed to sync tenant status for '${subdomain}': ${err.message}`);
+            this.logger.error(`Failed to sync tenant status for '${subdomain}': ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
     }
     async create(dto) {
@@ -143,7 +147,7 @@ let CustomerProfilesService = CustomerProfilesService_1 = class CustomerProfiles
         await this.logActivity(profile.id, 'profile.created', 'Customer profile created', 'system');
         this.subdomainService
             .provisionSubdomain(profile.id, dto.subdomain.toLowerCase())
-            .catch((err) => console.error('Subdomain provisioning failed:', err));
+            .catch((err) => this.logger.error('Subdomain provisioning failed:', err));
         return this.findOne(profile.id);
     }
     async findAll(options) {

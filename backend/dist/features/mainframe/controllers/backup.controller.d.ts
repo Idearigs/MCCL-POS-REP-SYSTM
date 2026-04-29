@@ -3,11 +3,10 @@ import { PrismaService } from '../../../core/prisma/prisma.service';
 export declare class BackupController {
     private readonly prisma;
     constructor(prisma: PrismaService);
-    private checkKey;
-    exportTenant(tenantId: string, key: string, res: Response): Promise<void>;
-    listTenants(key: string): Promise<{
-        id: string;
+    exportTenant(tenantId: string, timestamp: string, signature: string, res: Response): Promise<void>;
+    listTenants(timestamp: string, signature: string): Promise<{
         name: string;
+        id: string;
         subdomain: string;
     }[]>;
 }

@@ -62,7 +62,11 @@ let FileStorageService = FileStorageService_1 = class FileStorageService {
         this.uploadDirectory = path.join(process.cwd(), 'uploads');
         const tenantIds = this.configService.get('GOOGLE_DRIVE_TENANT_IDS', '');
         if (tenantIds) {
-            tenantIds.split(',').map(id => id.trim()).filter(Boolean).forEach(id => this.googleDriveTenantIds.add(id));
+            tenantIds
+                .split(',')
+                .map((id) => id.trim())
+                .filter(Boolean)
+                .forEach((id) => this.googleDriveTenantIds.add(id));
         }
         this.initializeStorageSystems();
     }
@@ -302,7 +306,9 @@ let FileStorageService = FileStorageService_1 = class FileStorageService {
             });
             const file = response.data;
             this.logger.debug(`File uploaded to Shared Drive: ${file.id} in drive ${file.driveId}`);
-            const appUrl = this.configService.get('APP_URL', 'http://localhost:3000').replace(/\/$/, '');
+            const appUrl = this.configService
+                .get('APP_URL', 'http://localhost:3000')
+                .replace(/\/$/, '');
             const fileUrl = `${appUrl}/api/v1/file-storage/drive/${file.id}`;
             return {
                 success: true,
@@ -334,7 +340,8 @@ let FileStorageService = FileStorageService_1 = class FileStorageService {
             const categoryPath = path.join(this.uploadDirectory, category);
             const filePath = path.join(categoryPath, uniqueFileName);
             await fs.promises.writeFile(filePath, buffer);
-            const appUrl = this.configService.get('APP_URL', `http://localhost:${this.configService.get('PORT', 3000)}`);
+            const port = this.configService.get('PORT', 3000);
+            const appUrl = this.configService.get('APP_URL', `http://localhost:${port}`);
             const baseUrl = appUrl.replace(/\/$/, '');
             const fileUrl = `${baseUrl}/uploads/${category}/${uniqueFileName}`;
             if (metadata) {

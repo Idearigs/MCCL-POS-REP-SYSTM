@@ -12,8 +12,10 @@ const compression_1 = __importDefault(require("compression"));
 const path_1 = require("path");
 const app_module_1 = require("./app.module");
 async function bootstrap() {
+    const logger = new common_1.Logger('Bootstrap');
     const app = await core_1.NestFactory.create(app_module_1.AppModule, {
         logger: ['log', 'error', 'warn', 'debug', 'verbose'],
+        rawBody: true,
     });
     const configService = app.get(config_1.ConfigService);
     app.use((0, helmet_1.default)({
@@ -147,22 +149,17 @@ async function bootstrap() {
     const port = configService.get('PORT', 3002);
     await app.listen(port, '0.0.0.0');
     const environment = configService.get('NODE_ENV', 'development');
-    console.log(`
-🚀 MPS Jewelry SaaS API started successfully!
-🌐 Environment: ${environment}
-🔗 API Endpoint: http://localhost:${port}/api/v1
-📚 Documentation: http://localhost:${port}/api/docs
-🔒 Security: Helmet + CORS + Rate Limiting enabled
-🛡️  Validation: Global validation pipes active
-🗄️  Database: PostgreSQL with Prisma ORM
-📁 File Storage: Google Drive integration ready
-`);
+    logger.log(`🚀 MPS Jewelry SaaS API started successfully!`);
+    logger.log(`🌐 Environment: ${environment}`);
+    logger.log(`🔗 API Endpoint: http://localhost:${port}/api/v1`);
+    logger.log(`📚 Documentation: http://localhost:${port}/api/docs`);
     if (environment === 'development') {
-        console.log('🔧 Development mode - Swagger docs available at /api/docs');
+        logger.log('🔧 Development mode - Swagger docs available at /api/docs');
     }
 }
 bootstrap().catch((error) => {
-    console.error('❌ Failed to start MPS Jewelry SaaS API:', error);
+    const logger = new common_1.Logger('Bootstrap');
+    logger.error('❌ Failed to start MPS Jewelry SaaS API:', error);
     process.exit(1);
 });
 //# sourceMappingURL=main.js.map

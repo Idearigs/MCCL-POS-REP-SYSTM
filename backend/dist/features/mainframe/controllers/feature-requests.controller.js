@@ -22,7 +22,10 @@ let FeatureRequestsController = class FeatureRequestsController {
         this.featureRequestsService = featureRequestsService;
     }
     async create(req, data) {
-        return this.featureRequestsService.create({ ...data, tenantId: req.user?.tenantId });
+        return this.featureRequestsService.create({
+            ...data,
+            tenantId: req.user?.tenantId,
+        });
     }
     async findAll(page, limit, status) {
         return this.featureRequestsService.findAll({

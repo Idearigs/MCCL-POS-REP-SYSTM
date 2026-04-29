@@ -2,7 +2,11 @@ import { FeatureRequestsService } from '../services/feature-requests.service';
 export declare class FeatureRequestsController {
     private readonly featureRequestsService;
     constructor(featureRequestsService: FeatureRequestsService);
-    create(req: any, data: {
+    create(req: {
+        user?: {
+            tenantId?: string;
+        };
+    }, data: {
         customerProfileId?: string;
         title: string;
         description: string;

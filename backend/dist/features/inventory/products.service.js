@@ -826,6 +826,7 @@ let ProductsService = ProductsService_1 = class ProductsService {
             minStockLevel: product.minStockLevel,
             maxStockLevel: product.maxStockLevel,
             material: product.material,
+            condition: product.condition,
             weight: product.weight ? Number(product.weight) : undefined,
             purity: product.purity,
             gemstone: product.gemstone,

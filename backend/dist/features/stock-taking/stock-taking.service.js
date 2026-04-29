@@ -8,13 +8,15 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var StockTakingService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.StockTakingService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../core/prisma/prisma.service");
 const client_1 = require("@prisma/client");
-let StockTakingService = class StockTakingService {
+let StockTakingService = StockTakingService_1 = class StockTakingService {
     prisma;
+    logger = new common_1.Logger(StockTakingService_1.name);
     constructor(prisma) {
         this.prisma = prisma;
     }
@@ -460,11 +462,11 @@ let StockTakingService = class StockTakingService {
                         }
                     }
                 }
-                console.log(`✅ Stock take applied: ${updatedCount} products updated, ${adjustmentCount} adjustments made`);
+                this.logger.log(`✅ Stock take applied: ${updatedCount} products updated, ${adjustmentCount} adjustments made`);
             });
         }
         catch (error) {
-            console.error('❌ Stock take application failed:', error.message);
+            this.logger.error('❌ Stock take application failed:', error.message);
             throw new common_1.BadRequestException(`Failed to apply stock take to inventory: ${error.message}. All changes have been rolled back.`);
         }
     }
@@ -641,7 +643,7 @@ let StockTakingService = class StockTakingService {
     }
 };
 exports.StockTakingService = StockTakingService;
-exports.StockTakingService = StockTakingService = __decorate([
+exports.StockTakingService = StockTakingService = StockTakingService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService])
 ], StockTakingService);

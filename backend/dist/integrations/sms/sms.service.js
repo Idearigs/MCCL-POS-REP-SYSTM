@@ -29,11 +29,11 @@ let SmsService = SmsService_1 = class SmsService {
     }
     async sendRepairStatusSMS(data) {
         try {
-            console.log(`🔧 === USING CENTRALIZED SMS PROCESSOR ===`);
-            console.log(`👤 Customer: ${data.customerName}`);
-            console.log(`📞 Phone: ${data.customerPhone}`);
-            console.log(`🔖 Repair: ${data.repairNumber}`);
-            console.log(`🔄 Status Change: ${data.oldStatus} → ${data.newStatus}`);
+            this.logger.log(`🔧 === USING CENTRALIZED SMS PROCESSOR ===`);
+            this.logger.log(`👤 Customer: ${data.customerName}`);
+            this.logger.log(`📞 Phone: ${data.customerPhone}`);
+            this.logger.log(`🔖 Repair: ${data.repairNumber}`);
+            this.logger.log(`🔄 Status Change: ${data.oldStatus} → ${data.newStatus}`);
             const result = await this.smsProcessor.sendRepairStatusSMS({
                 customerName: data.customerName,
                 customerPhone: data.customerPhone,
@@ -45,16 +45,16 @@ let SmsService = SmsService_1 = class SmsService {
                 shopName: data.shopName,
                 shopPhone: data.shopPhone,
             });
-            console.log(`🎯 Centralized SMS Result: ${result.success ? 'SUCCESS' : 'FAILED'}`);
+            this.logger.log(`🎯 Centralized SMS Result: ${result.success ? 'SUCCESS' : 'FAILED'}`);
             if (result.success) {
-                console.log(`   ✅ Message delivered to ${data.customerName}`);
-                console.log(`   📊 Credits used: ${result.creditsUsed}`);
-                console.log(`   💰 Credits remaining: ${result.creditsRemaining}`);
+                this.logger.log(`   ✅ Message delivered to ${data.customerName}`);
+                this.logger.log(`   📊 Credits used: ${result.creditsUsed}`);
+                this.logger.log(`   💰 Credits remaining: ${result.creditsRemaining}`);
             }
             else {
-                console.log(`   ❌ SMS failed: ${result.error}`);
+                this.logger.warn(`   ❌ SMS failed: ${result.error}`);
             }
-            console.log(`=== END CENTRALIZED SMS PROCESSOR ===\n`);
+            this.logger.log(`=== END CENTRALIZED SMS PROCESSOR ===`);
             return {
                 success: result.success,
                 messageId: result.messageId,
@@ -65,8 +65,6 @@ let SmsService = SmsService_1 = class SmsService {
         }
         catch (error) {
             this.logger.error(`Centralized SMS processor failed: ${error.message}`);
-            console.log(`❌ CENTRALIZED SMS EXCEPTION: ${error.message}`);
-            console.log(`=== END CENTRALIZED SMS PROCESSOR ===\n`);
             return {
                 success: false,
                 error: error.message,
@@ -97,19 +95,9 @@ let SmsService = SmsService_1 = class SmsService {
                 timeout: 10000,
             });
             const result = response.data;
-            console.log(`📱 === SMS DELIVERY REPORT ===`);
-            console.log(`📞 Phone: ${cleanPhone} (original: ${params.to})`);
-            console.log(`📋 Reference: ${params.reference || 'N/A'}`);
-            console.log(`📡 Response Status: ${response.status}`);
-            console.log(`📊 API Response:`, JSON.stringify(result, null, 2));
+            this.logger.debug(`📱 SMS response for ${cleanPhone}: status=${response.status} data=${JSON.stringify(result, null, 2)}`);
             if (response.status === 200 && result) {
                 this.logger.log(`✅ SMS sent successfully to ${cleanPhone}`);
-                console.log(`✅ SMS DELIVERY SUCCESS:`);
-                console.log(`   - Message ID: ${result.message_id || result.id || 'sent'}`);
-                console.log(`   - Credits Used: ${result.credits_used || result.message_count || 1}`);
-                console.log(`   - Credits Remaining: ${result.credits_remaining || 'Unknown'}`);
-                console.log(`   - Message Length: ${params.message.length} characters`);
-                console.log(`=== END SMS REPORT ===\n`);
                 return {
                     success: true,
                     messageId: result.message_id || result.id || 'sent',
@@ -119,10 +107,6 @@ let SmsService = SmsService_1 = class SmsService {
             }
             else {
                 this.logger.warn(`❌ SMS failed: ${result.error || 'Unknown error'}`);
-                console.log(`❌ SMS DELIVERY FAILED:`);
-                console.log(`   - Error: ${result.error || result.message || 'Unknown error'}`);
-                console.log(`   - Response Code: ${result.code || 'N/A'}`);
-                console.log(`=== END SMS REPORT ===\n`);
                 return {
                     success: false,
                     error: result.error || result.message || 'Unknown error',
@@ -130,15 +114,7 @@ let SmsService = SmsService_1 = class SmsService {
             }
         }
         catch (error) {
-            this.logger.error(`SMS sending failed: ${error.message}`);
-            console.log(`❌ SMS DELIVERY EXCEPTION:`);
-            console.log(`   - Error Message: ${error.message}`);
-            console.log(`   - Error Code: ${error.code || 'N/A'}`);
-            if (error.response) {
-                console.log(`   - HTTP Status: ${error.response.status}`);
-                console.log(`   - Response Data:`, JSON.stringify(error.response.data, null, 2));
-            }
-            console.log(`=== END SMS REPORT ===\n`);
+            this.logger.error(`SMS sending failed: ${error.message}${error.response ? ` (HTTP ${error.response.status})` : ''}`);
             return {
                 success: false,
                 error: error.message,
@@ -173,43 +149,27 @@ let SmsService = SmsService_1 = class SmsService {
     cleanPhoneNumberForRestAPI(phone) {
         const clean = phone.replace(/\D/g, '');
         const defaultCountry = this.configService.get('VOODOOSMS_DEFAULT_COUNTRY', 'LK');
-        console.log(`🔧 Phone number formatting debug:`, {
-            original: phone,
-            cleaned: clean,
-            defaultCountry: defaultCountry,
-        });
+        this.logger.debug(`🔧 Phone formatting: original=${phone} cleaned=${clean} country=${defaultCountry}`);
         if (defaultCountry === 'LK') {
             if (clean.startsWith('94')) {
-                const formatted = clean.substring(2);
-                console.log(`🇱🇰 Sri Lanka format: ${formatted}`);
-                return formatted;
+                return clean.substring(2);
             }
             else if (clean.startsWith('0')) {
-                const formatted = clean.substring(1);
-                console.log(`🇱🇰 Sri Lanka format (removed 0): ${formatted}`);
-                return formatted;
+                return clean.substring(1);
             }
-            console.log(`🇱🇰 Sri Lanka format (as-is): ${clean}`);
             return clean;
         }
         else if (defaultCountry === 'UK') {
             if (clean.startsWith('44')) {
-                const formatted = '+' + clean;
-                console.log(`🇬🇧 UK format (international with +): ${formatted}`);
-                return formatted;
+                return '+' + clean;
             }
             else if (clean.startsWith('0')) {
-                const formatted = '+44' + clean.substring(1);
-                console.log(`🇬🇧 UK format (converted to international with +): ${formatted}`);
-                return formatted;
+                return '+44' + clean.substring(1);
             }
             else {
-                const formatted = '+44' + clean;
-                console.log(`🇬🇧 UK format (added country code with +): ${formatted}`);
-                return formatted;
+                return '+44' + clean;
             }
         }
-        console.log(`🌍 Generic format: ${clean}`);
         return clean;
     }
     cleanPhoneNumber(phone) {

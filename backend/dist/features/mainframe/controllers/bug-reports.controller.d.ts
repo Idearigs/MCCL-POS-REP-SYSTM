@@ -37,7 +37,6 @@ export declare class BugReportsController {
             customerProfileId: string | null;
             userAgent: string | null;
             featureKey: string | null;
-            screenshots: string[];
             affectedVersion: string | null;
             browser: string | null;
             os: string | null;
@@ -45,6 +44,7 @@ export declare class BugReportsController {
             stepsToReproduce: string | null;
             expectedBehavior: string | null;
             actualBehavior: string | null;
+            screenshots: string[];
             errorLogs: string | null;
             assignedTo: string | null;
             resolvedAt: Date | null;
@@ -88,7 +88,6 @@ export declare class BugReportsController {
         customerProfileId: string | null;
         userAgent: string | null;
         featureKey: string | null;
-        screenshots: string[];
         affectedVersion: string | null;
         browser: string | null;
         os: string | null;
@@ -96,6 +95,7 @@ export declare class BugReportsController {
         stepsToReproduce: string | null;
         expectedBehavior: string | null;
         actualBehavior: string | null;
+        screenshots: string[];
         errorLogs: string | null;
         assignedTo: string | null;
         resolvedAt: Date | null;
@@ -121,7 +121,6 @@ export declare class BugReportsController {
         customerProfileId: string | null;
         userAgent: string | null;
         featureKey: string | null;
-        screenshots: string[];
         affectedVersion: string | null;
         browser: string | null;
         os: string | null;
@@ -129,6 +128,7 @@ export declare class BugReportsController {
         stepsToReproduce: string | null;
         expectedBehavior: string | null;
         actualBehavior: string | null;
+        screenshots: string[];
         errorLogs: string | null;
         assignedTo: string | null;
         resolvedAt: Date | null;

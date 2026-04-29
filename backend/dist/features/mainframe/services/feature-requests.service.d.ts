@@ -3,8 +3,8 @@ import { PrismaService } from '../../../core/prisma/prisma.service';
 export declare class FeatureRequestsService {
     private prisma;
     private config;
+    private readonly logger;
     private readonly mainframeUrl;
-    private readonly internalKey;
     constructor(prisma: PrismaService, config: ConfigService);
     create(data: {
         customerProfileId?: string;

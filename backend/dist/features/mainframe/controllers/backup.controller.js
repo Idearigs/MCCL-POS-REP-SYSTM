@@ -15,21 +15,28 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BackupController = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../../core/prisma/prisma.service");
+const hmac_verify_1 = require("../../../shared/utils/hmac-verify");
 let BackupController = class BackupController {
     prisma;
     constructor(prisma) {
         this.prisma = prisma;
     }
-    checkKey(key) {
-        const expected = process.env.INTERNAL_API_KEY;
-        if (!expected || key !== expected)
-            throw new common_1.UnauthorizedException('Invalid internal key');
-    }
-    async exportTenant(tenantId, key, res) {
-        this.checkKey(key);
+    async exportTenant(tenantId, timestamp, signature, res) {
+        (0, hmac_verify_1.verifyInternalHmac)(signature, timestamp, '');
         const [tenant, users, customers, products, sales, saleItems, repairs, repairPhotos,] = await Promise.all([
             this.prisma.tenants.findUnique({ where: { id: tenantId } }),
-            this.prisma.users.findMany({ where: { tenantId }, select: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true, createdAt: true } }),
+            this.prisma.users.findMany({
+                where: { tenantId },
+                select: {
+                    id: true,
+                    email: true,
+                    firstName: true,
+                    lastName: true,
+                    role: true,
+                    isActive: true,
+                    createdAt: true,
+                },
+            }),
             this.prisma.customers.findMany({ where: { tenantId } }),
             this.prisma.products.findMany({ where: { tenantId } }),
             this.prisma.sales.findMany({ where: { tenantId } }),
@@ -49,14 +56,15 @@ let BackupController = class BackupController {
             repairs,
             repairPhotos,
         };
-        const subdomain = tenant?.subdomain || tenantId.slice(0, 8);
+        const subdomain = tenant?.subdomain ||
+            tenantId.slice(0, 8);
         const filename = `${subdomain}-${new Date().toISOString().slice(0, 10)}.json`;
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.json(payload);
     }
-    async listTenants(key) {
-        this.checkKey(key);
+    async listTenants(timestamp, signature) {
+        (0, hmac_verify_1.verifyInternalHmac)(signature, timestamp, '');
         return this.prisma.tenants.findMany({
             select: { id: true, subdomain: true, name: true },
             orderBy: { name: 'asc' },
@@ -67,17 +75,19 @@ exports.BackupController = BackupController;
 __decorate([
     (0, common_1.Get)('tenant/:tenantId'),
     __param(0, (0, common_1.Param)('tenantId')),
-    __param(1, (0, common_1.Headers)('x-internal-key')),
-    __param(2, (0, common_1.Res)()),
+    __param(1, (0, common_1.Headers)('x-internal-timestamp')),
+    __param(2, (0, common_1.Headers)('x-internal-signature')),
+    __param(3, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:paramtypes", [String, String, String, Object]),
     __metadata("design:returntype", Promise)
 ], BackupController.prototype, "exportTenant", null);
 __decorate([
     (0, common_1.Get)('tenants'),
-    __param(0, (0, common_1.Headers)('x-internal-key')),
+    __param(0, (0, common_1.Headers)('x-internal-timestamp')),
+    __param(1, (0, common_1.Headers)('x-internal-signature')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", Promise)
 ], BackupController.prototype, "listTenants", null);
 exports.BackupController = BackupController = __decorate([

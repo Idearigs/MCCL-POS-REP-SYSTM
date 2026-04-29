@@ -3,6 +3,7 @@ import { CreateSessionDto, ScanItemDto, UpdateSessionDto, ApproveSessionDto } fr
 import { StockTakeStatus as PrismaStockTakeStatus } from '@prisma/client';
 export declare class StockTakingService {
     private prisma;
+    private readonly logger;
     constructor(prisma: PrismaService);
     createSession(tenantId: string, userId: string, dto: CreateSessionDto): Promise<{
         stock_take_items: {

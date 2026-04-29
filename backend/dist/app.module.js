@@ -46,23 +46,32 @@ exports.AppModule = AppModule = __decorate([
             cache_manager_1.CacheModule.registerAsync({
                 isGlobal: true,
                 useFactory: async () => {
+                    const logger = new common_1.Logger('AppModule');
+                    const isProduction = process.env.NODE_ENV === 'production';
                     try {
-                        const store = await (0, cache_manager_redis_store_1.redisStore)({
-                            socket: {
-                                host: process.env.REDIS_HOST || 'localhost',
-                                port: parseInt(process.env.REDIS_PORT || '6379'),
-                            },
-                            password: process.env.REDIS_PASSWORD,
-                            database: parseInt(process.env.REDIS_DB || '0'),
-                        });
-                        console.log('✅ Connected to Redis cache');
+                        const redisConfig = process.env.REDIS_URL
+                            ? { url: process.env.REDIS_URL }
+                            : {
+                                socket: {
+                                    host: process.env.REDIS_HOST || 'localhost',
+                                    port: parseInt(process.env.REDIS_PORT || '6379'),
+                                },
+                                password: process.env.REDIS_PASSWORD,
+                                database: parseInt(process.env.REDIS_DB || '0'),
+                            };
+                        const store = await (0, cache_manager_redis_store_1.redisStore)(redisConfig);
+                        logger.log('✅ Connected to Redis cache');
                         return {
                             store: store,
                             ttl: 300000,
                         };
                     }
                     catch (error) {
-                        console.warn('⚠️  Redis connection failed, using in-memory cache:', error.message);
+                        if (isProduction) {
+                            logger.error(`❌ Redis required in production but unavailable: ${error.message}`);
+                            throw error;
+                        }
+                        logger.warn(`⚠️  Redis unavailable, using in-memory cache (dev only): ${error.message}`);
                         return {
                             store: 'memory',
                             max: 1000,

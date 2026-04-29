@@ -1131,6 +1131,9 @@ enum InventoryLogType {
 
 enum JewelryMaterial {
   GOLD
+  YELLOW_GOLD
+  WHITE_GOLD
+  ROSE_GOLD
   SILVER
   PLATINUM
   DIAMOND

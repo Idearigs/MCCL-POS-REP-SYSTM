@@ -1,12 +1,12 @@
-import { PrismaService } from '../../core/prisma/prisma.service';
+import { CustomersRepository } from './customers.repository';
 import { CacheService } from '../../core/cache/cache.service';
 import { CreateCustomerDto, UpdateCustomerDto, CustomerQueryDto, CustomerResponseDto, CustomerStatsDto } from './dto/customer.dto';
 import { PaginatedResponseDto } from '../../shared/dto/pagination.dto';
 export declare class CustomersService {
-    private prismaService;
+    private customerRepo;
     private cacheService;
     private readonly logger;
-    constructor(prismaService: PrismaService, cacheService: CacheService);
+    constructor(customerRepo: CustomersRepository, cacheService: CacheService);
     create(createCustomerDto: CreateCustomerDto, tenantId: string): Promise<CustomerResponseDto>;
     findAll(query: CustomerQueryDto, tenantId: string): Promise<PaginatedResponseDto<CustomerResponseDto>>;
     findOne(id: string, tenantId: string): Promise<CustomerResponseDto>;

@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthResponseDto = exports.ResetPasswordDto = exports.ForgotPasswordDto = exports.ChangePasswordDto = exports.RegisterDto = exports.RefreshTokenDto = exports.LoginDto = void 0;
 const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
+const class_transformer_1 = require("class-transformer");
 class LoginDto {
     email;
     password;
@@ -23,6 +24,7 @@ __decorate([
         description: 'User email address',
         example: 'admin@buymejewellery.co.uk',
     }),
+    (0, class_transformer_1.Transform)(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value),
     (0, class_validator_1.IsEmail)({}, { message: 'Please provide a valid email address' }),
     __metadata("design:type", String)
 ], LoginDto.prototype, "email", void 0);
@@ -45,6 +47,7 @@ __decorate([
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Transform)(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], LoginDto.prototype, "companySlug", void 0);
@@ -73,6 +76,7 @@ __decorate([
         description: 'User email address',
         example: 'john.doe@buymejewellery.co.uk',
     }),
+    (0, class_transformer_1.Transform)(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value),
     (0, class_validator_1.IsEmail)({}, { message: 'Please provide a valid email address' }),
     __metadata("design:type", String)
 ], RegisterDto.prototype, "email", void 0);

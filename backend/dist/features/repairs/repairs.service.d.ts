@@ -1,17 +1,19 @@
 import { RepairStatus } from '@prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
+import { RepairsRepository } from './repairs.repository';
 import { CacheService } from '../../core/cache/cache.service';
 import { FileStorageService, FileUploadResult } from '../../integrations/file-storage/file-storage.service';
 import { SmsService } from '../../integrations/sms/sms.service';
 import { CreateRepairDto, UpdateRepairDto, RepairQueryDto, RepairResponseDto, RepairStatsDto } from './dto/repair.dto';
 import { PaginatedResponseDto } from '../../shared/dto/pagination.dto';
 export declare class RepairsService {
+    private repairsRepo;
     private prismaService;
     private cacheService;
     private fileStorageService;
     private smsService;
     private readonly logger;
-    constructor(prismaService: PrismaService, cacheService: CacheService, fileStorageService: FileStorageService, smsService: SmsService);
+    constructor(repairsRepo: RepairsRepository, prismaService: PrismaService, cacheService: CacheService, fileStorageService: FileStorageService, smsService: SmsService);
     create(createRepairDto: CreateRepairDto, tenantId: string, userId: string): Promise<RepairResponseDto>;
     findAll(queryDto: RepairQueryDto, tenantId: string): Promise<PaginatedResponseDto<RepairResponseDto>>;
     findOne(id: string, tenantId: string): Promise<RepairResponseDto>;

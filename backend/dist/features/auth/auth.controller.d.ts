@@ -1,3 +1,5 @@
+import type { RawBodyRequest } from '@nestjs/common';
+import type { Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
 import { type TenantInfo } from '../../shared/decorators/tenant.decorator';
 import { LoginDto, RegisterDto, RefreshTokenDto, ChangePasswordDto, AuthResponseDto } from './dto/auth.dto';
@@ -34,13 +36,13 @@ export declare class AuthController {
         page: number;
         limit: number;
     }>;
-    getUserById(tenant: TenantInfo, id: string): Promise<any>;
-    updateUser(tenant: TenantInfo, id: string, updateData: Record<string, unknown>): Promise<any>;
+    getUserById(tenant: TenantInfo, id: string): Promise<unknown>;
+    updateUser(tenant: TenantInfo, id: string, updateData: Record<string, unknown>): Promise<unknown>;
     resetUserPassword(tenant: TenantInfo, id: string, body: {
         password: string;
     }): Promise<void>;
     deleteUser(tenant: TenantInfo, id: string): Promise<void>;
-    provisionTenant(internalKey: string, body: {
+    provisionTenant(timestamp: string, signature: string, req: RawBodyRequest<ExpressRequest>, body: {
         tenantId: string;
         businessName: string;
         subdomain: string;
@@ -52,7 +54,7 @@ export declare class AuthController {
         tenantId: string;
         userId: string;
     }>;
-    updateTenantStatus(internalKey: string, body: {
+    updateTenantStatus(timestamp: string, signature: string, req: RawBodyRequest<ExpressRequest>, body: {
         subdomain: string;
         status: 'ACTIVE' | 'PAYMENT_DUE' | 'PAYMENT_WARNING' | 'SUSPENDED' | 'INACTIVE';
         suspendedReason?: string;

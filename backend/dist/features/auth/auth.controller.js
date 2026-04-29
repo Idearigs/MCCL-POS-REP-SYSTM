@@ -17,8 +17,11 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const throttler_1 = require("@nestjs/throttler");
 const auth_service_1 = require("./auth.service");
+const hmac_verify_1 = require("../../shared/utils/hmac-verify");
 const jwt_auth_guard_1 = require("./guards/jwt-auth.guard");
 const tenant_guard_1 = require("../../shared/guards/tenant.guard");
+const roles_guard_1 = require("../../shared/guards/roles.guard");
+const roles_decorator_1 = require("../../shared/decorators/roles.decorator");
 const public_decorator_1 = require("./decorators/public.decorator");
 const user_decorator_1 = require("../../shared/decorators/user.decorator");
 const tenant_decorator_1 = require("../../shared/decorators/tenant.decorator");
@@ -70,18 +73,12 @@ let AuthController = class AuthController {
     async deleteUser(tenant, id) {
         await this.authService.deleteUser(tenant.id, id);
     }
-    async provisionTenant(internalKey, body) {
-        const expectedKey = process.env.INTERNAL_API_KEY;
-        if (!expectedKey || internalKey !== expectedKey) {
-            throw new common_1.UnauthorizedException('Invalid internal API key');
-        }
+    async provisionTenant(timestamp, signature, req, body) {
+        (0, hmac_verify_1.verifyInternalHmac)(signature, timestamp, req.rawBody?.toString() ?? '');
         return this.authService.provisionTenant(body);
     }
-    async updateTenantStatus(internalKey, body) {
-        const expectedKey = process.env.INTERNAL_API_KEY;
-        if (!expectedKey || internalKey !== expectedKey) {
-            throw new common_1.UnauthorizedException('Invalid internal API key');
-        }
+    async updateTenantStatus(timestamp, signature, req, body) {
+        (0, hmac_verify_1.verifyInternalHmac)(signature, timestamp, req.rawBody?.toString() ?? '');
         return this.authService.updateTenantStatus(body);
     }
     health() {
@@ -244,17 +241,16 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "changePassword", null);
 __decorate([
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, roles_decorator_1.Roles)('OWNER', 'MANAGER'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, common_1.Get)('users'),
     (0, swagger_1.ApiBearerAuth)('access-token'),
     (0, swagger_1.ApiOperation)({
         summary: 'Get all users',
-        description: 'Get list of all users/cashiers (admin only)',
+        description: 'Get list of all users/cashiers — OWNER and MANAGER only',
     }),
-    (0, swagger_1.ApiResponse)({
-        status: 200,
-        description: 'Users retrieved successfully',
-    }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Users retrieved successfully' }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: 'Insufficient role' }),
     __param(0, (0, tenant_decorator_1.CurrentTenant)()),
     __param(1, (0, common_1.Query)('role')),
     __param(2, (0, common_1.Query)('isActive')),
@@ -265,17 +261,16 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "getUsers", null);
 __decorate([
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, roles_decorator_1.Roles)('OWNER', 'MANAGER'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, common_1.Get)('users/:id'),
     (0, swagger_1.ApiBearerAuth)('access-token'),
     (0, swagger_1.ApiOperation)({
         summary: 'Get user by ID',
-        description: 'Get a specific user by their ID',
+        description: 'Get a specific user by their ID — OWNER and MANAGER only',
     }),
-    (0, swagger_1.ApiResponse)({
-        status: 200,
-        description: 'User retrieved successfully',
-    }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'User retrieved successfully' }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: 'Insufficient role' }),
     __param(0, (0, tenant_decorator_1.CurrentTenant)()),
     __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -283,17 +278,16 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "getUserById", null);
 __decorate([
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, roles_decorator_1.Roles)('OWNER'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, common_1.Patch)('users/:id'),
     (0, swagger_1.ApiBearerAuth)('access-token'),
     (0, swagger_1.ApiOperation)({
         summary: 'Update user',
-        description: 'Update user details (admin only)',
+        description: 'Update user details — OWNER only',
     }),
-    (0, swagger_1.ApiResponse)({
-        status: 200,
-        description: 'User updated successfully',
-    }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'User updated successfully' }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: 'Insufficient role' }),
     __param(0, (0, tenant_decorator_1.CurrentTenant)()),
     __param(1, (0, common_1.Param)('id')),
     __param(2, (0, common_1.Body)()),
@@ -302,17 +296,16 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "updateUser", null);
 __decorate([
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, roles_decorator_1.Roles)('OWNER'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, common_1.Patch)('users/:id/password'),
     (0, swagger_1.ApiBearerAuth)('access-token'),
     (0, swagger_1.ApiOperation)({
         summary: 'Reset user password',
-        description: 'Reset password for a user (admin only)',
+        description: 'Reset password for any user — OWNER only',
     }),
-    (0, swagger_1.ApiResponse)({
-        status: 200,
-        description: 'Password reset successfully',
-    }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Password reset successfully' }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: 'Insufficient role' }),
     __param(0, (0, tenant_decorator_1.CurrentTenant)()),
     __param(1, (0, common_1.Param)('id')),
     __param(2, (0, common_1.Body)()),
@@ -321,12 +314,17 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "resetUserPassword", null);
 __decorate([
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, roles_decorator_1.Roles)('OWNER'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, common_1.Delete)('users/:id'),
     (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),
     (0, swagger_1.ApiBearerAuth)('access-token'),
-    (0, swagger_1.ApiOperation)({ summary: 'Delete user', description: 'Permanently delete a cashier/user (admin only)' }),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Delete user',
+        description: 'Permanently delete a user — OWNER only',
+    }),
     (0, swagger_1.ApiResponse)({ status: 204, description: 'User deleted successfully' }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: 'Insufficient role' }),
     __param(0, (0, tenant_decorator_1.CurrentTenant)()),
     __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -337,23 +335,33 @@ __decorate([
     (0, public_decorator_1.Public)(),
     (0, common_1.Post)('provision-tenant'),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
-    (0, swagger_1.ApiOperation)({ summary: 'Provision new tenant (internal)', description: 'Called by Mainframe to create a new customer tenant and owner account' }),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Provision new tenant (internal)',
+        description: 'Called by Mainframe to create a new customer tenant and owner account',
+    }),
     (0, swagger_1.ApiResponse)({ status: 201, description: 'Tenant provisioned successfully' }),
-    __param(0, (0, common_1.Headers)('x-internal-key')),
-    __param(1, (0, common_1.Body)()),
+    __param(0, (0, common_1.Headers)('x-internal-timestamp')),
+    __param(1, (0, common_1.Headers)('x-internal-signature')),
+    __param(2, (0, common_1.Req)()),
+    __param(3, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, String, Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "provisionTenant", null);
 __decorate([
     (0, public_decorator_1.Public)(),
     (0, common_1.Patch)('tenant-status'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, swagger_1.ApiOperation)({ summary: 'Update tenant status (internal)', description: 'Called by Mainframe to sync tenant suspension or billing status' }),
-    __param(0, (0, common_1.Headers)('x-internal-key')),
-    __param(1, (0, common_1.Body)()),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Update tenant status (internal)',
+        description: 'Called by Mainframe to sync tenant suspension or billing status',
+    }),
+    __param(0, (0, common_1.Headers)('x-internal-timestamp')),
+    __param(1, (0, common_1.Headers)('x-internal-signature')),
+    __param(2, (0, common_1.Req)()),
+    __param(3, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, String, Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "updateTenantStatus", null);
 __decorate([

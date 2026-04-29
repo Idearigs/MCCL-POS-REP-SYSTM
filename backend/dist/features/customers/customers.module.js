@@ -10,6 +10,7 @@ exports.CustomersModule = void 0;
 const common_1 = require("@nestjs/common");
 const customers_service_1 = require("./customers.service");
 const customers_controller_1 = require("./customers.controller");
+const customers_repository_1 = require("./customers.repository");
 const cache_module_1 = require("../../core/cache/cache.module");
 let CustomersModule = class CustomersModule {
 };
@@ -18,7 +19,7 @@ exports.CustomersModule = CustomersModule = __decorate([
     (0, common_1.Module)({
         imports: [cache_module_1.CacheServiceModule],
         controllers: [customers_controller_1.CustomersController],
-        providers: [customers_service_1.CustomersService],
+        providers: [customers_repository_1.CustomersRepository, customers_service_1.CustomersService],
         exports: [customers_service_1.CustomersService],
     })
 ], CustomersModule);

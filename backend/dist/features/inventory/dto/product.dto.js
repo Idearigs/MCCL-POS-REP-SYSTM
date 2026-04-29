@@ -17,6 +17,9 @@ const pagination_dto_1 = require("../../../shared/dto/pagination.dto");
 var JewelryMaterial;
 (function (JewelryMaterial) {
     JewelryMaterial["GOLD"] = "GOLD";
+    JewelryMaterial["YELLOW_GOLD"] = "YELLOW_GOLD";
+    JewelryMaterial["WHITE_GOLD"] = "WHITE_GOLD";
+    JewelryMaterial["ROSE_GOLD"] = "ROSE_GOLD";
     JewelryMaterial["SILVER"] = "SILVER";
     JewelryMaterial["PLATINUM"] = "PLATINUM";
     JewelryMaterial["DIAMOND"] = "DIAMOND";

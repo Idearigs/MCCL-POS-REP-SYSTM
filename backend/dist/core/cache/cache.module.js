@@ -22,7 +22,9 @@ exports.CacheServiceModule = CacheServiceModule = __decorate([
             cache_manager_1.CacheModule.registerAsync({
                 imports: [config_1.ConfigModule],
                 useFactory: (configService) => {
-                    const isRedisEnabled = configService.get('REDIS_HOST') && configService.get('REDIS_PORT');
+                    const logger = new common_1.Logger('CacheServiceModule');
+                    const isRedisEnabled = configService.get('REDIS_HOST') &&
+                        configService.get('REDIS_PORT');
                     if (isRedisEnabled) {
                         return {
                             store: redisStore,
@@ -37,7 +39,7 @@ exports.CacheServiceModule = CacheServiceModule = __decorate([
                         };
                     }
                     else {
-                        console.warn('⚠️  Redis not configured, using in-memory cache');
+                        logger.warn('⚠️  Redis not configured, using in-memory cache');
                         return {
                             ttl: 60 * 60,
                             max: 1000,

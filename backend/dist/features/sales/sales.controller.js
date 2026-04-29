@@ -37,6 +37,9 @@ let SalesController = class SalesController {
     async getStats(tenantId) {
         return this.salesService.getStats(tenantId);
     }
+    async getCashierStats(tenantId) {
+        return this.salesService.getCashierStats(tenantId);
+    }
     async getTodaysSales(query, tenantId) {
         const today = new Date().toISOString().split('T')[0];
         const todayQuery = {
@@ -281,6 +284,21 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], SalesController.prototype, "getStats", null);
+__decorate([
+    (0, common_1.Get)('stats/cashiers'),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Get per-cashier sales statistics',
+        description: 'Retrieve sales statistics broken down by cashier/staff member',
+    }),
+    (0, swagger_1.ApiResponse)({
+        status: 200,
+        description: 'Cashier stats retrieved successfully',
+    }),
+    __param(0, (0, tenant_decorator_1.TenantId)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], SalesController.prototype, "getCashierStats", null);
 __decorate([
     (0, common_1.Get)('today'),
     (0, swagger_1.ApiOperation)({

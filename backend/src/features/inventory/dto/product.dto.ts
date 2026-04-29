@@ -19,6 +19,9 @@ import { PaginationDto } from '../../../shared/dto/pagination.dto';
 
 export enum JewelryMaterial {
   GOLD = 'GOLD',
+  YELLOW_GOLD = 'YELLOW_GOLD',
+  WHITE_GOLD = 'WHITE_GOLD',
+  ROSE_GOLD = 'ROSE_GOLD',
   SILVER = 'SILVER',
   PLATINUM = 'PLATINUM',
   DIAMOND = 'DIAMOND',

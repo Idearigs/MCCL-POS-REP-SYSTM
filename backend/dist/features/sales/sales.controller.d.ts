@@ -7,6 +7,7 @@ export declare class SalesController {
     create(createSaleDto: CreateSaleDto, tenantId: string, userId: string): Promise<SaleResponseDto>;
     findAll(query: SaleQueryDto, tenantId: string): Promise<PaginatedResponseDto<SaleResponseDto>>;
     getStats(tenantId: string): Promise<SalesStatsDto>;
+    getCashierStats(tenantId: string): Promise<any[]>;
     getTodaysSales(query: SaleQueryDto, tenantId: string): Promise<PaginatedResponseDto<SaleResponseDto>>;
     findOne(id: string, tenantId: string): Promise<SaleResponseDto>;
     update(id: string, updateSaleDto: UpdateSaleDto, tenantId: string, userId: string): Promise<SaleResponseDto>;

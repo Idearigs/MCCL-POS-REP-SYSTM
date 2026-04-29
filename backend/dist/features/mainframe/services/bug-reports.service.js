@@ -11,43 +11,45 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
+var BugReportsService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BugReportsService = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const axios_1 = __importDefault(require("axios"));
 const prisma_service_1 = require("../../../core/prisma/prisma.service");
-let BugReportsService = class BugReportsService {
+const hmac_build_1 = require("../../../shared/utils/hmac-build");
+let BugReportsService = BugReportsService_1 = class BugReportsService {
     prisma;
     config;
+    logger = new common_1.Logger(BugReportsService_1.name);
     mainframeUrl;
-    internalKey;
     constructor(prisma, config) {
         this.prisma = prisma;
         this.config = config;
         this.mainframeUrl =
             this.config.get('MAINFRAME_BACKEND_URL') ||
                 'http://localhost:3001/api/v1';
-        this.internalKey =
-            this.config.get('INTERNAL_API_KEY') || 'local-dev-internal-key';
     }
     async create(data) {
         try {
-            const { data: created } = await axios_1.default.post(`${this.mainframeUrl}/mainframe/bug-reports`, {
+            const payload = {
                 ...data,
                 priority: data.priority || 'MEDIUM',
                 screenshots: data.screenshots || [],
-            }, {
+            };
+            const bodyStr = JSON.stringify(payload);
+            const { data: created } = await axios_1.default.post(`${this.mainframeUrl}/mainframe/bug-reports`, bodyStr, {
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-internal-key': this.internalKey,
+                    ...(0, hmac_build_1.buildHmacHeaders)(bodyStr),
                 },
                 timeout: 8000,
             });
             return created;
         }
         catch (err) {
-            console.error('[BugReports] Failed to forward to mainframe, storing locally:', err?.message);
+            this.logger.error('[BugReports] Failed to forward to mainframe, storing locally:', err?.message);
             return this.prisma.mf_bug_reports.create({
                 data: {
                     customerProfileId: data.customerProfileId,
@@ -167,7 +169,7 @@ let BugReportsService = class BugReportsService {
     }
 };
 exports.BugReportsService = BugReportsService;
-exports.BugReportsService = BugReportsService = __decorate([
+exports.BugReportsService = BugReportsService = BugReportsService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         config_1.ConfigService])

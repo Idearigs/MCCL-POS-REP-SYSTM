@@ -39,7 +39,8 @@ exports.MainframeModule = MainframeModule = __decorate([
             jwt_1.JwtModule.registerAsync({
                 imports: [config_1.ConfigModule],
                 useFactory: (configService) => ({
-                    secret: configService.get('MAINFRAME_JWT_SECRET') || configService.get('JWT_SECRET'),
+                    secret: configService.get('MAINFRAME_JWT_SECRET') ||
+                        configService.get('JWT_SECRET'),
                     signOptions: { expiresIn: '7d' },
                 }),
                 inject: [config_1.ConfigService],
