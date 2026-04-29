@@ -20,7 +20,9 @@ import {
   Trash2,
   Nfc,
   QrCode,
-  X
+  X,
+  ScanSearch,
+  RefreshCw,
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { useToast } from '@/hooks/use-toast';
@@ -198,11 +200,22 @@ const InventoryPage = () => {
     applyFilters(query, undefined, quickFilter);
   };
 
-  // Handle quick filter toggle (Low Stock / Out of Stock buttons)
-  const handleQuickFilter = (filterType: 'lowStock' | 'outOfStock') => {
+  // Handle quick filter toggle
+  const handleQuickFilter = (filterType: 'lowStock' | 'outOfStock' | 'duplicates') => {
     const newFilter = quickFilter === filterType ? null : filterType;
     setQuickFilter(newFilter);
     applyFilters(searchQuery, undefined, newFilter);
+  };
+
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+
+  const handleCheckDuplicates = async () => {
+    setCheckingDuplicates(true);
+    await refreshInventory();
+    setCheckingDuplicates(false);
+    // duplicateIds recomputes from updated inventory automatically
+    // scroll the user to the top so the banner is visible
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   
   // Handle sorting changes
@@ -769,19 +782,33 @@ const InventoryPage = () => {
             </div>
             
             <div className="hidden md:flex items-center gap-1">
-              <Button 
-                variant="outline" 
-                size="icon" 
+              <Button
+                variant="outline"
+                size="sm"
+                className={`h-8 rounded-full border-navy/10 hover:bg-amber-50 text-navy hover:text-amber-700 hover:border-amber-400 gap-1.5 text-xs font-medium ${checkingDuplicates ? 'opacity-60' : ''}`}
+                onClick={handleCheckDuplicates}
+                disabled={checkingDuplicates}
+                title="Refresh inventory and scan for duplicate SKUs"
+              >
+                {checkingDuplicates
+                  ? <RefreshCw size={13} className="animate-spin" />
+                  : <ScanSearch size={13} />}
+                {checkingDuplicates ? 'Checking…' : 'Check Duplicates'}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="icon"
                 className="h-8 w-8 rounded-full bg-white/90 border-navy/10 hover:bg-navy/5 text-navy hover:text-navy"
                 onClick={handlePrint}
                 title="Print inventory report"
               >
                 <Printer size={16} />
               </Button>
-              
-              <Button 
-                variant="outline" 
-                size="icon" 
+
+              <Button
+                variant="outline"
+                size="icon"
                 className="h-8 w-8 rounded-full bg-white/90 border-navy/10 hover:bg-navy/5 text-navy hover:text-navy"
                 onClick={toggleSortOrder}
                 title="Toggle sort order"

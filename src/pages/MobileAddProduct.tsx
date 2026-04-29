@@ -467,16 +467,32 @@ export default function MobileAddProduct() {
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       const value = e.target.value;
       setForm(f => ({ ...f, [field]: value }));
-      if (field === 'name') checkDuplicate(value);
+      if (field === 'name') checkNameDuplicate(value);
+      if (field === 'sku') checkSkuDuplicate(value);
     };
 
-  const checkDuplicate = useCallback(async (name: string) => {
+  const checkNameDuplicate = useCallback(async (name: string) => {
     if (name.trim().length < 3) { setDuplicateWarning(null); return; }
     try {
       const results = await productService.searchProducts(name.trim(), 5);
       const match = results.find(p => p.name.trim().toLowerCase() === name.trim().toLowerCase());
       if (match) {
-        setDuplicateWarning(`"${match.name}" already exists in inventory (SKU: ${match.sku}). You may be adding a duplicate.`);
+        setDuplicateWarning(`A product named "${match.name}" already exists (SKU: ${match.sku}). You may be adding a duplicate.`);
+      } else {
+        setDuplicateWarning(null);
+      }
+    } catch {
+      setDuplicateWarning(null);
+    }
+  }, []);
+
+  const checkSkuDuplicate = useCallback(async (sku: string) => {
+    if (sku.trim().length < 3) { setDuplicateWarning(null); return; }
+    try {
+      const results = await productService.searchProducts(sku.trim(), 10);
+      const match = results.find(p => p.sku.trim().toLowerCase() === sku.trim().toLowerCase());
+      if (match) {
+        setDuplicateWarning(`SKU "${sku}" is already used by "${match.name}". Change the SKU or you will create a duplicate.`);
       } else {
         setDuplicateWarning(null);
       }
