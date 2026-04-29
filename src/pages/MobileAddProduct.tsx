@@ -12,21 +12,51 @@ import {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const MATERIALS = [
-  'GOLD', 'SILVER', 'PLATINUM', 'DIAMOND',
+  'YELLOW_GOLD', 'WHITE_GOLD', 'ROSE_GOLD',
+  'SILVER', 'PLATINUM', 'DIAMOND',
   'PEARL', 'GEMSTONE', 'STAINLESS_STEEL', 'OTHER',
 ];
+
+const GOLD_TYPES = new Set(['YELLOW_GOLD', 'WHITE_GOLD', 'ROSE_GOLD']);
+const GOLD_CARATS = ['9CT', '14CT', '18CT', '22CT', '24CT'];
 
 const WATCH_BRANDS = ['Rosefeld', 'Roamer', 'Briston', 'Festina', 'Secondhand'];
 
 const CONDITIONS = ['BRAND_NEW', 'USED'];
 
 const MATERIAL_LABELS: Record<string, string> = {
-  GOLD: 'Gold', SILVER: 'Silver', PLATINUM: 'Platinum', DIAMOND: 'Diamond',
+  YELLOW_GOLD: 'Yellow Gold', WHITE_GOLD: 'White Gold', ROSE_GOLD: 'Rose Gold',
+  GOLD: 'Gold',
+  SILVER: 'Silver', PLATINUM: 'Platinum', DIAMOND: 'Diamond',
   PEARL: 'Pearl', GEMSTONE: 'Gemstone', STAINLESS_STEEL: 'Stainless Steel', OTHER: 'Other',
 };
 
+const CARAT_LABELS: Record<string, string> = {
+  '9CT': '9ct', '14CT': '14ct', '18CT': '18ct', '22CT': '22ct', '24CT': '24ct',
+};
+
+function parseMaterial(raw: string): { baseMaterial: string; carat: string } {
+  for (const base of ['YELLOW_GOLD', 'WHITE_GOLD', 'ROSE_GOLD']) {
+    for (const ct of GOLD_CARATS) {
+      if (raw === `${base}_${ct}`) return { baseMaterial: base, carat: ct };
+    }
+    if (raw === base) return { baseMaterial: base, carat: '' };
+  }
+  if (raw === 'GOLD') return { baseMaterial: 'YELLOW_GOLD', carat: '' };
+  return { baseMaterial: raw, carat: '' };
+}
+
+function combineMaterial(baseMaterial: string, carat: string): string {
+  if (GOLD_TYPES.has(baseMaterial) && carat) return `${baseMaterial}_${carat}`;
+  return baseMaterial;
+}
+
 function generateSKU(name: string, material: string): string {
-  const prefix = material === 'OTHER' ? 'JWL' : material.slice(0, 3);
+  const prefix = material.startsWith('YELLOW_GOLD') ? 'YGD'
+    : material.startsWith('WHITE_GOLD') ? 'WGD'
+    : material.startsWith('ROSE_GOLD') ? 'RGD'
+    : material === 'OTHER' ? 'JWL'
+    : material.slice(0, 3);
   const nameCode = name.replace(/\s+/g, '-').toUpperCase().slice(0, 8);
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `${prefix}-${nameCode}-${rand}`;
@@ -37,7 +67,7 @@ interface Category { id: string; name: string; }
 const emptyForm = {
   name: '', sku: '', price: '', cost: '', weight: '',
   stock: '', minStockLevel: '1', category: '',
-  material: 'GOLD', condition: 'BRAND_NEW', description: '', brand: '',
+  material: 'YELLOW_GOLD', carat: '', condition: 'BRAND_NEW', description: '', brand: '',
 };
 
 type View = 'add' | 'list' | 'edit';
@@ -262,32 +292,47 @@ function ProductFormFields({ form, set, onAutoSKU, categories, isBuyme }: Produc
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Material</label>
             <div className="flex flex-wrap gap-2 mt-2">
               {MATERIALS.map(m => (
-                <button key={m} type="button"
-                  onClick={() => {/* handled by parent via form state */ }}
-                  className="hidden"
-                  aria-hidden="true"
-                />
-              ))}
-              {/* We use direct form state buttons in the parent, so render via closure won't work cleanly
-                  The parent passes set() but for pill buttons we need setForm — see workaround below */}
-              {MATERIALS.map(m => (
                 <span
                   key={m}
-                  data-material={m}
                   className={`px-3 py-1.5 rounded-full text-sm font-medium cursor-pointer select-none transition-colors ${
                     form.material === m ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 active:bg-gray-200'
                   }`}
-                  // Use onChange trick via hidden input — use data attribute + parent handler
                   onClick={() => {
-                    // dispatch synthetic event to set('material')
                     const synthetic = { target: { value: m } } as React.ChangeEvent<HTMLInputElement>;
                     set('material')(synthetic);
+                    if (!GOLD_TYPES.has(m)) {
+                      const clear = { target: { value: '' } } as React.ChangeEvent<HTMLInputElement>;
+                      set('carat')(clear);
+                    }
                   }}
                 >
                   {MATERIAL_LABELS[m]}
                 </span>
               ))}
             </div>
+
+            {/* Carat picker — only when a gold type is selected */}
+            {GOLD_TYPES.has(form.material) && (
+              <div className="mt-3">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Carat</label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {GOLD_CARATS.map(ct => (
+                    <span
+                      key={ct}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium cursor-pointer select-none transition-colors ${
+                        form.carat === ct ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 active:bg-gray-200'
+                      }`}
+                      onClick={() => {
+                        const synthetic = { target: { value: form.carat === ct ? '' : ct } } as React.ChangeEvent<HTMLInputElement>;
+                        set('carat')(synthetic);
+                      }}
+                    >
+                      {CARAT_LABELS[ct]}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div className="px-4 py-3">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Condition</label>
@@ -355,6 +400,7 @@ export default function MobileAddProduct() {
   const [addedCount, setAddedCount] = useState(0);
   const [successFlash, setSuccessFlash] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -418,8 +464,26 @@ export default function MobileAddProduct() {
   // ─────────────────────────────────────────────────────
 
   const set = (field: keyof typeof emptyForm) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-      setForm(f => ({ ...f, [field]: e.target.value }));
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      const value = e.target.value;
+      setForm(f => ({ ...f, [field]: value }));
+      if (field === 'name') checkDuplicate(value);
+    };
+
+  const checkDuplicate = useCallback(async (name: string) => {
+    if (name.trim().length < 3) { setDuplicateWarning(null); return; }
+    try {
+      const results = await productService.searchProducts(name.trim(), 5);
+      const match = results.find(p => p.name.trim().toLowerCase() === name.trim().toLowerCase());
+      if (match) {
+        setDuplicateWarning(`"${match.name}" already exists in inventory (SKU: ${match.sku}). You may be adding a duplicate.`);
+      } else {
+        setDuplicateWarning(null);
+      }
+    } catch {
+      setDuplicateWarning(null);
+    }
+  }, []);
 
   const autoSKU = () => {
     if (!form.name) return;
@@ -454,7 +518,7 @@ export default function MobileAddProduct() {
         stock: Number(form.stock),
         minStockLevel: Number(form.minStockLevel) || 1,
         category: form.category || undefined,
-        material: form.material,
+        material: combineMaterial(form.material, form.carat),
         description: form.description.trim() || undefined,
         weight: form.weight ? Number(form.weight) : undefined,
       };
@@ -475,7 +539,7 @@ export default function MobileAddProduct() {
       setAddedCount(c => c + 1);
       setSuccessFlash(true);
       setTimeout(() => setSuccessFlash(false), 1800);
-      setForm(f => ({ ...emptyForm, material: f.material, condition: f.condition, category: f.category, brand: f.brand }));
+      setForm(f => ({ ...emptyForm, material: f.material, carat: f.carat, condition: f.condition, category: f.category, brand: f.brand }));
       setPhotoFile(null);
       setPhotoPreview(null);
     } catch (err: any) {
@@ -517,6 +581,7 @@ export default function MobileAddProduct() {
     setEditPhotoPreview(null);
     setEditError(null);
     setEditSuccess(false);
+    const { baseMaterial, carat } = parseMaterial(product.material ?? 'YELLOW_GOLD');
     setEditForm({
       name: product.name ?? '',
       sku: product.sku ?? '',
@@ -526,7 +591,8 @@ export default function MobileAddProduct() {
       stock: product.stock != null ? String(product.stock) : '',
       minStockLevel: product.minStockLevel != null ? String(product.minStockLevel) : '1',
       category: product.category ?? '',
-      material: product.material ?? 'GOLD',
+      material: baseMaterial,
+      carat,
       condition: (product as any).condition ?? 'BRAND_NEW',
       description: product.description ?? '',
       brand: product.supplierName ?? '',
@@ -550,8 +616,8 @@ export default function MobileAddProduct() {
         cost: Number(editForm.cost) || 0,
         stock: Number(editForm.stock) || 0,
         minStockLevel: Number(editForm.minStockLevel) || 1,
-        category: editForm.category || undefined,   // empty string → don't send → Prisma won't touch categoryId
-        material: editForm.material,
+        category: editForm.category || undefined,
+        material: combineMaterial(editForm.material, editForm.carat),
         description: editForm.description.trim() || undefined,
         weight: editForm.weight ? Number(editForm.weight) : undefined,
         ...(editForm.condition ? { condition: editForm.condition } as any : {}),
@@ -676,6 +742,12 @@ export default function MobileAddProduct() {
         <form onSubmit={handleSubmit} className="flex-1 px-4 py-5 space-y-5 pb-32">
           {addError && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">{addError}</div>
+          )}
+          {duplicateWarning && (
+            <div className="bg-amber-50 border border-amber-300 text-amber-800 text-sm px-4 py-3 rounded-xl flex items-start gap-2">
+              <span className="text-amber-500 mt-0.5 flex-shrink-0">⚠</span>
+              <span>{duplicateWarning}</span>
+            </div>
           )}
           <PhotoSection
             preview={photoPreview}

@@ -21,6 +21,7 @@ export interface InventoryItemProps {
   quantity: number;
   threshold: number;
   imageUrl?: string;
+  isDuplicate?: boolean;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   className?: string;
@@ -36,6 +37,7 @@ const InventoryItem: React.FC<InventoryItemProps> = ({
   quantity,
   threshold,
   imageUrl,
+  isDuplicate,
   onEdit,
   onDelete,
   className
@@ -52,7 +54,7 @@ const InventoryItem: React.FC<InventoryItemProps> = ({
   const profitMargin = ((profit / price) * 100).toFixed(0);
 
   return (
-    <Card className={`overflow-hidden h-full ${className || 'bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg border border-gray-100 rounded-xl shadow-sm'}`}>
+    <Card className={`overflow-hidden h-full ${isDuplicate ? 'ring-2 ring-amber-400 border-amber-300' : ''} ${className || 'bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg border border-gray-100 rounded-xl shadow-sm'}`}>
       <CardContent className="p-3">
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-2">
@@ -74,11 +76,18 @@ const InventoryItem: React.FC<InventoryItemProps> = ({
               <Badge variant="outline" className="text-xs py-0 h-5 mt-1 rounded-full border-gray-200 text-gray-600">{category}</Badge>
             </div>
           </div>
-          <Badge 
-            className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${stockStatus.color}`}
-          >
-            {stockStatus.label}
-          </Badge>
+          <div className="flex flex-col items-end gap-1">
+            <Badge
+              className={`rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${stockStatus.color}`}
+            >
+              {stockStatus.label}
+            </Badge>
+            {isDuplicate && (
+              <Badge className="rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 whitespace-nowrap">
+                Duplicate
+              </Badge>
+            )}
+          </div>
         </div>
         
         <div className="grid grid-cols-2 gap-2 mt-3 bg-gray-50/50 p-2 rounded-lg">

@@ -95,7 +95,23 @@ const InventoryPage = () => {
     return () => clearInterval(t);
   }, [isQRModalOpen]);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
-  const [quickFilter, setQuickFilter] = useState<'lowStock' | 'outOfStock' | null>(null);
+  const [quickFilter, setQuickFilter] = useState<'lowStock' | 'outOfStock' | 'duplicates' | null>(null);
+
+  // Compute which product IDs are duplicates (same normalised name)
+  const duplicateIds = React.useMemo(() => {
+    const nameMap = new Map<string, string[]>();
+    for (const item of inventory) {
+      const key = item.name.trim().toLowerCase();
+      const group = nameMap.get(key) ?? [];
+      group.push(item.id);
+      nameMap.set(key, group);
+    }
+    const ids = new Set<string>();
+    for (const group of nameMap.values()) {
+      if (group.length > 1) group.forEach(id => ids.add(id));
+    }
+    return ids;
+  }, [inventory]);
   const { toast } = useToast();
   
   // Set isLoaded to true after component mounts to prevent initial render issues
@@ -105,7 +121,7 @@ const InventoryPage = () => {
   }, []);
 
   // Apply search and filters to inventory
-  const applyFilters = (searchTerm: string, filters?: any, activeQuickFilter?: 'lowStock' | 'outOfStock' | null) => {
+  const applyFilters = (searchTerm: string, filters?: any, activeQuickFilter?: 'lowStock' | 'outOfStock' | 'duplicates' | null) => {
     let result = [...inventory];
 
     // Apply search
@@ -119,12 +135,14 @@ const InventoryPage = () => {
       );
     }
 
-    // Apply quick filter (Low Stock or Out of Stock button clicks)
+    // Apply quick filter (Low Stock, Out of Stock, or Duplicates button clicks)
     const currentQuickFilter = activeQuickFilter !== undefined ? activeQuickFilter : quickFilter;
     if (currentQuickFilter === 'lowStock') {
       result = result.filter(item => item.quantity > 0 && item.quantity <= item.threshold);
     } else if (currentQuickFilter === 'outOfStock') {
       result = result.filter(item => item.quantity <= 0);
+    } else if (currentQuickFilter === 'duplicates') {
+      result = result.filter(item => duplicateIds.has(item.id));
     }
 
     // Apply filters if provided
@@ -680,6 +698,25 @@ const InventoryPage = () => {
           </div>
         </div>
 
+        {/* Duplicate products banner */}
+        {duplicateIds.size > 0 && (
+          <button
+            type="button"
+            onClick={() => handleQuickFilter(quickFilter === 'duplicates' ? null : 'duplicates')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-all ${
+              quickFilter === 'duplicates'
+                ? 'bg-amber-50 border-amber-400 text-amber-800 ring-2 ring-amber-400'
+                : 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
+            }`}
+          >
+            <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-500" />
+            <span>
+              <strong>{duplicateIds.size}</strong> duplicate product{duplicateIds.size !== 1 ? 's' : ''} detected — products with the same name exist more than once.
+              {quickFilter === 'duplicates' ? ' Click to clear filter.' : ' Click to review.'}
+            </span>
+          </button>
+        )}
+
         {/* Search and filters section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div className="relative w-full md:w-80">
@@ -989,6 +1026,7 @@ const InventoryPage = () => {
                   quantity={item.quantity}
                   threshold={item.threshold}
                   imageUrl={item.imageUrl}
+                  isDuplicate={duplicateIds.has(item.id)}
                   onEdit={handleEditItem}
                   onDelete={handleDeleteItem}
                   className="bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-all duration-200"
@@ -1026,10 +1064,17 @@ const InventoryPage = () => {
                     return (
                       <TableRow
                         key={item.id}
-                        className="cursor-pointer hover:bg-navy/5 transition-colors"
+                        className={`cursor-pointer transition-colors ${duplicateIds.has(item.id) ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-navy/5'}`}
                         onClick={() => handleEditItem(item.id)}
                       >
-                        <TableCell className="font-medium text-navy">{item.name}</TableCell>
+                        <TableCell className="font-medium text-navy">
+                          <div className="flex items-center gap-2">
+                            {item.name}
+                            {duplicateIds.has(item.id) && (
+                              <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Duplicate</span>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-sm text-gray-600">{item.sku}</TableCell>
                         <TableCell className="text-sm text-gray-600">{(item as any).categoryName || item.category}</TableCell>
                         <TableCell className="text-sm text-gray-600">
