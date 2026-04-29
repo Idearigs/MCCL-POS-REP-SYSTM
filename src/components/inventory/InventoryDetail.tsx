@@ -19,18 +19,62 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { X, Upload, Image as ImageIcon, Plus, Trash2 } from "lucide-react";
+import { X, Upload, Image as ImageIcon, Plus, Trash2, Shuffle } from "lucide-react";
 import { cn, normalizeImageUrl } from "@/lib/utils";
 import { productService } from "@/services/productService";
 import { useAuth } from "@/contexts/AuthContext";
 
 const WATCH_BRANDS = ['Rosefeild', 'Roamer', 'Briston', 'Festina', 'Secondhand watches'];
 
+const MATERIALS = [
+  'YELLOW_GOLD', 'WHITE_GOLD', 'ROSE_GOLD',
+  'SILVER', 'PLATINUM', 'DIAMOND',
+  'PEARL', 'GEMSTONE', 'STAINLESS_STEEL', 'OTHER',
+];
+const GOLD_TYPES = new Set(['YELLOW_GOLD', 'WHITE_GOLD', 'ROSE_GOLD']);
+const GOLD_CARATS = ['9CT', '14CT', '18CT', '22CT', '24CT'];
+const MATERIAL_LABELS: Record<string, string> = {
+  YELLOW_GOLD: 'Yellow Gold', WHITE_GOLD: 'White Gold', ROSE_GOLD: 'Rose Gold',
+  GOLD: 'Gold', SILVER: 'Silver', PLATINUM: 'Platinum', DIAMOND: 'Diamond',
+  PEARL: 'Pearl', GEMSTONE: 'Gemstone', STAINLESS_STEEL: 'Stainless Steel', OTHER: 'Other',
+};
+const CARAT_LABELS: Record<string, string> = {
+  '9CT': '9ct', '14CT': '14ct', '18CT': '18ct', '22CT': '22ct', '24CT': '24ct',
+};
+
+function parseMaterial(raw: string): { base: string; carat: string } {
+  for (const base of ['YELLOW_GOLD', 'WHITE_GOLD', 'ROSE_GOLD']) {
+    for (const ct of GOLD_CARATS) {
+      if (raw === `${base}_${ct}`) return { base, carat: ct };
+    }
+    if (raw === base) return { base, carat: '' };
+  }
+  if (raw === 'GOLD') return { base: 'YELLOW_GOLD', carat: '' };
+  return { base: raw || 'YELLOW_GOLD', carat: '' };
+}
+
+function combineMaterial(base: string, carat: string): string {
+  if (GOLD_TYPES.has(base) && carat) return `${base}_${carat}`;
+  return base;
+}
+
+function generateSKU(name: string, material: string): string {
+  const prefix = material.startsWith('YELLOW_GOLD') ? 'YGD'
+    : material.startsWith('WHITE_GOLD') ? 'WGD'
+    : material.startsWith('ROSE_GOLD') ? 'RGD'
+    : material === 'OTHER' ? 'JWL'
+    : material.slice(0, 3);
+  const nameCode = name.replace(/\s+/g, '-').toUpperCase().slice(0, 8);
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${prefix}-${nameCode}-${rand}`;
+}
+
 export interface InventoryItemDetails {
   id: string;
   name: string;
   category: string;
   condition?: string;
+  material?: string;
   sku: string;
   rfidTag?: string;
   description: string;
@@ -94,6 +138,10 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Material state — parsed from stored value like "WHITE_GOLD_18CT"
+  const [baseMaterial, setBaseMaterial] = useState('YELLOW_GOLD');
+  const [carat, setCarat] = useState('');
+
   // Show watch brand picker whenever the selected category name contains "watch"
   const selectedCategoryName = categories.find(c => c.id === editedItem.category)?.name || '';
   const isWatchCategory = selectedCategoryName.toLowerCase().includes('watch');
@@ -107,25 +155,22 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
 
   useEffect(() => {
     if (item) {
-      console.log('📦 InventoryDetail received item:', item);
-      console.log('🖼️  Images:', { imageUrl: item.imageUrl, additionalImages: item.additionalImages });
-      console.log('🏢 Supplier:', item.supplier);
-
       setEditedItem(item);
-      // Reset preview URLs when item changes — normalize Google Drive URLs for display
+      const { base, carat: ct } = parseMaterial((item as any).material ?? '');
+      setBaseMaterial(base);
+      setCarat(ct);
+
       const urls: string[] = [];
       if (item.imageUrl) urls.push(normalizeImageUrl(item.imageUrl) || item.imageUrl);
       if (item.additionalImages) urls.push(...item.additionalImages.map(u => normalizeImageUrl(u) || u));
       setPreviewUrls(urls);
-
-      // IMPORTANT: Reset imageFiles when loading existing item (only URLs from DB, no File objects to upload)
       setImageFiles([]);
-
-      console.log('✅ Preview URLs set:', urls);
     } else if (isNew) {
       setEditedItem(defaultItem);
+      setBaseMaterial('YELLOW_GOLD');
+      setCarat('');
       setPreviewUrls([]);
-      setImageFiles([]);  // Also reset for new items
+      setImageFiles([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item, isNew]);
@@ -229,16 +274,11 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
   };
   
   const handleSave = async () => {
-    // Ensure at least one image is uploaded
     if (previewUrls.length === 0 && isNew) {
       alert('Please upload at least one image');
       return;
     }
-
-    console.log('💾 Saving item with image files:', imageFiles);
-
-    // Call onSave and pass the actual image files for upload
-    onSave(editedItem, imageFiles);
+    onSave({ ...editedItem, material: combineMaterial(baseMaterial, carat) } as any, imageFiles);
   };
 
   return (
@@ -278,7 +318,7 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="condition">Product Condition</Label>
+              <Label htmlFor="condition">Condition</Label>
               <Select
                 value={editedItem.condition || 'BRAND_NEW'}
                 onValueChange={(value) => handleSelectChange('condition', value)}
@@ -292,32 +332,87 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2"></div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="sku">SKU</Label>
-              <Input
-                id="sku"
-                name="sku"
-                value={editedItem.sku}
-                onChange={handleChange}
-                placeholder="e.g., JWL-RING-001"
-                required
-              />
+              <div className="flex gap-1">
+                <Input
+                  id="sku"
+                  name="sku"
+                  value={editedItem.sku}
+                  onChange={handleChange}
+                  placeholder="e.g., JWL-RING-001"
+                  className="font-mono"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title="Auto-generate SKU"
+                  onClick={() => {
+                    if (!editedItem.name) return;
+                    setEditedItem(prev => ({ ...prev, sku: generateSKU(prev.name, combineMaterial(baseMaterial, carat)) }));
+                  }}
+                >
+                  <Shuffle className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="rfidTag">RFID Tag</Label>
-              <Input
-                id="rfidTag"
-                name="rfidTag"
-                value={editedItem.rfidTag || ''}
-                onChange={handleChange}
-                placeholder="e.g., E2801170000002010DC90E8F"
-              />
-              <p className="text-xs text-gray-500">Optional: For fast inventory scanning</p>
+          </div>
+
+          {/* Material */}
+          <div className="space-y-2">
+            <Label>Material</Label>
+            <div className="flex flex-wrap gap-2">
+              {MATERIALS.map(m => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setBaseMaterial(m);
+                    if (!GOLD_TYPES.has(m)) setCarat('');
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                    baseMaterial === m
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-400 hover:text-indigo-600'
+                  }`}
+                >
+                  {MATERIAL_LABELS[m]}
+                </button>
+              ))}
             </div>
+            {GOLD_TYPES.has(baseMaterial) && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <span className="text-xs text-gray-500 self-center font-medium">Carat:</span>
+                {GOLD_CARATS.map(ct => (
+                  <button
+                    key={ct}
+                    type="button"
+                    onClick={() => setCarat(prev => prev === ct ? '' : ct)}
+                    className={`px-3 py-1 rounded-full text-sm font-medium border transition-colors ${
+                      carat === ct
+                        ? 'bg-amber-500 text-white border-amber-500'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-amber-400 hover:text-amber-600'
+                    }`}
+                  >
+                    {CARAT_LABELS[ct]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="rfidTag">RFID Tag</Label>
+            <Input
+              id="rfidTag"
+              name="rfidTag"
+              value={editedItem.rfidTag || ''}
+              onChange={handleChange}
+              placeholder="e.g., E2801170000002010DC90E8F"
+            />
+            <p className="text-xs text-gray-500">Optional: For fast inventory scanning</p>
           </div>
 
           {/* Watch Brand — visible when Watch category is selected */}
@@ -371,7 +466,7 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
           
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="price">Price ($)</Label>
+              <Label htmlFor="price">Price (£)</Label>
               <Input
                 id="price"
                 name="price"
@@ -383,7 +478,7 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cost">Cost ($)</Label>
+              <Label htmlFor="cost">Cost (£)</Label>
               <Input
                 id="cost"
                 name="cost"

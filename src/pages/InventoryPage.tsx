@@ -97,17 +97,19 @@ const InventoryPage = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [quickFilter, setQuickFilter] = useState<'lowStock' | 'outOfStock' | 'duplicates' | null>(null);
 
-  // Compute which product IDs are duplicates (same normalised name)
+  // Compute duplicate IDs — same SKU means the same product was added more than once.
+  // Different SKU = different product even if the name is the same (e.g. same ring in 9ct vs 18ct).
   const duplicateIds = React.useMemo(() => {
-    const nameMap = new Map<string, string[]>();
+    const skuMap = new Map<string, string[]>();
     for (const item of inventory) {
-      const key = item.name.trim().toLowerCase();
-      const group = nameMap.get(key) ?? [];
+      const key = item.sku?.trim().toLowerCase();
+      if (!key) continue;
+      const group = skuMap.get(key) ?? [];
       group.push(item.id);
-      nameMap.set(key, group);
+      skuMap.set(key, group);
     }
     const ids = new Set<string>();
-    for (const group of nameMap.values()) {
+    for (const group of skuMap.values()) {
       if (group.length > 1) group.forEach(id => ids.add(id));
     }
     return ids;
