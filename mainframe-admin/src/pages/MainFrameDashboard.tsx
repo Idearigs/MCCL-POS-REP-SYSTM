@@ -1305,16 +1305,13 @@ const MainFrameDashboard: React.FC = () => {
                               </div>
                             </div>
                           </div>
-                        </div>
-                      )}
-
                           {/* Beta testing card */}
                           {(() => {
                             const betaDaysLeft = betaExpiry
                               ? Math.ceil((new Date(betaExpiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
                               : null;
                             return (
-                              <div className="rounded-2xl overflow-hidden mt-4" style={{ background: 'rgba(255,159,10,0.06)', border: '1px solid rgba(255,159,10,0.2)' }}>
+                              <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,159,10,0.06)', border: '1px solid rgba(255,159,10,0.2)' }}>
                                 <div className="flex items-center gap-2 px-5 py-3" style={{ background: 'rgba(255,159,10,0.1)', borderBottom: '1px solid rgba(255,159,10,0.15)' }}>
                                   <Zap className="w-3.5 h-3.5" style={{ color: '#FF9F0A' }} />
                                   <p className="text-xs font-bold tracking-wider uppercase" style={{ color: '#FF9F0A' }}>Beta Testing Access</p>

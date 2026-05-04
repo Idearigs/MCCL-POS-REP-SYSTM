@@ -23,7 +23,7 @@ async function main() {
       lastName: 'Admin',
       email: EMAIL,
       passwordHash: hashPassword(PASSWORD),
-      role: 'superadmin',
+      role: 'SYSTEM_ARCHITECT' as any,
     },
   });
 

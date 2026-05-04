@@ -13,7 +13,10 @@ import {
 } from './dto/attendance.dto';
 
 // ── UK Bank Holidays (England & Wales) ────────────────────────────────────────
-const BANK_HOLIDAYS_DATA: Record<number, Array<{ name: string; date: string }>> = {
+const BANK_HOLIDAYS_DATA: Record<
+  number,
+  Array<{ name: string; date: string }>
+> = {
   2024: [
     { name: "New Year's Day", date: '2024-01-01' },
     { name: 'Good Friday', date: '2024-03-29' },

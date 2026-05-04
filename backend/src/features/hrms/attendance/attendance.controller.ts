@@ -14,10 +14,7 @@ import {
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../features/auth/guards/jwt-auth.guard';
 import { AttendanceService } from './attendance.service';
-import {
-  BulkUpsertEntriesDto,
-  RejectTimesheetDto,
-} from './dto/attendance.dto';
+import { BulkUpsertEntriesDto, RejectTimesheetDto } from './dto/attendance.dto';
 
 @ApiTags('HRMS - Attendance')
 @ApiBearerAuth('access-token')
@@ -45,11 +42,17 @@ export class AttendanceController {
     @Request() req: any,
   ) {
     const ws = weekStart || new Date().toISOString().split('T')[0];
-    return this.attendanceService.getOrCreateTimesheet(employeeId, ws, req.user.tenantId);
+    return this.attendanceService.getOrCreateTimesheet(
+      employeeId,
+      ws,
+      req.user.tenantId,
+    );
   }
 
   @Post('timesheets/:employeeId/entries')
-  @ApiOperation({ summary: 'Save all entries for an employee week (bulk upsert)' })
+  @ApiOperation({
+    summary: 'Save all entries for an employee week (bulk upsert)',
+  })
   bulkUpsert(
     @Param('employeeId') employeeId: string,
     @Query('weekStart') weekStart: string,
@@ -57,7 +60,12 @@ export class AttendanceController {
     @Request() req: any,
   ) {
     const ws = weekStart || new Date().toISOString().split('T')[0];
-    return this.attendanceService.bulkUpsertEntries(employeeId, ws, dto, req.user.tenantId);
+    return this.attendanceService.bulkUpsertEntries(
+      employeeId,
+      ws,
+      dto,
+      req.user.tenantId,
+    );
   }
 
   @Delete('timesheets/:timesheetId/entries/:entryDate')
@@ -68,7 +76,11 @@ export class AttendanceController {
     @Param('entryDate') entryDate: string,
     @Request() req: any,
   ) {
-    return this.attendanceService.deleteEntry(timesheetId, entryDate, req.user.tenantId);
+    return this.attendanceService.deleteEntry(
+      timesheetId,
+      entryDate,
+      req.user.tenantId,
+    );
   }
 
   @Post('timesheets/:id/submit')
@@ -80,12 +92,20 @@ export class AttendanceController {
   @Post('timesheets/:id/approve')
   @ApiOperation({ summary: 'Approve a submitted timesheet' })
   approve(@Param('id') id: string, @Request() req: any) {
-    return this.attendanceService.approveTimesheet(id, req.user.sub, req.user.tenantId);
+    return this.attendanceService.approveTimesheet(
+      id,
+      req.user.sub,
+      req.user.tenantId,
+    );
   }
 
   @Post('timesheets/:id/reject')
   @ApiOperation({ summary: 'Reject a submitted timesheet' })
-  reject(@Param('id') id: string, @Body() dto: RejectTimesheetDto, @Request() req: any) {
+  reject(
+    @Param('id') id: string,
+    @Body() dto: RejectTimesheetDto,
+    @Request() req: any,
+  ) {
     return this.attendanceService.rejectTimesheet(id, dto, req.user.tenantId);
   }
 
@@ -94,13 +114,19 @@ export class AttendanceController {
   @Get('wtd/:employeeId')
   @ApiOperation({ summary: 'Get WTD 17-week rolling average for employee' })
   getWtd(@Param('employeeId') employeeId: string, @Request() req: any) {
-    return this.attendanceService.calculateWtdAverage(employeeId, req.user.tenantId);
+    return this.attendanceService.calculateWtdAverage(
+      employeeId,
+      req.user.tenantId,
+    );
   }
 
   @Get('zero-hours/:employeeId')
   @ApiOperation({ summary: 'Get zero-hours holiday accrual (12.07% of hours)' })
   getZeroHours(@Param('employeeId') employeeId: string, @Request() req: any) {
-    return this.attendanceService.calculateZeroHoursHoliday(employeeId, req.user.tenantId);
+    return this.attendanceService.calculateZeroHoursHoliday(
+      employeeId,
+      req.user.tenantId,
+    );
   }
 
   // ─── Bank Holidays ────────────────────────────────────────────────────────
