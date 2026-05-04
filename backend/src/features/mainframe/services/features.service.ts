@@ -29,7 +29,7 @@ export class FeaturesService {
    *  expects the subdomain, so we resolve it from the tenants table first. */
   async getTenantFeatures(
     tenantIdOrSubdomain: string,
-  ): Promise<{ features: string[]; _source?: string }> {
+  ): Promise<{ features: string[]; _source?: string; betaExpiresAt?: string | null; isBetaTester?: boolean }> {
     // Resolve the real subdomain — look up the tenant by its internal ID first.
     // If not found (already a subdomain), use the value as-is.
     let subdomain = tenantIdOrSubdomain;
@@ -45,7 +45,7 @@ export class FeaturesService {
 
     const url = `${this.mainframeUrl}/mainframe/tenant-features/${subdomain}`;
     try {
-      const { data } = await axios.get<{ features: string[] }>(url, {
+      const { data } = await axios.get<{ features: string[]; betaExpiresAt?: string | null; isBetaTester?: boolean }>(url, {
         headers: { ...buildHmacHeaders('') },
         timeout: 5000,
       });

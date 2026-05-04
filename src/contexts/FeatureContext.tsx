@@ -38,6 +38,8 @@ interface FeatureContextType {
   hasFeature: (key: string) => boolean;
   loading: boolean;
   reload: () => void;
+  betaExpiresAt: string | null;
+  isBetaTester: boolean;
 }
 
 const FeatureContext = createContext<FeatureContextType>({
@@ -45,6 +47,8 @@ const FeatureContext = createContext<FeatureContextType>({
   hasFeature: (key: string) => CORE_FEATURES.has(key),
   loading: true,
   reload: () => {},
+  betaExpiresAt: null,
+  isBetaTester: false,
 });
 
 export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -52,6 +56,8 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [enabledFeatures, setEnabledFeatures] = useState<string[]>(() => readCache() ?? []);
   const [loading, setLoading] = useState(true);
   const [everLoaded, setEverLoaded] = useState(() => readCache() !== null);
+  const [betaExpiresAt, setBetaExpiresAt] = useState<string | null>(null);
+  const [isBetaTester, setIsBetaTester] = useState(false);
 
   const load = useCallback(async () => {
     const token = localStorage.getItem('accessToken');
@@ -65,11 +71,13 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setLoading(true);
     try {
-      const data = await apiClient.get<{ features: string[] }>('/mainframe/features/tenant-features');
+      const data = await apiClient.get<{ features: string[]; betaExpiresAt?: string | null; isBetaTester?: boolean }>('/mainframe/features/tenant-features');
       const features = data.features || [];
       setEnabledFeatures(features);
       writeCache(features);
       setEverLoaded(true);
+      setBetaExpiresAt(data.betaExpiresAt ?? null);
+      setIsBetaTester(data.isBetaTester ?? false);
     } catch {
       // On error: keep whatever we had (cache or previous load).
       // Do NOT fall back to "all features enabled" — that bypasses restrictions.
@@ -98,7 +106,7 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [enabledFeatures, loading, everLoaded]);
 
   return (
-    <FeatureContext.Provider value={{ enabledFeatures, hasFeature, loading, reload: load }}>
+    <FeatureContext.Provider value={{ enabledFeatures, hasFeature, loading, reload: load, betaExpiresAt, isBetaTester }}>
       {children}
     </FeatureContext.Provider>
   );

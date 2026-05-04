@@ -24,6 +24,7 @@ export interface UserPermissions {
   subscription?: boolean;
   mainframe?: boolean;
   financial_intelligence?: boolean;
+  hrms?: boolean;
 }
 
 export interface User {

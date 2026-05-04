@@ -125,7 +125,7 @@ router.post('/', requireAuth, async (req, res) => {
         lastName,
         email: email.toLowerCase(),
         passwordHash: hashPassword(password),
-        role: role || 'admin',
+        role: role || 'SOFTWARE_DEVELOPER',
       },
       select: {
         id: true,

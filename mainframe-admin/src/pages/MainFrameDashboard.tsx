@@ -298,6 +298,7 @@ interface Tenant {
   contact?: { firstName: string; lastName: string; email: string; phone?: string };
   subscription?: { plan: string; basePrice: number; billingCycle?: string; currentUsers: number; nextBillingDate: string };
   users?: any[]; _count?: { customerUsers: number };
+  isAlphaTester?: boolean; isBetaTester?: boolean; betaExpiresAt?: string | null;
 }
 interface Feature {
   id: string; featureKey: string; featureName: string; description?: string;
@@ -353,6 +354,14 @@ const MainFrameDashboard: React.FC = () => {
   const [tenantActivity, setTenantActivity] = useState<any[]>([]);
   const [tenantFeatures, setTenantFeatures] = useState<TenantFeature[]>([]);
   const [savingFeatures, setSavingFeatures] = useState(false);
+  const [betaExpiring, setBetaExpiring] = useState<any[]>([]);
+  const [betaBannerDismissed, setBetaBannerDismissed] = useState(false);
+
+  // Beta testing card local state (reset when selectedTenant changes)
+  const [betaEnabled, setBetaEnabled] = useState(false);
+  const [alphaEnabled, setAlphaEnabled] = useState(false);
+  const [betaExpiry, setBetaExpiry] = useState('');
+  const [savingBeta, setSavingBeta] = useState(false);
 
   // Subscription offer form
   const defaultOffer = {
@@ -433,6 +442,9 @@ const MainFrameDashboard: React.FC = () => {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    customerProfilesApi.getBetaExpiring().then(r => setBetaExpiring(r.data || [])).catch(() => {});
+  }, []);
 
   // ── Navigation ──────────────────────────────────────────────────────────────
   const navigate = (view: View) => {
@@ -445,10 +457,15 @@ const MainFrameDashboard: React.FC = () => {
   const openTenant = async (t: Tenant) => {
     try {
       const r = await customerProfilesApi.getById(t.id);
-      setSelectedTenant(r.data);
+      const profile = r.data;
+      setSelectedTenant(profile);
       setTenantTab('info');
       setTenantUsers([]); setTenantInvoices([]); setTenantActivity([]); setTenantFeatures([]);
       setPasswordHistoryMap({}); setExpandedHistory({});
+      // Reset beta card state from freshly loaded profile
+      setBetaEnabled(profile.isBetaTester ?? false);
+      setAlphaEnabled(profile.isAlphaTester ?? false);
+      setBetaExpiry(profile.betaExpiresAt ? new Date(profile.betaExpiresAt).toISOString().split('T')[0] : '');
     } catch { toast.error('Failed to load tenant'); }
   };
 
@@ -539,6 +556,18 @@ const MainFrameDashboard: React.FC = () => {
       const hint = e.response?.data?.hint || '';
       toast.error(msg + (hint ? ` — ${hint}` : ''));
     }
+  };
+
+  // ── Tester flags ────────────────────────────────────────────────────────────
+  const saveTesterFlags = async (id: string, flags: { isAlphaTester?: boolean; isBetaTester?: boolean; betaExpiresAt?: string | null }) => {
+    try {
+      const r = await customerProfilesApi.updateTesterFlags(id, flags);
+      setSelectedTenant(prev => prev ? { ...prev, ...flags } : null);
+      setTenants(prev => prev.map(t => t.id === id ? { ...t, ...flags } : t));
+      customerProfilesApi.getBetaExpiring().then(res => setBetaExpiring(res.data || [])).catch(() => {});
+      toast.success('Beta testing settings saved');
+      return r.data;
+    } catch { toast.error('Failed to save tester flags'); }
   };
 
   // ── Users ───────────────────────────────────────────────────────────────────
@@ -913,6 +942,20 @@ const MainFrameDashboard: React.FC = () => {
           })}
         </nav>
 
+        {/* Dev Portal link */}
+        <div className="px-3 py-2">
+          <div className="h-px mb-2" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          <motion.button
+            whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+            onClick={() => { window.location.href = '/dev-portal'; }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium"
+            style={{ background: 'rgba(88,86,214,0.15)', color: '#A78BFA' }}
+          >
+            <Zap className="w-4 h-4 flex-shrink-0" />
+            Developer Portal
+          </motion.button>
+        </div>
+
         {/* User */}
         <div className="p-4 mt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex items-center gap-2.5 mb-3 px-1">
@@ -1262,6 +1305,85 @@ const MainFrameDashboard: React.FC = () => {
                               </div>
                             </div>
                           </div>
+                        </div>
+                      )}
+
+                          {/* Beta testing card */}
+                          {(() => {
+                            const betaDaysLeft = betaExpiry
+                              ? Math.ceil((new Date(betaExpiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                              : null;
+                            return (
+                              <div className="rounded-2xl overflow-hidden mt-4" style={{ background: 'rgba(255,159,10,0.06)', border: '1px solid rgba(255,159,10,0.2)' }}>
+                                <div className="flex items-center gap-2 px-5 py-3" style={{ background: 'rgba(255,159,10,0.1)', borderBottom: '1px solid rgba(255,159,10,0.15)' }}>
+                                  <Zap className="w-3.5 h-3.5" style={{ color: '#FF9F0A' }} />
+                                  <p className="text-xs font-bold tracking-wider uppercase" style={{ color: '#FF9F0A' }}>Beta Testing Access</p>
+                                  {betaEnabled && betaDaysLeft !== null && (
+                                    <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                                      style={{ background: betaDaysLeft <= 7 ? 'rgba(255,59,48,0.2)' : 'rgba(255,159,10,0.18)', color: betaDaysLeft <= 7 ? '#FF6B6B' : '#FF9F0A', border: `1px solid ${betaDaysLeft <= 7 ? 'rgba(255,59,48,0.3)' : 'rgba(255,159,10,0.3)'}` }}>
+                                      {betaDaysLeft <= 0 ? 'Expired' : `${betaDaysLeft}d remaining`}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="p-5 space-y-4">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>Beta Tester</p>
+                                      <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>Access BETA features before GA release</p>
+                                    </div>
+                                    <button onClick={() => setBetaEnabled(v => !v)}
+                                      className="transition-colors"
+                                      style={{ color: betaEnabled ? '#FF9F0A' : 'rgba(255,255,255,0.2)' }}>
+                                      {betaEnabled ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
+                                    </button>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>Alpha Tester</p>
+                                      <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>Access ALPHA features (internal only)</p>
+                                    </div>
+                                    <button onClick={() => setAlphaEnabled(v => !v)}
+                                      className="transition-colors"
+                                      style={{ color: alphaEnabled ? '#5856D6' : 'rgba(255,255,255,0.2)' }}>
+                                      {alphaEnabled ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
+                                    </button>
+                                  </div>
+                                  {betaEnabled && (
+                                    <div>
+                                      <p className="text-[11px] mb-1.5 font-semibold" style={{ color: 'rgba(255,255,255,0.4)' }}>Beta access expires</p>
+                                      <input
+                                        type="date"
+                                        value={betaExpiry}
+                                        onChange={e => setBetaExpiry(e.target.value)}
+                                        className="w-full px-3 py-2 rounded-xl text-sm font-medium"
+                                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.85)', outline: 'none' }}
+                                      />
+                                      {betaExpiry && betaDaysLeft !== null && betaDaysLeft <= 7 && (
+                                        <p className="text-xs mt-1.5" style={{ color: '#FF6B6B' }}>
+                                          ⚠ {betaDaysLeft <= 0 ? 'Beta access has expired — client should be moved to a paid subscription.' : `Beta expires in ${betaDaysLeft} day${betaDaysLeft !== 1 ? 's' : ''} — prompt client to purchase a subscription.`}
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                  <button
+                                    disabled={savingBeta}
+                                    onClick={async () => {
+                                      setSavingBeta(true);
+                                      await saveTesterFlags(selectedTenant.id, {
+                                        isBetaTester: betaEnabled,
+                                        isAlphaTester: alphaEnabled,
+                                        betaExpiresAt: betaEnabled && betaExpiry ? betaExpiry : null,
+                                      });
+                                      setSavingBeta(false);
+                                    }}
+                                    className="w-full py-2 rounded-xl text-sm font-semibold transition-opacity"
+                                    style={{ background: 'rgba(255,159,10,0.2)', color: '#FF9F0A', border: '1px solid rgba(255,159,10,0.3)', opacity: savingBeta ? 0.5 : 1 }}>
+                                    {savingBeta ? 'Saving…' : 'Save Beta Settings'}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
 
@@ -2139,6 +2261,45 @@ const MainFrameDashboard: React.FC = () => {
               {/* ── Overview ────────────────────────────────────────────── */}
               {activeView === 'overview' && (
                 <div className="space-y-6">
+                  {/* Beta-expiring alert banner */}
+                  {!betaBannerDismissed && betaExpiring.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={spring}
+                      className="rounded-2xl p-4 flex items-start gap-4"
+                      style={{ background: 'linear-gradient(135deg, rgba(255,159,10,0.15) 0%, rgba(255,107,53,0.12) 100%)', border: '1px solid rgba(255,159,10,0.35)' }}>
+                      <div className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center" style={{ background: 'rgba(255,159,10,0.2)' }}>
+                        <Clock className="w-4.5 h-4.5" style={{ color: '#FF9F0A' }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm mb-1" style={{ color: '#FF9F0A' }}>
+                          {betaExpiring.length} client{betaExpiring.length > 1 ? 's' : ''} with expiring beta access
+                        </p>
+                        <div className="space-y-1">
+                          {betaExpiring.map((c: any) => {
+                            const exp = new Date(c.betaExpiresAt);
+                            const daysLeft = Math.ceil((exp.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                            return (
+                              <p key={c.id} className="text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                                <span className="font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>{c.businessName}</span>
+                                {' — '}
+                                {daysLeft <= 0 ? <span style={{ color: '#FF6B6B' }}>Expired {Math.abs(daysLeft)} days ago</span>
+                                  : <span>Expires in <span style={{ color: '#FF9F0A' }}>{daysLeft} day{daysLeft !== 1 ? 's' : ''}</span> ({exp.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })})</span>}
+                                {' — '}
+                                <button className="underline hover:no-underline" style={{ color: '#60A5FA' }}
+                                  onClick={() => { const t = tenants.find(x => x.id === c.id); if (t) openTenant(t); }}>
+                                  View client
+                                </button>
+                              </p>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <button onClick={() => setBetaBannerDismissed(true)} className="flex-shrink-0 transition-opacity hover:opacity-70" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                        <X className="w-4 h-4" />
+                      </button>
+                    </motion.div>
+                  )}
+
                   {/* Stat cards */}
                   {loading ? <SkeletonStatCards /> : (
                   <div className="grid grid-cols-4 gap-4">

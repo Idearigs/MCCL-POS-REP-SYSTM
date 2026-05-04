@@ -187,6 +187,9 @@ function formatProfile(profile: any) {
         }
       : null,
     internalNotes: profile.internalNotes,
+    isAlphaTester: (profile as any).isAlphaTester ?? false,
+    isBetaTester:  (profile as any).isBetaTester  ?? false,
+    betaExpiresAt: (profile as any).betaExpiresAt  ?? null,
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,
   };
@@ -319,6 +322,27 @@ router.get('/', requireAuth, async (req, res) => {
       data: profiles.map(formatProfile),
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// GET /mainframe/customer-profiles/beta-expiring
+// Returns profiles whose betaExpiresAt is within the next 30 days (must be before /:id)
+router.get('/beta-expiring', requireAuth, async (_req, res) => {
+  try {
+    const now = new Date();
+    const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const profiles = await prisma.mf_customer_profiles.findMany({
+      where: { isBetaTester: true, betaExpiresAt: { lte: in30 } } as any,
+      select: {
+        id: true, businessName: true, subdomain: true, businessEmail: true,
+        betaExpiresAt: true, isBetaTester: true,
+      },
+      orderBy: { betaExpiresAt: 'asc' } as any,
+    });
+    return res.json(profiles);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -718,6 +742,37 @@ router.get('/:id/activity', requireAuth, async (req, res) => {
       take: 50,
     });
     return res.json(logs);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// PUT /mainframe/customer-profiles/:id/tester-flags
+router.put('/:id/tester-flags', requireAuth, async (req, res) => {
+  try {
+    const { isAlphaTester, isBetaTester, betaExpiresAt } = req.body;
+    const data: any = {};
+    if (typeof isAlphaTester === 'boolean') data.isAlphaTester = isAlphaTester;
+    if (typeof isBetaTester  === 'boolean') data.isBetaTester  = isBetaTester;
+    if (betaExpiresAt !== undefined) data.betaExpiresAt = betaExpiresAt ? new Date(betaExpiresAt) : null;
+
+    const updated = await prisma.mf_customer_profiles.update({
+      where: { id: req.params.id },
+      data,
+      include: profileInclude,
+    });
+
+    await prisma.mf_activity_logs.create({
+      data: {
+        customerProfileId: req.params.id,
+        action: 'profile.tester_flags_updated',
+        description: `Beta: ${isBetaTester}, Alpha: ${isAlphaTester}, Expires: ${betaExpiresAt ?? 'none'}`,
+        actorType: 'admin',
+      },
+    });
+
+    return res.json(formatProfile(updated));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Internal server error' });

@@ -45,6 +45,24 @@ enum FeatureStatus {
   DISABLED
 }
 
+enum InternalRole {
+  SOFTWARE_DEVELOPER
+  RND
+  DEVOPS
+  SUPPORT
+  CYBER_SECURITY
+  SYSTEM_ARCHITECT
+  SERVER_ADMIN
+}
+
+enum RoadmapStatus {
+  BACKLOG
+  IN_DEV
+  ALPHA
+  BETA
+  SHIPPED
+}
+
 enum BugPriority {
   CRITICAL
   HIGH
@@ -95,6 +113,9 @@ model mf_customer_profiles {
   contactEmail             String
   contactPhone             String?
   internalNotes            String?
+  isAlphaTester            Boolean                @default(false)
+  isBetaTester             Boolean                @default(false)
+  betaExpiresAt            DateTime?
   createdAt                DateTime               @default(now())
   updatedAt                DateTime               @updatedAt
   activityLogs             mf_activity_logs[]
@@ -354,7 +375,7 @@ model mf_admins {
   lastName     String
   email        String    @unique
   passwordHash String
-  role         String    @default("admin")
+  role         InternalRole @default(SOFTWARE_DEVELOPER)
   permissions  Json?
   isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
@@ -374,4 +395,22 @@ model mf_settings {
   updatedAt   DateTime @updatedAt
 
   @@index([key])
+}
+
+model mf_roadmap_items {
+  id            String        @id @default(uuid())
+  title         String
+  description   String?
+  featureKey    String?
+  status        RoadmapStatus @default(BACKLOG)
+  priority      BugPriority   @default(MEDIUM)
+  assignedTo    String?
+  targetVersion String?
+  dueDate       DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status])
+  @@index([featureKey])
 }

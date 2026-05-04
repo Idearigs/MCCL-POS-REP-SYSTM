@@ -47,6 +47,13 @@ import FinancialIntelligencePage from "./pages/FinancialIntelligencePage";
 import MobileAddProduct from "./pages/MobileAddProduct";
 import MobileAddRepair from "./pages/MobileAddRepair";
 import SaleConditionEditPage from "./pages/SaleConditionEditPage";
+import EmployeesPage from "./pages/hrms/EmployeesPage";
+import EmployeePage from "./pages/hrms/EmployeePage";
+import PayrollPage from "./pages/hrms/PayrollPage";
+import PayslipPage from "./pages/hrms/PayslipPage";
+import AttendancePage from "./pages/hrms/AttendancePage";
+import ReportsPage from "./pages/hrms/ReportsPage";
+import SelfServicePage from "./pages/hrms/SelfServicePage";
 
 // Create a client for React Query
 const queryClient = new QueryClient();
@@ -301,6 +308,78 @@ const App = () => (
                   />
 
                   <Route path="/settings/sale-conditions" element={<PrivateRoute><SaleConditionEditPage /></PrivateRoute>} />
+
+                  {/* HRMS */}
+                  <Route
+                    path="/hrms"
+                    element={
+                      <PrivateRoute>
+                        <PermissionGuard permission="hrms">
+                          <EmployeesPage />
+                        </PermissionGuard>
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/hrms/employees/:id"
+                    element={
+                      <PrivateRoute>
+                        <PermissionGuard permission="hrms">
+                          <EmployeePage />
+                        </PermissionGuard>
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/hrms/payroll"
+                    element={
+                      <PrivateRoute>
+                        <PermissionGuard permission="hrms">
+                          <PayrollPage />
+                        </PermissionGuard>
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/hrms/payslips/:id"
+                    element={
+                      <PrivateRoute>
+                        <PermissionGuard permission="hrms">
+                          <PayslipPage />
+                        </PermissionGuard>
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/hrms/attendance"
+                    element={
+                      <PrivateRoute>
+                        <PermissionGuard permission="hrms">
+                          <AttendancePage />
+                        </PermissionGuard>
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/hrms/reports"
+                    element={
+                      <PrivateRoute>
+                        <PermissionGuard permission="hrms">
+                          <ReportsPage />
+                        </PermissionGuard>
+                      </PrivateRoute>
+                    }
+                  />
+
+                  {/* Self-Service Portal — no permission guard, any logged-in user */}
+                  <Route
+                    path="/my-portal"
+                    element={
+                      <PrivateRoute>
+                        <SelfServicePage />
+                      </PrivateRoute>
+                    }
+                  />
 
                   {/* Mobile routes (standalone, no MainLayout) */}
                   <Route path="/mobile/add-product" element={<PrivateRoute><MobileAddProduct /></PrivateRoute>} />

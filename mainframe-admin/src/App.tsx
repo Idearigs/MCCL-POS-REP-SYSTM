@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Login from './pages/Login';
 import MainFrameDashboard from './pages/MainFrameDashboard';
+import DevPortalPage from './pages/DevPortalPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './index.css';
 
@@ -32,6 +33,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <MainFrameDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dev-portal"
+        element={
+          <ProtectedRoute>
+            <DevPortalPage />
           </ProtectedRoute>
         }
       />

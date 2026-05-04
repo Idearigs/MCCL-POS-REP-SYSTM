@@ -14,6 +14,7 @@ import subdomainRouter from './routes/subdomain';
 import credentialsRouter from './routes/credentials';
 import tenantFeaturesRouter from './routes/tenant-features';
 import backupRouter from './routes/backup';
+import roadmapRouter from './routes/roadmap';
 import lemonsqueezyWebhookRouter from './routes/lemonsqueezy-webhook';
 
 const app = express();
@@ -71,7 +72,7 @@ app.post('/setup', async (req, res) => {
   await prisma.mf_admins.upsert({
     where: { email: EMAIL },
     update: { passwordHash, isActive: true },
-    create: { firstName: 'Super', lastName: 'Admin', email: EMAIL, passwordHash, role: 'superadmin' },
+    create: { firstName: 'Super', lastName: 'Admin', email: EMAIL, passwordHash, role: 'SYSTEM_ARCHITECT' as any },
   });
 
   return res.json({ message: 'Admin created/reset', email: EMAIL, password: PASSWORD });
@@ -91,6 +92,7 @@ api.use('/mainframe/subdomain', subdomainRouter);
 api.use('/mainframe/credentials', credentialsRouter);
 api.use('/mainframe/tenant-features', tenantFeaturesRouter);
 api.use('/mainframe/backup', backupRouter);
+api.use('/mainframe/roadmap', roadmapRouter);
 
 app.use('/api/v1', api);
 
@@ -120,7 +122,7 @@ async function seedAdmin() {
           lastName: 'Admin',
           email: EMAIL,
           passwordHash,
-          role: 'superadmin',
+          role: 'SYSTEM_ARCHITECT' as any,
         },
       });
       console.log(`✅ Default admin seeded: ${EMAIL}`);
@@ -285,6 +287,36 @@ async function seedBuymeTenant() {
   }
 }
 
+async function migrateDevPortal() {
+  const steps: Array<[string, string]> = [
+    ['Create InternalRole enum', `DO $$ BEGIN CREATE TYPE "InternalRole" AS ENUM ('SOFTWARE_DEVELOPER','RND','DEVOPS','SUPPORT','CYBER_SECURITY','SYSTEM_ARCHITECT','SERVER_ADMIN'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`],
+    ['Create RoadmapStatus enum', `DO $$ BEGIN CREATE TYPE "RoadmapStatus" AS ENUM ('BACKLOG','IN_DEV','ALPHA','BETA','SHIPPED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`],
+    ['Add isAlphaTester column', `ALTER TABLE "mf_customer_profiles" ADD COLUMN IF NOT EXISTS "isAlphaTester" BOOLEAN NOT NULL DEFAULT false`],
+    ['Add isBetaTester column',  `ALTER TABLE "mf_customer_profiles" ADD COLUMN IF NOT EXISTS "isBetaTester" BOOLEAN NOT NULL DEFAULT false`],
+    ['Add betaExpiresAt column', `ALTER TABLE "mf_customer_profiles" ADD COLUMN IF NOT EXISTS "betaExpiresAt" TIMESTAMP(3)`],
+    ['Create mf_roadmap_items', `CREATE TABLE IF NOT EXISTS "mf_roadmap_items" ("id" TEXT NOT NULL,"title" TEXT NOT NULL,"description" TEXT,"featureKey" TEXT,"status" "RoadmapStatus" NOT NULL DEFAULT 'BACKLOG',"priority" "BugPriority" NOT NULL DEFAULT 'MEDIUM',"assignedTo" TEXT,"targetVersion" TEXT,"dueDate" TIMESTAMP(3),"completedAt" TIMESTAMP(3),"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "mf_roadmap_items_pkey" PRIMARY KEY ("id"))`],
+    ['Index roadmap status',    `CREATE INDEX IF NOT EXISTS "mf_roadmap_items_status_idx" ON "mf_roadmap_items"("status")`],
+    ['Index roadmap featureKey', `CREATE INDEX IF NOT EXISTS "mf_roadmap_items_featureKey_idx" ON "mf_roadmap_items"("featureKey")`],
+    ['Migrate admin roles — update values', `UPDATE "mf_admins" SET "role" = 'SOFTWARE_DEVELOPER' WHERE "role" NOT IN ('SOFTWARE_DEVELOPER','RND','DEVOPS','SUPPORT','CYBER_SECURITY','SYSTEM_ARCHITECT','SERVER_ADMIN')`],
+    ['Migrate admin roles — convert column', `DO $$ DECLARE col_type text; BEGIN SELECT data_type INTO col_type FROM information_schema.columns WHERE table_name='mf_admins' AND column_name='role'; IF col_type IN ('text','character varying','USER-DEFINED') AND col_type <> 'USER-DEFINED' THEN EXECUTE 'ALTER TABLE "mf_admins" ALTER COLUMN "role" DROP DEFAULT'; EXECUTE 'ALTER TABLE "mf_admins" ALTER COLUMN "role" TYPE "InternalRole" USING "role"::"InternalRole"'; EXECUTE 'ALTER TABLE "mf_admins" ALTER COLUMN "role" SET DEFAULT ''SOFTWARE_DEVELOPER''::"InternalRole"'; END IF; END $$`],
+  ];
+
+  console.log('Running Developer Portal migrations…');
+  for (const [name, sql] of steps) {
+    try {
+      await prisma.$executeRawUnsafe(sql);
+      console.log(`  ✅ ${name}`);
+    } catch (err: any) {
+      // duplicate_object / already_exists errors are safe to ignore
+      if (!err.message?.includes('already exists') && !err.message?.includes('duplicate')) {
+        console.warn(`  ⚠️  ${name}: ${err.message}`);
+      } else {
+        console.log(`  ⟳  ${name} (already applied)`);
+      }
+    }
+  }
+}
+
 async function bootstrap() {
   try {
     await prisma.$connect();
@@ -294,6 +326,7 @@ async function bootstrap() {
     process.exit(1);
   }
 
+  await migrateDevPortal();
   await seedAdmin();
   await seedFeatures();
   await seedBuymeTenant();

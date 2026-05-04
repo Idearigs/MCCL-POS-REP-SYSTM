@@ -4,6 +4,13 @@ import { requireAuth } from '../middleware/auth';
 
 const router = Router();
 
+// ─── Lifecycle promotion order ───────────────────────────────────────────────
+const PROMOTE_MAP: Record<string, string> = {
+  ALPHA: 'BETA',
+  BETA:  'STABLE',
+  STABLE:'DEPRECATED',
+};
+
 // GET /mainframe/features
 router.get('/', requireAuth, async (req, res) => {
   try {
@@ -41,7 +48,7 @@ router.get('/:id', requireAuth, async (req, res) => {
   }
 });
 
-// POST /mainframe/features
+// POST /mainframe/features — new features always start as ALPHA
 router.post('/', requireAuth, async (req, res) => {
   try {
     const { featureKey, featureName, description, category, isIncludedInBase, additionalCost, dependsOn } = req.body;
@@ -58,8 +65,8 @@ router.post('/', requireAuth, async (req, res) => {
         isIncludedInBase: isIncludedInBase ?? true,
         additionalCost: additionalCost || 0,
         dependsOn: dependsOn || [],
-        status: 'STABLE',
-        currentVersion: '1.0.0',
+        status: 'ALPHA',
+        currentVersion: '0.1.0',
       },
     });
     return res.status(201).json(feature);
@@ -77,6 +84,45 @@ router.put('/:id', requireAuth, async (req, res) => {
       data: req.body,
     });
     return res.json(feature);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// POST /mainframe/features/:id/promote — ALPHA→BETA→STABLE→DEPRECATED
+router.post('/:id/promote', requireAuth, async (req, res) => {
+  try {
+    const feature = await prisma.mf_features.findUnique({ where: { id: req.params.id } });
+    if (!feature) return res.status(404).json({ message: 'Feature not found' });
+
+    const next = PROMOTE_MAP[feature.status];
+    if (!next) {
+      return res.status(400).json({ message: `Cannot promote feature in ${feature.status} status` });
+    }
+
+    const updated = await prisma.mf_features.update({
+      where: { id: req.params.id },
+      data: {
+        status: next as any,
+        ...(next === 'STABLE' ? { isBeta: false } : {}),
+        ...(next === 'BETA'   ? { isBeta: true  } : {}),
+      },
+    });
+
+    // Record version snapshot
+    await prisma.mf_feature_versions.create({
+      data: {
+        featureId:    req.params.id,
+        version:      feature.currentVersion,
+        versionType:  next as any,
+        releaseNotes: `Promoted from ${feature.status} to ${next}`,
+        deployedAt:   new Date(),
+        deployedBy:   (req as any).admin?.id || 'system',
+      },
+    }).catch(() => {}); // non-fatal
+
+    return res.json({ previous: feature.status, current: next, feature: updated });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -137,6 +183,8 @@ router.post('/seed-defaults', requireAuth, async (_req, res) => {
       { featureKey: 'financial_intelligence', featureName: 'Financial Intelligence', category: 'analytics',  isIncludedInBase: false },
       { featureKey: 'chatbot',                featureName: 'AI Chatbot',             category: 'ai',         isIncludedInBase: false },
       { featureKey: 'google_drive',           featureName: 'Google Drive',           category: 'integrations', isIncludedInBase: false },
+      // ── HRMS ─────────────────────────────────────────────────────────
+      { featureKey: 'hrms',                   featureName: 'HR Management',          category: 'hr',         isIncludedInBase: false },
     ];
 
     const results = [];

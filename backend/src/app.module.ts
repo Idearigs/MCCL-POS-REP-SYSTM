@@ -25,6 +25,7 @@ import { FinancialIntelligenceModule } from './features/financial-intelligence/f
 import { ChatbotModule } from './features/chatbot/chatbot.module';
 import { MainframeModule } from './features/mainframe/mainframe.module';
 import { TasksModule } from './features/tasks/tasks.module';
+import { HrmsModule } from './features/hrms/hrms.module';
 
 // External integrations
 import {
@@ -115,6 +116,7 @@ import { OpenAIModule } from './integrations/openai/openai.module';
     ChatbotModule,
     MainframeModule,
     TasksModule,
+    HrmsModule,
   ],
   controllers: [AppController],
   providers: [AppService, CacheService],

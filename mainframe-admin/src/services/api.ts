@@ -55,6 +55,9 @@ export const customerProfilesApi = {
     apiClient.put(`/mainframe/customer-profiles/${id}/features/batch`, { features }),
   delete: (id: string) => apiClient.delete(`/mainframe/customer-profiles/${id}`),
   reprovision: (id: string) => apiClient.post(`/mainframe/customer-profiles/${id}/reprovision`),
+  updateTesterFlags: (id: string, data: { isAlphaTester?: boolean; isBetaTester?: boolean; betaExpiresAt?: string | null }) =>
+    apiClient.put(`/mainframe/customer-profiles/${id}/tester-flags`, data),
+  getBetaExpiring: () => apiClient.get('/mainframe/customer-profiles/beta-expiring'),
 };
 
 // ── Customer Users ───────────────────────────────────────────────────────────
@@ -87,6 +90,7 @@ export const featuresApi = {
   getById:      (id: string)              => apiClient.get(`/mainframe/features/${id}`),
   create:       (data: any)              => apiClient.post('/mainframe/features', data),
   update:       (id: string, data: any)  => apiClient.put(`/mainframe/features/${id}`, data),
+  promote:      (id: string)             => apiClient.post(`/mainframe/features/${id}/promote`),
   addVersion:   (id: string, data: any)  => apiClient.post(`/mainframe/features/${id}/versions`, data),
   seedDefaults: ()                       => apiClient.post('/mainframe/features/seed-defaults'),
 };
@@ -118,6 +122,21 @@ export const subdomainApi = {
     apiClient.get(`/mainframe/customer-profiles/check-subdomain/${subdomain}`),
   suggest: (businessName: string) =>
     apiClient.get('/mainframe/customer-profiles/suggest-subdomain', { params: { businessName } }),
+};
+
+// ── Roadmap ───────────────────────────────────────────────────────────────────
+export const roadmapApi = {
+  getAll:  (params?: any)            => apiClient.get('/mainframe/roadmap', { params }),
+  create:  (data: any)              => apiClient.post('/mainframe/roadmap', data),
+  update:  (id: string, data: any)  => apiClient.put(`/mainframe/roadmap/${id}`, data),
+  delete:  (id: string)             => apiClient.delete(`/mainframe/roadmap/${id}`),
+};
+
+// ── Admins ────────────────────────────────────────────────────────────────────
+export const adminsApi = {
+  getAll:  ()                       => apiClient.get('/mainframe/admins'),
+  create:  (data: any)              => apiClient.post('/mainframe/admins', data),
+  update:  (id: string, data: any)  => apiClient.put(`/mainframe/admins/${id}`, data),
 };
 
 // ── Backup ────────────────────────────────────────────────────────────────────

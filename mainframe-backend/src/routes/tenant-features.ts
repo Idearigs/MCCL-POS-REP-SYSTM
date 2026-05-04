@@ -33,7 +33,6 @@ router.get('/:subdomain', requireAuthOrInternalKey, async (req, res) => {
     if (!profile) return res.status(404).json({ message: 'Tenant not found' });
 
     if (profile.status !== 'ACTIVE') {
-      // Suspended/pending tenants only get core features
       return res.json({ features: CORE_FEATURES, tier: 'suspended' });
     }
 
@@ -46,7 +45,6 @@ router.get('/:subdomain', requireAuthOrInternalKey, async (req, res) => {
     planFeatures.forEach(f => featureSet.add(f));
 
     // Apply custom overrides from mf_customer_features
-    // These can ADD features not in the plan, or REMOVE non-core Standard/Premium features
     const customOverrides = await prisma.mf_customer_features.findMany({
       where: { customerProfileId: profile.id },
       include: { feature: { select: { featureKey: true } } },
@@ -55,9 +53,34 @@ router.get('/:subdomain', requireAuthOrInternalKey, async (req, res) => {
     for (const cf of customOverrides) {
       const key = cf.feature.featureKey;
       if (cf.isEnabled) {
-        featureSet.add(key); // Custom add (e.g. upgrade a STARTER to have shifts)
+        featureSet.add(key);
       } else if (!CORE_FEATURES.includes(key)) {
-        featureSet.delete(key); // Custom remove (cannot remove core features)
+        featureSet.delete(key);
+      }
+    }
+
+    // ── Lifecycle filter ─────────────────────────────────────────────────────
+    // Fetch status for every feature key currently in the set
+    const featureKeys = Array.from(featureSet);
+    const catalog = await prisma.mf_features.findMany({
+      where: { featureKey: { in: featureKeys } },
+      select: { featureKey: true, status: true },
+    });
+    const statusMap = new Map(catalog.map(f => [f.featureKey, f.status as string]));
+
+    const isAlpha = (profile as any).isAlphaTester === true;
+    const isBeta  = (profile as any).isBetaTester  === true;
+
+    for (const key of featureKeys) {
+      const status = statusMap.get(key);
+      if (!status) continue; // not in catalog → keep (e.g. legacy hardcoded key)
+
+      if (status === 'DEPRECATED' || status === 'DISABLED') {
+        featureSet.delete(key);
+      } else if (status === 'ALPHA' && !isAlpha) {
+        featureSet.delete(key);
+      } else if (status === 'BETA' && !isBeta && !isAlpha) {
+        featureSet.delete(key);
       }
     }
 
@@ -65,6 +88,8 @@ router.get('/:subdomain', requireAuthOrInternalKey, async (req, res) => {
       features: Array.from(featureSet),
       plan,
       tier: plan.toLowerCase(),
+      betaExpiresAt: (profile as any).betaExpiresAt ?? null,
+      isBetaTester: (profile as any).isBetaTester ?? false,
     });
   } catch (err) {
     console.error(err);

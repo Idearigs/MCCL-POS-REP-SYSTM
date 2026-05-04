@@ -91,6 +91,7 @@ export const usePermissions = () => {
           pettyCash: true,
           mainframe: true,
           financial_intelligence: true,
+          hrms: true,
         };
       }
 

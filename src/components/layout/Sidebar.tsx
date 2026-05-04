@@ -17,7 +17,8 @@ import {
   Package, FileText, User, Settings, Calendar, Tag, Search, Database,
   LogOut, CreditCard, History, TrendingUp, Users, ClipboardCheck,
   UserCog, Calculator, DollarSign, Wallet, ChevronDown, ChevronRight,
-  ShoppingCart, Wrench, Briefcase, Cog, Clock, Brain, Server, CheckSquare
+  ShoppingCart, Wrench, Briefcase, Cog, Clock, Brain, Server, CheckSquare,
+  UserSquare2, LayoutDashboard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -70,11 +71,12 @@ const navigationCategories: NavigationCategory[] = [
     title: 'Management',
     icon: Briefcase,
     items: [
-      { title: 'Customers', path: '/customers', icon: User,        permissionKey: 'customers', featureKey: 'customers' },
-      { title: 'Inventory', path: '/inventory', icon: Package,     permissionKey: 'inventory', featureKey: 'inventory' },
-      { title: 'Tasks',     path: '/tasks',     icon: CheckSquare, permissionKey: 'pos',       featureKey: 'tasks'     },
-      { title: 'Calendar',  path: '/calendar',  icon: Calendar,    permissionKey: 'calendar',  featureKey: 'calendar'  },
-      { title: 'History',   path: '/history',   icon: History,     permissionKey: 'history',   featureKey: 'history'   },
+      { title: 'Customers', path: '/customers', icon: User,          permissionKey: 'customers', featureKey: 'customers' },
+      { title: 'Inventory', path: '/inventory', icon: Package,       permissionKey: 'inventory', featureKey: 'inventory' },
+      { title: 'HR Management', path: '/hrms', icon: UserSquare2,   permissionKey: 'hrms' },
+      { title: 'Tasks',     path: '/tasks',     icon: CheckSquare,   permissionKey: 'pos',       featureKey: 'tasks'     },
+      { title: 'Calendar',  path: '/calendar',  icon: Calendar,      permissionKey: 'calendar',  featureKey: 'calendar'  },
+      { title: 'History',   path: '/history',   icon: History,       permissionKey: 'history',   featureKey: 'history'   },
     ]
   },
   {
@@ -216,6 +218,26 @@ const Sidebar = () => {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* My Portal — always visible to any logged-in user */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu className="space-y-0.5">
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location.pathname === '/my-portal'}
+                  tooltip="My Portal"
+                >
+                  <Link to="/my-portal" className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
+                    <LayoutDashboard size={20} />
+                    <span className="text-sm">My Portal</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
