@@ -29,33 +29,50 @@ export class EmployeesService {
   // ─── Employee Number ────────────────────────────────────────────────────────
 
   private async generateEmployeeNumber(tenantId: string): Promise<string> {
-    const count = await this.prisma.hrms_employees.count({ where: { tenantId } });
+    const count = await this.prisma.hrms_employees.count({
+      where: { tenantId },
+    });
     return `EMP${String(count + 1).padStart(4, '0')}`;
   }
 
   // ─── Pension Eligibility Check ──────────────────────────────────────────────
 
-  private isPensionEligible(dob: Date | null, salary: number | null, hourlyRate: number | null, contractedHours: number | null): boolean {
+  private isPensionEligible(
+    dob: Date | null,
+    salary: number | null,
+    hourlyRate: number | null,
+    contractedHours: number | null,
+  ): boolean {
     if (!dob) return false;
     const today = new Date();
-    const age = today.getFullYear() - dob.getFullYear() - (today < new Date(today.getFullYear(), dob.getMonth(), dob.getDate()) ? 1 : 0);
+    const age =
+      today.getFullYear() -
+      dob.getFullYear() -
+      (today < new Date(today.getFullYear(), dob.getMonth(), dob.getDate())
+        ? 1
+        : 0);
     if (age < 22 || age >= 66) return false;
 
     // UK 2024/25: £10,000/year (£833/month) qualifying earnings threshold
     const annualEarnings = salary
       ? Number(salary)
       : hourlyRate && contractedHours
-      ? Number(hourlyRate) * Number(contractedHours) * 52
-      : 0;
+        ? Number(hourlyRate) * Number(contractedHours) * 52
+        : 0;
     return annualEarnings >= 10000;
   }
 
   // ─── Map to Response ────────────────────────────────────────────────────────
 
-  private mapToResponse(emp: any, includeSensitive = false): EmployeeResponseDto {
+  private mapToResponse(
+    emp: any,
+    includeSensitive = false,
+  ): EmployeeResponseDto {
     const niDecrypted = this.encryption.decryptOptional(emp.niNumber);
     const sortCodeDecrypted = this.encryption.decryptOptional(emp.bankSortCode);
-    const accountNoDecrypted = this.encryption.decryptOptional(emp.bankAccountNo);
+    const accountNoDecrypted = this.encryption.decryptOptional(
+      emp.bankAccountNo,
+    );
 
     return {
       id: emp.id,
@@ -65,7 +82,9 @@ export class EmployeesService {
       firstName: emp.firstName,
       middleName: emp.middleName,
       lastName: emp.lastName,
-      fullName: [emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' '),
+      fullName: [emp.firstName, emp.middleName, emp.lastName]
+        .filter(Boolean)
+        .join(' '),
       preferredName: emp.preferredName,
       gender: emp.gender,
       dateOfBirth: emp.dateOfBirth?.toISOString(),
@@ -96,22 +115,34 @@ export class EmployeesService {
       probationEndDate: emp.probationEndDate?.toISOString(),
       noticePeriodDays: emp.noticePeriodDays,
       // Sensitive fields — always masked in list, optionally full in detail
-      niNumberMasked: niDecrypted ? this.encryption.maskNi(niDecrypted) : undefined,
+      niNumberMasked: niDecrypted
+        ? this.encryption.maskNi(niDecrypted)
+        : undefined,
       taxCode: emp.taxCode,
       niCategory: emp.niCategory,
       payFrequency: emp.payFrequency,
       salary: emp.salary ? Number(emp.salary) : undefined,
       hourlyRate: emp.hourlyRate ? Number(emp.hourlyRate) : undefined,
-      contractedHours: emp.contractedHours ? Number(emp.contractedHours) : undefined,
+      contractedHours: emp.contractedHours
+        ? Number(emp.contractedHours)
+        : undefined,
       bankName: emp.bankName,
-      bankSortCodeMasked: sortCodeDecrypted ? this.encryption.maskSortCode(sortCodeDecrypted) : undefined,
-      bankAccountNoMasked: accountNoDecrypted ? `****${accountNoDecrypted.slice(-4)}` : undefined,
+      bankSortCodeMasked: sortCodeDecrypted
+        ? this.encryption.maskSortCode(sortCodeDecrypted)
+        : undefined,
+      bankAccountNoMasked: accountNoDecrypted
+        ? `****${accountNoDecrypted.slice(-4)}`
+        : undefined,
       starterDeclaration: emp.starterDeclaration,
       p45Received: emp.p45Received,
       pensionEligible: emp.pensionEligible,
       pensionEnrolled: emp.pensionEnrolled,
-      employerPensionPct: emp.employerPensionPct ? Number(emp.employerPensionPct) : undefined,
-      employeePensionPct: emp.employeePensionPct ? Number(emp.employeePensionPct) : undefined,
+      employerPensionPct: emp.employerPensionPct
+        ? Number(emp.employerPensionPct)
+        : undefined,
+      employeePensionPct: emp.employeePensionPct
+        ? Number(emp.employeePensionPct)
+        : undefined,
       annualLeaveEntitlement: Number(emp.annualLeaveEntitlement),
       studentLoanPlan: emp.studentLoanPlan,
       rightToWorkChecked: emp.rightToWorkChecked,
@@ -128,7 +159,10 @@ export class EmployeesService {
 
   // ─── Self-Service ────────────────────────────────────────────────────────────
 
-  async findMe(email: string, tenantId: string): Promise<EmployeeResponseDto | null> {
+  async findMe(
+    email: string,
+    tenantId: string,
+  ): Promise<EmployeeResponseDto | null> {
     const emp = await this.prisma.hrms_employees.findFirst({
       where: {
         tenantId,
@@ -137,7 +171,7 @@ export class EmployeesService {
       },
       include: {
         department: { select: { id: true, name: true } },
-        position:   { select: { id: true, title: true } },
+        position: { select: { id: true, title: true } },
       },
     });
     return emp ? this.mapToResponse(emp) : null;
@@ -145,7 +179,10 @@ export class EmployeesService {
 
   // ─── CRUD ───────────────────────────────────────────────────────────────────
 
-  async create(dto: CreateEmployeeDto, tenantId: string): Promise<EmployeeResponseDto> {
+  async create(
+    dto: CreateEmployeeDto,
+    tenantId: string,
+  ): Promise<EmployeeResponseDto> {
     const employeeNumber = await this.generateEmployeeNumber(tenantId);
 
     // Check work email uniqueness
@@ -153,11 +190,19 @@ export class EmployeesService {
       const existing = await this.prisma.hrms_employees.findFirst({
         where: { tenantId, workEmail: dto.workEmail },
       });
-      if (existing) throw new ConflictException(`Work email ${dto.workEmail} already in use`);
+      if (existing)
+        throw new ConflictException(
+          `Work email ${dto.workEmail} already in use`,
+        );
     }
 
     const dob = dto.dateOfBirth ? new Date(dto.dateOfBirth) : null;
-    const pensionEligible = this.isPensionEligible(dob, dto.salary ?? null, dto.hourlyRate ?? null, dto.contractedHours ?? null);
+    const pensionEligible = this.isPensionEligible(
+      dob,
+      dto.salary ?? null,
+      dto.hourlyRate ?? null,
+      dto.contractedHours ?? null,
+    );
 
     const employee = await this.prisma.hrms_employees.create({
       data: {
@@ -192,7 +237,9 @@ export class EmployeesService {
         contractType: (dto.contractType as any) ?? 'PERMANENT',
         startDate: new Date(dto.startDate),
         endDate: dto.endDate ? new Date(dto.endDate) : null,
-        probationEndDate: dto.probationEndDate ? new Date(dto.probationEndDate) : null,
+        probationEndDate: dto.probationEndDate
+          ? new Date(dto.probationEndDate)
+          : null,
         noticePeriodDays: dto.noticePeriodDays,
         niNumber: this.encryption.encryptOptional(dto.niNumber),
         taxCode: dto.taxCode ?? '1257L',
@@ -212,7 +259,9 @@ export class EmployeesService {
         annualLeaveEntitlement: dto.annualLeaveEntitlement ?? 28,
         studentLoanPlan: dto.studentLoanPlan,
         rightToWorkChecked: dto.rightToWorkChecked ?? false,
-        rightToWorkExpiry: dto.rightToWorkExpiry ? new Date(dto.rightToWorkExpiry) : null,
+        rightToWorkExpiry: dto.rightToWorkExpiry
+          ? new Date(dto.rightToWorkExpiry)
+          : null,
         emergencyName: dto.emergencyName,
         emergencyPhone: dto.emergencyPhone,
         emergencyRelation: dto.emergencyRelation,
@@ -221,7 +270,9 @@ export class EmployeesService {
       include: { department: true, position: true },
     });
 
-    this.logger.log(`✅ Employee ${employeeNumber} created for tenant ${tenantId}`);
+    this.logger.log(
+      `✅ Employee ${employeeNumber} created for tenant ${tenantId}`,
+    );
     return this.mapToResponse(employee);
   }
 
@@ -229,7 +280,14 @@ export class EmployeesService {
     tenantId: string,
     query: EmployeeQueryDto,
   ): Promise<{ data: EmployeeResponseDto[]; meta: any }> {
-    const { page = 1, limit = 20, search, status, departmentId, employmentType } = query;
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      status,
+      departmentId,
+      employmentType,
+    } = query;
     const skip = (page - 1) * limit;
 
     const where: any = { tenantId, isActive: true };
@@ -279,52 +337,135 @@ export class EmployeesService {
     return this.mapToResponse(employee);
   }
 
-  async update(id: string, dto: UpdateEmployeeDto, tenantId: string): Promise<EmployeeResponseDto> {
-    const existing = await this.prisma.hrms_employees.findFirst({ where: { id, tenantId } });
+  async update(
+    id: string,
+    dto: UpdateEmployeeDto,
+    tenantId: string,
+  ): Promise<EmployeeResponseDto> {
+    const existing = await this.prisma.hrms_employees.findFirst({
+      where: { id, tenantId },
+    });
     if (!existing) throw new NotFoundException(`Employee ${id} not found`);
 
     if (dto.workEmail && dto.workEmail !== existing.workEmail) {
       const conflict = await this.prisma.hrms_employees.findFirst({
         where: { tenantId, workEmail: dto.workEmail, id: { not: id } },
       });
-      if (conflict) throw new ConflictException(`Work email ${dto.workEmail} already in use`);
+      if (conflict)
+        throw new ConflictException(
+          `Work email ${dto.workEmail} already in use`,
+        );
     }
 
-    const dob = dto.dateOfBirth ? new Date(dto.dateOfBirth) : (existing.dateOfBirth ?? null);
+    const dob = dto.dateOfBirth
+      ? new Date(dto.dateOfBirth)
+      : (existing.dateOfBirth ?? null);
     const pensionEligible = this.isPensionEligible(
       dob,
       dto.salary ?? (existing.salary ? Number(existing.salary) : null),
-      dto.hourlyRate ?? (existing.hourlyRate ? Number(existing.hourlyRate) : null),
-      dto.contractedHours ?? (existing.contractedHours ? Number(existing.contractedHours) : null),
+      dto.hourlyRate ??
+        (existing.hourlyRate ? Number(existing.hourlyRate) : null),
+      dto.contractedHours ??
+        (existing.contractedHours ? Number(existing.contractedHours) : null),
     );
 
     const updateData: any = { pensionEligible, updatedAt: new Date() };
 
-    const strFields = ['firstName', 'middleName', 'lastName', 'preferredName', 'nationality', 'ethnicity',
-      'personalEmail', 'workEmail', 'personalPhone', 'workPhone', 'addressLine1', 'addressLine2',
-      'city', 'county', 'postcode', 'country', 'departmentId', 'positionId', 'managerId', 'jobTitle',
-      'taxCode', 'bankName', 'studentLoanPlan', 'emergencyName', 'emergencyPhone', 'emergencyRelation', 'notes'];
-    strFields.forEach((f) => { if ((dto as any)[f] !== undefined) updateData[f] = (dto as any)[f]; });
+    const strFields = [
+      'firstName',
+      'middleName',
+      'lastName',
+      'preferredName',
+      'nationality',
+      'ethnicity',
+      'personalEmail',
+      'workEmail',
+      'personalPhone',
+      'workPhone',
+      'addressLine1',
+      'addressLine2',
+      'city',
+      'county',
+      'postcode',
+      'country',
+      'departmentId',
+      'positionId',
+      'managerId',
+      'jobTitle',
+      'taxCode',
+      'bankName',
+      'studentLoanPlan',
+      'emergencyName',
+      'emergencyPhone',
+      'emergencyRelation',
+      'notes',
+    ];
+    strFields.forEach((f) => {
+      if ((dto as any)[f] !== undefined) updateData[f] = (dto as any)[f];
+    });
 
-    const enumFields = ['title', 'gender', 'maritalStatus', 'status', 'employmentType', 'contractType', 'niCategory', 'payFrequency', 'starterDeclaration'];
-    enumFields.forEach((f) => { if ((dto as any)[f] !== undefined) updateData[f] = (dto as any)[f]; });
+    const enumFields = [
+      'title',
+      'gender',
+      'maritalStatus',
+      'status',
+      'employmentType',
+      'contractType',
+      'niCategory',
+      'payFrequency',
+      'starterDeclaration',
+    ];
+    enumFields.forEach((f) => {
+      if ((dto as any)[f] !== undefined) updateData[f] = (dto as any)[f];
+    });
 
-    const numFields = ['noticePeriodDays', 'salary', 'hourlyRate', 'contractedHours', 'annualLeaveEntitlement'];
-    numFields.forEach((f) => { if ((dto as any)[f] !== undefined) updateData[f] = (dto as any)[f]; });
+    const numFields = [
+      'noticePeriodDays',
+      'salary',
+      'hourlyRate',
+      'contractedHours',
+      'annualLeaveEntitlement',
+    ];
+    numFields.forEach((f) => {
+      if ((dto as any)[f] !== undefined) updateData[f] = (dto as any)[f];
+    });
 
     const boolFields = ['p45Received', 'rightToWorkChecked'];
-    boolFields.forEach((f) => { if ((dto as any)[f] !== undefined) updateData[f] = (dto as any)[f]; });
+    boolFields.forEach((f) => {
+      if ((dto as any)[f] !== undefined) updateData[f] = (dto as any)[f];
+    });
 
-    if (dto.dateOfBirth !== undefined) updateData.dateOfBirth = dto.dateOfBirth ? new Date(dto.dateOfBirth) : null;
-    if (dto.startDate !== undefined) updateData.startDate = new Date(dto.startDate);
-    if (dto.endDate !== undefined) updateData.endDate = dto.endDate ? new Date(dto.endDate) : null;
-    if (dto.probationEndDate !== undefined) updateData.probationEndDate = dto.probationEndDate ? new Date(dto.probationEndDate) : null;
-    if (dto.rightToWorkExpiry !== undefined) updateData.rightToWorkExpiry = dto.rightToWorkExpiry ? new Date(dto.rightToWorkExpiry) : null;
+    if (dto.dateOfBirth !== undefined)
+      updateData.dateOfBirth = dto.dateOfBirth
+        ? new Date(dto.dateOfBirth)
+        : null;
+    if (dto.startDate !== undefined)
+      updateData.startDate = new Date(dto.startDate);
+    if (dto.endDate !== undefined)
+      updateData.endDate = dto.endDate ? new Date(dto.endDate) : null;
+    if (dto.probationEndDate !== undefined)
+      updateData.probationEndDate = dto.probationEndDate
+        ? new Date(dto.probationEndDate)
+        : null;
+    if (dto.rightToWorkExpiry !== undefined)
+      updateData.rightToWorkExpiry = dto.rightToWorkExpiry
+        ? new Date(dto.rightToWorkExpiry)
+        : null;
 
-    if (dto.niNumber !== undefined) updateData.niNumber = this.encryption.encryptOptional(dto.niNumber);
-    if (dto.bankAccountName !== undefined) updateData.bankAccountName = this.encryption.encryptOptional(dto.bankAccountName);
-    if (dto.bankSortCode !== undefined) updateData.bankSortCode = this.encryption.encryptOptional(dto.bankSortCode);
-    if (dto.bankAccountNo !== undefined) updateData.bankAccountNo = this.encryption.encryptOptional(dto.bankAccountNo);
+    if (dto.niNumber !== undefined)
+      updateData.niNumber = this.encryption.encryptOptional(dto.niNumber);
+    if (dto.bankAccountName !== undefined)
+      updateData.bankAccountName = this.encryption.encryptOptional(
+        dto.bankAccountName,
+      );
+    if (dto.bankSortCode !== undefined)
+      updateData.bankSortCode = this.encryption.encryptOptional(
+        dto.bankSortCode,
+      );
+    if (dto.bankAccountNo !== undefined)
+      updateData.bankAccountNo = this.encryption.encryptOptional(
+        dto.bankAccountNo,
+      );
 
     const updated = await this.prisma.hrms_employees.update({
       where: { id },
@@ -336,7 +477,9 @@ export class EmployeesService {
   }
 
   async remove(id: string, tenantId: string): Promise<void> {
-    const existing = await this.prisma.hrms_employees.findFirst({ where: { id, tenantId } });
+    const existing = await this.prisma.hrms_employees.findFirst({
+      where: { id, tenantId },
+    });
     if (!existing) throw new NotFoundException(`Employee ${id} not found`);
     // Soft delete
     await this.prisma.hrms_employees.update({
@@ -352,12 +495,16 @@ export class EmployeesService {
     dto: CreateLeaveRequestDto,
     tenantId: string,
   ) {
-    const employee = await this.prisma.hrms_employees.findFirst({ where: { id: employeeId, tenantId } });
-    if (!employee) throw new NotFoundException(`Employee ${employeeId} not found`);
+    const employee = await this.prisma.hrms_employees.findFirst({
+      where: { id: employeeId, tenantId },
+    });
+    if (!employee)
+      throw new NotFoundException(`Employee ${employeeId} not found`);
 
     const start = new Date(dto.startDate);
     const end = new Date(dto.endDate);
-    if (end < start) throw new BadRequestException('End date must be after start date');
+    if (end < start)
+      throw new BadRequestException('End date must be after start date');
 
     // Simple working-day count (Mon–Fri)
     let days = 0;
@@ -383,8 +530,11 @@ export class EmployeesService {
   }
 
   async getLeaveRequests(employeeId: string, tenantId: string) {
-    const employee = await this.prisma.hrms_employees.findFirst({ where: { id: employeeId, tenantId } });
-    if (!employee) throw new NotFoundException(`Employee ${employeeId} not found`);
+    const employee = await this.prisma.hrms_employees.findFirst({
+      where: { id: employeeId, tenantId },
+    });
+    if (!employee)
+      throw new NotFoundException(`Employee ${employeeId} not found`);
 
     return this.prisma.hrms_leave_requests.findMany({
       where: { employeeId, tenantId },
@@ -398,8 +548,11 @@ export class EmployeesService {
     tenantId: string,
     approverId: string,
   ) {
-    const leave = await this.prisma.hrms_leave_requests.findFirst({ where: { id: leaveId, tenantId } });
-    if (!leave) throw new NotFoundException(`Leave request ${leaveId} not found`);
+    const leave = await this.prisma.hrms_leave_requests.findFirst({
+      where: { id: leaveId, tenantId },
+    });
+    if (!leave)
+      throw new NotFoundException(`Leave request ${leaveId} not found`);
 
     return this.prisma.hrms_leave_requests.update({
       where: { id: leaveId },
@@ -407,7 +560,8 @@ export class EmployeesService {
         status: dto.status as any,
         approvedById: dto.status === LeaveStatus.APPROVED ? approverId : null,
         approvedAt: dto.status === LeaveStatus.APPROVED ? new Date() : null,
-        rejectedReason: dto.status === LeaveStatus.REJECTED ? dto.rejectedReason : null,
+        rejectedReason:
+          dto.status === LeaveStatus.REJECTED ? dto.rejectedReason : null,
       },
     });
   }
@@ -417,7 +571,9 @@ export class EmployeesService {
   async getDepartments(tenantId: string) {
     const depts = await this.prisma.hrms_departments.findMany({
       where: { tenantId, isActive: true },
-      include: { _count: { select: { employees: { where: { isActive: true } } } } },
+      include: {
+        _count: { select: { employees: { where: { isActive: true } } } },
+      },
       orderBy: { name: 'asc' },
     });
     return depts.map((d) => ({
@@ -436,16 +592,29 @@ export class EmployeesService {
 
   async createDepartment(dto: any, tenantId: string) {
     if (dto.code) {
-      const exists = await this.prisma.hrms_departments.findFirst({ where: { tenantId, code: dto.code } });
-      if (exists) throw new ConflictException(`Department code ${dto.code} already exists`);
+      const exists = await this.prisma.hrms_departments.findFirst({
+        where: { tenantId, code: dto.code },
+      });
+      if (exists)
+        throw new ConflictException(
+          `Department code ${dto.code} already exists`,
+        );
     }
     return this.prisma.hrms_departments.create({
-      data: { tenantId, name: dto.name, code: dto.code, description: dto.description, managerId: dto.managerId },
+      data: {
+        tenantId,
+        name: dto.name,
+        code: dto.code,
+        description: dto.description,
+        managerId: dto.managerId,
+      },
     });
   }
 
   async updateDepartment(id: string, dto: any, tenantId: string) {
-    const existing = await this.prisma.hrms_departments.findFirst({ where: { id, tenantId } });
+    const existing = await this.prisma.hrms_departments.findFirst({
+      where: { id, tenantId },
+    });
     if (!existing) throw new NotFoundException(`Department ${id} not found`);
     return this.prisma.hrms_departments.update({ where: { id }, data: dto });
   }
@@ -461,46 +630,64 @@ export class EmployeesService {
 
   async createPosition(dto: any, tenantId: string) {
     if (dto.code) {
-      const exists = await this.prisma.hrms_positions.findFirst({ where: { tenantId, code: dto.code } });
-      if (exists) throw new ConflictException(`Position code ${dto.code} already exists`);
+      const exists = await this.prisma.hrms_positions.findFirst({
+        where: { tenantId, code: dto.code },
+      });
+      if (exists)
+        throw new ConflictException(`Position code ${dto.code} already exists`);
     }
     return this.prisma.hrms_positions.create({
-      data: { tenantId, title: dto.title, code: dto.code, description: dto.description, department: dto.department },
+      data: {
+        tenantId,
+        title: dto.title,
+        code: dto.code,
+        description: dto.description,
+        department: dto.department,
+      },
     });
   }
 
   // ─── Dashboard Stats ────────────────────────────────────────────────────────
 
   async getStats(tenantId: string) {
-    const [total, byStatus, byType, pendingLeave, probationEnding] = await Promise.all([
-      this.prisma.hrms_employees.count({ where: { tenantId, isActive: true } }),
-      this.prisma.hrms_employees.groupBy({
-        by: ['status'],
-        where: { tenantId, isActive: true },
-        _count: { id: true },
-      }),
-      this.prisma.hrms_employees.groupBy({
-        by: ['employmentType'],
-        where: { tenantId, isActive: true },
-        _count: { id: true },
-      }),
-      this.prisma.hrms_leave_requests.count({
-        where: { tenantId, status: 'PENDING' as any },
-      }),
-      this.prisma.hrms_employees.count({
-        where: {
-          tenantId,
-          isActive: true,
-          status: 'PROBATION' as any,
-          probationEndDate: { lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
-        },
-      }),
-    ]);
+    const [total, byStatus, byType, pendingLeave, probationEnding] =
+      await Promise.all([
+        this.prisma.hrms_employees.count({
+          where: { tenantId, isActive: true },
+        }),
+        this.prisma.hrms_employees.groupBy({
+          by: ['status'],
+          where: { tenantId, isActive: true },
+          _count: { id: true },
+        }),
+        this.prisma.hrms_employees.groupBy({
+          by: ['employmentType'],
+          where: { tenantId, isActive: true },
+          _count: { id: true },
+        }),
+        this.prisma.hrms_leave_requests.count({
+          where: { tenantId, status: 'PENDING' as any },
+        }),
+        this.prisma.hrms_employees.count({
+          where: {
+            tenantId,
+            isActive: true,
+            status: 'PROBATION' as any,
+            probationEndDate: {
+              lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            },
+          },
+        }),
+      ]);
 
     return {
       total,
-      byStatus: Object.fromEntries(byStatus.map((s) => [s.status, s._count.id])),
-      byEmploymentType: Object.fromEntries(byType.map((t) => [t.employmentType, t._count.id])),
+      byStatus: Object.fromEntries(
+        byStatus.map((s) => [s.status, s._count.id]),
+      ),
+      byEmploymentType: Object.fromEntries(
+        byType.map((t) => [t.employmentType, t._count.id]),
+      ),
       pendingLeaveRequests: pendingLeave,
       probationEndingSoon: probationEnding,
     };

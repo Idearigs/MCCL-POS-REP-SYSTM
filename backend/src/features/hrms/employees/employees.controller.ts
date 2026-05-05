@@ -43,9 +43,15 @@ export class EmployeesController {
   // ─── Self-Service ─────────────────────────────────────────────────────────
 
   @Get('me')
-  @ApiOperation({ summary: 'Get the employee record linked to the current user (matched by email)' })
+  @ApiOperation({
+    summary:
+      'Get the employee record linked to the current user (matched by email)',
+  })
   async getMe(@Request() req: any) {
-    const emp = await this.employeesService.findMe(req.user.email, req.user.tenantId);
+    const emp = await this.employeesService.findMe(
+      req.user.email,
+      req.user.tenantId,
+    );
     if (!emp) {
       return { linked: false, employee: null };
     }
@@ -83,7 +89,11 @@ export class EmployeesController {
 
   @Put('employees/:id')
   @ApiOperation({ summary: 'Update employee' })
-  update(@Param('id') id: string, @Body() dto: UpdateEmployeeDto, @Request() req: any) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateEmployeeDto,
+    @Request() req: any,
+  ) {
     return this.employeesService.update(id, dto, req.user.tenantId);
   }
 
@@ -119,7 +129,12 @@ export class EmployeesController {
     @Body() dto: UpdateLeaveStatusDto,
     @Request() req: any,
   ) {
-    return this.employeesService.updateLeaveStatus(leaveId, dto, req.user.tenantId, req.user.sub);
+    return this.employeesService.updateLeaveStatus(
+      leaveId,
+      dto,
+      req.user.tenantId,
+      req.user.sub,
+    );
   }
 
   // ─── Departments ───────────────────────────────────────────────────────────
