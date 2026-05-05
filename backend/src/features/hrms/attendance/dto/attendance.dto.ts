@@ -35,7 +35,9 @@ export class TimesheetEntryDto {
   @Type(() => Number)
   breakMinutes?: number;
 
-  @ApiPropertyOptional({ description: 'Override hours (used for leave types when no start/end)' })
+  @ApiPropertyOptional({
+    description: 'Override hours (used for leave types when no start/end)',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -44,7 +46,16 @@ export class TimesheetEntryDto {
   hoursWorked?: number;
 
   @ApiPropertyOptional({
-    enum: ['REGULAR', 'OVERTIME', 'SICK', 'ANNUAL_LEAVE', 'BANK_HOLIDAY', 'TRAINING', 'UNPAID', 'OTHER'],
+    enum: [
+      'REGULAR',
+      'OVERTIME',
+      'SICK',
+      'ANNUAL_LEAVE',
+      'BANK_HOLIDAY',
+      'TRAINING',
+      'UNPAID',
+      'OTHER',
+    ],
     default: 'REGULAR',
   })
   @IsOptional()

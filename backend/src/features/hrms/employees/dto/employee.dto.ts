@@ -383,14 +383,23 @@ export class CreateEmployeeDto {
 // ─── Update Employee ──────────────────────────────────────────────────────────
 
 export class UpdateEmployeeDto {
-  @ApiPropertyOptional({ enum: TitleType }) @IsOptional() @IsEnum(TitleType) title?: TitleType;
+  @ApiPropertyOptional({ enum: TitleType })
+  @IsOptional()
+  @IsEnum(TitleType)
+  title?: TitleType;
   @ApiPropertyOptional() @IsOptional() @IsString() firstName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() middleName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() lastName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() preferredName?: string;
-  @ApiPropertyOptional({ enum: Gender }) @IsOptional() @IsEnum(Gender) gender?: Gender;
+  @ApiPropertyOptional({ enum: Gender })
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
   @ApiPropertyOptional() @IsOptional() @IsDateString() dateOfBirth?: string;
-  @ApiPropertyOptional({ enum: MaritalStatus }) @IsOptional() @IsEnum(MaritalStatus) maritalStatus?: MaritalStatus;
+  @ApiPropertyOptional({ enum: MaritalStatus })
+  @IsOptional()
+  @IsEnum(MaritalStatus)
+  maritalStatus?: MaritalStatus;
   @ApiPropertyOptional() @IsOptional() @IsString() nationality?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() ethnicity?: string;
   @ApiPropertyOptional() @IsOptional() @IsEmail() personalEmail?: string;
@@ -407,30 +416,78 @@ export class UpdateEmployeeDto {
   @ApiPropertyOptional() @IsOptional() @IsString() positionId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() managerId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() jobTitle?: string;
-  @ApiPropertyOptional({ enum: EmployeeStatus }) @IsOptional() @IsEnum(EmployeeStatus) status?: EmployeeStatus;
-  @ApiPropertyOptional({ enum: EmploymentType }) @IsOptional() @IsEnum(EmploymentType) employmentType?: EmploymentType;
-  @ApiPropertyOptional({ enum: ContractType }) @IsOptional() @IsEnum(ContractType) contractType?: ContractType;
+  @ApiPropertyOptional({ enum: EmployeeStatus })
+  @IsOptional()
+  @IsEnum(EmployeeStatus)
+  status?: EmployeeStatus;
+  @ApiPropertyOptional({ enum: EmploymentType })
+  @IsOptional()
+  @IsEnum(EmploymentType)
+  employmentType?: EmploymentType;
+  @ApiPropertyOptional({ enum: ContractType })
+  @IsOptional()
+  @IsEnum(ContractType)
+  contractType?: ContractType;
   @ApiPropertyOptional() @IsOptional() @IsDateString() startDate?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() endDate?: string;
-  @ApiPropertyOptional() @IsOptional() @IsDateString() probationEndDate?: string;
-  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) noticePeriodDays?: number;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  probationEndDate?: string;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  noticePeriodDays?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() niNumber?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() taxCode?: string;
-  @ApiPropertyOptional({ enum: NiCategory }) @IsOptional() @IsEnum(NiCategory) niCategory?: NiCategory;
-  @ApiPropertyOptional({ enum: PayFrequency }) @IsOptional() @IsEnum(PayFrequency) payFrequency?: PayFrequency;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() salary?: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() hourlyRate?: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) @Max(168) contractedHours?: number;
+  @ApiPropertyOptional({ enum: NiCategory })
+  @IsOptional()
+  @IsEnum(NiCategory)
+  niCategory?: NiCategory;
+  @ApiPropertyOptional({ enum: PayFrequency })
+  @IsOptional()
+  @IsEnum(PayFrequency)
+  payFrequency?: PayFrequency;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  salary?: number;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  hourlyRate?: number;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(168)
+  contractedHours?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() bankAccountName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() bankSortCode?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() bankAccountNo?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() bankName?: string;
-  @ApiPropertyOptional({ enum: StarterDeclaration }) @IsOptional() @IsEnum(StarterDeclaration) starterDeclaration?: StarterDeclaration;
+  @ApiPropertyOptional({ enum: StarterDeclaration })
+  @IsOptional()
+  @IsEnum(StarterDeclaration)
+  starterDeclaration?: StarterDeclaration;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() p45Received?: boolean;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) annualLeaveEntitlement?: number;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  annualLeaveEntitlement?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() studentLoanPlan?: string;
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() rightToWorkChecked?: boolean;
-  @ApiPropertyOptional() @IsOptional() @IsDateString() rightToWorkExpiry?: string;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  rightToWorkChecked?: boolean;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  rightToWorkExpiry?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() emergencyName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() emergencyPhone?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() emergencyRelation?: string;
@@ -522,7 +579,8 @@ export class EmployeeResponseDto {
   @ApiPropertyOptional() probationEndDate?: string;
   @ApiPropertyOptional() noticePeriodDays?: number;
 
-  @ApiPropertyOptional({ description: 'Masked NI number' }) niNumberMasked?: string;
+  @ApiPropertyOptional({ description: 'Masked NI number' })
+  niNumberMasked?: string;
   @ApiPropertyOptional() taxCode?: string;
   @ApiPropertyOptional() niCategory?: string;
   @ApiPropertyOptional() payFrequency?: string;
@@ -531,8 +589,10 @@ export class EmployeeResponseDto {
   @ApiPropertyOptional() contractedHours?: number;
 
   @ApiPropertyOptional() bankName?: string;
-  @ApiPropertyOptional({ description: 'Masked sort code' }) bankSortCodeMasked?: string;
-  @ApiPropertyOptional({ description: 'Masked account number' }) bankAccountNoMasked?: string;
+  @ApiPropertyOptional({ description: 'Masked sort code' })
+  bankSortCodeMasked?: string;
+  @ApiPropertyOptional({ description: 'Masked account number' })
+  bankAccountNoMasked?: string;
 
   @ApiPropertyOptional() starterDeclaration?: string;
   @ApiProperty() p45Received: boolean;
@@ -579,7 +639,9 @@ export class CreateLeaveRequestDto {
 }
 
 export class UpdateLeaveStatusDto {
-  @ApiProperty({ enum: [LeaveStatus.APPROVED, LeaveStatus.REJECTED, LeaveStatus.CANCELLED] })
+  @ApiProperty({
+    enum: [LeaveStatus.APPROVED, LeaveStatus.REJECTED, LeaveStatus.CANCELLED],
+  })
   @IsEnum(LeaveStatus)
   status: LeaveStatus;
 
