@@ -19,6 +19,11 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import {
@@ -287,6 +292,7 @@ const EmployeesPage: React.FC = () => {
   const [deptFilter, setDeptFilter] = useState('ALL');
   const [meta, setMeta] = useState({ total: 0, page: 1, totalPages: 1 });
   const [page, setPage] = useState(1);
+  const [terminateTarget, setTerminateTarget] = useState<Employee | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -315,11 +321,12 @@ const EmployeesPage: React.FC = () => {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const handleTerminate = async (emp: Employee) => {
-    if (!confirm(`Terminate ${emp.fullName}? This will soft-delete the record.`)) return;
+  const handleTerminate = async () => {
+    if (!terminateTarget) return;
     try {
-      await hrmsService.terminateEmployee(emp.id);
-      toast.success(`${emp.fullName} terminated`);
+      await hrmsService.terminateEmployee(terminateTarget.id);
+      toast.success(`${terminateTarget.fullName} terminated`);
+      setTerminateTarget(null);
       loadData();
     } catch {
       toast.error('Failed to terminate employee');
@@ -533,7 +540,7 @@ const EmployeesPage: React.FC = () => {
                               {emp.status !== 'TERMINATED' && (
                                 <DropdownMenuItem
                                   className="text-red-600"
-                                  onClick={() => handleTerminate(emp)}
+                                  onClick={() => setTerminateTarget(emp)}
                                 >
                                   <Trash2 className="h-4 w-4 mr-2" /> Terminate
                                 </DropdownMenuItem>
@@ -574,6 +581,27 @@ const EmployeesPage: React.FC = () => {
         onCreated={(emp) => { setEmployees((prev) => [emp, ...prev]); }}
         departments={departments}
       />
+
+      <AlertDialog open={!!terminateTarget} onOpenChange={(o) => { if (!o) setTerminateTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Terminate Employee</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to terminate <strong>{terminateTarget?.fullName}</strong>?
+              This will soft-delete the record and can be reversed by an admin.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={handleTerminate}
+            >
+              Terminate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </MainLayout>
   );
 };

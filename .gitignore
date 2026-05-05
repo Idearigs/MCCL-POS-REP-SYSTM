@@ -23,3 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 qz-cert/
+Google-Driver-Details/
+*.json.key
+backend/dist/
+frontend/build/
+.env
+.env.*
+!.env.example
