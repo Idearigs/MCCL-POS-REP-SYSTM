@@ -1,4 +1,3 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { SalesRepository } from './sales.repository';
@@ -149,20 +148,14 @@ const mockShiftsService = {
 describe('SalesService', () => {
   let service: SalesService;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.clearAllMocks();
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        SalesService,
-        { provide: SalesRepository, useValue: mockSalesRepository },
-        { provide: PrismaService, useValue: mockPrismaService },
-        { provide: CacheService, useValue: mockCacheService },
-        { provide: ShiftsService, useValue: mockShiftsService },
-      ],
-    }).compile();
-
-    service = module.get<SalesService>(SalesService);
+    service = new SalesService(
+      mockSalesRepository as unknown as SalesRepository,
+      mockPrismaService as unknown as PrismaService,
+      mockCacheService as unknown as CacheService,
+      mockShiftsService as unknown as ShiftsService,
+    );
   });
 
   it('should be defined', () => {

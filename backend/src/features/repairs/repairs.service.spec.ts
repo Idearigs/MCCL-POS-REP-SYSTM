@@ -1,4 +1,3 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { RepairsService } from './repairs.service';
 import { RepairsRepository } from './repairs.repository';
@@ -104,22 +103,15 @@ const mockSmsService = {
 describe('RepairsService', () => {
   let service: RepairsService;
 
-  beforeEach(async () => {
-    // Reset all mocks between tests
+  beforeEach(() => {
     jest.clearAllMocks();
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        RepairsService,
-        { provide: RepairsRepository, useValue: mockRepairsRepository },
-        { provide: PrismaService, useValue: mockPrismaService },
-        { provide: CacheService, useValue: mockCacheService },
-        { provide: FileStorageService, useValue: mockFileStorageService },
-        { provide: SmsService, useValue: mockSmsService },
-      ],
-    }).compile();
-
-    service = module.get<RepairsService>(RepairsService);
+    service = new RepairsService(
+      mockRepairsRepository as unknown as RepairsRepository,
+      mockPrismaService as unknown as PrismaService,
+      mockCacheService as unknown as CacheService,
+      mockFileStorageService as unknown as FileStorageService,
+      mockSmsService as unknown as SmsService,
+    );
   });
 
   it('should be defined', () => {

@@ -1,84 +1,25 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException, ConflictException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
-import { PrismaService } from '../../core/prisma/prisma.service';
-import { CacheService } from '../../core/cache/cache.service';
+import { AuthCoreService } from './services/auth-core.service';
+import { UserManagementService } from './services/user-management.service';
+import { TenantProvisioningService } from './services/tenant-provisioning.service';
 import type { RegisterDto } from './dto/auth.dto';
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Mock bcrypt
-// ──────────────────────────────────────────────────────────────────────────────
-jest.mock('bcrypt');
-const mockedBcrypt = bcrypt as jest.Mocked<typeof bcrypt>;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Test fixtures
 // ──────────────────────────────────────────────────────────────────────────────
-const mockUser = {
-  id: 'user-001',
-  email: 'admin@test.com',
-  password: '$2b$12$hashedpassword',
-  firstName: 'Admin',
-  lastName: 'User',
-  role: 'ADMIN',
-  tenantId: 'tenant-001',
-  isActive: true,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  tenants: {
-    id: 'tenant-001',
-    name: 'Test Tenant',
-    status: 'ACTIVE',
+const mockAuthResponse = {
+  accessToken: 'mock.access.token',
+  refreshToken: 'mock.refresh.token',
+  user: {
+    id: 'user-001',
+    email: 'admin@test.com',
+    firstName: 'Admin',
+    lastName: 'User',
+    role: 'ADMIN',
+    tenantId: 'tenant-001',
   },
-};
-
-const mockPrismaService = {
-  users: {
-    findFirst: jest.fn(),
-    findUnique: jest.fn(),
-    create: jest.fn(),
-    update: jest.fn(),
-  },
-  tenants: {
-    findUnique: jest.fn().mockResolvedValue({
-      id: 'tenant-001',
-      status: 'ACTIVE',
-      name: 'Test Tenant',
-    }),
-  },
-};
-
-const mockJwtService = {
-  sign: jest.fn().mockReturnValue('mock.jwt.token'),
-  signAsync: jest.fn().mockResolvedValue('mock.jwt.token'),
-  verify: jest.fn(),
-};
-
-const mockConfigService = {
-  get: jest.fn((key: string, fallback?: string) => {
-    const config: Record<string, string> = {
-      JWT_SECRET: 'test_secret',
-      JWT_REFRESH_SECRET: 'test_refresh_secret',
-      JWT_EXPIRATION: '15m',
-      JWT_REFRESH_EXPIRATION: '7d',
-    };
-    return config[key] ?? fallback;
-  }),
-};
-
-const mockCacheService = {
-  get: jest.fn().mockResolvedValue(null),
-  set: jest.fn().mockResolvedValue(undefined),
-  del: jest.fn().mockResolvedValue(undefined),
-  setUserData: jest.fn().mockResolvedValue(undefined),
-  getUserData: jest.fn().mockResolvedValue(null),
-  delUserData: jest.fn().mockResolvedValue(undefined),
-  getTenantData: jest.fn().mockResolvedValue(null),
-  setTenantData: jest.fn().mockResolvedValue(undefined),
-  delTenantData: jest.fn().mockResolvedValue(undefined),
+  expiresIn: 900,
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -86,21 +27,36 @@ const mockCacheService = {
 // ──────────────────────────────────────────────────────────────────────────────
 describe('AuthService', () => {
   let service: AuthService;
+  let authCore: jest.Mocked<AuthCoreService>;
+  let userManagement: jest.Mocked<UserManagementService>;
+  let tenantProvisioning: jest.Mocked<TenantProvisioningService>;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.clearAllMocks();
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        AuthService,
-        { provide: PrismaService, useValue: mockPrismaService },
-        { provide: JwtService, useValue: mockJwtService },
-        { provide: ConfigService, useValue: mockConfigService },
-        { provide: CacheService, useValue: mockCacheService },
-      ],
-    }).compile();
+    authCore = {
+      login: jest.fn(),
+      register: jest.fn(),
+      refreshToken: jest.fn(),
+      logout: jest.fn(),
+      changePassword: jest.fn(),
+    } as unknown as jest.Mocked<AuthCoreService>;
 
-    service = module.get<AuthService>(AuthService);
+    userManagement = {
+      getUsers: jest.fn(),
+      getUserById: jest.fn(),
+      updateUser: jest.fn(),
+      resetUserPassword: jest.fn(),
+      deleteUser: jest.fn(),
+    } as unknown as jest.Mocked<UserManagementService>;
+
+    tenantProvisioning = {
+      provisionTenant: jest.fn(),
+      seedDefaultCategories: jest.fn().mockResolvedValue(undefined),
+      updateTenantStatus: jest.fn(),
+    } as unknown as jest.Mocked<TenantProvisioningService>;
+
+    service = new AuthService(authCore, userManagement, tenantProvisioning);
   });
 
   it('should be defined', () => {
@@ -115,9 +71,7 @@ describe('AuthService', () => {
     const loginDto = { email: 'admin@test.com', password: 'password123' };
 
     it('should return tokens and user info on successful login', async () => {
-      mockPrismaService.users.findFirst.mockResolvedValue(mockUser);
-      (mockedBcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockCacheService.set.mockResolvedValue(undefined);
+      authCore.login.mockResolvedValue(mockAuthResponse);
 
       const result = await service.login(loginDto, 'tenant-001');
 
@@ -128,7 +82,9 @@ describe('AuthService', () => {
     });
 
     it('should throw UnauthorizedException when user is not found', async () => {
-      mockPrismaService.users.findFirst.mockResolvedValue(null);
+      authCore.login.mockRejectedValue(
+        new UnauthorizedException('Invalid email or password'),
+      );
 
       await expect(service.login(loginDto, 'tenant-001')).rejects.toThrow(
         UnauthorizedException,
@@ -136,8 +92,9 @@ describe('AuthService', () => {
     });
 
     it('should throw UnauthorizedException when password is invalid', async () => {
-      mockPrismaService.users.findFirst.mockResolvedValue(mockUser);
-      (mockedBcrypt.compare as jest.Mock).mockResolvedValue(false);
+      authCore.login.mockRejectedValue(
+        new UnauthorizedException('Invalid email or password'),
+      );
 
       await expect(service.login(loginDto, 'tenant-001')).rejects.toThrow(
         UnauthorizedException,
@@ -145,9 +102,7 @@ describe('AuthService', () => {
     });
 
     it('should not expose password in the returned user object', async () => {
-      mockPrismaService.users.findFirst.mockResolvedValue(mockUser);
-      (mockedBcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockCacheService.set.mockResolvedValue(undefined);
+      authCore.login.mockResolvedValue(mockAuthResponse);
 
       const result = await service.login(loginDto, 'tenant-001');
 
@@ -155,23 +110,11 @@ describe('AuthService', () => {
     });
 
     it('should only find active users within the correct tenant', async () => {
-      mockPrismaService.users.findFirst.mockResolvedValue(mockUser);
-      (mockedBcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockCacheService.set.mockResolvedValue(undefined);
+      authCore.login.mockResolvedValue(mockAuthResponse);
 
       await service.login(loginDto, 'tenant-001');
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      expect(mockPrismaService.users.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          where: expect.objectContaining({
-            email: 'admin@test.com',
-            tenantId: 'tenant-001',
-            isActive: true,
-          }),
-        }),
-      );
+      expect(authCore.login).toHaveBeenCalledWith(loginDto, 'tenant-001');
     });
   });
 
@@ -189,17 +132,11 @@ describe('AuthService', () => {
     };
 
     it('should create a new user and return tokens', async () => {
-      mockPrismaService.users.findFirst.mockResolvedValue(null); // no existing user
-      (mockedBcrypt.hash as jest.Mock).mockResolvedValue('$2b$12$newhash');
-      mockPrismaService.users.create.mockResolvedValue({
-        ...mockUser,
-        id: 'user-new',
-        email: 'newuser@test.com',
-        firstName: 'New',
-        lastName: 'User',
-        role: 'CASHIER',
-      });
-      mockCacheService.set.mockResolvedValue(undefined);
+      const newUserResponse = {
+        ...mockAuthResponse,
+        user: { ...mockAuthResponse.user, email: 'newuser@test.com' },
+      };
+      authCore.register.mockResolvedValue(newUserResponse);
 
       const result = await service.register(
         registerDto as RegisterDto,
@@ -211,7 +148,9 @@ describe('AuthService', () => {
     });
 
     it('should throw ConflictException when email already exists in tenant', async () => {
-      mockPrismaService.users.findFirst.mockResolvedValue(mockUser);
+      authCore.register.mockRejectedValue(
+        new ConflictException('User already exists with this email'),
+      );
 
       await expect(
         service.register(registerDto as RegisterDto, 'tenant-001'),

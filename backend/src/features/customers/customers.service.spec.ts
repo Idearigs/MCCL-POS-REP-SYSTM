@@ -1,4 +1,3 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { CustomersService } from './customers.service';
 import { CustomersRepository } from './customers.repository';
@@ -63,18 +62,12 @@ const mockCacheService = {
 describe('CustomersService', () => {
   let service: CustomersService;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.clearAllMocks();
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        CustomersService,
-        { provide: CustomersRepository, useValue: mockCustomersRepository },
-        { provide: CacheService, useValue: mockCacheService },
-      ],
-    }).compile();
-
-    service = module.get<CustomersService>(CustomersService);
+    service = new CustomersService(
+      mockCustomersRepository as unknown as CustomersRepository,
+      mockCacheService as unknown as CacheService,
+    );
   });
 
   it('should be defined', () => {
