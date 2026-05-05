@@ -293,6 +293,16 @@ const EmployeesPage: React.FC = () => {
   const [meta, setMeta] = useState({ total: 0, page: 1, totalPages: 1 });
   const [page, setPage] = useState(1);
   const [terminateTarget, setTerminateTarget] = useState<Employee | null>(null);
+  const [tsLinkTarget, setTsLinkTarget] = useState<Employee | null>(null);
+  const [tsLinkWeek, setTsLinkWeek] = useState(() => {
+    const today = new Date();
+    const day = today.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    today.setDate(today.getDate() + diff);
+    return today.toISOString().split('T')[0];
+  });
+  const [tsLink, setTsLink] = useState('');
+  const [tsLinkLoading, setTsLinkLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -330,6 +340,35 @@ const EmployeesPage: React.FC = () => {
       loadData();
     } catch {
       toast.error('Failed to terminate employee');
+    }
+  };
+
+  const handleGenerateTimesheetLink = async () => {
+    if (!tsLinkTarget) return;
+    setTsLinkLoading(true);
+    setTsLink('');
+    try {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3007/api/v1';
+      const token = localStorage.getItem('accessToken') || '';
+      const tenantId = localStorage.getItem('tenantId') || '';
+      const resp = await fetch(
+        `${API_BASE}/hrms/attendance/timesheets/${tsLinkTarget.id}/generate-link?weekStart=${tsLinkWeek}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'x-tenant-id': tenantId,
+          },
+        },
+      );
+      if (!resp.ok) throw new Error('Failed to generate link');
+      const data = await resp.json();
+      const fullLink = `${window.location.origin}${data.link}`;
+      setTsLink(fullLink);
+    } catch {
+      toast.error('Could not generate timesheet link');
+    } finally {
+      setTsLinkLoading(false);
     }
   };
 
@@ -539,6 +578,13 @@ const EmployeesPage: React.FC = () => {
                               </DropdownMenuItem>
                               {emp.status !== 'TERMINATED' && (
                                 <DropdownMenuItem
+                                  onClick={() => { setTsLinkTarget(emp); setTsLink(''); }}
+                                >
+                                  <Clock className="h-4 w-4 mr-2" /> Timesheet Link
+                                </DropdownMenuItem>
+                              )}
+                              {emp.status !== 'TERMINATED' && (
+                                <DropdownMenuItem
                                   className="text-red-600"
                                   onClick={() => setTerminateTarget(emp)}
                                 >
@@ -581,6 +627,55 @@ const EmployeesPage: React.FC = () => {
         onCreated={(emp) => { setEmployees((prev) => [emp, ...prev]); }}
         departments={departments}
       />
+
+      {/* Timesheet Link Dialog */}
+      <Dialog open={!!tsLinkTarget} onOpenChange={(o) => { if (!o) { setTsLinkTarget(null); setTsLink(''); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Generate Timesheet Link</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-gray-600">
+              Generate a self-service link for <strong>{tsLinkTarget?.fullName}</strong>.
+              The employee will set their own PIN and fill their hours.
+            </p>
+            <div>
+              <Label htmlFor="ts-week">Week starting (Monday)</Label>
+              <Input
+                id="ts-week"
+                type="date"
+                value={tsLinkWeek}
+                onChange={(e) => setTsLinkWeek(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            {tsLink && (
+              <div className="space-y-2">
+                <Label>Share this link with the employee</Label>
+                <div className="flex gap-2">
+                  <Input value={tsLink} readOnly className="text-xs" />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { navigator.clipboard.writeText(tsLink); toast.success('Link copied'); }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setTsLinkTarget(null); setTsLink(''); }}>
+              Close
+            </Button>
+            <Button onClick={handleGenerateTimesheetLink} disabled={tsLinkLoading}>
+              {tsLinkLoading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+              Generate Link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!terminateTarget} onOpenChange={(o) => { if (!o) setTerminateTarget(null); }}>
         <AlertDialogContent>

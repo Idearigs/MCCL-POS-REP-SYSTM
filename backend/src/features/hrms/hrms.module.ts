@@ -7,6 +7,7 @@ import { PayrollService } from './payroll/payroll.service';
 import { PayrollCalcService } from './payroll/payroll-calc.service';
 import { AttendanceController } from './attendance/attendance.controller';
 import { AttendanceService } from './attendance/attendance.service';
+import { TimesheetTokensService } from './attendance/timesheet-tokens.service';
 import { ReportsController } from './reports/reports.controller';
 import { ReportsService } from './reports/reports.service';
 import { CacheServiceModule } from '../../core/cache/cache.module';
@@ -25,6 +26,7 @@ import { CacheServiceModule } from '../../core/cache/cache.module';
     PayrollService,
     PayrollCalcService,
     AttendanceService,
+    TimesheetTokensService,
     ReportsService,
   ],
   exports: [

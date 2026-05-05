@@ -1632,9 +1632,10 @@ model hrms_employees {
   leaveRequests  hrms_leave_requests[]
   documents      hrms_employee_documents[]
   payslips       hrms_payslips[]
-  timesheets     hrms_timesheets[]
-  timesheetEntries hrms_timesheet_entries[]
-  p11dBenefits   hrms_p11d_benefits[]
+  timesheets        hrms_timesheets[]
+  timesheetEntries  hrms_timesheet_entries[]
+  timesheetTokens   hrms_timesheet_tokens[]
+  p11dBenefits      hrms_p11d_benefits[]
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId, status])
@@ -1849,6 +1850,25 @@ model hrms_timesheet_entries {
 
   @@unique([timesheetId, entryDate])
   @@index([tenantId, employeeId, entryDate])
+}
+
+model hrms_timesheet_tokens {
+  id          String   @id @default(uuid())
+  tenantId    String
+  employeeId  String
+  token       String   @unique
+  weekStart   DateTime @db.Date
+  weekEnd     DateTime @db.Date
+  pinHash     String?
+  status      String   @default("PENDING")
+  submittedAt DateTime?
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+
+  employee hrms_employees @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, employeeId])
+  @@index([token])
 }
 
 model hrms_bank_holidays {

@@ -10,10 +10,13 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../../../features/auth/guards/jwt-auth.guard';
 import { AttendanceService } from './attendance.service';
+import { TimesheetTokensService } from './timesheet-tokens.service';
 import { BulkUpsertEntriesDto, RejectTimesheetDto } from './dto/attendance.dto';
 
 @ApiTags('HRMS - Attendance')
@@ -21,7 +24,10 @@ import { BulkUpsertEntriesDto, RejectTimesheetDto } from './dto/attendance.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('hrms/attendance')
 export class AttendanceController {
-  constructor(private readonly attendanceService: AttendanceService) {}
+  constructor(
+    private readonly attendanceService: AttendanceService,
+    private readonly timesheetTokensService: TimesheetTokensService,
+  ) {}
 
   // ─── Weekly Overview ──────────────────────────────────────────────────────
 
@@ -154,5 +160,51 @@ export class AttendanceController {
   @ApiOperation({ summary: 'Delete a bank holiday entry' })
   deleteBankHoliday(@Param('id') id: string, @Request() req: any) {
     return this.attendanceService.deleteBankHoliday(id, req.user.tenantId);
+  }
+
+  // ─── Self-Service Timesheet Links ─────────────────────────────────────────
+
+  @Post('timesheets/:employeeId/generate-link')
+  @ApiOperation({ summary: 'Generate a self-service timesheet link for employee' })
+  generateTimesheetLink(
+    @Param('employeeId') employeeId: string,
+    @Query('weekStart') weekStart: string,
+    @Request() req: any,
+  ) {
+    const ws = weekStart || new Date().toISOString().split('T')[0];
+    return this.timesheetTokensService.generateLink(
+      employeeId,
+      ws,
+      req.user.tenantId,
+    );
+  }
+
+  // ─── Public endpoints (no JWT guard) ─────────────────────────────────────────
+
+  @Get('public/:token')
+  @ApiOperation({ summary: 'Get token info — public, no auth required' })
+  getPublicTokenInfo(@Param('token') token: string) {
+    return this.timesheetTokensService.getTokenInfo(token);
+  }
+
+  @Post('public/:token/submit')
+  @ApiOperation({ summary: 'Submit timesheet + download PDF — public, no auth required' })
+  async submitPublicTimesheet(
+    @Param('token') token: string,
+    @Body() body: { pin: string; entries: any[] },
+    @Res() res: Response,
+  ) {
+    const pdfBuffer = await this.timesheetTokensService.submitAndGeneratePdf(
+      token,
+      body.pin,
+      body.entries,
+    );
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'attachment; filename="timesheet.pdf"',
+      'Content-Length': pdfBuffer.length,
+    });
+    res.end(pdfBuffer);
   }
 }

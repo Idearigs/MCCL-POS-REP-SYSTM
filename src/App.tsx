@@ -38,6 +38,7 @@ import CashiersPage from "./pages/CashiersPage";
 import { StockTakingPage } from "./pages/StockTakingPage";
 import { UsersPage } from "./pages/UsersPage";
 import CustomerSelfRegistration from "./pages/CustomerSelfRegistration";
+import TimesheetFillPage from "./pages/hrms/TimesheetFillPage";
 import CashUpPage from "./pages/CashUpPage";
 import FloatManagementPage from "./pages/FloatManagementPage";
 import TasksPage from "./pages/TasksPage";
@@ -89,6 +90,7 @@ const App = () => (
                   {/* Public routes */}
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<CustomerSelfRegistration />} />
+                  <Route path="/timesheets/fill/:token" element={<TimesheetFillPage />} />
 
                   {/* Protected routes - require authentication */}
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
