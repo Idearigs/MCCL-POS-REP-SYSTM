@@ -191,7 +191,7 @@ router.post('/seed-defaults', requireAuth, async (_req, res) => {
     for (const d of defaults) {
       const upserted = await prisma.mf_features.upsert({
         where: { featureKey: d.featureKey },
-        update: { featureName: d.featureName, category: d.category, isIncludedInBase: d.isIncludedInBase },
+        update: { category: d.category, isIncludedInBase: d.isIncludedInBase },
         create: { ...d, status: 'STABLE', currentVersion: '1.0.0' },
       });
       results.push(upserted);
