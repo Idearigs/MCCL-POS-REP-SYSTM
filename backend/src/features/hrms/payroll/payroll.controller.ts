@@ -15,7 +15,10 @@ import {
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../features/auth/guards/jwt-auth.guard';
 import { PayrollService } from './payroll.service';
-import { CreatePayrollRunDto, AddPayslipAdjustmentsDto } from './dto/payroll.dto';
+import {
+  CreatePayrollRunDto,
+  AddPayslipAdjustmentsDto,
+} from './dto/payroll.dto';
 
 @ApiTags('HRMS - Payroll')
 @ApiBearerAuth('access-token')
@@ -86,7 +89,9 @@ export class PayrollController {
   }
 
   @Put('payslips/:id')
-  @ApiOperation({ summary: 'Update payslip adjustments (overtime, bonuses, etc.)' })
+  @ApiOperation({
+    summary: 'Update payslip adjustments (overtime, bonuses, etc.)',
+  })
   updatePayslip(
     @Param('id') id: string,
     @Body() dto: AddPayslipAdjustmentsDto,
@@ -99,7 +104,13 @@ export class PayrollController {
 
   @Get('employees/:employeeId/payslips')
   @ApiOperation({ summary: 'Get finalized payslip history for an employee' })
-  getEmployeePayslips(@Param('employeeId') employeeId: string, @Request() req: any) {
-    return this.payrollService.getEmployeePayslips(employeeId, req.user.tenantId);
+  getEmployeePayslips(
+    @Param('employeeId') employeeId: string,
+    @Request() req: any,
+  ) {
+    return this.payrollService.getEmployeePayslips(
+      employeeId,
+      req.user.tenantId,
+    );
   }
 }

@@ -13,13 +13,25 @@ import { CacheServiceModule } from '../../core/cache/cache.module';
 
 @Module({
   imports: [CacheServiceModule],
-  controllers: [EmployeesController, PayrollController, AttendanceController, ReportsController],
+  controllers: [
+    EmployeesController,
+    PayrollController,
+    AttendanceController,
+    ReportsController,
+  ],
   providers: [
-    EmployeesService, EncryptionService,
-    PayrollService, PayrollCalcService,
+    EmployeesService,
+    EncryptionService,
+    PayrollService,
+    PayrollCalcService,
     AttendanceService,
     ReportsService,
   ],
-  exports: [EmployeesService, PayrollService, AttendanceService, ReportsService],
+  exports: [
+    EmployeesService,
+    PayrollService,
+    AttendanceService,
+    ReportsService,
+  ],
 })
 export class HrmsModule {}

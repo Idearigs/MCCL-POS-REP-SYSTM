@@ -1,4 +1,10 @@
-import { IsString, IsDateString, IsOptional, IsNumber, Min } from 'class-validator';
+import {
+  IsString,
+  IsDateString,
+  IsOptional,
+  IsNumber,
+  Min,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -15,7 +21,10 @@ export class CreatePayrollRunDto {
   @IsDateString()
   payDate: string;
 
-  @ApiPropertyOptional({ enum: ['WEEKLY', 'FORTNIGHTLY', 'FOUR_WEEKLY', 'MONTHLY'], default: 'MONTHLY' })
+  @ApiPropertyOptional({
+    enum: ['WEEKLY', 'FORTNIGHTLY', 'FOUR_WEEKLY', 'MONTHLY'],
+    default: 'MONTHLY',
+  })
   @IsOptional()
   @IsString()
   payFrequency?: string;
@@ -69,7 +78,9 @@ export class AddPayslipAdjustmentsDto {
   @Type(() => Number)
   otherAdditions?: number;
 
-  @ApiPropertyOptional({ description: 'Additional deductions (e.g. salary advance repayment)' })
+  @ApiPropertyOptional({
+    description: 'Additional deductions (e.g. salary advance repayment)',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)

@@ -2,20 +2,20 @@ import { Injectable } from '@nestjs/common';
 
 // ── UK 2024/25 PAYE rates (England / Wales / Northern Ireland) ─────────────────
 const PERSONAL_ALLOWANCE = 12_570;
-const BASIC_RATE_LIMIT = 50_270;        // upper boundary of basic-rate band
-const ADDITIONAL_RATE_LIMIT = 125_140;  // start of additional rate
-const TAPER_THRESHOLD = 100_000;        // PA reduces by £1 per £2 above this
-const BASIC_RATE = 0.20;
-const HIGHER_RATE = 0.40;
+const BASIC_RATE_LIMIT = 50_270; // upper boundary of basic-rate band
+const ADDITIONAL_RATE_LIMIT = 125_140; // start of additional rate
+const TAPER_THRESHOLD = 100_000; // PA reduces by £1 per £2 above this
+const BASIC_RATE = 0.2;
+const HIGHER_RATE = 0.4;
 const ADDITIONAL_RATE = 0.45;
 
 // ── UK 2024/25 Class 1 NI ──────────────────────────────────────────────────────
-const NI_PRIMARY_THRESHOLD = 12_570;    // employee NI starts (annual)
+const NI_PRIMARY_THRESHOLD = 12_570; // employee NI starts (annual)
 const NI_UPPER_EARNINGS_LIMIT = 50_270; // employee upper limit (annual)
-const NI_SECONDARY_THRESHOLD = 9_100;   // employer NI starts (annual)
-const NI_EMPLOYEE_MAIN = 0.08;          // 8% (reduced from 10% in April 2024)
-const NI_EMPLOYEE_UPPER = 0.02;         // 2% above UEL
-const NI_EMPLOYER = 0.138;              // 13.8%
+const NI_SECONDARY_THRESHOLD = 9_100; // employer NI starts (annual)
+const NI_EMPLOYEE_MAIN = 0.08; // 8% (reduced from 10% in April 2024)
+const NI_EMPLOYEE_UPPER = 0.02; // 2% above UEL
+const NI_EMPLOYER = 0.138; // 13.8%
 
 // ── Student loan 2024/25 annual repayment thresholds ──────────────────────────
 const STUDENT_LOAN_THRESHOLDS: Record<string, number> = {
@@ -29,7 +29,7 @@ const STUDENT_LOAN_RATE = 0.09;
 const POSTGRAD_RATE = 0.06;
 
 // ── Pension qualifying earnings 2024/25 ────────────────────────────────────────
-const PENSION_LOWER_THRESHOLD = 6_240;  // annual lower qualifying earnings limit
+const PENSION_LOWER_THRESHOLD = 6_240; // annual lower qualifying earnings limit
 
 // ── Pay periods per year ───────────────────────────────────────────────────────
 const PERIODS_PER_YEAR: Record<string, number> = {
@@ -53,7 +53,6 @@ export interface PayrollCalculation {
 
 @Injectable()
 export class PayrollCalcService {
-
   // ─── Tax code parsing ────────────────────────────────────────────────────────
 
   private parseTaxCode(code: string): {
@@ -64,9 +63,12 @@ export class PayrollCalcService {
     const c = code.trim().toUpperCase();
 
     if (c === 'NT') return { annualAllowance: 0, flatRate: null, noTax: true };
-    if (c === 'BR') return { annualAllowance: 0, flatRate: BASIC_RATE, noTax: false };
-    if (c === 'D0') return { annualAllowance: 0, flatRate: HIGHER_RATE, noTax: false };
-    if (c === 'D1') return { annualAllowance: 0, flatRate: ADDITIONAL_RATE, noTax: false };
+    if (c === 'BR')
+      return { annualAllowance: 0, flatRate: BASIC_RATE, noTax: false };
+    if (c === 'D0')
+      return { annualAllowance: 0, flatRate: HIGHER_RATE, noTax: false };
+    if (c === 'D1')
+      return { annualAllowance: 0, flatRate: ADDITIONAL_RATE, noTax: false };
     if (c === '0T') return { annualAllowance: 0, flatRate: null, noTax: false };
 
     // K code: addition to taxable pay (negative allowance)
@@ -77,15 +79,27 @@ export class PayrollCalcService {
 
     // Standard L/M/N/T codes: digits * 10 = annual allowance
     const m = c.match(/^(\d+)[LMNT]?$/);
-    if (m) return { annualAllowance: parseInt(m[1], 10) * 10, flatRate: null, noTax: false };
+    if (m)
+      return {
+        annualAllowance: parseInt(m[1], 10) * 10,
+        flatRate: null,
+        noTax: false,
+      };
 
     // Fallback: standard personal allowance
-    return { annualAllowance: PERSONAL_ALLOWANCE, flatRate: null, noTax: false };
+    return {
+      annualAllowance: PERSONAL_ALLOWANCE,
+      flatRate: null,
+      noTax: false,
+    };
   }
 
   // ─── Taper reduction ─────────────────────────────────────────────────────────
 
-  private taperedAllowance(annualAllowance: number, annualisedGross: number): number {
+  private taperedAllowance(
+    annualAllowance: number,
+    annualisedGross: number,
+  ): number {
     if (annualisedGross <= TAPER_THRESHOLD) return annualAllowance;
     const reduction = Math.floor((annualisedGross - TAPER_THRESHOLD) / 2);
     return Math.max(0, annualAllowance - reduction);
@@ -101,7 +115,10 @@ export class PayrollCalcService {
     if (flatRate !== null) return this.r2(Math.max(0, grossPay * flatRate));
 
     const annualisedGross = grossPay * periods;
-    const effectiveAllowance = this.taperedAllowance(annualAllowance, annualisedGross);
+    const effectiveAllowance = this.taperedAllowance(
+      annualAllowance,
+      annualisedGross,
+    );
     const periodAllowance = effectiveAllowance / periods;
 
     const taxablePay = grossPay - periodAllowance;
@@ -109,16 +126,21 @@ export class PayrollCalcService {
 
     // Band sizes per period (above the personal allowance)
     const basicBandEnd = (BASIC_RATE_LIMIT - effectiveAllowance) / periods;
-    const higherBandEnd = (ADDITIONAL_RATE_LIMIT - effectiveAllowance) / periods;
+    const higherBandEnd =
+      (ADDITIONAL_RATE_LIMIT - effectiveAllowance) / periods;
 
     let tax: number;
     if (taxablePay <= basicBandEnd) {
       tax = taxablePay * BASIC_RATE;
     } else if (taxablePay <= higherBandEnd) {
-      tax = basicBandEnd * BASIC_RATE + (taxablePay - basicBandEnd) * HIGHER_RATE;
+      tax =
+        basicBandEnd * BASIC_RATE + (taxablePay - basicBandEnd) * HIGHER_RATE;
     } else {
       const higherBand = higherBandEnd - basicBandEnd;
-      tax = basicBandEnd * BASIC_RATE + higherBand * HIGHER_RATE + (taxablePay - higherBandEnd) * ADDITIONAL_RATE;
+      tax =
+        basicBandEnd * BASIC_RATE +
+        higherBand * HIGHER_RATE +
+        (taxablePay - higherBandEnd) * ADDITIONAL_RATE;
     }
 
     return this.r2(Math.max(0, tax));
@@ -126,7 +148,11 @@ export class PayrollCalcService {
 
   // ─── National Insurance (Class 1) ─────────────────────────────────────────────
 
-  calculateNI(grossPay: number, frequency: string, niCategory: string): {
+  calculateNI(
+    grossPay: number,
+    frequency: string,
+    niCategory: string,
+  ): {
     employeeNI: number;
     employerNI: number;
   } {
@@ -173,7 +199,11 @@ export class PayrollCalcService {
 
   // ─── Student Loan ─────────────────────────────────────────────────────────────
 
-  calculateStudentLoan(grossPay: number, frequency: string, plan: string | null): number {
+  calculateStudentLoan(
+    grossPay: number,
+    frequency: string,
+    plan: string | null,
+  ): number {
     if (!plan) return 0;
     const periods = PERIODS_PER_YEAR[frequency] ?? 12;
     const key = plan.toUpperCase().replace(/\s/g, '');
@@ -196,7 +226,9 @@ export class PayrollCalcService {
     const periods = PERIODS_PER_YEAR[params.frequency] ?? 12;
     if (params.salary) return this.r2(params.salary / periods);
     if (params.hourlyRate && params.contractedHours) {
-      return this.r2((params.hourlyRate * params.contractedHours * 52) / periods);
+      return this.r2(
+        (params.hourlyRate * params.contractedHours * 52) / periods,
+      );
     }
     return 0;
   }
@@ -215,24 +247,45 @@ export class PayrollCalcService {
     studentLoanPlan: string | null;
   }): PayrollCalculation {
     const {
-      grossPay, taxCode, niCategory, frequency,
-      pensionEligible, pensionEnrolled,
-      employerPensionPct, employeePensionPct, studentLoanPlan,
+      grossPay,
+      taxCode,
+      niCategory,
+      frequency,
+      pensionEligible,
+      pensionEnrolled,
+      employerPensionPct,
+      employeePensionPct,
+      studentLoanPlan,
     } = params;
 
     const paye = this.calculatePAYE(grossPay, taxCode, frequency);
-    const { employeeNI, employerNI } = this.calculateNI(grossPay, frequency, niCategory);
+    const { employeeNI, employerNI } = this.calculateNI(
+      grossPay,
+      frequency,
+      niCategory,
+    );
 
     let employeePension = 0;
     let employerPension = 0;
     if (pensionEligible && pensionEnrolled) {
-      const p = this.calculatePension(grossPay, frequency, employerPensionPct, employeePensionPct);
+      const p = this.calculatePension(
+        grossPay,
+        frequency,
+        employerPensionPct,
+        employeePensionPct,
+      );
       employeePension = p.employeePension;
       employerPension = p.employerPension;
     }
 
-    const studentLoanRepayment = this.calculateStudentLoan(grossPay, frequency, studentLoanPlan);
-    const totalDeductions = this.r2(paye + employeeNI + employeePension + studentLoanRepayment);
+    const studentLoanRepayment = this.calculateStudentLoan(
+      grossPay,
+      frequency,
+      studentLoanPlan,
+    );
+    const totalDeductions = this.r2(
+      paye + employeeNI + employeePension + studentLoanRepayment,
+    );
     const netPay = this.r2(Math.max(0, grossPay - totalDeductions));
 
     return {

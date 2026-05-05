@@ -7,7 +7,10 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 import { PayrollCalcService } from './payroll-calc.service';
-import { CreatePayrollRunDto, AddPayslipAdjustmentsDto } from './dto/payroll.dto';
+import {
+  CreatePayrollRunDto,
+  AddPayslipAdjustmentsDto,
+} from './dto/payroll.dto';
 
 @Injectable()
 export class PayrollService {
@@ -94,18 +97,26 @@ export class PayrollService {
   }
 
   async deleteRun(id: string, tenantId: string) {
-    const run = await this.prisma.hrms_payroll_runs.findFirst({ where: { id, tenantId } });
+    const run = await this.prisma.hrms_payroll_runs.findFirst({
+      where: { id, tenantId },
+    });
     if (!run) throw new NotFoundException(`Payroll run ${id} not found`);
-    if (run.status === 'LOCKED') throw new BadRequestException('Cannot delete a locked payroll run');
+    if (run.status === 'LOCKED')
+      throw new BadRequestException('Cannot delete a locked payroll run');
     await this.prisma.hrms_payroll_runs.delete({ where: { id } });
   }
 
   // ─── Payslip Generation ──────────────────────────────────────────────────────
 
   async generatePayslips(runId: string, tenantId: string) {
-    const run = await this.prisma.hrms_payroll_runs.findFirst({ where: { id: runId, tenantId } });
+    const run = await this.prisma.hrms_payroll_runs.findFirst({
+      where: { id: runId, tenantId },
+    });
     if (!run) throw new NotFoundException(`Payroll run ${runId} not found`);
-    if (run.status === 'LOCKED') throw new BadRequestException('Payroll run is locked and cannot be modified');
+    if (run.status === 'LOCKED')
+      throw new BadRequestException(
+        'Payroll run is locked and cannot be modified',
+      );
 
     // Remove existing draft payslips (allow regeneration)
     await this.prisma.hrms_payslips.deleteMany({
@@ -129,7 +140,9 @@ export class PayrollService {
         frequency,
         salary: emp.salary ? Number(emp.salary) : null,
         hourlyRate: emp.hourlyRate ? Number(emp.hourlyRate) : null,
-        contractedHours: emp.contractedHours ? Number(emp.contractedHours) : null,
+        contractedHours: emp.contractedHours
+          ? Number(emp.contractedHours)
+          : null,
       });
 
       const result = this.calc.calculate({
@@ -139,8 +152,12 @@ export class PayrollService {
         frequency,
         pensionEligible: emp.pensionEligible,
         pensionEnrolled: emp.pensionEnrolled,
-        employerPensionPct: emp.employerPensionPct ? Number(emp.employerPensionPct) : 3,
-        employeePensionPct: emp.employeePensionPct ? Number(emp.employeePensionPct) : 5,
+        employerPensionPct: emp.employerPensionPct
+          ? Number(emp.employerPensionPct)
+          : 3,
+        employeePensionPct: emp.employeePensionPct
+          ? Number(emp.employeePensionPct)
+          : 5,
         studentLoanPlan: emp.studentLoanPlan,
       });
 
@@ -205,7 +222,9 @@ export class PayrollService {
   // ─── Payslips ────────────────────────────────────────────────────────────────
 
   async getPayslips(runId: string, tenantId: string) {
-    const run = await this.prisma.hrms_payroll_runs.findFirst({ where: { id: runId, tenantId } });
+    const run = await this.prisma.hrms_payroll_runs.findFirst({
+      where: { id: runId, tenantId },
+    });
     if (!run) throw new NotFoundException(`Payroll run ${runId} not found`);
 
     return this.prisma.hrms_payslips.findMany({
@@ -223,13 +242,18 @@ export class PayrollService {
     return slip;
   }
 
-  async updatePayslip(id: string, dto: AddPayslipAdjustmentsDto, tenantId: string) {
+  async updatePayslip(
+    id: string,
+    dto: AddPayslipAdjustmentsDto,
+    tenantId: string,
+  ) {
     const slip = await this.prisma.hrms_payslips.findFirst({
       where: { id, tenantId },
       include: { payrollRun: true, employee: true },
     });
     if (!slip) throw new NotFoundException(`Payslip ${id} not found`);
-    if (slip.payrollRun.status === 'LOCKED') throw new BadRequestException('Payroll run is locked');
+    if (slip.payrollRun.status === 'LOCKED')
+      throw new BadRequestException('Payroll run is locked');
 
     const grossPay =
       Number(slip.basicPay) +
@@ -248,8 +272,12 @@ export class PayrollService {
       frequency: String(slip.payFrequency),
       pensionEligible: slip.pensionEligible,
       pensionEnrolled: slip.pensionEnrolled,
-      employerPensionPct: emp?.employerPensionPct ? Number(emp.employerPensionPct) : 3,
-      employeePensionPct: emp?.employeePensionPct ? Number(emp.employeePensionPct) : 5,
+      employerPensionPct: emp?.employerPensionPct
+        ? Number(emp.employerPensionPct)
+        : 3,
+      employeePensionPct: emp?.employeePensionPct
+        ? Number(emp.employeePensionPct)
+        : 5,
       studentLoanPlan: emp?.studentLoanPlan ?? null,
     });
 
@@ -273,8 +301,12 @@ export class PayrollService {
         employeePension: result.employeePension,
         employerPension: result.employerPension,
         studentLoanRepayment: result.studentLoanRepayment,
-        totalDeductions: Math.round((result.totalDeductions + extraDeductions) * 100) / 100,
-        netPay: Math.max(0, Math.round((result.netPay - extraDeductions) * 100) / 100),
+        totalDeductions:
+          Math.round((result.totalDeductions + extraDeductions) * 100) / 100,
+        netPay: Math.max(
+          0,
+          Math.round((result.netPay - extraDeductions) * 100) / 100,
+        ),
         updatedAt: new Date(),
       },
     });
@@ -286,13 +318,20 @@ export class PayrollService {
   // ─── Finalize (Lock) ─────────────────────────────────────────────────────────
 
   async finalizeRun(runId: string, tenantId: string) {
-    const run = await this.prisma.hrms_payroll_runs.findFirst({ where: { id: runId, tenantId } });
+    const run = await this.prisma.hrms_payroll_runs.findFirst({
+      where: { id: runId, tenantId },
+    });
     if (!run) throw new NotFoundException(`Payroll run ${runId} not found`);
-    if (run.status === 'LOCKED') throw new BadRequestException('Payroll run is already locked');
+    if (run.status === 'LOCKED')
+      throw new BadRequestException('Payroll run is already locked');
 
-    const count = await this.prisma.hrms_payslips.count({ where: { payrollRunId: runId } });
+    const count = await this.prisma.hrms_payslips.count({
+      where: { payrollRunId: runId },
+    });
     if (count === 0) {
-      throw new BadRequestException('Generate payslips before finalizing the payroll run');
+      throw new BadRequestException(
+        'Generate payslips before finalizing the payroll run',
+      );
     }
 
     await this.prisma.hrms_payslips.updateMany({
@@ -319,14 +358,22 @@ export class PayrollService {
   // ─── Employee payslip history ────────────────────────────────────────────────
 
   async getEmployeePayslips(employeeId: string, tenantId: string) {
-    const emp = await this.prisma.hrms_employees.findFirst({ where: { id: employeeId, tenantId } });
+    const emp = await this.prisma.hrms_employees.findFirst({
+      where: { id: employeeId, tenantId },
+    });
     if (!emp) throw new NotFoundException(`Employee ${employeeId} not found`);
 
     return this.prisma.hrms_payslips.findMany({
       where: { employeeId, tenantId, status: 'FINAL' as any },
       include: {
         payrollRun: {
-          select: { id: true, periodStart: true, periodEnd: true, payDate: true, payFrequency: true },
+          select: {
+            id: true,
+            periodStart: true,
+            periodEnd: true,
+            payDate: true,
+            payFrequency: true,
+          },
         },
       },
       orderBy: { payDate: 'desc' },

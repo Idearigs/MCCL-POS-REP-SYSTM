@@ -39,13 +39,14 @@ export class EncryptionService {
 
   decrypt(ciphertext: string): string {
     const [ivHex, tagHex, dataHex] = ciphertext.split(':');
-    if (!ivHex || !tagHex || !dataHex) throw new Error('Invalid encrypted format');
+    if (!ivHex || !tagHex || !dataHex)
+      throw new Error('Invalid encrypted format');
     const iv = Buffer.from(ivHex, 'hex');
     const tag = Buffer.from(tagHex, 'hex');
     const data = Buffer.from(dataHex, 'hex');
     const decipher = crypto.createDecipheriv(ALGORITHM, this.key, iv);
     decipher.setAuthTag(tag);
-    return decipher.update(data) + decipher.final('utf8');
+    return decipher.update(data).toString('utf8') + decipher.final('utf8');
   }
 
   /** Encrypt only if value is non-empty, otherwise return null */
@@ -72,6 +73,8 @@ export class EncryptionService {
 
   /** Return masked sort code: "12-34-56" → "**-**-56" */
   maskSortCode(sc: string): string {
-    return sc.replace(/\d/g, (d, i) => (i >= sc.replace(/-/g, '').length - 2 ? d : '*'));
+    return sc.replace(/\d/g, (d, i) =>
+      i >= sc.replace(/-/g, '').length - 2 ? d : '*',
+    );
   }
 }

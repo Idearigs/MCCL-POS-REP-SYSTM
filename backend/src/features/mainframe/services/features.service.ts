@@ -27,9 +27,12 @@ export class FeaturesService {
    *  The x-tenant-id header may contain either the subdomain (e.g. "buymejewellery") or
    *  the internal tenant CUID (e.g. "cmgjqfaxy0000o72w07x7d1yk"). The mainframe always
    *  expects the subdomain, so we resolve it from the tenants table first. */
-  async getTenantFeatures(
-    tenantIdOrSubdomain: string,
-  ): Promise<{ features: string[]; _source?: string; betaExpiresAt?: string | null; isBetaTester?: boolean }> {
+  async getTenantFeatures(tenantIdOrSubdomain: string): Promise<{
+    features: string[];
+    _source?: string;
+    betaExpiresAt?: string | null;
+    isBetaTester?: boolean;
+  }> {
     // Resolve the real subdomain — look up the tenant by its internal ID first.
     // If not found (already a subdomain), use the value as-is.
     let subdomain = tenantIdOrSubdomain;
@@ -45,7 +48,11 @@ export class FeaturesService {
 
     const url = `${this.mainframeUrl}/mainframe/tenant-features/${subdomain}`;
     try {
-      const { data } = await axios.get<{ features: string[]; betaExpiresAt?: string | null; isBetaTester?: boolean }>(url, {
+      const { data } = await axios.get<{
+        features: string[];
+        betaExpiresAt?: string | null;
+        isBetaTester?: boolean;
+      }>(url, {
         headers: { ...buildHmacHeaders('') },
         timeout: 5000,
       });

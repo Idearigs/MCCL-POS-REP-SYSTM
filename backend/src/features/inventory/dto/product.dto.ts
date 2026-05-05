@@ -286,7 +286,8 @@ export class CreateProductDto {
 
   @ApiPropertyOptional({
     description: 'JSON array of material entries (multi-material support)',
-    example: '[{"base":"YELLOW_GOLD","carat":"18CT"},{"base":"DIAMOND","detail":"Round"}]',
+    example:
+      '[{"base":"YELLOW_GOLD","carat":"18CT"},{"base":"DIAMOND","detail":"Round"}]',
   })
   @IsOptional()
   @IsString()
@@ -635,7 +636,9 @@ export class ProductResponseDto {
   @ApiPropertyOptional({ example: 'Display Case A1' })
   location?: string;
 
-  @ApiPropertyOptional({ example: '[{"base":"YELLOW_GOLD","carat":"18CT"},{"base":"DIAMOND"}]' })
+  @ApiPropertyOptional({
+    example: '[{"base":"YELLOW_GOLD","carat":"18CT"},{"base":"DIAMOND"}]',
+  })
   materials?: string;
 
   @ApiProperty({ example: true })
