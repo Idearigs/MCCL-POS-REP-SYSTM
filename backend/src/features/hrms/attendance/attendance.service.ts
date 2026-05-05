@@ -79,9 +79,16 @@ export class AttendanceService {
 
     const [employees, timesheets, bankHolidays] = await Promise.all([
       this.prisma.hrms_employees.findMany({
-        where: { tenantId, isActive: true, status: { not: 'TERMINATED' as any } },
+        where: {
+          tenantId,
+          isActive: true,
+          status: { not: 'TERMINATED' as any },
+        },
         select: {
-          id: true, employeeNumber: true, firstName: true, lastName: true,
+          id: true,
+          employeeNumber: true,
+          firstName: true,
+          lastName: true,
           contractedHours: true,
         },
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
@@ -103,7 +110,7 @@ export class AttendanceService {
     ]);
 
     // Build lookup maps
-    const tsByEmp = new Map<string, typeof timesheets[0]>();
+    const tsByEmp = new Map<string, (typeof timesheets)[0]>();
     timesheets.forEach((ts) => tsByEmp.set(ts.employeeId, ts));
 
     // 7-day ISO date strings for the week
@@ -118,14 +125,20 @@ export class AttendanceService {
     const results = await Promise.all(
       employees.map(async (emp) => {
         const ts = tsByEmp.get(emp.id);
-        const dayMap: Record<string, { hoursWorked: number; entryType: string } | null> = {};
+        const dayMap: Record<
+          string,
+          { hoursWorked: number; entryType: string } | null
+        > = {};
 
         days.forEach((d) => {
           const entry = ts?.entries.find(
             (e) => this.isoDate(new Date(e.entryDate)) === d,
           );
           dayMap[d] = entry
-            ? { hoursWorked: Number(entry.hoursWorked), entryType: String(entry.entryType) }
+            ? {
+                hoursWorked: Number(entry.hoursWorked),
+                entryType: String(entry.entryType),
+              }
             : null;
         });
 
@@ -140,7 +153,12 @@ export class AttendanceService {
           days: dayMap,
           totalHours: ts ? Number(ts.totalHours) : 0,
           wtdAverage: wtd.average,
-          wtdStatus: wtd.average > 48 ? 'VIOLATION' : wtd.average > 44 ? 'WARNING' : 'OK',
+          wtdStatus:
+            wtd.average > 48
+              ? 'VIOLATION'
+              : wtd.average > 44
+                ? 'WARNING'
+                : 'OK',
         };
       }),
     );
@@ -157,7 +175,9 @@ export class AttendanceService {
       summary: {
         totalEmployees: employees.length,
         totalHours: results.reduce((s, e) => s + e.totalHours, 0),
-        pendingApprovals: results.filter((e) => e.timesheetStatus === 'SUBMITTED').length,
+        pendingApprovals: results.filter(
+          (e) => e.timesheetStatus === 'SUBMITTED',
+        ).length,
         wtdWarnings: results.filter((e) => e.wtdStatus !== 'OK').length,
       },
     };
@@ -165,8 +185,14 @@ export class AttendanceService {
 
   // ─── Timesheet CRUD ──────────────────────────────────────────────────────────
 
-  async getOrCreateTimesheet(employeeId: string, weekStartStr: string, tenantId: string) {
-    const emp = await this.prisma.hrms_employees.findFirst({ where: { id: employeeId, tenantId } });
+  async getOrCreateTimesheet(
+    employeeId: string,
+    weekStartStr: string,
+    tenantId: string,
+  ) {
+    const emp = await this.prisma.hrms_employees.findFirst({
+      where: { id: employeeId, tenantId },
+    });
     if (!emp) throw new NotFoundException(`Employee ${employeeId} not found`);
 
     const monday = this.getMonday(new Date(weekStartStr));
@@ -189,7 +215,9 @@ export class AttendanceService {
     dto: BulkUpsertEntriesDto,
     tenantId: string,
   ) {
-    const emp = await this.prisma.hrms_employees.findFirst({ where: { id: employeeId, tenantId } });
+    const emp = await this.prisma.hrms_employees.findFirst({
+      where: { id: employeeId, tenantId },
+    });
     if (!emp) throw new NotFoundException(`Employee ${employeeId} not found`);
 
     const monday = this.getMonday(new Date(weekStartStr));
@@ -204,12 +232,17 @@ export class AttendanceService {
         data: { tenantId, employeeId, weekStartDate: monday, notes: dto.notes },
       });
     } else {
-      if (ts.status === 'APPROVED') throw new BadRequestException('Cannot edit an approved timesheet');
+      if (ts.status === 'APPROVED')
+        throw new BadRequestException('Cannot edit an approved timesheet');
       // Reset to DRAFT if it was rejected
       if (ts.status === 'REJECTED') {
         ts = await this.prisma.hrms_timesheets.update({
           where: { id: ts.id },
-          data: { status: 'DRAFT', rejectedReason: null, notes: dto.notes ?? ts.notes },
+          data: {
+            status: 'DRAFT',
+            rejectedReason: null,
+            notes: dto.notes ?? ts.notes,
+          },
         });
       } else if (dto.notes !== undefined) {
         ts = await this.prisma.hrms_timesheets.update({
@@ -231,7 +264,9 @@ export class AttendanceService {
       if (existing) {
         if (hoursWorked === 0 && !entry.entryType) {
           // Delete if zeroing out
-          await this.prisma.hrms_timesheet_entries.delete({ where: { id: existing.id } });
+          await this.prisma.hrms_timesheet_entries.delete({
+            where: { id: existing.id },
+          });
         } else {
           await this.prisma.hrms_timesheet_entries.update({
             where: { id: existing.id },
@@ -273,9 +308,12 @@ export class AttendanceService {
   }
 
   async deleteEntry(timesheetId: string, entryDate: string, tenantId: string) {
-    const ts = await this.prisma.hrms_timesheets.findFirst({ where: { id: timesheetId, tenantId } });
+    const ts = await this.prisma.hrms_timesheets.findFirst({
+      where: { id: timesheetId, tenantId },
+    });
     if (!ts) throw new NotFoundException(`Timesheet ${timesheetId} not found`);
-    if (ts.status === 'APPROVED') throw new BadRequestException('Cannot edit an approved timesheet');
+    if (ts.status === 'APPROVED')
+      throw new BadRequestException('Cannot edit an approved timesheet');
 
     await this.prisma.hrms_timesheet_entries.deleteMany({
       where: { timesheetId, entryDate: new Date(entryDate) },
@@ -287,10 +325,14 @@ export class AttendanceService {
   // ─── Workflow Actions ────────────────────────────────────────────────────────
 
   async submitTimesheet(timesheetId: string, tenantId: string) {
-    const ts = await this.prisma.hrms_timesheets.findFirst({ where: { id: timesheetId, tenantId } });
+    const ts = await this.prisma.hrms_timesheets.findFirst({
+      where: { id: timesheetId, tenantId },
+    });
     if (!ts) throw new NotFoundException(`Timesheet ${timesheetId} not found`);
-    if (ts.status === 'APPROVED') throw new BadRequestException('Already approved');
-    if (ts.status === 'SUBMITTED') throw new BadRequestException('Already submitted');
+    if (ts.status === 'APPROVED')
+      throw new BadRequestException('Already approved');
+    if (ts.status === 'SUBMITTED')
+      throw new BadRequestException('Already submitted');
 
     return this.prisma.hrms_timesheets.update({
       where: { id: timesheetId },
@@ -299,10 +341,17 @@ export class AttendanceService {
     });
   }
 
-  async approveTimesheet(timesheetId: string, approverId: string, tenantId: string) {
-    const ts = await this.prisma.hrms_timesheets.findFirst({ where: { id: timesheetId, tenantId } });
+  async approveTimesheet(
+    timesheetId: string,
+    approverId: string,
+    tenantId: string,
+  ) {
+    const ts = await this.prisma.hrms_timesheets.findFirst({
+      where: { id: timesheetId, tenantId },
+    });
     if (!ts) throw new NotFoundException(`Timesheet ${timesheetId} not found`);
-    if (ts.status === 'APPROVED') throw new BadRequestException('Already approved');
+    if (ts.status === 'APPROVED')
+      throw new BadRequestException('Already approved');
 
     return this.prisma.hrms_timesheets.update({
       where: { id: timesheetId },
@@ -316,8 +365,14 @@ export class AttendanceService {
     });
   }
 
-  async rejectTimesheet(timesheetId: string, dto: RejectTimesheetDto, tenantId: string) {
-    const ts = await this.prisma.hrms_timesheets.findFirst({ where: { id: timesheetId, tenantId } });
+  async rejectTimesheet(
+    timesheetId: string,
+    dto: RejectTimesheetDto,
+    tenantId: string,
+  ) {
+    const ts = await this.prisma.hrms_timesheets.findFirst({
+      where: { id: timesheetId, tenantId },
+    });
     if (!ts) throw new NotFoundException(`Timesheet ${timesheetId} not found`);
 
     return this.prisma.hrms_timesheets.update({
@@ -348,11 +403,15 @@ export class AttendanceService {
       select: { totalHours: true },
     });
 
-    const totalHours = timesheets.reduce((s, ts) => s + Number(ts.totalHours), 0);
+    const totalHours = timesheets.reduce(
+      (s, ts) => s + Number(ts.totalHours),
+      0,
+    );
     const weeksTracked = timesheets.length;
-    const average = weeksTracked > 0
-      ? Math.round((totalHours / weeksTracked) * 100) / 100
-      : 0;
+    const average =
+      weeksTracked > 0
+        ? Math.round((totalHours / weeksTracked) * 100) / 100
+        : 0;
 
     return {
       average,
@@ -365,14 +424,17 @@ export class AttendanceService {
   // ─── Zero-hours holiday accrual ──────────────────────────────────────────────
 
   async calculateZeroHoursHoliday(employeeId: string, tenantId: string) {
-    const emp = await this.prisma.hrms_employees.findFirst({ where: { id: employeeId, tenantId } });
+    const emp = await this.prisma.hrms_employees.findFirst({
+      where: { id: employeeId, tenantId },
+    });
     if (!emp) throw new NotFoundException(`Employee ${employeeId} not found`);
 
     // UK tax year starts April 6
     const now = new Date();
-    const taxYearStart = now.getUTCMonth() >= 3 && now.getUTCDate() >= 6
-      ? new Date(Date.UTC(now.getUTCFullYear(), 3, 6))
-      : new Date(Date.UTC(now.getUTCFullYear() - 1, 3, 6));
+    const taxYearStart =
+      now.getUTCMonth() >= 3 && now.getUTCDate() >= 6
+        ? new Date(Date.UTC(now.getUTCFullYear(), 3, 6))
+        : new Date(Date.UTC(now.getUTCFullYear() - 1, 3, 6));
 
     // Get approved timesheet IDs in this tax year
     const approvedTimesheets = await this.prisma.hrms_timesheets.findMany({
@@ -405,10 +467,13 @@ export class AttendanceService {
       _sum: { hoursWorked: true },
     });
 
-    const totalHoursWorked = Math.round(Number(agg._sum.hoursWorked ?? 0) * 100) / 100;
+    const totalHoursWorked =
+      Math.round(Number(agg._sum.hoursWorked ?? 0) * 100) / 100;
     // UK: 5.6 weeks / year = 12.07% of hours worked
-    const holidayHoursAccrued = Math.round(totalHoursWorked * 0.1207 * 100) / 100;
-    const holidayDaysAccrued = Math.round((holidayHoursAccrued / 7.5) * 100) / 100;
+    const holidayHoursAccrued =
+      Math.round(totalHoursWorked * 0.1207 * 100) / 100;
+    const holidayDaysAccrued =
+      Math.round((holidayHoursAccrued / 7.5) * 100) / 100;
 
     return {
       totalHoursWorked,
@@ -436,7 +501,9 @@ export class AttendanceService {
   async seedBankHolidays(year: number, tenantId: string) {
     const data = BANK_HOLIDAYS_DATA[year];
     if (!data) {
-      throw new BadRequestException(`No bank holiday data for year ${year}. Supported: ${Object.keys(BANK_HOLIDAYS_DATA).join(', ')}`);
+      throw new BadRequestException(
+        `No bank holiday data for year ${year}. Supported: ${Object.keys(BANK_HOLIDAYS_DATA).join(', ')}`,
+      );
     }
 
     let seeded = 0;
@@ -456,7 +523,9 @@ export class AttendanceService {
       }
     }
 
-    this.logger.log(`Seeded ${seeded} bank holidays for year ${year}, tenant ${tenantId}`);
+    this.logger.log(
+      `Seeded ${seeded} bank holidays for year ${year}, tenant ${tenantId}`,
+    );
     return { seeded, total: data.length };
   }
 
@@ -474,7 +543,8 @@ export class AttendanceService {
     if (entry.startTime && entry.endTime) {
       const [sh, sm] = entry.startTime.split(':').map(Number);
       const [eh, em] = entry.endTime.split(':').map(Number);
-      const totalMins = eh * 60 + em - (sh * 60 + sm) - (entry.breakMinutes ?? 0);
+      const totalMins =
+        eh * 60 + em - (sh * 60 + sm) - (entry.breakMinutes ?? 0);
       return Math.round(Math.max(0, totalMins / 60) * 100) / 100;
     }
     return Math.round((entry.hoursWorked ?? 0) * 100) / 100;
