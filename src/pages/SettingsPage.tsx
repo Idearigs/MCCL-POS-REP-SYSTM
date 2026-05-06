@@ -19,6 +19,103 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import RepairTagsSettings from '@/components/repair/RepairTagsSettings';
 
+// ─── QZ Tray certificate setup component ─────────────────────────────────────
+
+function QzCertSetup({ configured, onSaved }: { configured: boolean; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [cert, setCert] = useState('');
+  const [pkey, setPkey] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!cert.trim() || !pkey.trim()) {
+      toast.error('Both certificate and private key are required');
+      return;
+    }
+    setSaving(true);
+    try {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3007/api/v1';
+      const token = localStorage.getItem('accessToken') || '';
+      const tenantId = localStorage.getItem('tenantId') || '';
+      const resp = await fetch(`${API_BASE}/auth/qz-config`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-tenant-id': tenantId,
+        },
+        body: JSON.stringify({ certificate: cert.trim(), privateKey: pkey.trim() }),
+      });
+      if (!resp.ok) throw new Error('Save failed');
+      // Apply locally too so printing works immediately without re-login
+      const { storeQzConfig } = await import('@/utils/qzBridge');
+      storeQzConfig(cert.trim(), pkey.trim());
+      toast.success('QZ Tray certificate saved — printing is ready');
+      setCert('');
+      setPkey('');
+      setOpen(false);
+      onSaved();
+    } catch {
+      toast.error('Failed to save certificate');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">QZ Tray Certificate</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Connects this account to the local QZ Tray printer daemon.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className={`inline-block h-2 w-2 rounded-full ${configured ? 'bg-green-500' : 'bg-amber-400'}`} />
+            <span className="text-xs text-gray-500">{configured ? 'Configured' : 'Not set'}</span>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setOpen((o) => !o)}>
+            {open ? 'Cancel' : configured ? 'Update' : 'Set up'}
+          </Button>
+        </div>
+      </div>
+
+      {open && (
+        <div className="rounded-lg border p-4 space-y-3 bg-gray-50">
+          <p className="text-xs text-gray-600">
+            Open QZ Tray on this PC → right-click the Q icon → <strong>Site Manager</strong> → click <strong>+</strong> → Yes.
+            Then paste the generated certificate and private key below.
+          </p>
+          <div>
+            <label className="text-xs font-medium text-gray-700">Certificate</label>
+            <Textarea
+              className="mt-1 font-mono text-xs h-28"
+              placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+              value={cert}
+              onChange={(e) => setCert(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-700">Private Key</label>
+            <Textarea
+              className="mt-1 font-mono text-xs h-28"
+              placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+              value={pkey}
+              onChange={(e) => setPkey(e.target.value)}
+            />
+          </div>
+          <Button onClick={handleSave} disabled={saving} size="sm">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            Save & Activate
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Form schemas
 const generalFormSchema = z.object({
   storeName: z.string().min(2, {
@@ -126,20 +223,9 @@ const SettingsPage = () => {
   const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
   const [loadingPrinters, setLoadingPrinters] = useState(false);
   const [testPrinting, setTestPrinting] = useState(false);
-  const [qzProfileId, setQzProfileId] = useState<string>(
-    () => localStorage.getItem('qz_profile_id') ?? 'dev',
+  const [qzConfigured, setQzConfigured] = useState<boolean>(
+    () => !!(localStorage.getItem('qz_certificate') && localStorage.getItem('qz_private_key')),
   );
-  const qzProfiles = [
-    { id: 'dev', label: 'Developer PC (Sri Lanka)', configured: true },
-    { id: 'customer', label: 'Customer PC (UK)', configured: false },
-  ];
-
-  const handleSetQZProfile = async (id: string) => {
-    setQzProfileId(id);
-    const { setActiveQZProfile } = await import('@/utils/qzBridge');
-    setActiveQZProfile(id);
-    toast.success(`Switched to ${qzProfiles.find(p => p.id === id)?.label ?? id}`);
-  };
 
   const onSubmitPrinter = async () => {
     await updatePrinterSettings({ model: printerModel, printerName, autoPrint, copies, footerText });
@@ -635,34 +721,8 @@ const SettingsPage = () => {
               </CardHeader>
               <CardContent className="space-y-6">
 
-                {/* QZ Tray — Machine Profile */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Machine Profile</label>
-                  <p className="text-xs text-muted-foreground">
-                    Select this PC's QZ Tray keypair so "Remember this decision" works permanently.
-                    Each PC needs its own profile generated via QZ Tray → Site Manager → +.
-                  </p>
-                  <div className="flex gap-2 flex-wrap">
-                    {qzProfiles.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => handleSetQZProfile(p.id)}
-                        className={`flex items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-medium transition-colors ${
-                          qzProfileId === p.id
-                            ? 'border-blue-600 bg-blue-50 text-blue-700'
-                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-2 w-2 rounded-full ${p.configured ? 'bg-green-500' : 'bg-gray-300'}`}
-                        />
-                        {p.label}
-                        {!p.configured && <span className="text-xs text-amber-600">(not set up)</span>}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                {/* QZ Tray — Certificate Setup */}
+                <QzCertSetup configured={qzConfigured} onSaved={() => setQzConfigured(true)} />
 
                 <Separator />
 

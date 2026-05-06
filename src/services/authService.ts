@@ -52,11 +52,11 @@ class AuthService {
       // Store tokens and tenantId using apiClient's method
       if (response.accessToken && response.refreshToken) {
         apiClient.setTokens(response.accessToken, response.refreshToken);
-        // Store tenantId so all subsequent requests use the correct tenant
         if (response.user?.tenantId) {
           localStorage.setItem('tenantId', response.user.tenantId);
         }
-        console.log('🔑 Tokens stored successfully');
+        // Load this tenant's QZ Tray certificate silently in the background
+        this.fetchAndStoreQzConfig().catch(() => {});
       } else {
         console.error('❌ No tokens received from backend');
       }
@@ -146,6 +146,20 @@ class AuthService {
   clearAuth(): void {
     apiClient.removeTokens();
     localStorage.removeItem('tenantId');
+    localStorage.removeItem('qz_certificate');
+    localStorage.removeItem('qz_private_key');
+  }
+
+  async fetchAndStoreQzConfig(): Promise<void> {
+    try {
+      const data = await apiClient.get<{ certificate: string; privateKey: string }>('/auth/qz-config');
+      if (data.certificate && data.privateKey) {
+        const { storeQzConfig } = await import('../utils/qzBridge');
+        storeQzConfig(data.certificate, data.privateKey);
+      }
+    } catch {
+      // QZ config is optional — don't break login if it fails
+    }
   }
 }
 

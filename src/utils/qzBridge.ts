@@ -1,155 +1,22 @@
 // QZ Tray bridge — connects the browser to the local thermal printer daemon
 // QZ Tray must be installed and running on the till PC: https://qz.io
+//
+// Certificates and private keys are stored per-tenant in the database and
+// delivered via GET /api/v1/auth/qz-config after login. They are NEVER
+// hardcoded here — each tenant's key is only visible to that tenant.
 import type { ThermalReceiptData, PrintOptions } from './thermalReceipt';
 import { buildEscPos } from './escpos';
 import { buildReceiptHTML } from './thermalReceipt';
 
-// ─── Machine-specific keypairs ────────────────────────────────────────────────
-// Each till PC needs its own keypair so QZ Tray can permanently remember the
-// decision. Generate one via: QZ Tray tray icon → Site Manager → + → Yes.
-// Paste the certificate and private key below, then select the profile in
-// Settings → Printer → Machine Profile.
+// ─── Per-tenant QZ config (loaded from API after login) ──────────────────────
 
-export interface QZProfile {
-  id: string;
-  label: string;
-  certificate: string;
-  privateKey: string;
-}
+const QZ_CERT_KEY = 'qz_certificate';
+const QZ_PKEY_KEY = 'qz_private_key';
 
-const QZ_PROFILES: Record<string, QZProfile> = {
-  dev: {
-    id: 'dev',
-    label: 'Developer PC (Sri Lanka)',
-    certificate: `-----BEGIN CERTIFICATE-----
-MIIECzCCAvOgAwIBAgIGAZ2/8+HtMA0GCSqGSIb3DQEBCwUAMIGiMQswCQYDVQQG
-EwJVUzELMAkGA1UECAwCTlkxEjAQBgNVBAcMCUNhbmFzdG90YTEbMBkGA1UECgwS
-UVogSW5kdXN0cmllcywgTExDMRswGQYDVQQLDBJRWiBJbmR1c3RyaWVzLCBMTEMx
-HDAaBgkqhkiG9w0BCQEWDXN1cHBvcnRAcXouaW8xGjAYBgNVBAMMEVFaIFRyYXkg
-RGVtbyBDZXJ0MB4XDTI2MDQyMzE0NDUyNFoXDTQ2MDQyMzE0NDUyNFowgaIxCzAJ
-BgNVBAYTAlVTMQswCQYDVQQIDAJOWTESMBAGA1UEBwwJQ2FuYXN0b3RhMRswGQYD
-VQQKDBJRWiBJbmR1c3RyaWVzLCBMTEMxGzAZBgNVBAsMElFaIEluZHVzdHJpZXMs
-IExMQzEcMBoGCSqGSIb3DQEJARYNc3VwcG9ydEBxei5pbzEaMBgGA1UEAwwRUVog
-VHJheSBEZW1vIENlcnQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDJ
-VWnCenzGv6nEtSsX5q3kds6T5nBzTv6vvlqvyN0f1lWsu/zYhCwMMEH2TFyswnEn
-pY8Ti6jVIUzB7QIA2iVkzHKSDcH/Gpe6waMlhE6m3FWwXd/rr/3gzI10BkP7GU9W
-mF/1u/Yvbzzp6u+gI0Y1lip9ynMYT2h2YlyaqoQmnJ1mJcJQjarXdHQEvQZuUqqS
-Hc6vMDDafw1ypONWR70wrvx5c7K3ZM7I5euEqL87DYclTf/YlmiZOBxtipQ07FCv
-ekU0NmCV76qRtUkEdh3bQ7aIeLAYZLy8XiWZ2YQ9Nkhv7D5vREoQYoCDjmNoEGP1
-oJI1/AaVY7k3Um6P2dbBAgMBAAGjRTBDMBIGA1UdEwEB/wQIMAYBAf8CAQEwDgYD
-VR0PAQH/BAQDAgEGMB0GA1UdDgQWBBRDBFsedKdw80zb9TRotwWhSUvc1jANBgkq
-hkiG9w0BAQsFAAOCAQEAShUpKArTYDLdw0ilvJHlaPWY/z8w0f83hdXJ92nccaj0
-UmAD2BVMQs+1qlJhrHLKxuacRTQK4+B79Na9PlR3jUqBDSzUEWvrc1WqORNxOuyk
-9diDycM26zmdYRdFufvs5D0q7EbhMx0LMBA4liOKUACc1yKi07RN3oPA0TUDdGOU
-+f9yLTJRr9L2UpMZL5ki28y9x2T9ERD2z74j9UcEdgvp2+N8161k3qgnYaWZwaUO
-X5XlwlJhAez+xWdr9Vkb8cAwRhOcBJcTAtiMjgS8v98gIrfcFVLFjdYqKvMWiucF
-SlnBkqxbI+mcJmqgId7Ju6NLJbBUNKnuq0zkSLfbMw==
------END CERTIFICATE-----`,
-    privateKey: `-----BEGIN PRIVATE KEY-----
-MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDJVWnCenzGv6nE
-tSsX5q3kds6T5nBzTv6vvlqvyN0f1lWsu/zYhCwMMEH2TFyswnEnpY8Ti6jVIUzB
-7QIA2iVkzHKSDcH/Gpe6waMlhE6m3FWwXd/rr/3gzI10BkP7GU9WmF/1u/Yvbzzp
-6u+gI0Y1lip9ynMYT2h2YlyaqoQmnJ1mJcJQjarXdHQEvQZuUqqSHc6vMDDafw1y
-pONWR70wrvx5c7K3ZM7I5euEqL87DYclTf/YlmiZOBxtipQ07FCvekU0NmCV76qR
-tUkEdh3bQ7aIeLAYZLy8XiWZ2YQ9Nkhv7D5vREoQYoCDjmNoEGP1oJI1/AaVY7k3
-Um6P2dbBAgMBAAECggEAAXYab9ofH5tuqFYLDXfr+1J6MIBBwNGCB10np/rakYeH
-DMtaxAjOD8rWILs4STv6UagJykHXUHA24Bm3+/D5aGJUQs+BIOiU0TsEc9JSdpM2
-90IwLNQUwPnlHTJqMgdykCmoGSbTjC+30sgU9A3rfZo03d+/Pv39D25qdwgtsEDL
-lpliZa+k8WzHdke7eP1KElNKKXMpFbKrejJCX3bZKoxIGuiafSwEP6M7vV0Fk2rA
-0nw7RXzWAzTFMQPyI5Rsf/9FEQcu4UmUhbQWPH32ibjNA97IEAkFp1bFpbu3saQs
-jNrz8ReV+OmY4c8H2/7fM9AIbuiUONIDnuu6KlLiEQKBgQDr7OCI+dZHbHIGm4Td
-Vdnc+YLCLmYnG+nA+vIw9Ukb9GmjzQZmt28j66LJrWJukbuRAM0M+QlNiv09lifk
-njYA7Sxfgf8Mg2v8w4KLcj3V9tXLU/eTtrEsG6UpxHaMQx1Dk8iDDBxCiZEKwIre
-effope6RFxSJg063qHdIa/DGUQKBgQDadwgTmGr3V+thcD7aPEmLxuVBc3bWunGM
-/Dqufc1Z0NVbzNcaI2iTVlwfRCWNm7j1k7UdItTq3elkn9AevYcCvhbV0/yEBM//
-26k0IKjxlb3gnmXEhftxfSR9fuGlRp9Sz7FYirsD/u1JR2qfYxcQN6dgtfRvb2T9
-SaYPNQE9cQKBgQC8Bnpg0HTFUZmCyJlYaR6L7VMX/TCuxKFEivtQp3xPyjgTMsiC
-PnlWMGr5vrRvGLha9T92sleGtFnlpnE+1BSIIn211H33dBoxRYQaLL85clKrjM0I
-rZaAZ7v3ELvGR4rgG7y3LIStRsQQxKkobB53DR+YBMP6YGrxFlOSpWwsMQKBgHGn
-gWUoY2XAsK0lhx1kReLZG8X8OvQlVRPC2QiUXDQAyC8VF0b66tnUEOMXQe40+HmS
-WaQJzflOb7Cwz8ZeVZHgsOKXgYRxOIDkl1eOMjZU786euVUPWyvErio3y05/uj2L
-3bixm+/NPUdlRxwaohIG0iYnIz6iFkkLer/olHeRAoGBAKXgf7MkbiSnIlMkKEiI
-PyEJaSL+bideR0vXmAgrd/Byzg2pvxKmWX0/5JuBy27VZFKhAGRtp7+5ibbq/Giz
-wcB42YiOkx9M/70qbFA+oZz1QHx46L3OCyT+bq8S3wP4F/ciDBZY/EJhkVlBh2uF
-PQu7JYZ3zJLFk9Hy2kqqge4j
------END PRIVATE KEY-----`,
-  },
-
-  customer: {
-    id: 'customer',
-    label: 'Customer PC (UK) — buymejewellery',
-    certificate: `-----BEGIN CERTIFICATE-----
-MIIECzCCAvOgAwIBAgIGAZ39fzppMA0GCSqGSIb3DQEBCwUAMIGiMQswCQYDVQQG
-EwJVUzELMAkGA1UECAwCTlkxEjAQBgNVBAcMCUNhbmFzdG90YTEbMBkGA1UECgwS
-UVogSW5kdXN0cmllcywgTExDMRswGQYDVQQLDBJRWiBJbmR1c3RyaWVzLCBMTEMx
-HDAaBgkqhkiG9w0BCQEWDXN1cHBvcnRAcXouaW8xGjAYBgNVBAMMEVFaIFRyYXkg
-RGVtbyBDZXJ0MB4XDTI2MDUwNTEzMzQyNloXDTQ2MDUwNTEzMzQyNlowgaIxCzAJ
-BgNVBAYTAlVTMQswCQYDVQQIDAJOWTESMBAGA1UEBwwJQ2FuYXN0b3RhMRswGQYD
-VQQKDBJRWiBJbmR1c3RyaWVzLCBMTEMxGzAZBgNVBAsMElFaIEluZHVzdHJpZXMs
-IExMQzEcMBoGCSqGSIb3DQEJARYNc3VwcG9ydEBxei5pbzEaMBgGA1UEAwwRUVog
-VHJheSBEZW1vIENlcnQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDA
-OoNVaNr6YS9rGzKVxYZklTKEg1h4UaMvebygsaKAG1yBK5zQYZUGwyBkFn97OrFP
-V3kLg8Dy52KnlTlnDuwBHyu/hjbSxJwrjGb2rgWCqGfxk9zebY2YvcAfJ+oX4Y6H
-+C9rkMfMrZdAthXcez/0uRwf8z9kWO/DgkH7TYzNVzOPA6wOKsqmQ6PGV3lVMdfP
-daxhlgqgyT89bHJRmRAaKY57u767wikdmrQuTQA135hM8aJuCbN/9ShIhK4VN6fu
-PoGrTYokOTBCIsaUCtzcTpShUB7Fg/fYIjvyNZGjzHvm2WW1HEEu7susbfuxolSJ
-nD3VZDPPaJq8Bb2nxJGNAgMBAAGjRTBDMBIGA1UdEwEB/wQIMAYBAf8CAQEwDgYD
-VR0PAQH/BAQDAgEGMB0GA1UdDgQWBBQOrbwtVFHlcl2gexx9GH/kUdyCFDANBgkq
-hkiG9w0BAQsFAAOCAQEAB/zmvZOo3DArjvyBPD9HLIIzWjGqhuJDqIzA9RFPOmFu
-gWd+5xRgq1GnDH0PNzGDwlskHTJFYMBnCpcS8CyHQ/t45UnnkDsrFhriSNvrs1Gi
-8YlE8P+5Ay/pFlSXR5Y2AqB5NXEkGXZEjqJfmyQm1KIxIXYz2GIeFiMZf4DVo16C
-8kWxXwDpORveDZX7M6sMFg4t+ZhrGJZbRpL9g3oVN/vLFDncMUryZi2QlYA4cl9z
-ggRK0GXgDHVPYrQ7Hww0LW/CZEXVdAP8Mke1x6jVKln/N03HzH2MvQPo+AJn3PoA
-FiSEkT4PhpL/HOSzhcFTMvgzmlb0MNbWZwa6sC6pjA==
------END CERTIFICATE-----`,
-    privateKey: `-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDAOoNVaNr6YS9r
-GzKVxYZklTKEg1h4UaMvebygsaKAG1yBK5zQYZUGwyBkFn97OrFPV3kLg8Dy52Kn
-lTlnDuwBHyu/hjbSxJwrjGb2rgWCqGfxk9zebY2YvcAfJ+oX4Y6H+C9rkMfMrZdA
-thXcez/0uRwf8z9kWO/DgkH7TYzNVzOPA6wOKsqmQ6PGV3lVMdfPdaxhlgqgyT89
-bHJRmRAaKY57u767wikdmrQuTQA135hM8aJuCbN/9ShIhK4VN6fuPoGrTYokOTBC
-IsaUCtzcTpShUB7Fg/fYIjvyNZGjzHvm2WW1HEEu7susbfuxolSJnD3VZDPPaJq8
-Bb2nxJGNAgMBAAECggEABaDA7xt4i8uUHpPnhXyIvIGkvr30tWMYfr+W7vJ8cjk6
-2lpLR0uQGChW1q9U8KftgIfsVpK3L7VoDUWAbnzAmqDNwFf+22lftCOycQbzyNlC
-388HMKju9BmcGh1qTGQxbtgslT7iJqMvcjjSh4fBPdo8kU/nG3pCHMx/v4qL9IgL
-zyCbeAayGmnXiPQk3Tt3cILXqSMm/lR1y3JJPMPv5lBVRhOwMC8gyWxJwR1iwL81
-Fc+JnYTNECPM4r7X9AHD8R1zcmktyWjVI5bzuLYsbu27cCczoWIjm5QTg9ds5FTh
-wJg7GSEB5hq70MfdjqevrKMFYIAQTXYwzo3+VttsWQKBgQDjyJfXRgKMtAEDRx0n
-daHzOfwNOCNSE7RxeltlvWG2VNJfzEyo/QA1nYKNisr4dITgsd3ry+5n09CdzdfE
-vMQngDgBCK8h0UYYHGmydD50CMEQcgqGTQrKvvDqKuBv61Z09AYK0ZV80bJJWLDI
-7g5wyRUawRedIh32tnkkCO4DSQKBgQDYCmjzJoev1tmINVsZSUlsk02A4NNmVVFc
-IkBJ6XtW74DuY4XdSsX1KUtk29v5IMnYZDEK2OMDxE9dizjo1O+5BBIaDbR+3DkZ
-oBcqQAiQCcykUiSAvmqRXjaLMZOKjfaql29dPgm3G3nTi3OBWIJEgVxXNdy99z2Y
-rnxezVVYJQKBgHTTtDUgXjxmMkLJHYXYimiia8kn6s20945gMDJdUJlgpcmmkgb2
-RD47e/M2pWWK9X/9GhJPNQahl9Tn92ubWYvc8lxtZM2WdTn2kKuLfWCsAMF7jDRX
-nVphVlT0Csq8TEqNwe+YkPBE6Qk/aOSVXGiyaZWgRYk9L1sTOcymm9SpAoGAPPEa
-z9RDnFeX/3NFomlo++bFiyBgodJZZAsJZZAmScy/6v9KCLWKB/FBIk9eyvTz20XQ
-C8ZIq4xZ8wJN6GgAw4khbhYFn2+R7+eYAUQU5kTNZGEDiQmt2BnievteKkyHk3Gq
-aXwRk4R9pi4FRCxqetae7L716ORwjLxTuw5jD70CgYEAlFcEPE87dqZXEJjUGZzy
-5QHawKwrOCiguFXr9KKXQxOq1PwgRVi7YKrxaOjHTXjN88aUE29a7+kxB8FDyrpV
-YUJDCy+ZfITOh2/PY41irrV4xzSHkt3A0S4aFH8IePxSzN5c8xwscI+wJU56DvYF
-ohqh8h8B/fhF6eB8I4UqpU0=
------END PRIVATE KEY-----`,
-  },
-};
-
-const QZ_PROFILE_STORAGE_KEY = 'qz_profile_id';
-
-export function listQZProfiles(): { id: string; label: string; configured: boolean }[] {
-  return Object.values(QZ_PROFILES).map(({ id, label, certificate }) => ({
-    id,
-    label,
-    configured: certificate.length > 0,
-  }));
-}
-
-export function getActiveQZProfileId(): string {
-  return localStorage.getItem(QZ_PROFILE_STORAGE_KEY) ?? 'dev';
-}
-
-export function setActiveQZProfile(id: string): void {
-  localStorage.setItem(QZ_PROFILE_STORAGE_KEY, id);
-  // Force re-initialisation with the new profile's certificate and key
+export function storeQzConfig(certificate: string, privateKey: string): void {
+  localStorage.setItem(QZ_CERT_KEY, certificate);
+  localStorage.setItem(QZ_PKEY_KEY, privateKey);
+  // Drop cached crypto key so next connection uses the new cert
   _cryptoKey = null;
   _qz = null;
   if (_status !== 'disconnected') {
@@ -158,9 +25,16 @@ export function setActiveQZProfile(id: string): void {
   }
 }
 
-function getActiveProfile(): QZProfile {
-  const id = getActiveQZProfileId();
-  return QZ_PROFILES[id] ?? QZ_PROFILES['dev'];
+function getQzCertificate(): string {
+  return localStorage.getItem(QZ_CERT_KEY) ?? '';
+}
+
+function getQzPrivateKey(): string {
+  return localStorage.getItem(QZ_PKEY_KEY) ?? '';
+}
+
+export function isQzConfigured(): boolean {
+  return getQzCertificate().length > 0 && getQzPrivateKey().length > 0;
 }
 
 // ─── Crypto helpers ───────────────────────────────────────────────────────────
@@ -178,7 +52,7 @@ let _cryptoKey: CryptoKey | null = null;
 
 async function getSigningKey(): Promise<CryptoKey> {
   if (_cryptoKey) return _cryptoKey;
-  const { privateKey } = getActiveProfile();
+  const privateKey = getQzPrivateKey();
   _cryptoKey = await window.crypto.subtle.importKey(
     'pkcs8',
     pemToArrayBuffer(privateKey),
@@ -227,21 +101,17 @@ async function loadQZ(): Promise<any> {
     const mod = await import('qz-tray');
     _qz = (mod as any).default ?? mod;
 
-    const { certificate, privateKey } = getActiveProfile();
-
     _qz.security.setCertificatePromise(function (resolve: any) {
-      resolve(certificate);
+      resolve(getQzCertificate());
     });
 
     _qz.security.setSignatureAlgorithm('SHA512');
 
-    if (privateKey) {
-      _qz.security.setSignaturePromise(function (toSign: string) {
-        return function (resolve: any, reject: any) {
-          signMessage(toSign).then(resolve).catch(reject);
-        };
-      });
-    }
+    _qz.security.setSignaturePromise(function (toSign: string) {
+      return function (resolve: any, reject: any) {
+        signMessage(toSign).then(resolve).catch(reject);
+      };
+    });
 
     return _qz;
   } catch {

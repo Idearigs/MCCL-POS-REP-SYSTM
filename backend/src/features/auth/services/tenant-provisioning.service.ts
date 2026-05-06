@@ -172,4 +172,37 @@ export class TenantProvisioningService {
 
     return { tenantId: updated.id, status: updated.status };
   }
+
+  // ── QZ Tray per-tenant config ─────────────────────────────────────────────
+
+  async getQzConfig(tenantId: string): Promise<{ certificate: string; privateKey: string }> {
+    const tenant = await this.prismaService.tenants.findUnique({
+      where: { id: tenantId },
+      select: { settings: true },
+    });
+    const settings = (tenant?.settings ?? {}) as Record<string, unknown>;
+    return {
+      certificate: (settings['qzCertificate'] as string) ?? '',
+      privateKey: (settings['qzPrivateKey'] as string) ?? '',
+    };
+  }
+
+  async saveQzConfig(
+    tenantId: string,
+    certificate: string,
+    privateKey: string,
+  ): Promise<void> {
+    const tenant = await this.prismaService.tenants.findUnique({
+      where: { id: tenantId },
+      select: { settings: true },
+    });
+    const existing = (tenant?.settings ?? {}) as Record<string, unknown>;
+    await this.prismaService.tenants.update({
+      where: { id: tenantId },
+      data: {
+        settings: { ...existing, qzCertificate: certificate, qzPrivateKey: privateKey },
+        updatedAt: new Date(),
+      },
+    });
+  }
 }

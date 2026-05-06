@@ -126,4 +126,12 @@ export class AuthService {
   }): Promise<{ tenantId: string; status: string }> {
     return this.tenantProvisioning.updateTenantStatus(data);
   }
+
+  getQzConfig(tenantId: string) {
+    return this.tenantProvisioning.getQzConfig(tenantId);
+  }
+
+  saveQzConfig(tenantId: string, certificate: string, privateKey: string) {
+    return this.tenantProvisioning.saveQzConfig(tenantId, certificate, privateKey);
+  }
 }
