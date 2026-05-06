@@ -229,7 +229,8 @@ export class TimesheetTokensService {
     if (!entry.startTime || !entry.endTime) return 0;
     const [sh, sm] = entry.startTime.split(':').map(Number);
     const [eh, em] = entry.endTime.split(':').map(Number);
-    const totalMins = (eh * 60 + em) - (sh * 60 + sm) - (entry.breakMinutes ?? 0);
+    const totalMins =
+      eh * 60 + em - (sh * 60 + sm) - (entry.breakMinutes ?? 0);
     return Math.max(0, Math.round((totalMins / 60) * 100) / 100);
   }
 
@@ -287,22 +288,37 @@ export class TimesheetTokensService {
         .text('Weekly Timesheet', { align: 'center' });
 
       doc.moveDown(0.5);
-      doc.fontSize(11).font('Helvetica').text(
-        `Employee: ${employee.firstName} ${employee.lastName}  |  #${employee.employeeNumber}`,
-        { align: 'center' },
-      );
+      doc
+        .fontSize(11)
+        .font('Helvetica')
+        .text(
+          `Employee: ${employee.firstName} ${employee.lastName}  |  #${employee.employeeNumber}`,
+          { align: 'center' },
+        );
       if (employee.jobTitle) {
         doc.fontSize(10).text(employee.jobTitle, { align: 'center' });
       }
       doc.moveDown(0.3);
-      doc.fontSize(10).text(`Week: ${weekStart} to ${weekEnd}`, { align: 'center' });
+      doc
+        .fontSize(10)
+        .text(`Week: ${weekStart} to ${weekEnd}`, { align: 'center' });
       doc.moveDown(1);
 
       // ── Table header ──
       const colX = [50, 120, 200, 280, 350, 420, 490];
-      const colHeaders = ['Day', 'Date', 'Start', 'End', 'Break', 'Hours', 'Type'];
+      const colHeaders = [
+        'Day',
+        'Date',
+        'Start',
+        'End',
+        'Break',
+        'Hours',
+        'Type',
+      ];
       doc.font('Helvetica-Bold').fontSize(9);
-      colHeaders.forEach((h, i) => doc.text(h, colX[i], doc.y, { width: 70, continued: i < 6 }));
+      colHeaders.forEach((h, i) =>
+        doc.text(h, colX[i], doc.y, { width: 70, continued: i < 6 }),
+      );
       doc.moveDown(0.3);
 
       // ── Horizontal rule ──
@@ -319,7 +335,9 @@ export class TimesheetTokensService {
 
       // Build a map by date for easy lookup
       const byDate: Record<string, DayEntry> = {};
-      entries.forEach((e) => { byDate[e.entryDate] = e; });
+      entries.forEach((e) => {
+        byDate[e.entryDate] = e;
+      });
 
       // Generate Mon–Sun rows
       const monday = new Date(weekStart + 'T00:00:00Z');
@@ -334,10 +352,17 @@ export class TimesheetTokensService {
         doc.text(dateStr.slice(5), colX[1], rowY, { width: 75 });
         doc.text(entry?.startTime ?? '—', colX[2], rowY, { width: 75 });
         doc.text(entry?.endTime ?? '—', colX[3], rowY, { width: 65 });
-        doc.text(entry ? `${entry.breakMinutes ?? 0}m` : '—', colX[4], rowY, { width: 65 });
+        doc.text(
+          entry ? `${entry.breakMinutes ?? 0}m` : '—',
+          colX[4],
+          rowY,
+          { width: 65 },
+        );
         doc.text(
           entry ? String(entry.hoursWorked ?? this.calcHours(entry)) : '0',
-          colX[5], rowY, { width: 65 },
+          colX[5],
+          rowY,
+          { width: 65 },
         );
         doc.text(entry?.entryType ?? 'REGULAR', colX[6], rowY, { width: 70 });
       }

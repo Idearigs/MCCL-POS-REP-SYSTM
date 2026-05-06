@@ -132,6 +132,10 @@ export class AuthService {
   }
 
   saveQzConfig(tenantId: string, certificate: string, privateKey: string) {
-    return this.tenantProvisioning.saveQzConfig(tenantId, certificate, privateKey);
+    return this.tenantProvisioning.saveQzConfig(
+      tenantId,
+      certificate,
+      privateKey,
+    );
   }
 }

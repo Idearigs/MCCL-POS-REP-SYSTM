@@ -385,7 +385,9 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('qz-config')
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Get QZ Tray certificate + private key for this tenant' })
+  @ApiOperation({
+    summary: 'Get QZ Tray certificate + private key for this tenant',
+  })
   getQzConfig(@CurrentUser() user: { tenantId: string }) {
     return this.authService.getQzConfig(user.tenantId);
   }
@@ -394,14 +396,21 @@ export class AuthController {
   @Patch('qz-config')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Save QZ Tray certificate + private key for this tenant (owner only)' })
+  @ApiOperation({
+    summary:
+      'Save QZ Tray certificate + private key for this tenant (owner only)',
+  })
   @Roles('OWNER', 'ADMIN')
   @UseGuards(RolesGuard)
   async saveQzConfig(
     @CurrentUser() user: { tenantId: string },
     @Body() body: { certificate: string; privateKey: string },
   ) {
-    await this.authService.saveQzConfig(user.tenantId, body.certificate, body.privateKey);
+    await this.authService.saveQzConfig(
+      user.tenantId,
+      body.certificate,
+      body.privateKey,
+    );
   }
 
   @Public()

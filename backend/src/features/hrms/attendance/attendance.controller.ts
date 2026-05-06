@@ -165,7 +165,9 @@ export class AttendanceController {
   // ─── Self-Service Timesheet Links ─────────────────────────────────────────
 
   @Post('timesheets/:employeeId/generate-link')
-  @ApiOperation({ summary: 'Generate a self-service timesheet link for employee' })
+  @ApiOperation({
+    summary: 'Generate a self-service timesheet link for employee',
+  })
   generateTimesheetLink(
     @Param('employeeId') employeeId: string,
     @Query('weekStart') weekStart: string,
@@ -188,7 +190,9 @@ export class AttendanceController {
   }
 
   @Post('public/:token/submit')
-  @ApiOperation({ summary: 'Submit timesheet + download PDF — public, no auth required' })
+  @ApiOperation({
+    summary: 'Submit timesheet + download PDF — public, no auth required',
+  })
   async submitPublicTimesheet(
     @Param('token') token: string,
     @Body() body: { pin: string; entries: any[] },
