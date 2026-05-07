@@ -7,10 +7,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../core/prisma/prisma.service';
-import {
-  CreateOutletDto,
-  UpdateOutletDto,
-} from './dto/outlet.dto';
+import { CreateOutletDto, UpdateOutletDto } from './dto/outlet.dto';
 
 const SALT_ROUNDS = 10;
 
@@ -157,10 +154,9 @@ export class OutletsService {
     const existing = await this.prisma.outlets.count({ where: { tenantId } });
     if (existing > 0) return;
 
-    const code = businessName
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, '')
-      .slice(0, 6) || 'MAIN';
+    const code =
+      businessName.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) ||
+      'MAIN';
 
     await this.prisma.outlets.create({
       data: {

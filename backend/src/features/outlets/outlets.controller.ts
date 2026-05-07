@@ -97,11 +97,7 @@ export class OutletsController {
     @Param('id') id: string,
     @Body() dto: VerifyOutletPasswordDto,
   ) {
-    return this.outletsService.verifyPassword(
-      user.tenantId,
-      id,
-      dto.password,
-    );
+    return this.outletsService.verifyPassword(user.tenantId, id, dto.password);
   }
 
   @Get('count')

@@ -229,8 +229,7 @@ export class TimesheetTokensService {
     if (!entry.startTime || !entry.endTime) return 0;
     const [sh, sm] = entry.startTime.split(':').map(Number);
     const [eh, em] = entry.endTime.split(':').map(Number);
-    const totalMins =
-      eh * 60 + em - (sh * 60 + sm) - (entry.breakMinutes ?? 0);
+    const totalMins = eh * 60 + em - (sh * 60 + sm) - (entry.breakMinutes ?? 0);
     return Math.max(0, Math.round((totalMins / 60) * 100) / 100);
   }
 
@@ -322,11 +321,7 @@ export class TimesheetTokensService {
       doc.moveDown(0.3);
 
       // ── Horizontal rule ──
-      doc
-        .moveTo(50, doc.y)
-        .lineTo(545, doc.y)
-        .strokeColor('#cccccc')
-        .stroke();
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#cccccc').stroke();
       doc.moveDown(0.2);
 
       // ── Rows ──

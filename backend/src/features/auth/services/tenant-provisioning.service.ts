@@ -85,9 +85,10 @@ export class TenantProvisioningService {
     await this.seedDefaultCategories(data.tenantId);
     await this.outletsService
       .seedPrimaryOutlet(data.tenantId, data.businessName)
-      .catch((e: unknown) =>
-        this.logger.warn(`Could not seed outlet: ${String(e)}`),
-      );
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.warn(`Could not seed outlet: ${msg}`);
+      });
 
     this.logger.log(
       `Tenant provisioned: ${data.tenantId} (${data.businessName})`,

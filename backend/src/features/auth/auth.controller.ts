@@ -12,7 +12,6 @@ import {
   Query,
   Param,
   Headers,
-  UnauthorizedException,
   Req,
 } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
