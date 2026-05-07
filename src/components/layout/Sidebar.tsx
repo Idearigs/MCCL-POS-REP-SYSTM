@@ -23,6 +23,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOutlet } from '@/contexts/OutletContext';
+import { OutletSelectorDialog } from '@/components/outlets/OutletSelectorDialog';
 import { useToast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { UserPermissions } from '@/types/user';
@@ -92,7 +94,7 @@ const navigationCategories: NavigationCategory[] = [
 ];
 
 const Sidebar = () => {
-  const [selectedOutlet, setSelectedOutlet] = useState('London');
+  const [switchOutletOpen, setSwitchOutletOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<string[]>([
     'Sales & Transactions', // Default expanded
     'Operations',
@@ -104,6 +106,9 @@ const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, auth } = useAuth();
+  const { currentOutlet, clearOutlet } = useOutlet();
+  const businessName = auth.tenantInfo?.tenantName ?? 'My Business';
+  const outletName = currentOutlet?.name ?? 'No outlet selected';
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
   const { hasFeature } = useFeatures();
@@ -176,11 +181,13 @@ const Sidebar = () => {
           {/* Company Logo & Branding */}
           <div className="flex items-center space-x-3 px-2">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
-              <span className="text-white text-xl font-bold">{selectedOutlet.charAt(0)}</span>
+              <span className="text-white text-xl font-bold">
+                {businessName.charAt(0).toUpperCase()}
+              </span>
             </div>
-            <div className="text-left">
-              <h2 className="text-base font-bold text-sidebar-foreground">
-                {selectedOutlet}
+            <div className="text-left overflow-hidden">
+              <h2 className="text-base font-bold text-sidebar-foreground truncate">
+                {businessName}
               </h2>
               <p className="text-[10px] text-muted-foreground">Powered by TrueDesk</p>
             </div>
@@ -190,12 +197,19 @@ const Sidebar = () => {
           <div className="w-full px-2">
             <Button
               variant="outline"
-              className="w-full bg-sidebar text-sidebar-foreground text-sm border border-sidebar-border hover:bg-sidebar-accent transition-all justify-start"
+              className="w-full bg-sidebar text-sidebar-foreground text-sm border border-sidebar-border hover:bg-sidebar-accent transition-all justify-between"
               size="sm"
+              onClick={() => setSwitchOutletOpen(true)}
             >
-              {selectedOutlet} Outlet
+              <span className="truncate">{outletName}</span>
+              <ChevronRight className="h-3 w-3 ml-1 opacity-50 shrink-0" />
             </Button>
           </div>
+
+          <OutletSelectorDialog
+            open={switchOutletOpen}
+            onSelected={() => setSwitchOutletOpen(false)}
+          />
         </div>
       </SidebarHeader>
 

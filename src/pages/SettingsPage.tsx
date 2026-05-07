@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import RepairTagsSettings from '@/components/repair/RepairTagsSettings';
+import { OutletManagement } from '@/components/outlets/OutletManagement';
 
 // ─── QZ Tray certificate setup component ─────────────────────────────────────
 
@@ -418,10 +419,11 @@ const SettingsPage = () => {
         <Separator className="my-6" />
 
         <Tabs defaultValue="general" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
+            <TabsTrigger value="outlets">Outlets</TabsTrigger>
             <TabsTrigger value="printer">Printer</TabsTrigger>
             <TabsTrigger value="repair-tags">Repair Tags</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
@@ -900,6 +902,10 @@ const SettingsPage = () => {
           </TabsContent>
 
           {/* Security Settings Tab */}
+          <TabsContent value="outlets">
+            <OutletManagement />
+          </TabsContent>
+
           <TabsContent value="security">
             <Card>
               <CardHeader>

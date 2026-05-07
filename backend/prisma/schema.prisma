@@ -381,6 +381,7 @@ model tenants {
   float_sessions          float_sessions[]
   float_transactions      float_transactions[]
   inventory_logs          inventory_logs[]
+  outlets                 outlets[]
   petty_cash_accounts     petty_cash_accounts[]
   petty_cash_transactions petty_cash_transactions[]
   products                products[]
@@ -393,6 +394,25 @@ model tenants {
   suppliers               suppliers[]
   tasks                   tasks[]
   users                   users[]
+}
+
+model outlets {
+  id           String   @id @default(uuid())
+  tenantId     String
+  name         String
+  code         String
+  passwordHash String
+  isActive     Boolean  @default(true)
+  isPrimary    Boolean  @default(false)
+  address      String?
+  phone        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant tenants @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
 }
 
 model users {

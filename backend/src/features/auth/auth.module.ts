@@ -13,10 +13,12 @@ import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from '../../shared/guards/roles.guard';
 import { CacheServiceModule } from '../../core/cache/cache.module';
+import { OutletsModule } from '../outlets/outlets.module';
 
 @Module({
   imports: [
     CacheServiceModule,
+    OutletsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       useFactory: (configService: ConfigService) => ({

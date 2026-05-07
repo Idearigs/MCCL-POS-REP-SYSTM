@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 import { generateId } from '../../../shared/utils/id-generator';
+import { OutletsService } from '../../outlets/outlets.service';
 
 @Injectable()
 export class TenantProvisioningService {
@@ -11,6 +12,7 @@ export class TenantProvisioningService {
   constructor(
     private prismaService: PrismaService,
     private configService: ConfigService,
+    private outletsService: OutletsService,
   ) {}
 
   async provisionTenant(data: {
@@ -81,6 +83,11 @@ export class TenantProvisioningService {
     }
 
     await this.seedDefaultCategories(data.tenantId);
+    await this.outletsService
+      .seedPrimaryOutlet(data.tenantId, data.businessName)
+      .catch((e: unknown) =>
+        this.logger.warn(`Could not seed outlet: ${String(e)}`),
+      );
 
     this.logger.log(
       `Tenant provisioned: ${data.tenantId} (${data.businessName})`,

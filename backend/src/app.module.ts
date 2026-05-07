@@ -26,6 +26,7 @@ import { ChatbotModule } from './features/chatbot/chatbot.module';
 import { MainframeModule } from './features/mainframe/mainframe.module';
 import { TasksModule } from './features/tasks/tasks.module';
 import { HrmsModule } from './features/hrms/hrms.module';
+import { OutletsModule } from './features/outlets/outlets.module';
 
 // External integrations
 import {
@@ -117,6 +118,7 @@ import { OpenAIModule } from './integrations/openai/openai.module';
     MainframeModule,
     TasksModule,
     HrmsModule,
+    OutletsModule,
   ],
   controllers: [AppController],
   providers: [AppService, CacheService],

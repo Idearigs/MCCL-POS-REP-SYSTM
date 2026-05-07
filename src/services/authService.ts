@@ -148,6 +148,7 @@ class AuthService {
     localStorage.removeItem('tenantId');
     localStorage.removeItem('qz_certificate');
     localStorage.removeItem('qz_private_key');
+    localStorage.removeItem('mps_selected_outlet');
   }
 
   async fetchAndStoreQzConfig(): Promise<void> {
