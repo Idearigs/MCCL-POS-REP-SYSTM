@@ -393,7 +393,7 @@ export class AuthController {
 
   @Patch('qz-config')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'ADMIN')
+  @Roles('OWNER')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiBearerAuth('access-token')
   @ApiOperation({

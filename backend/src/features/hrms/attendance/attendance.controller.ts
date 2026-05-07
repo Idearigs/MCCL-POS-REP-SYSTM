@@ -13,7 +13,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { Response } from 'express';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../../../features/auth/guards/jwt-auth.guard';
 import { AttendanceService } from './attendance.service';
 import { TimesheetTokensService } from './timesheet-tokens.service';
