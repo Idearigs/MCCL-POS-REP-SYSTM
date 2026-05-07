@@ -158,8 +158,7 @@ export class OutletsService {
       businessName
         .toUpperCase()
         .replace(/[^A-Z0-9]/g, '')
-        .slice(0, 6) ||
-      'MAIN';
+        .slice(0, 6) || 'MAIN';
 
     await this.prisma.outlets.create({
       data: {
