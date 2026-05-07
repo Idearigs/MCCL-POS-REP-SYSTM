@@ -86,6 +86,7 @@ export class TenantProvisioningService {
     await this.outletsService
       .seedPrimaryOutlet(data.tenantId, data.businessName)
       .catch((e: unknown) => {
+        // eslint-disable-next-line @typescript-eslint/no-base-to-string
         const msg = e instanceof Error ? e.message : String(e);
         this.logger.warn(`Could not seed outlet: ${msg}`);
       });

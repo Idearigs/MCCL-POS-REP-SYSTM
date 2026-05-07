@@ -155,7 +155,10 @@ export class OutletsService {
     if (existing > 0) return;
 
     const code =
-      businessName.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) ||
+      businessName
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .slice(0, 6) ||
       'MAIN';
 
     await this.prisma.outlets.create({

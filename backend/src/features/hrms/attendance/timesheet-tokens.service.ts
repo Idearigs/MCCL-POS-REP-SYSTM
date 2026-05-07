@@ -347,12 +347,9 @@ export class TimesheetTokensService {
         doc.text(dateStr.slice(5), colX[1], rowY, { width: 75 });
         doc.text(entry?.startTime ?? '—', colX[2], rowY, { width: 75 });
         doc.text(entry?.endTime ?? '—', colX[3], rowY, { width: 65 });
-        doc.text(
-          entry ? `${entry.breakMinutes ?? 0}m` : '—',
-          colX[4],
-          rowY,
-          { width: 65 },
-        );
+        doc.text(entry ? `${entry.breakMinutes ?? 0}m` : '—', colX[4], rowY, {
+          width: 65,
+        });
         doc.text(
           entry ? String(entry.hoursWorked ?? this.calcHours(entry)) : '0',
           colX[5],
