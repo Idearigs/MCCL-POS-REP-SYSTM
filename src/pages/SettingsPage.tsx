@@ -228,6 +228,13 @@ const SettingsPage = () => {
   const [qzConfigured, setQzConfigured] = useState<boolean>(
     () => !!(localStorage.getItem('qz_certificate') && localStorage.getItem('qz_private_key')),
   );
+  const [drawerLog, setDrawerLog] = useState<import('@/utils/qzBridge').DrawerLogEntry[]>(() => {
+    try {
+      const raw = localStorage.getItem('qz_drawer_log');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  const [showDrawerLog, setShowDrawerLog] = useState(false);
 
   const onSubmitPrinter = async () => {
     await updatePrinterSettings({ model: printerModel, printerName, autoPrint, copies, footerText });
@@ -282,8 +289,9 @@ const SettingsPage = () => {
     if (!printerName) { toast.error('Enter or pick a printer name first.'); return; }
     setTestingDrawer(true);
     try {
-      const { openCashDrawer } = await import('@/utils/qzBridge');
-      await openCashDrawer(printerName, printerModel);
+      const { openCashDrawer, getDrawerLog } = await import('@/utils/qzBridge');
+      await openCashDrawer(printerName, printerModel, 'manual');
+      setDrawerLog(getDrawerLog());
       toast.success('Cash drawer opened!');
     } catch (e: any) {
       toast.error(`Drawer failed: ${e?.message ?? 'Unknown error'}`);
@@ -900,7 +908,59 @@ const SettingsPage = () => {
                     {testingDrawer ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
                     {testingDrawer ? 'Opening…' : 'Test Drawer'}
                   </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setShowDrawerLog(v => !v)}
+                    className="flex items-center gap-2 text-muted-foreground"
+                  >
+                    <Archive className="h-4 w-4" />
+                    Drawer Log {drawerLog.length > 0 && `(${drawerLog.length})`}
+                  </Button>
                 </div>
+
+                {showDrawerLog && (
+                  <div className="mt-4 rounded-md border bg-muted/40 p-3 space-y-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Cash Drawer Events — last {Math.min(drawerLog.length, 50)}
+                      </p>
+                      {drawerLog.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-xs text-destructive hover:text-destructive"
+                          onClick={async () => {
+                            const { clearDrawerLog, getDrawerLog } = await import('@/utils/qzBridge');
+                            clearDrawerLog();
+                            setDrawerLog(getDrawerLog());
+                          }}
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                    {drawerLog.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic">No drawer events recorded yet.</p>
+                    ) : (
+                      [...drawerLog].reverse().slice(0, 50).map((entry, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs py-0.5 border-b border-border/40 last:border-0">
+                          <span className="text-muted-foreground font-mono">
+                            {new Date(entry.at).toLocaleString('en-GB', {
+                              day: '2-digit', month: 'short', year: 'numeric',
+                              hour: '2-digit', minute: '2-digit', second: '2-digit',
+                            })}
+                          </span>
+                          <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium ${entry.trigger === 'sale' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                            {entry.trigger}
+                          </span>
+                          <span className="ml-2 text-muted-foreground truncate max-w-[140px]">{entry.printer}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
 
               </CardContent>
             </Card>

@@ -234,9 +234,49 @@ const BLANK_KICK_HTML =
   'body{margin:0;padding:0;width:80mm;height:1mm;overflow:hidden;}' +
   '</style></head><body></body></html>';
 
+// ─── Drawer event log ─────────────────────────────────────────────────────────
+// Hardware has no status pin readback through the FuturePRNT raster driver, so
+// we log every kick command that succeeded. Capped at 500 entries (~50 KB).
+
+const DRAWER_LOG_KEY = 'qz_drawer_log';
+const DRAWER_LOG_MAX = 500;
+
+export interface DrawerLogEntry {
+  at: string;       // ISO timestamp
+  printer: string;
+  model: string;
+  trigger: 'manual' | 'sale'; // manual = Test Drawer button; sale = auto after payment
+}
+
+function writeDrawerLog(entry: Omit<DrawerLogEntry, 'at'>): void {
+  try {
+    const raw = localStorage.getItem(DRAWER_LOG_KEY);
+    const log: DrawerLogEntry[] = raw ? (JSON.parse(raw) as DrawerLogEntry[]) : [];
+    log.push({ at: new Date().toISOString(), ...entry });
+    if (log.length > DRAWER_LOG_MAX) log.splice(0, log.length - DRAWER_LOG_MAX);
+    localStorage.setItem(DRAWER_LOG_KEY, JSON.stringify(log));
+  } catch {
+    // localStorage unavailable — non-fatal
+  }
+}
+
+export function getDrawerLog(): DrawerLogEntry[] {
+  try {
+    const raw = localStorage.getItem(DRAWER_LOG_KEY);
+    return raw ? (JSON.parse(raw) as DrawerLogEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function clearDrawerLog(): void {
+  localStorage.removeItem(DRAWER_LOG_KEY);
+}
+
 export async function openCashDrawer(
   printerName: string,
   model?: string,
+  trigger: DrawerLogEntry['trigger'] = 'manual',
 ): Promise<void> {
   if (!(await connectQZ())) {
     throw new Error('QZ Tray is not running on this PC.');
@@ -247,10 +287,11 @@ export async function openCashDrawer(
     // Send a 1mm-tall blank HTML page — drawer fires, virtually no paper feeds.
     const config = _qz.configs.create(printerName);
     await _qz.print(config, [{ type: 'html', format: 'plain', data: BLANK_KICK_HTML }]);
-    return;
+  } else {
+    // EPSON / ONIX — raw ESC/POS drawer kick
+    const config = _qz.configs.create(printerName, { scaleContent: false });
+    await _qz.print(config, [{ type: 'raw', format: 'hex', data: toHex(DRAWER_ESCPOS) }]);
   }
 
-  // EPSON / ONIX — raw ESC/POS drawer kick
-  const config = _qz.configs.create(printerName, { scaleContent: false });
-  await _qz.print(config, [{ type: 'raw', format: 'hex', data: toHex(DRAWER_ESCPOS) }]);
+  writeDrawerLog({ printer: printerName, model: model ?? 'OTHER', trigger });
 }
