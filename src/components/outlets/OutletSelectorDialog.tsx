@@ -10,11 +10,12 @@ import { useOutlet } from '../../contexts/OutletContext';
 interface Props {
   open: boolean;
   onSelected: () => void;
+  onUnavailable?: () => void;
 }
 
 type Step = 'list' | 'password';
 
-export function OutletSelectorDialog({ open, onSelected }: Props) {
+export function OutletSelectorDialog({ open, onSelected, onUnavailable }: Props) {
   const { selectOutlet } = useOutlet();
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);
@@ -34,10 +35,19 @@ export function OutletSelectorDialog({ open, onSelected }: Props) {
     setLoading(true);
     outletService
       .getOutlets()
-      .then(setOutlets)
-      .catch(() => setError('Failed to load outlets — please refresh.'))
+      .then((list) => {
+        setOutlets(list);
+        if (list.length === 0) {
+          // No outlets configured — let user through, admin can set up later
+          onUnavailable?.();
+        }
+      })
+      .catch(() => {
+        // API unavailable — don't block the user
+        onUnavailable?.();
+      })
       .finally(() => setLoading(false));
-  }, [open]);
+  }, [open, onUnavailable]);
 
   const handlePickOutlet = (outlet: Outlet) => {
     setPicked(outlet);

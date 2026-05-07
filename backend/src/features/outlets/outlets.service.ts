@@ -41,11 +41,16 @@ export class OutletsService {
   constructor(private prisma: PrismaService) {}
 
   async getOutlets(tenantId: string) {
-    const outlets = await this.prisma.outlets.findMany({
-      where: { tenantId },
-      orderBy: [{ isPrimary: 'desc' }, { name: 'asc' }],
-    });
-    return outlets.map(safeOutlet);
+    try {
+      const outlets = await this.prisma.outlets.findMany({
+        where: { tenantId },
+        orderBy: [{ isPrimary: 'desc' }, { name: 'asc' }],
+      });
+      return outlets.map(safeOutlet);
+    } catch {
+      // Table may not exist yet (pending migration) — return empty list
+      return [];
+    }
   }
 
   async createOutlet(tenantId: string, dto: CreateOutletDto) {
@@ -178,6 +183,10 @@ export class OutletsService {
 
   /** How many outlets does this tenant have (for billing display) */
   async outletCount(tenantId: string): Promise<number> {
-    return this.prisma.outlets.count({ where: { tenantId } });
+    try {
+      return await this.prisma.outlets.count({ where: { tenantId } });
+    } catch {
+      return 0;
+    }
   }
 }
