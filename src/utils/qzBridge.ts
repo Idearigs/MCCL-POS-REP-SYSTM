@@ -5,7 +5,7 @@
 // delivered via GET /api/v1/auth/qz-config after login. They are NEVER
 // hardcoded here — each tenant's key is only visible to that tenant.
 import type { ThermalReceiptData, PrintOptions } from './thermalReceipt';
-import { buildEscPos } from './escpos';
+import { buildEscPos, buildStarLine } from './escpos';
 import { buildReceiptHTML } from './thermalReceipt';
 
 // ─── Per-tenant QZ config (loaded from API after login) ──────────────────────
@@ -192,30 +192,35 @@ export async function printReceiptQZ(
     throw new Error('QZ Tray is not running on this PC.');
   }
 
-  const isThermal = options.model === 'ONIX' || options.model === 'EPSON';
+  const config = _qz.configs.create(printerName, { scaleContent: false });
 
-  if (isThermal) {
+  if (options.model === 'STAR_TSP100') {
+    const starData = buildStarLine(data, options.copies ?? 1);
+    await _qz.print(config, [{ type: 'raw', format: 'plain', data: starData }]);
+  } else if (options.model === 'ONIX' || options.model === 'EPSON') {
     const escpos = buildEscPos(data, options.copies ?? 1);
-    const config = _qz.configs.create(printerName, { scaleContent: false });
     await _qz.print(config, [{ type: 'raw', format: 'plain', data: escpos }]);
   } else {
     const html = buildReceiptHTML(data, options);
-    const config = _qz.configs.create(printerName);
-    await _qz.print(config, [{ type: 'html', format: 'plain', data: html }]);
+    const htmlConfig = _qz.configs.create(printerName);
+    await _qz.print(htmlConfig, [{ type: 'html', format: 'plain', data: html }]);
   }
 }
 
 // ─── Cash drawer ──────────────────────────────────────────────────────────────
-// ESC p m t1 t2 — kicks the drawer connected to the printer's DK/RJ12 port.
-// m=0x00 → pin 2 (most drawers), t1/t2 = on/off pulse durations × 2ms.
-const DRAWER_OPEN_CMD = '\x1B\x70\x00\x19\xFA';
+// ESC/POS:   ESC p m t1 t2 — pin 2 (most EPSON/ONIX drawers)
+// Star Line: ESC BEL t1 t2 — Star TSP100 FuturePRNT in Star Line mode
+const DRAWER_ESCPOS = '\x1B\x70\x00\x19\xFA'; // ESC p 0 25 250 — pin 2, 50ms on / 500ms off
+const DRAWER_STAR   = '\x1B\x07\x05\x05';      // ESC BEL 5 5   — Star Line, 50ms on / 50ms off
 
-export async function openCashDrawer(printerName: string): Promise<void> {
+export async function openCashDrawer(
+  printerName: string,
+  model?: string,
+): Promise<void> {
   if (!(await connectQZ())) {
     throw new Error('QZ Tray is not running on this PC.');
   }
+  const cmd = model === 'STAR_TSP100' ? DRAWER_STAR : DRAWER_ESCPOS;
   const config = _qz.configs.create(printerName, { scaleContent: false });
-  await _qz.print(config, [
-    { type: 'raw', format: 'plain', data: DRAWER_OPEN_CMD },
-  ]);
+  await _qz.print(config, [{ type: 'raw', format: 'plain', data: cmd }]);
 }

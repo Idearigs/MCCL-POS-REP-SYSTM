@@ -216,7 +216,7 @@ const SettingsPage = () => {
   });
 
   // Printer settings (local state — no react-hook-form needed for this simple form)
-  const [printerModel, setPrinterModel] = useState<'ONIX' | 'EPSON' | 'OTHER'>(settings.printer.model);
+  const [printerModel, setPrinterModel] = useState<'ONIX' | 'EPSON' | 'STAR_TSP100' | 'OTHER'>(settings.printer.model);
   const [printerName, setPrinterName] = useState(settings.printer.printerName ?? '');
   const [autoPrint, setAutoPrint] = useState(settings.printer.autoPrint);
   const [copies, setCopies] = useState<1 | 2>(settings.printer.copies);
@@ -283,7 +283,7 @@ const SettingsPage = () => {
     setTestingDrawer(true);
     try {
       const { openCashDrawer } = await import('@/utils/qzBridge');
-      await openCashDrawer(printerName);
+      await openCashDrawer(printerName, printerModel);
       toast.success('Cash drawer opened!');
     } catch (e: any) {
       toast.error(`Drawer failed: ${e?.message ?? 'Unknown error'}`);
@@ -787,21 +787,26 @@ const SettingsPage = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Printer Model</label>
                   <p className="text-sm text-muted-foreground">
-                    Both ONIX and EPSON use 80mm paper. Select your model for optimal settings.
+                    Select your printer model. Star TSP100 uses Star Line protocol — different from EPSON/ONIX.
                   </p>
-                  <div className="flex gap-3 mt-2">
-                    {(['EPSON', 'ONIX', 'OTHER'] as const).map((m) => (
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {([
+                      { id: 'EPSON',       label: 'EPSON' },
+                      { id: 'ONIX',        label: 'ONIX' },
+                      { id: 'STAR_TSP100', label: 'Star TSP100' },
+                      { id: 'OTHER',       label: 'Other 80mm' },
+                    ] as const).map(({ id, label }) => (
                       <button
-                        key={m}
+                        key={id}
                         type="button"
-                        onClick={() => setPrinterModel(m)}
+                        onClick={() => setPrinterModel(id)}
                         className={`flex-1 rounded-lg border-2 py-3 text-sm font-semibold transition-colors ${
-                          printerModel === m
+                          printerModel === id
                             ? 'border-blue-600 bg-blue-50 text-blue-700'
                             : 'border-gray-200 text-gray-600 hover:border-gray-300'
                         }`}
                       >
-                        {m === 'OTHER' ? 'Other 80mm' : m}
+                        {label}
                       </button>
                     ))}
                   </div>

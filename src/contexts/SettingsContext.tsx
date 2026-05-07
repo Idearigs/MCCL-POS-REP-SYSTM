@@ -25,7 +25,7 @@ export interface AppearanceSettings {
   receiptTemplate: string;
 }
 
-export type PrinterModel = 'ONIX' | 'EPSON' | 'OTHER';
+export type PrinterModel = 'ONIX' | 'EPSON' | 'STAR_TSP100' | 'OTHER';
 
 export interface PrinterSettings {
   model: PrinterModel;

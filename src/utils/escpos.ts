@@ -1,4 +1,5 @@
 // ESC/POS command builder for 80mm thermal printers (EPSON / ONIX)
+// Star Line command builder for Star TSP100 FuturePRNT
 import type { ThermalReceiptData } from './thermalReceipt';
 
 const LINE_WIDTH = 42; // characters per line at standard density on 80mm paper
@@ -6,6 +7,7 @@ const LINE_WIDTH = 42; // characters per line at standard density on 80mm paper
 const ESC = '\x1B';
 const GS = '\x1D';
 
+// ESC/POS commands — for EPSON / ONIX printers
 const CMD = {
   INIT:         ESC + '@',
   CUT:          GS  + 'V\x42\x03',  // full cut + 3mm feed
@@ -17,6 +19,22 @@ const CMD = {
   SIZE_NORMAL:  GS  + '!\x00',
   LF:           '\n',
   FEED:         ESC + 'd\x04',      // feed 4 lines before cut
+};
+
+// Star Line commands — for Star TSP100 FuturePRNT in Star Line mode
+// Key differences vs ESC/POS: bold uses ESC E / ESC F (no param), cut uses ESC i,
+// double-size uses ESC ! flags, GS commands do not exist in Star Line mode.
+const STAR = {
+  INIT:         ESC + '@',
+  CUT:          ESC + 'd\x03' + ESC + 'i', // feed 3 lines then full cut
+  ALIGN_LEFT:   ESC + 'a\x00',
+  ALIGN_CENTER: ESC + 'a\x01',
+  BOLD_ON:      ESC + 'E',          // ESC E  (no parameter — different from ESC/POS)
+  BOLD_OFF:     ESC + 'F',          // ESC F
+  SIZE_DOUBLE:  ESC + '!\x30',      // ESC ! 0x30 = double width (0x20) + double height (0x10)
+  SIZE_NORMAL:  ESC + '!\x00',
+  LF:           '\n',
+  FEED:         ESC + 'd\x03',      // feed 3 lines before cut
 };
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -118,4 +136,74 @@ export function buildEscPos(data: ThermalReceiptData, copies: 1 | 2 = 1): string
     return buildCopy(data, '--- CUSTOMER COPY ---') + buildCopy(data, '--- MERCHANT COPY ---');
   }
   return buildCopy(data);
+}
+
+// Star Line receipt builder — identical logic to buildCopy but uses STAR commands
+function buildStarCopy(data: ThermalReceiptData, copyLabel?: string): string {
+  const parts: string[] = [];
+  const p = (...s: string[]) => parts.push(...s);
+
+  p(STAR.INIT);
+
+  if (copyLabel) {
+    p(STAR.ALIGN_CENTER, STAR.BOLD_ON, copyLabel + STAR.LF, STAR.BOLD_OFF);
+  }
+
+  p(STAR.ALIGN_CENTER, STAR.SIZE_DOUBLE, data.storeName + STAR.LF, STAR.SIZE_NORMAL);
+  if (data.storeAddress) p(data.storeAddress + STAR.LF);
+  if (data.storePhone)   p('Tel: ' + data.storePhone + STAR.LF);
+  if (data.storeEmail)   p(data.storeEmail + STAR.LF);
+
+  p(STAR.ALIGN_LEFT, '-'.repeat(LINE_WIDTH) + STAR.LF);
+
+  p(STAR.ALIGN_CENTER, STAR.BOLD_ON, 'RECEIPT: ' + data.receiptNumber + STAR.LF, STAR.BOLD_OFF, STAR.ALIGN_LEFT);
+
+  p(padBetween('Date', formatDate(data.date)) + STAR.LF);
+  p(padBetween('Cashier', data.cashierName) + STAR.LF);
+  if (data.customerName) p(padBetween('Customer', data.customerName) + STAR.LF);
+
+  p('-'.repeat(LINE_WIDTH) + STAR.LF);
+
+  for (const item of data.items) {
+    const name = item.name.length > 28 ? item.name.slice(0, 28) + '…' : item.name;
+    const tag  = item.isRepair ? ' [Repair]' : '';
+    p(STAR.BOLD_ON, name + tag + STAR.LF, STAR.BOLD_OFF);
+    p(padBetween('  ' + item.quantity + ' x ' + fmt(item.unitPrice), fmt(item.total)) + STAR.LF);
+    if (item.discount && item.discount > 0) {
+      p(padBetween('  Discount', '-' + fmt(item.discount)) + STAR.LF);
+    }
+  }
+
+  p('-'.repeat(LINE_WIDTH) + STAR.LF);
+
+  p(padBetween('Subtotal', fmt(data.subtotal)) + STAR.LF);
+  if (data.discountAmount > 0) p(padBetween('Discount', '-' + fmt(data.discountAmount)) + STAR.LF);
+  if (data.taxAmount > 0)      p(padBetween('Tax', fmt(data.taxAmount)) + STAR.LF);
+  p(STAR.BOLD_ON, padBetween('TOTAL', fmt(data.totalAmount)) + STAR.LF, STAR.BOLD_OFF);
+
+  p('-'.repeat(LINE_WIDTH) + STAR.LF);
+
+  p(padBetween('Payment', PAYMENT_LABELS[data.paymentMethod] ?? data.paymentMethod) + STAR.LF);
+  if (data.cashReceived && data.cashReceived > 0) {
+    p(padBetween('Cash Received', fmt(data.cashReceived)) + STAR.LF);
+    p(padBetween('Change', fmt(data.change ?? 0)) + STAR.LF);
+  }
+
+  p('-'.repeat(LINE_WIDTH) + STAR.LF);
+
+  p(STAR.ALIGN_CENTER);
+  for (const line of (data.footerMessage ?? 'Thank you for your purchase!').split('\n')) {
+    p(line + STAR.LF);
+  }
+
+  p(STAR.FEED, STAR.CUT);
+
+  return parts.join('');
+}
+
+export function buildStarLine(data: ThermalReceiptData, copies: 1 | 2 = 1): string {
+  if (copies >= 2) {
+    return buildStarCopy(data, '--- CUSTOMER COPY ---') + buildStarCopy(data, '--- MERCHANT COPY ---');
+  }
+  return buildStarCopy(data);
 }
