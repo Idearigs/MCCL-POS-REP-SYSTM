@@ -5,7 +5,7 @@
 // delivered via GET /api/v1/auth/qz-config after login. They are NEVER
 // hardcoded here — each tenant's key is only visible to that tenant.
 import type { ThermalReceiptData, PrintOptions } from './thermalReceipt';
-import { buildEscPos, buildStarLine } from './escpos';
+import { buildEscPos } from './escpos';
 import { buildReceiptHTML } from './thermalReceipt';
 
 // ─── Per-tenant QZ config (loaded from API after login) ──────────────────────
@@ -181,6 +181,19 @@ export async function listPrinters(): Promise<string[]> {
   }
 }
 
+// ─── Hex encoding ─────────────────────────────────────────────────────────────
+// QZ Tray format:'plain' passes the string through JavaScript's UTF-8 encoder,
+// which corrupts any byte > 127 (e.g. £ = 0xA3 → 0xC2 0xA3, 0xFA → 0xC3 0xBA).
+// format:'hex' sends an ASCII hex string that QZ decodes to exact bytes.
+
+function toHex(str: string): string {
+  let hex = '';
+  for (let i = 0; i < str.length; i++) {
+    hex += (str.charCodeAt(i) & 0xff).toString(16).padStart(2, '0');
+  }
+  return hex;
+}
+
 // ─── Printing ─────────────────────────────────────────────────────────────────
 
 export async function printReceiptQZ(
@@ -192,15 +205,15 @@ export async function printReceiptQZ(
     throw new Error('QZ Tray is not running on this PC.');
   }
 
-  const config = _qz.configs.create(printerName, { scaleContent: false });
-
-  if (options.model === 'STAR_TSP100') {
-    const starData = buildStarLine(data, options.copies ?? 1);
-    await _qz.print(config, [{ type: 'raw', format: 'plain', data: starData }]);
-  } else if (options.model === 'ONIX' || options.model === 'EPSON') {
+  if (options.model === 'ONIX' || options.model === 'EPSON') {
+    // Direct ESC/POS raw path — bypasses Windows raster driver entirely.
+    // Must use format:'hex' so bytes > 127 (£ sign, drawer timing) aren't UTF-8 mangled.
     const escpos = buildEscPos(data, options.copies ?? 1);
-    await _qz.print(config, [{ type: 'raw', format: 'plain', data: escpos }]);
+    const config = _qz.configs.create(printerName, { scaleContent: false });
+    await _qz.print(config, [{ type: 'raw', format: 'hex', data: toHex(escpos) }]);
   } else {
+    // STAR_TSP100 + OTHER: FuturePRNT is a Windows raster (GDI) driver.
+    // It does not pass raw Star Line / ESC/POS bytes to the hardware — only HTML jobs work.
     const html = buildReceiptHTML(data, options);
     const htmlConfig = _qz.configs.create(printerName);
     await _qz.print(htmlConfig, [{ type: 'html', format: 'plain', data: html }]);
@@ -208,10 +221,18 @@ export async function printReceiptQZ(
 }
 
 // ─── Cash drawer ──────────────────────────────────────────────────────────────
-// ESC/POS:   ESC p m t1 t2 — pin 2 (most EPSON/ONIX drawers)
-// Star Line: ESC BEL t1 t2 — Star TSP100 FuturePRNT in Star Line mode
+// EPSON/ONIX: raw ESC/POS kick command via hex-encoded raw job.
+// STAR_TSP100 / OTHER (FuturePRNT raster driver): the driver cannot execute raw
+// drawer commands — it kicks the DK-port automatically on every print job.
+// We send a sub-1mm blank HTML job so the drawer fires with negligible paper feed.
+
 const DRAWER_ESCPOS = '\x1B\x70\x00\x19\xFA'; // ESC p 0 25 250 — pin 2, 50ms on / 500ms off
-const DRAWER_STAR   = '\x1B\x07\x05\x05';      // ESC BEL 5 5   — Star Line, 50ms on / 50ms off
+
+const BLANK_KICK_HTML =
+  '<!DOCTYPE html><html><head><style>' +
+  '@page{size:80mm 1mm;margin:0;}' +
+  'body{margin:0;padding:0;width:80mm;height:1mm;overflow:hidden;}' +
+  '</style></head><body></body></html>';
 
 export async function openCashDrawer(
   printerName: string,
@@ -220,7 +241,16 @@ export async function openCashDrawer(
   if (!(await connectQZ())) {
     throw new Error('QZ Tray is not running on this PC.');
   }
-  const cmd = model === 'STAR_TSP100' ? DRAWER_STAR : DRAWER_ESCPOS;
+
+  if (model === 'STAR_TSP100' || model === 'OTHER' || model === undefined) {
+    // FuturePRNT / generic Windows raster driver: kicks drawer on every print job.
+    // Send a 1mm-tall blank HTML page — drawer fires, virtually no paper feeds.
+    const config = _qz.configs.create(printerName);
+    await _qz.print(config, [{ type: 'html', format: 'plain', data: BLANK_KICK_HTML }]);
+    return;
+  }
+
+  // EPSON / ONIX — raw ESC/POS drawer kick
   const config = _qz.configs.create(printerName, { scaleContent: false });
-  await _qz.print(config, [{ type: 'raw', format: 'plain', data: cmd }]);
+  await _qz.print(config, [{ type: 'raw', format: 'hex', data: toHex(DRAWER_ESCPOS) }]);
 }

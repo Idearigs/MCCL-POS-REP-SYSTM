@@ -29,7 +29,7 @@ export interface ThermalReceiptData {
   footerMessage?: string;
 }
 
-export type PrinterModel = 'ONIX' | 'EPSON' | 'OTHER';
+export type PrinterModel = 'ONIX' | 'EPSON' | 'STAR_TSP100' | 'OTHER';
 
 export interface PrintOptions {
   model?: PrinterModel;
@@ -156,6 +156,11 @@ export function buildReceiptHTML(data: ThermalReceiptData, options: PrintOptions
   <meta charset="UTF-8" />
   <title>Receipt ${data.receiptNumber}</title>
   <style>
+    @page {
+      size: 80mm auto;
+      margin: 0;
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     html {
