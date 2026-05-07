@@ -1460,6 +1460,13 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       // Show the post-sale receipt screen inside the payment dialog
       setCompletedSale(createdSale);
 
+      // Open cash drawer on cash payments (fire-and-forget — don't block sale)
+      if (selectedPaymentMethod === 'CASH' && settings.printer.printerName) {
+        import('../../utils/qzBridge').then(({ openCashDrawer }) => {
+          openCashDrawer(settings.printer.printerName).catch(() => {});
+        });
+      }
+
       // Auto-print if enabled in printer settings
       if (settings.printer.autoPrint) {
         // Small delay so the success screen renders first

@@ -204,3 +204,18 @@ export async function printReceiptQZ(
     await _qz.print(config, [{ type: 'html', format: 'plain', data: html }]);
   }
 }
+
+// ─── Cash drawer ──────────────────────────────────────────────────────────────
+// ESC p m t1 t2 — kicks the drawer connected to the printer's DK/RJ12 port.
+// m=0x00 → pin 2 (most drawers), t1/t2 = on/off pulse durations × 2ms.
+const DRAWER_OPEN_CMD = '\x1B\x70\x00\x19\xFA';
+
+export async function openCashDrawer(printerName: string): Promise<void> {
+  if (!(await connectQZ())) {
+    throw new Error('QZ Tray is not running on this PC.');
+  }
+  const config = _qz.configs.create(printerName, { scaleContent: false });
+  await _qz.print(config, [
+    { type: 'raw', format: 'plain', data: DRAWER_OPEN_CMD },
+  ]);
+}

@@ -4,7 +4,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Save, Lock, Eye, EyeOff, RotateCcw, Loader2, UserCircle, Printer } from 'lucide-react';
+import { Save, Lock, Eye, EyeOff, RotateCcw, Loader2, UserCircle, Printer, Archive } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -223,6 +223,7 @@ const SettingsPage = () => {
   const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
   const [loadingPrinters, setLoadingPrinters] = useState(false);
   const [testPrinting, setTestPrinting] = useState(false);
+  const [testingDrawer, setTestingDrawer] = useState(false);
   const [qzConfigured, setQzConfigured] = useState<boolean>(
     () => !!(localStorage.getItem('qz_certificate') && localStorage.getItem('qz_private_key')),
   );
@@ -273,6 +274,20 @@ const SettingsPage = () => {
       toast.error(`Print failed: ${e?.message ?? 'Unknown error'}`);
     } finally {
       setTestPrinting(false);
+    }
+  };
+
+  const handleTestDrawer = async () => {
+    if (!printerName) { toast.error('Enter or pick a printer name first.'); return; }
+    setTestingDrawer(true);
+    try {
+      const { openCashDrawer } = await import('@/utils/qzBridge');
+      await openCashDrawer(printerName);
+      toast.success('Cash drawer opened!');
+    } catch (e: any) {
+      toast.error(`Drawer failed: ${e?.message ?? 'Unknown error'}`);
+    } finally {
+      setTestingDrawer(false);
     }
   };
 
@@ -867,6 +882,16 @@ const SettingsPage = () => {
                   >
                     <Printer className="h-4 w-4" />
                     {testPrinting ? 'Printing…' : 'Test Print'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleTestDrawer}
+                    disabled={testingDrawer || !printerName}
+                    className="flex items-center gap-2"
+                  >
+                    {testingDrawer ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+                    {testingDrawer ? 'Opening…' : 'Test Drawer'}
                   </Button>
                 </div>
 
