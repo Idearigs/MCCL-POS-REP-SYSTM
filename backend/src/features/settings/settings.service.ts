@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { UpdateSettingsDto } from './dto/settings.dto';
 
@@ -136,7 +137,7 @@ export class SettingsService {
         settings: {
           ...reserved,
           [APP_SETTINGS_KEY]: next,
-        } as unknown as Record<string, unknown>,
+        } as Prisma.InputJsonValue,
         updatedAt: new Date(),
       },
     });
