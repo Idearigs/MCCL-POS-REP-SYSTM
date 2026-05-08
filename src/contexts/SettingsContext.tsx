@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 
-// Settings types
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 export interface GeneralSettings {
   storeName: string;
   phone: string;
@@ -29,12 +30,12 @@ export type PrinterModel = 'ONIX' | 'EPSON' | 'STAR_TSP100' | 'OTHER';
 
 export interface PrinterSettings {
   model: PrinterModel;
-  printerName: string;   // Windows printer name as shown in QZ Tray / Control Panel
+  printerName: string;
   autoPrint: boolean;
   copies: 1 | 2;
   footerText: string;
-  drawerPin?: string;   // 4-digit PIN for manual drawer open — only OWNER can set
-  vatNumber?: string;   // store VAT registration number printed on receipts
+  drawerPin?: string;
+  vatNumber?: string;
 }
 
 export interface AllSettings {
@@ -56,9 +57,8 @@ interface SettingsContextType {
   resetToDefaults: () => void;
 }
 
-const SETTINGS_STORAGE_KEY = 'mccl_pos_settings';
+// ─── Defaults (used when DB returns nothing) ──────────────────────────────────
 
-// Default settings
 const defaultSettings: AllSettings = {
   general: {
     storeName: 'MCCL Jewelry Store',
@@ -78,15 +78,7 @@ const defaultSettings: AllSettings = {
   appearance: {
     darkMode: false,
     compactView: false,
-    receiptTemplate: `Thank you for shopping at MCCL Jewelry Store!
-
-{ITEMS}
-
-Total: {TOTAL}
-Date: {DATE}
-
-We appreciate your business!
-Visit us again soon.`,
+    receiptTemplate: '',
   },
   printer: {
     model: 'EPSON',
@@ -98,84 +90,115 @@ Visit us again soon.`,
   },
 };
 
+// ─── API helpers ──────────────────────────────────────────────────────────────
+
+const CACHE_KEY = 'mccl_pos_settings_cache'; // localStorage — fast-load only, not source of truth
+
+function getApiBase(): string {
+  return (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3007/api/v1';
+}
+
+function authHeaders(): HeadersInit {
+  const token = localStorage.getItem('accessToken') ?? '';
+  const tenantId = localStorage.getItem('tenantId') ?? '';
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+    'x-tenant-id': tenantId,
+  };
+}
+
+function mergeWithDefaults(raw: Partial<AllSettings>): AllSettings {
+  return {
+    general: { ...defaultSettings.general, ...(raw.general ?? {}) },
+    notifications: { ...defaultSettings.notifications, ...(raw.notifications ?? {}) },
+    appearance: { ...defaultSettings.appearance, ...(raw.appearance ?? {}) },
+    printer: { ...defaultSettings.printer, ...(raw.printer ?? {}) },
+  };
+}
+
+function readCache(): AllSettings | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    return mergeWithDefaults(JSON.parse(raw) as Partial<AllSettings>);
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(s: AllSettings): void {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(s)); } catch { /* non-fatal */ }
+}
+
+async function fetchSettings(): Promise<AllSettings> {
+  const res = await fetch(`${getApiBase()}/settings`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`Settings fetch failed: ${res.status}`);
+  const data = (await res.json()) as Partial<AllSettings>;
+  return mergeWithDefaults(data);
+}
+
+async function patchSettings(section: Partial<AllSettings>): Promise<AllSettings> {
+  const res = await fetch(`${getApiBase()}/settings`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(section),
+  });
+  if (!res.ok) throw new Error(`Settings save failed: ${res.status}`);
+  const data = (await res.json()) as Partial<AllSettings>;
+  return mergeWithDefaults(data);
+}
+
+// ─── Context ──────────────────────────────────────────────────────────────────
+
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [settings, setSettings] = useState<AllSettings>(() => {
-    // Load settings from localStorage on initialization
-    try {
-      const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        // Merge with defaults to ensure all properties exist
-        return {
-          general: { ...defaultSettings.general, ...parsed.general },
-          notifications: { ...defaultSettings.notifications, ...parsed.notifications },
-          appearance: { ...defaultSettings.appearance, ...parsed.appearance },
-          printer: { ...defaultSettings.printer, ...parsed.printer },
-        };
-      }
-    } catch (error) {
-      console.error('Error loading settings from localStorage:', error);
-    }
-    return defaultSettings;
-  });
-
+  // Initialise from cache so the UI renders immediately, then hydrate from DB
+  const [settings, setSettings] = useState<AllSettings>(readCache() ?? defaultSettings);
   const [loading, setLoading] = useState(false);
 
-  // Apply dark mode to document
   const applyDarkMode = useCallback((isDark: boolean) => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      document.body.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.body.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', isDark);
+    document.body.classList.toggle('dark', isDark);
   }, []);
 
-  // Apply compact view to document
   const applyCompactView = useCallback((isCompact: boolean) => {
-    if (isCompact) {
-      document.documentElement.classList.add('compact');
-      document.body.classList.add('compact');
-    } else {
-      document.documentElement.classList.remove('compact');
-      document.body.classList.remove('compact');
-    }
+    document.documentElement.classList.toggle('compact', isCompact);
+    document.body.classList.toggle('compact', isCompact);
   }, []);
 
-  // Apply settings on mount and when they change
+  // Re-apply visual settings whenever they change
   useEffect(() => {
     applyDarkMode(settings.appearance.darkMode);
     applyCompactView(settings.appearance.compactView);
   }, [settings.appearance.darkMode, settings.appearance.compactView, applyDarkMode, applyCompactView]);
 
-  // Save settings to localStorage whenever they change
+  // Hydrate from database on mount (silently falls back to cache if unauthenticated)
   useEffect(() => {
-    try {
-      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-    } catch (error) {
-      console.error('Error saving settings to localStorage:', error);
-    }
-  }, [settings]);
+    const token = localStorage.getItem('accessToken');
+    if (!token) return; // not logged in yet — skip
+    fetchSettings()
+      .then((fresh) => {
+        setSettings(fresh);
+        writeCache(fresh);
+      })
+      .catch(() => {
+        // API unreachable — keep using the cached value, no error shown to user
+      });
+  }, []);
 
-  // Update general settings
+  // ─── Updaters — save to DB first, then update state ─────────────────────────
+
   const updateGeneralSettings = async (newSettings: GeneralSettings): Promise<boolean> => {
     setLoading(true);
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      setSettings(prev => ({
-        ...prev,
-        general: newSettings,
-      }));
-
-      toast.success('General settings saved successfully');
+      const updated = await patchSettings({ general: newSettings });
+      setSettings(updated);
+      writeCache(updated);
+      toast.success('General settings saved');
       return true;
-    } catch (error) {
-      console.error('Error updating general settings:', error);
+    } catch {
       toast.error('Failed to save general settings');
       return false;
     } finally {
@@ -183,22 +206,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  // Update notification settings
   const updateNotificationSettings = async (newSettings: NotificationSettings): Promise<boolean> => {
     setLoading(true);
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      setSettings(prev => ({
-        ...prev,
-        notifications: newSettings,
-      }));
-
-      toast.success('Notification settings saved successfully');
+      const updated = await patchSettings({ notifications: newSettings });
+      setSettings(updated);
+      writeCache(updated);
+      toast.success('Notification settings saved');
       return true;
-    } catch (error) {
-      console.error('Error updating notification settings:', error);
+    } catch {
       toast.error('Failed to save notification settings');
       return false;
     } finally {
@@ -206,22 +222,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  // Update appearance settings
   const updateAppearanceSettings = async (newSettings: AppearanceSettings): Promise<boolean> => {
     setLoading(true);
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      setSettings(prev => ({
-        ...prev,
-        appearance: newSettings,
-      }));
-
-      toast.success('Appearance settings saved successfully');
+      const updated = await patchSettings({ appearance: newSettings });
+      setSettings(updated);
+      writeCache(updated);
+      toast.success('Appearance settings saved');
       return true;
-    } catch (error) {
-      console.error('Error updating appearance settings:', error);
+    } catch {
       toast.error('Failed to save appearance settings');
       return false;
     } finally {
@@ -229,16 +238,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  // Update printer settings
   const updatePrinterSettings = async (newSettings: PrinterSettings): Promise<boolean> => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 200));
-      setSettings(prev => ({ ...prev, printer: newSettings }));
+      const updated = await patchSettings({ printer: newSettings });
+      setSettings(updated);
+      writeCache(updated);
       toast.success('Printer settings saved');
       return true;
-    } catch (error) {
-      console.error('Error updating printer settings:', error);
+    } catch {
       toast.error('Failed to save printer settings');
       return false;
     } finally {
@@ -246,39 +254,29 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  // Toggle dark mode - applies immediately
+  // Dark mode / compact view toggle immediately (also persists via appearance update)
   const toggleDarkMode = () => {
     const newValue = !settings.appearance.darkMode;
-    // Apply immediately
     applyDarkMode(newValue);
-    // Update state
-    setSettings(prev => ({
-      ...prev,
-      appearance: {
-        ...prev.appearance,
-        darkMode: newValue,
-      },
-    }));
+    const next = { ...settings, appearance: { ...settings.appearance, darkMode: newValue } };
+    setSettings(next);
+    writeCache(next);
+    patchSettings({ appearance: next.appearance }).catch(() => {});
   };
 
-  // Toggle compact view - applies immediately
   const toggleCompactView = () => {
     const newValue = !settings.appearance.compactView;
-    // Apply immediately
     applyCompactView(newValue);
-    // Update state
-    setSettings(prev => ({
-      ...prev,
-      appearance: {
-        ...prev.appearance,
-        compactView: newValue,
-      },
-    }));
+    const next = { ...settings, appearance: { ...settings.appearance, compactView: newValue } };
+    setSettings(next);
+    writeCache(next);
+    patchSettings({ appearance: next.appearance }).catch(() => {});
   };
 
-  // Reset to defaults
   const resetToDefaults = () => {
-    setSettings(defaultSettings);
+    patchSettings(defaultSettings)
+      .then((updated) => { setSettings(updated); writeCache(updated); })
+      .catch(() => {});
     toast.success('Settings reset to defaults');
   };
 
@@ -301,7 +299,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 };
 
-// Custom hook to use settings context
 // eslint-disable-next-line react-refresh/only-export-components
 export const useSettings = (): SettingsContextType => {
   const context = useContext(SettingsContext);

@@ -27,6 +27,7 @@ import { MainframeModule } from './features/mainframe/mainframe.module';
 import { TasksModule } from './features/tasks/tasks.module';
 import { HrmsModule } from './features/hrms/hrms.module';
 import { OutletsModule } from './features/outlets/outlets.module';
+import { SettingsModule } from './features/settings/settings.module';
 
 // External integrations
 import {
@@ -119,6 +120,7 @@ import { OpenAIModule } from './integrations/openai/openai.module';
     TasksModule,
     HrmsModule,
     OutletsModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [AppService, CacheService],
