@@ -33,6 +33,8 @@ export interface PrinterSettings {
   autoPrint: boolean;
   copies: 1 | 2;
   footerText: string;
+  drawerPin?: string;   // 4-digit PIN for manual drawer open — only OWNER can set
+  vatNumber?: string;   // store VAT registration number printed on receipts
 }
 
 export interface AllSettings {

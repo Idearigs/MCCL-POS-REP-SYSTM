@@ -221,6 +221,8 @@ const SettingsPage = () => {
   const [autoPrint, setAutoPrint] = useState(settings.printer.autoPrint);
   const [copies, setCopies] = useState<1 | 2>(settings.printer.copies);
   const [footerText, setFooterText] = useState(settings.printer.footerText);
+  const [vatNumber, setVatNumber] = useState(settings.printer.vatNumber ?? '');
+  const [drawerPin, setDrawerPin] = useState(settings.printer.drawerPin ?? '');
   const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
   const [loadingPrinters, setLoadingPrinters] = useState(false);
   const [testPrinting, setTestPrinting] = useState(false);
@@ -237,7 +239,7 @@ const SettingsPage = () => {
   const [showDrawerLog, setShowDrawerLog] = useState(false);
 
   const onSubmitPrinter = async () => {
-    await updatePrinterSettings({ model: printerModel, printerName, autoPrint, copies, footerText });
+    await updatePrinterSettings({ model: printerModel, printerName, autoPrint, copies, footerText, vatNumber: vatNumber || undefined, drawerPin: drawerPin || undefined });
   };
 
   const handleFindPrinters = async () => {
@@ -863,6 +865,37 @@ const SettingsPage = () => {
                 </div>
 
                 <Separator />
+
+                {/* VAT number */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">VAT Registration Number</label>
+                  <p className="text-sm text-muted-foreground">Printed on every receipt below the store address (e.g. GB 123 4567 89).</p>
+                  <Input
+                    value={vatNumber}
+                    onChange={(e) => setVatNumber(e.target.value)}
+                    placeholder="GB 123 4567 89"
+                    className="max-w-xs"
+                  />
+                </div>
+
+                {/* Drawer PIN — OWNER only */}
+                {auth.user?.role === 'OWNER' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Cash Drawer PIN</label>
+                    <p className="text-sm text-muted-foreground">
+                      4-digit PIN staff must enter to open the cash drawer manually from the POS screen. Leave blank to disable the shortcut.
+                    </p>
+                    <Input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={drawerPin}
+                      onChange={(e) => setDrawerPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      placeholder="e.g. 1234"
+                      className="max-w-[120px] tracking-widest text-center text-lg"
+                    />
+                  </div>
+                )}
 
                 {/* Footer text */}
                 <div className="space-y-2">

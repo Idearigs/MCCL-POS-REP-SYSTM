@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { normalizeImageUrl } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -61,6 +61,8 @@ import {
   AlertCircle,
   AlertTriangle,
   Trash2,
+  Archive,
+  Lock,
 } from 'lucide-react';
 import { useInventory, InventoryItem } from '@/contexts/InventoryContext';
 import { Customer, useCustomers } from '@/contexts/CustomerContext';
@@ -72,6 +74,8 @@ import { salesService, CreateSaleData, Sale } from '@/services/salesService';
 import { customerService } from '@/services/customerService';
 import { productService } from '@/services/productService';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useOutlet } from '@/contexts/OutletContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { printThermalReceipt } from '@/utils/thermalReceipt';
 import { PrinterStatusBadge } from './PrinterStatusBadge';
 import {
@@ -108,10 +112,19 @@ interface TileBasedPOSProps {
 const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const { inventory, refreshInventory } = useInventory();
   const { settings } = useSettings();
+  const { currentOutlet } = useOutlet();
+  const { auth } = useAuth();
   const { toast } = useToast();
 
   // Stores the last completed sale so we can show the print receipt screen
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
+
+  // Cash drawer PIN shortcut
+  const [showDrawerPinDialog, setShowDrawerPinDialog] = useState(false);
+  const [drawerPinInput, setDrawerPinInput] = useState('');
+  const [drawerPinError, setDrawerPinError] = useState('');
+  const [openingDrawer, setOpeningDrawer] = useState(false);
+  const drawerPinRef = useRef<HTMLInputElement>(null);
 
   // Load cart from localStorage on mount
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -1266,9 +1279,11 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         storeAddress: settings.general.address,
         storePhone: settings.general.phone,
         storeEmail: settings.general.email,
+        vatNumber: settings.printer.vatNumber,
+        tillNumber: currentOutlet?.code ?? '01',
         receiptNumber: (sale as any).saleNumber ?? sale.receiptNumber ?? 'N/A',
         date: sale.createdAt,
-        cashierName: sale.cashierName || 'Staff',
+        cashierName: sale.cashierName || auth.user?.name || 'Staff',
         customerName: sale.customerName || undefined,
         items: (sale.items || []).map((item: any) => ({
           name: item.productName || item.name || 'Item',
@@ -1282,11 +1297,12 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         subtotal: sale.subtotal,
         discountAmount: sale.discountAmount,
         taxAmount: sale.taxAmount,
+        taxRate: settings.general.taxRate,
         totalAmount: sale.totalAmount,
         paymentMethod: sale.paymentMethod,
         cashReceived,
         change,
-        footerMessage: settings.printer.footerText || 'Thank you for your purchase!',
+        footerMessage: settings.printer.footerText || 'Thank you for shopping\nKEEP THIS RECEIPT AS PROOF OF PURCHASE',
       },
       {
         model: settings.printer.model,
@@ -1294,6 +1310,38 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       },
       settings.printer.printerName || undefined,
     );
+  };
+
+  // Manual drawer open via PIN (for non-sale drawer access)
+  const handleDrawerPinSubmit = async () => {
+    const pin = settings.printer.drawerPin;
+    if (!pin) {
+      setDrawerPinError('Drawer PIN not set. Ask the store owner to configure one in Settings → Printer.');
+      return;
+    }
+    if (drawerPinInput !== pin) {
+      setDrawerPinError('Incorrect PIN. Try again.');
+      setDrawerPinInput('');
+      drawerPinRef.current?.focus();
+      return;
+    }
+    if (!settings.printer.printerName) {
+      setDrawerPinError('No printer configured.');
+      return;
+    }
+    setOpeningDrawer(true);
+    try {
+      const { openCashDrawer } = await import('../../utils/qzBridge');
+      await openCashDrawer(settings.printer.printerName, settings.printer.model, 'manual');
+      setShowDrawerPinDialog(false);
+      setDrawerPinInput('');
+      setDrawerPinError('');
+      toast({ title: 'Cash drawer opened' });
+    } catch (e: any) {
+      setDrawerPinError(e?.message ?? 'Failed to open drawer');
+    } finally {
+      setOpeningDrawer(false);
+    }
   };
 
   // Close the post-sale screen and start a new sale
@@ -1463,13 +1511,12 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       // Open cash drawer on cash payments (fire-and-forget — don't block sale)
       if (selectedPaymentMethod === 'CASH' && settings.printer.printerName) {
         import('../../utils/qzBridge').then(({ openCashDrawer }) => {
-          openCashDrawer(settings.printer.printerName).catch(() => {});
+          openCashDrawer(settings.printer.printerName, settings.printer.model, 'sale').catch(() => {});
         });
       }
 
-      // Auto-print if enabled in printer settings
-      if (settings.printer.autoPrint) {
-        // Small delay so the success screen renders first
+      // Print receipt on every completed sale when a printer is configured
+      if (settings.printer.printerName) {
         setTimeout(() => handlePrintReceipt(createdSale), 400);
       }
 
@@ -1529,6 +1576,18 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             )}
 
             <PrinterStatusBadge />
+
+            {/* Manual drawer shortcut — visible when a printer + PIN is configured */}
+            {settings.printer.printerName && settings.printer.drawerPin && (
+              <button
+                onClick={() => { setDrawerPinInput(''); setDrawerPinError(''); setShowDrawerPinDialog(true); }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors text-xs font-medium"
+                title="Open cash drawer"
+              >
+                <Archive className="h-3.5 w-3.5" />
+                <Lock className="h-3 w-3" />
+              </button>
+            )}
 
             {/* Search - hidden in category view and appraisal view */}
             {!showCategoryView && !showAppraisalView && (
@@ -4608,6 +4667,64 @@ Deposit is non-refundable.
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== CASH DRAWER PIN DIALOG ===== */}
+      <Dialog open={showDrawerPinDialog} onOpenChange={(o) => { if (!o) { setShowDrawerPinDialog(false); setDrawerPinInput(''); setDrawerPinError(''); }}}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Archive className="h-5 w-5 text-amber-600" />
+              Open Cash Drawer
+            </DialogTitle>
+            <DialogDescription>Enter your 4-digit PIN to open the drawer.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <input
+              ref={drawerPinRef}
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              autoFocus
+              value={drawerPinInput}
+              onChange={(e) => { setDrawerPinInput(e.target.value.replace(/\D/g, '').slice(0, 4)); setDrawerPinError(''); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && drawerPinInput.length === 4) handleDrawerPinSubmit(); }}
+              placeholder="• • • •"
+              className="w-full text-center text-3xl tracking-[0.5em] border rounded-lg py-3 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+            {drawerPinError && <p className="text-sm text-destructive text-center">{drawerPinError}</p>}
+
+            {/* PIN pad */}
+            <div className="grid grid-cols-3 gap-2">
+              {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((k) => (
+                <button
+                  key={k}
+                  disabled={!k || openingDrawer}
+                  onClick={() => {
+                    if (k === '⌫') { setDrawerPinInput(p => p.slice(0, -1)); }
+                    else if (drawerPinInput.length < 4) { setDrawerPinInput(p => p + k); setDrawerPinError(''); }
+                  }}
+                  className={`py-3 rounded-lg text-lg font-semibold border transition-colors ${k ? 'bg-white hover:bg-gray-50 active:bg-gray-100' : 'invisible'}`}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDrawerPinDialog(false)}>Cancel</Button>
+            <Button
+              disabled={drawerPinInput.length !== 4 || openingDrawer}
+              onClick={handleDrawerPinSubmit}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {openingDrawer ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Archive className="h-4 w-4 mr-2" />}
+              Open Drawer
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

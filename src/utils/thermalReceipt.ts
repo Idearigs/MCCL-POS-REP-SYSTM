@@ -6,6 +6,8 @@ export interface ThermalReceiptData {
   storeAddress?: string;
   storePhone?: string;
   storeEmail?: string;
+  vatNumber?: string;   // e.g. "GB 123 4567 89" — shown as "VAT No: ..."
+  tillNumber?: string;  // outlet code / till ID shown in header row
   receiptNumber: string;
   date: string; // ISO string
   cashierName: string;
@@ -22,6 +24,7 @@ export interface ThermalReceiptData {
   subtotal: number;
   discountAmount: number;
   taxAmount: number;
+  taxRate?: number;     // percentage, e.g. 20
   totalAmount: number;
   paymentMethod: string;
   cashReceived?: number;
@@ -37,109 +40,125 @@ export interface PrintOptions {
 }
 
 const PAYMENT_LABELS: Record<string, string> = {
-  CASH: 'Cash',
-  CARD: 'Card',
-  BANK_TRANSFER: 'Bank Transfer',
-  CHEQUE: 'Cheque',
-  DIGITAL_WALLET: 'Digital Wallet',
-  INSTALLMENT: 'Installment',
+  CASH: 'CASH',
+  CARD: 'CREDIT CARD',
+  BANK_TRANSFER: 'BANK TRANSFER',
+  CHEQUE: 'CHEQUE',
+  DIGITAL_WALLET: 'DIGITAL WALLET',
+  INSTALLMENT: 'INSTALLMENT',
 };
 
 function fmt(amount: number | undefined | null): string {
   return `£${(amount ?? 0).toFixed(2)}`;
 }
 
+// "08-May-2026 09:28" — matches reference receipt date style
 function formatDate(isoString: string): string {
   const d = new Date(isoString);
-  return d.toLocaleString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = d.toLocaleString('en-GB', { month: 'short' });
+  const year = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${day}-${month}-${year} ${hh}:${mm}`;
 }
 
 function buildCopyHTML(data: ThermalReceiptData, copyLabel?: string): string {
-  const paymentLabel = PAYMENT_LABELS[data.paymentMethod] || data.paymentMethod;
+  const paymentLabel = PAYMENT_LABELS[data.paymentMethod] ?? data.paymentMethod.toUpperCase();
+  const itemCount = data.items.reduce((s, i) => s + i.quantity, 0);
 
   const itemRows = data.items
     .map((item) => {
-      const nameDisplay = item.name.length > 24 ? item.name.slice(0, 24) + '…' : item.name;
-      const qtyPrice = `${item.quantity} x ${fmt(item.unitPrice)}`;
-      return `
-      <div class="item">
-        <div class="item-name">${nameDisplay}${item.isRepair ? ' <span class="repair-tag">[Repair]</span>' : ''}</div>
-        <div class="item-sub">
-          <span>${qtyPrice}</span>
-          <span>${fmt(item.total)}</span>
-        </div>
-        ${item.discount && item.discount > 0 ? `<div class="item-discount">Discount: -${fmt(item.discount)}</div>` : ''}
-      </div>`;
+      const name = item.name.length > 26 ? item.name.slice(0, 26) + '…' : item.name;
+      const tag = item.isRepair ? ' [Repair]' : '';
+      const qtyPrice = `${item.quantity}@${fmt(item.unitPrice)}`;
+      const rows = [`<div class="item-line">
+        <span class="item-name">${name}${tag}</span>
+        <span class="item-mid">${qtyPrice}</span>
+        <span class="item-amt">${fmt(item.total)}</span>
+      </div>`];
+      if (item.discount && item.discount > 0) {
+        rows.push(`<div class="item-disc">Discount: -${fmt(item.discount)}</div>`);
+      }
+      return rows.join('');
     })
     .join('');
 
-  const discountRow =
-    data.discountAmount > 0
-      ? `<div class="summary-row"><span>Discount</span><span>-${fmt(data.discountAmount)}</span></div>`
-      : '';
+  const discountRow = data.discountAmount > 0
+    ? `<div class="row"><span>DISCOUNT</span><span>-${fmt(data.discountAmount)}</span></div>`
+    : '';
 
-  const taxRow =
-    data.taxAmount > 0
-      ? `<div class="summary-row"><span>Tax</span><span>${fmt(data.taxAmount)}</span></div>`
-      : '';
+  const vatRows = (() => {
+    if (data.taxAmount <= 0) return '';
+    const rate = data.taxRate ?? 20;
+    const taxableAmt = data.totalAmount - data.taxAmount;
+    return `<hr class="divider"/>
+    <table class="vat-tbl"><thead>
+      <tr><th>Rate</th><th>Amount</th><th>VAT</th></tr>
+    </thead><tbody>
+      <tr><td>${rate.toFixed(2)}%</td><td>${fmt(taxableAmt)}</td><td>${fmt(data.taxAmount)}</td></tr>
+      <tr><td>0.00%</td><td>${fmt(data.subtotal - taxableAmt)}</td><td>${fmt(0)}</td></tr>
+    </tbody></table>`;
+  })();
 
-  const changeRow =
-    data.cashReceived && data.cashReceived > 0
-      ? `<div class="summary-row"><span>Cash Received</span><span>${fmt(data.cashReceived)}</span></div>
-         <div class="summary-row"><span>Change</span><span>${fmt(data.change ?? 0)}</span></div>`
-      : '';
+  const changeRows = (data.cashReceived ?? 0) > 0
+    ? `<div class="row"><span>${paymentLabel}</span><span>${fmt(data.cashReceived)}</span></div>
+       <div class="row"><span>CHANGE DUE</span><span>${fmt(data.change ?? 0)}</span></div>`
+    : `<div class="row"><span>${paymentLabel}</span><span>${fmt(data.totalAmount)}</span></div>
+       <div class="row"><span>CHANGE DUE</span><span>${fmt(0)}</span></div>`;
 
   const copyBadge = copyLabel
     ? `<div class="copy-badge">${copyLabel}</div>`
     : '';
 
-  return `
-  <div class="receipt-copy">
+  const header = (() => {
+    const till = data.tillNumber ?? '01';
+    const date = formatDate(data.date);
+    const operator = data.cashierName;
+    return `<div class="meta-grid">
+      <div><div class="meta-lbl">Till</div><div>${till}</div></div>
+      <div><div class="meta-lbl">Date &amp; Time</div><div>${date}</div></div>
+      <div><div class="meta-lbl">Operator</div><div>${operator}</div></div>
+    </div>`;
+  })();
+
+  const customerRow = data.customerName
+    ? `<div class="row"><span>Customer</span><span>${data.customerName}</span></div>`
+    : '';
+
+  return `<div class="receipt-copy">
     ${copyBadge}
+    <div class="store-name">${data.storeName.toUpperCase()}</div>
+    <div class="store-sub">${[
+      data.storeAddress,
+      data.storePhone,
+      data.storeEmail,
+      data.vatNumber ? `V.A.T No: ${data.vatNumber}` : null,
+    ].filter(Boolean).join('<br>')}</div>
 
-    <div class="store-name">${data.storeName}</div>
-    ${data.storeAddress || data.storePhone || data.storeEmail ? `
-    <div class="store-sub">
-      ${data.storeAddress ? `${data.storeAddress}<br>` : ''}
-      ${data.storePhone ? `Tel: ${data.storePhone}<br>` : ''}
-      ${data.storeEmail ? `${data.storeEmail}` : ''}
-    </div>` : ''}
+    <hr class="divider"/>
+    <div class="center">Receipt - Copy - Sales</div>
+    <hr class="divider"/>
 
-    <hr class="divider" />
-
-    <div class="receipt-number">RECEIPT: ${data.receiptNumber}</div>
-
-    <div class="meta-row"><span>Date</span><span>${formatDate(data.date)}</span></div>
-    <div class="meta-row"><span>Cashier</span><span>${data.cashierName}</span></div>
-    ${data.customerName ? `<div class="meta-row"><span>Customer</span><span>${data.customerName}</span></div>` : ''}
-
-    <hr class="divider" />
+    ${header}
+    ${customerRow}
+    <hr class="divider"/>
 
     ${itemRows}
+    <hr class="divider"/>
 
-    <hr class="divider" />
-
-    <div class="summary-row"><span>Subtotal</span><span>${fmt(data.subtotal)}</span></div>
+    <div class="row"><span>${itemCount} ITEM${itemCount !== 1 ? 'S' : ''} PURCHASED</span></div>
     ${discountRow}
-    ${taxRow}
     <div class="total-row"><span>TOTAL</span><span>${fmt(data.totalAmount)}</span></div>
 
-    <hr class="divider" />
+    <hr class="divider"/>
 
-    <div class="summary-row"><span>Payment</span><span>${paymentLabel}</span></div>
-    ${changeRow}
+    ${changeRows}
 
-    <hr class="divider" />
+    ${vatRows}
 
-    <div class="footer">${
-      data.footerMessage || 'Thank you for your purchase!<br>Please keep this receipt for your records.'
-    }</div>
+    <hr class="divider"/>
+    <div class="footer">${(data.footerMessage ?? 'Thank you for shopping\nKEEP THIS RECEIPT AS PROOF OF PURCHASE').replace(/\n/g, '<br>')}</div>
   </div>`;
 }
 
@@ -153,153 +172,119 @@ export function buildReceiptHTML(data: ThermalReceiptData, options: PrintOptions
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <title>Receipt ${data.receiptNumber}</title>
   <style>
-    @page {
-      size: 80mm auto;
-      margin: 0;
-    }
+    @page { size: 80mm auto; margin: 0; }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    html {
-      height: auto;
-    }
 
     body {
       font-family: 'Courier New', Courier, monospace;
       font-size: 11px;
-      width: 80mm;
-      max-width: 80mm;
-      height: auto;
+      /* 72mm centered on 80mm paper — 4mm buffer each side prevents right-edge clipping */
+      width: 72mm;
+      margin: 0 auto;
       color: #000;
       background: #fff;
     }
 
-    .receipt-copy {
-      width: 80mm;
-      padding: 3mm 4mm;
-    }
+    .receipt-copy { padding: 3mm 0; }
 
     .copy-badge {
       text-align: center;
       font-size: 9px;
       font-weight: bold;
       letter-spacing: 2px;
-      color: #555;
       margin-bottom: 2mm;
     }
 
     .store-name {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: bold;
       text-align: center;
-      margin-bottom: 1mm;
       letter-spacing: 0.5px;
+      margin-bottom: 1mm;
     }
 
     .store-sub {
       font-size: 10px;
       text-align: center;
-      color: #333;
-      line-height: 1.5;
+      line-height: 1.6;
       margin-bottom: 2mm;
     }
 
-    .divider {
-      border: none;
-      border-top: 1px dashed #000;
-      margin: 2.5mm 0;
-    }
+    .divider { border: none; border-top: 1px dashed #000; margin: 2mm 0; }
 
-    .meta-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 10px;
-      margin: 0.8mm 0;
-    }
+    .center { text-align: center; font-size: 11px; margin: 1mm 0; }
 
-    .receipt-number {
-      font-size: 11px;
-      font-weight: bold;
-      text-align: center;
+    /* Till / Date / Operator 3-column header */
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 0.6fr 1.4fr 1.4fr;
+      font-size: 9.5px;
+      gap: 0 2mm;
       margin: 1mm 0;
     }
+    .meta-lbl { font-weight: bold; margin-bottom: 0.5mm; }
 
-    .item {
-      margin: 1.5mm 0;
-    }
-
-    .item-name {
-      font-size: 11px;
-      font-weight: bold;
-      word-break: break-word;
-    }
-
-    .repair-tag {
-      font-size: 9px;
-      font-weight: normal;
-      color: #555;
-    }
-
-    .item-sub {
+    /* Item line: name | qty@price | total */
+    .item-line {
       display: flex;
-      justify-content: space-between;
-      font-size: 10px;
-      color: #222;
+      align-items: baseline;
+      gap: 2mm;
+      margin: 1mm 0;
+      font-size: 11px;
     }
+    .item-name { font-weight: bold; flex: 1; word-break: break-word; }
+    .item-mid  { white-space: nowrap; flex-shrink: 0; }
+    .item-amt  { white-space: nowrap; flex-shrink: 0; text-align: right; min-width: 10mm; }
+    .item-disc { font-size: 10px; text-align: right; color: #333; }
 
-    .item-discount {
-      font-size: 10px;
-      color: #444;
-      text-align: right;
-    }
-
-    .summary-row {
+    /* Generic 2-col row (payment, change, subtotal…) */
+    .row {
       display: flex;
       justify-content: space-between;
       font-size: 11px;
-      margin: 0.8mm 0;
+      margin: 0.6mm 0;
     }
 
     .total-row {
       display: flex;
       justify-content: space-between;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: bold;
       margin: 1.5mm 0;
     }
 
-    .footer {
-      text-align: center;
+    /* VAT breakdown table */
+    .vat-tbl {
+      width: 100%;
+      border-collapse: collapse;
       font-size: 10px;
-      color: #333;
-      margin-top: 2mm;
+      margin: 1mm 0;
+    }
+    .vat-tbl th { font-weight: bold; text-align: left; padding-bottom: 0.5mm; }
+    .vat-tbl td { text-align: left; padding: 0.2mm 0; }
+
+    .footer {
+      font-size: 10px;
       line-height: 1.6;
+      margin-top: 2mm;
+      word-wrap: break-word;
     }
 
     .cut-line {
       text-align: center;
       font-size: 9px;
-      letter-spacing: 1px;
       color: #555;
       padding: 3mm 0;
     }
 
     @media print {
-      html, body {
-        width: 80mm;
-        height: auto !important;
-        min-height: 0 !important;
-        overflow: visible !important;
-      }
+      html, body { height: auto !important; overflow: visible !important; }
       .cut-line { color: #000; }
-      @page {
-        size: 80mm auto;
-        margin: 0;
-        padding: 0;
-      }
+      @page { size: 80mm auto; margin: 0; }
     }
   </style>
 </head>
