@@ -133,7 +133,10 @@ export class SettingsService {
     await this.prisma.tenants.update({
       where: { id: tenantId },
       data: {
-        settings: { ...reserved, [APP_SETTINGS_KEY]: next } as unknown as Record<string, unknown>,
+        settings: {
+          ...reserved,
+          [APP_SETTINGS_KEY]: next,
+        } as unknown as Record<string, unknown>,
         updatedAt: new Date(),
       },
     });
