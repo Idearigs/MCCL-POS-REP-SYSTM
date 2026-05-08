@@ -1276,6 +1276,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     await printThermalReceipt(
       {
         storeName: settings.general.storeName,
+        tradingName: settings.general.tradingName,
         storeAddress: settings.general.address,
         storePhone: settings.general.phone,
         storeEmail: settings.general.email,

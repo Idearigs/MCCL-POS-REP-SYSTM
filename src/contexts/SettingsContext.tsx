@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 export interface GeneralSettings {
   storeName: string;
+  tradingName?: string; // legal entity line printed on receipts
   phone: string;
   email: string;
   address: string;
@@ -62,6 +63,7 @@ interface SettingsContextType {
 const defaultSettings: AllSettings = {
   general: {
     storeName: 'MCCL Jewelry Store',
+    tradingName: 'A trading name of Beeston Jewellers Ltd',
     phone: '+44 20 1234 5678',
     email: 'contact@mccljewelry.com',
     address: '123 High Street, London, UK',

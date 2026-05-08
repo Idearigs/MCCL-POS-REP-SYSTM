@@ -10,6 +10,7 @@ export interface AppSettings {
   general: {
     storeName: string;
     phone: string;
+    tradingName?: string;
     email: string;
     address: string;
     currency: string;
@@ -41,6 +42,7 @@ export interface AppSettings {
 const DEFAULTS: AppSettings = {
   general: {
     storeName: 'My Store',
+    tradingName: 'A trading name of Beeston Jewellers Ltd',
     phone: '',
     email: '',
     address: '',

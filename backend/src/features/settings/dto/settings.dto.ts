@@ -7,6 +7,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class GeneralSettingsDto {
   @ApiPropertyOptional() @IsOptional() @IsString() storeName?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() tradingName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() phone?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() email?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() address?: string;

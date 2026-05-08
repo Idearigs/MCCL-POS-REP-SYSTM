@@ -6,7 +6,8 @@ export interface ThermalReceiptData {
   storeAddress?: string;
   storePhone?: string;
   storeEmail?: string;
-  vatNumber?: string;   // e.g. "GB 123 4567 89" — shown as "VAT No: ..."
+  tradingName?: string; // legal entity line e.g. "A trading name of Beeston Jewellers Ltd"
+  vatNumber?: string;   // e.g. "275322603" — shown as "VAT No: ..."
   tillNumber?: string;  // outlet code / till ID shown in header row
   receiptNumber: string;
   date: string; // ISO string
@@ -129,6 +130,7 @@ function buildCopyHTML(data: ThermalReceiptData, copyLabel?: string): string {
   return `<div class="receipt-copy">
     ${copyBadge}
     <div class="store-name">${data.storeName.toUpperCase()}</div>
+    ${data.tradingName ? `<div class="trading-name">${data.tradingName}</div>` : ''}
     <div class="store-sub">${[
       data.storeAddress,
       data.storePhone,
@@ -204,6 +206,13 @@ export function buildReceiptHTML(data: ThermalReceiptData, options: PrintOptions
       font-weight: bold;
       text-align: center;
       letter-spacing: 0.5px;
+      margin-bottom: 1mm;
+    }
+
+    .trading-name {
+      font-size: 9.5px;
+      text-align: center;
+      font-style: italic;
       margin-bottom: 1mm;
     }
 

@@ -122,6 +122,7 @@ const generalFormSchema = z.object({
   storeName: z.string().min(2, {
     message: "Store name must be at least 2 characters.",
   }),
+  tradingName: z.string().optional(),
   phone: z.string().min(6, {
     message: "Phone number must be at least 6 digits.",
   }),
@@ -187,6 +188,7 @@ const SettingsPage = () => {
     resolver: zodResolver(generalFormSchema),
     defaultValues: {
       storeName: settings.general.storeName,
+      tradingName: settings.general.tradingName ?? '',
       phone: settings.general.phone,
       email: settings.general.email,
       address: settings.general.address,
@@ -265,9 +267,11 @@ const SettingsPage = () => {
       await printThermalReceipt(
         {
           storeName: settings.general.storeName || 'Test Store',
+          tradingName: settings.general.tradingName,
           storeAddress: settings.general.address,
           storePhone: settings.general.phone,
           storeEmail: settings.general.email,
+          vatNumber: settings.printer.vatNumber,
           receiptNumber: 'TEST-001',
           date: new Date().toISOString(),
           cashierName: 'Staff',
@@ -316,6 +320,7 @@ const SettingsPage = () => {
   useEffect(() => {
     generalForm.reset({
       storeName: settings.general.storeName,
+      tradingName: settings.general.tradingName ?? '',
       phone: settings.general.phone,
       email: settings.general.email,
       address: settings.general.address,
@@ -345,6 +350,7 @@ const SettingsPage = () => {
     await updateGeneralSettings({
       ...settings.general,
       storeName: data.storeName,
+      tradingName: data.tradingName,
       phone: data.phone,
       email: data.email,
       address: data.address,
@@ -462,6 +468,23 @@ const SettingsPage = () => {
                           </FormControl>
                           <FormDescription>
                             This is your store's display name.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={generalForm.control}
+                      name="tradingName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Trading Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="e.g. A trading name of Beeston Jewellers Ltd" />
+                          </FormControl>
+                          <FormDescription>
+                            Legal entity line printed on receipts below the store name.
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
