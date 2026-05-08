@@ -184,6 +184,7 @@ export function buildReceiptHTML(data: ThermalReceiptData, options: PrintOptions
     body {
       font-family: 'Courier New', Courier, monospace;
       font-size: 11px;
+      font-weight: 600;
       /* 72mm centered on 80mm paper — 4mm buffer each side prevents right-edge clipping */
       width: 72mm;
       margin: 0 auto;

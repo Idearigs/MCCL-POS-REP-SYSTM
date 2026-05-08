@@ -902,11 +902,14 @@ const SettingsPage = () => {
                 </div>
 
                 {/* Drawer PIN — OWNER only */}
-                {auth.user?.role === 'OWNER' && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Cash Drawer PIN</label>
-                    <p className="text-sm text-muted-foreground">
-                      4-digit PIN staff must enter to open the cash drawer manually from the POS screen. Leave blank to disable the shortcut.
+                {auth.user?.role === 'OWNER' ? (
+                  <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                    <div className="flex items-center gap-2">
+                      <Lock className="h-4 w-4 text-amber-600" />
+                      <label className="text-sm font-semibold text-amber-800">Cash Drawer PIN <span className="ml-1 rounded bg-amber-200 px-1.5 py-0.5 text-xs font-bold text-amber-900">OWNER ONLY</span></label>
+                    </div>
+                    <p className="text-sm text-amber-700">
+                      4-digit PIN required to open the cash drawer from the POS toolbar. Leave blank to disable the button.
                     </p>
                     <Input
                       type="password"
@@ -917,6 +920,13 @@ const SettingsPage = () => {
                       placeholder="e.g. 1234"
                       className="max-w-[120px] tracking-widest text-center text-lg"
                     />
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <Lock className="h-4 w-4" />
+                      <span className="text-sm font-medium">Cash Drawer PIN — Owner access only</span>
+                    </div>
                   </div>
                 )}
 
