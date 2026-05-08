@@ -137,7 +137,7 @@ export class SettingsService {
         settings: {
           ...reserved,
           [APP_SETTINGS_KEY]: next,
-        } as Prisma.InputJsonValue,
+        } as unknown as Prisma.InputJsonValue,
         updatedAt: new Date(),
       },
     });
