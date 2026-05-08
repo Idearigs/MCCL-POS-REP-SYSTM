@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { SidebarProvider } from "@/components/ui/sidebar";
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -9,6 +9,8 @@ import GlobalNotificationIndicator from '@/components/notifications/GlobalNotifi
 import FloatingShiftButton from '@/components/shifts/FloatingShiftButton';
 import { ChatWidget } from '@/components/chatbot/ChatWidget';
 import BillingWarningBanner from '@/components/auth/BillingWarningBanner';
+import { usePrinterDetection } from '@/hooks/usePrinterDetection';
+import { PrinterSelectorDialog } from '@/components/printer/PrinterSelectorDialog';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -19,34 +21,45 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ children, pageTitle, hasPaymentWarning = false }) => {
   const { auth } = useAuth();
   const [showWarning, setShowWarning] = useState(false);
-  
-  // Always check for any notifications that should trigger warnings
+  const printerDetection = usePrinterDetection();
+  const detectionRan = useRef(false);
+
   useEffect(() => {
-    // Check for payment warnings or any other important notifications
     const hasWarningNotification = auth.notifications.some(
-      notification => (
-        // Check for payment warning notifications
+      notification =>
         (notification.type === 'payment' && notification.title === 'Payment Warning') ||
-        // Also check for payment due notifications
-        (notification.type === 'payment' && notification.title === 'Payment Due')
-      )
+        (notification.type === 'payment' && notification.title === 'Payment Due'),
     );
-    
-    // Set warning state based on props or existing notifications
     setShowWarning(hasPaymentWarning || hasWarningNotification);
   }, [auth.notifications, hasPaymentWarning]);
+
+  // Run printer detection once per session after login
+  useEffect(() => {
+    if (detectionRan.current || !auth.isAuthenticated) return;
+    detectionRan.current = true;
+    // Delay so QZ Tray has time to handshake after page load
+    const t = setTimeout(() => { printerDetection.scan(); }, 3000);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.isAuthenticated]);
+
   return (
     <NetworkStatus>
       <SidebarProvider>
         <div className="flex h-screen w-full bg-background relative transition-colors duration-200">
-          {/* Add GlobalNotificationIndicator at the top level */}
           <GlobalNotificationIndicator />
-
-          {/* Floating Shift Button - Visible throughout the system */}
           <FloatingShiftButton />
-
-          {/* TrueDesk AI Assistant Chatbot */}
           <ChatWidget />
+
+          {/* Global printer selector — shown when multiple/replacement printers detected */}
+          <PrinterSelectorDialog
+            open={printerDetection.showSelector}
+            printers={printerDetection.selectorPrinters}
+            mode={printerDetection.selectorMode}
+            missingPrinter={printerDetection.missingPrinter}
+            onSelect={printerDetection.confirmSelect}
+            onDismiss={printerDetection.dismiss}
+          />
 
           <Sidebar />
           <div className="flex-1 flex flex-col overflow-hidden">

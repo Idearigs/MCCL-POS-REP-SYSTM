@@ -4,7 +4,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Save, Lock, Eye, EyeOff, RotateCcw, Loader2, UserCircle, Printer, Archive } from 'lucide-react';
+import { Save, Lock, Eye, EyeOff, RotateCcw, Loader2, UserCircle, Printer, Archive, ScanLine, Eye as EyeIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -19,6 +19,9 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import RepairTagsSettings from '@/components/repair/RepairTagsSettings';
 import { OutletManagement } from '@/components/outlets/OutletManagement';
+import { ReceiptPreviewModal } from '@/components/printer/ReceiptPreviewModal';
+import { usePrinterDetection } from '@/hooks/usePrinterDetection';
+import { PrinterSelectorDialog } from '@/components/printer/PrinterSelectorDialog';
 
 // ─── QZ Tray certificate setup component ─────────────────────────────────────
 
@@ -239,6 +242,9 @@ const SettingsPage = () => {
     } catch { return []; }
   });
   const [showDrawerLog, setShowDrawerLog] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+
+  const printerDetection = usePrinterDetection();
 
   const onSubmitPrinter = async () => {
     await updatePrinterSettings({ model: printerModel, printerName, autoPrint, copies, footerText, vatNumber: vatNumber || undefined, drawerPin: drawerPin || undefined });
@@ -251,7 +257,13 @@ const SettingsPage = () => {
       await connectQZ();
       const found = await listPrinters();
       setAvailablePrinters(found);
-      if (found.length === 0) toast.error('No printers found — make sure QZ Tray is running on this PC.');
+      if (found.length === 0) {
+        toast.error('No printers found — make sure QZ Tray is running on this PC.');
+      } else {
+        // Auto-select if only one found and nothing selected yet
+        if (found.length === 1 && !printerName) setPrinterName(found[0]);
+        toast.success(`Found ${found.length} printer${found.length > 1 ? 's' : ''}`);
+      }
     } catch {
       toast.error('QZ Tray not available — install and start QZ Tray on this PC first.');
     } finally {
@@ -344,6 +356,18 @@ const SettingsPage = () => {
       receiptTemplate: settings.appearance.receiptTemplate,
     });
   }, [settings.appearance, appearanceForm]);
+
+  // Auto-scan printers when switching to the printer tab
+  useEffect(() => {
+    if (activeTab !== 'printer') return;
+    handleFindPrinters();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // Sync printerName when detection dialog selects a new printer
+  useEffect(() => {
+    if (settings.printer.printerName) setPrinterName(settings.printer.printerName);
+  }, [settings.printer.printerName]);
 
   // Form submission handlers
   const onSubmitGeneral = async (data: GeneralFormValues) => {
@@ -778,27 +802,28 @@ const SettingsPage = () => {
 
                 {/* QZ Tray — Printer Name */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Windows Printer Name (QZ Tray)</label>
-                  <p className="text-xs text-muted-foreground">
-                    The exact printer name as it appears in Windows. Click <strong>Find Printers</strong> to detect automatically — requires <a href="https://qz.io/download" target="_blank" rel="noreferrer" className="underline text-blue-600">QZ Tray</a> running on this PC.
-                  </p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={printerName}
-                      onChange={(e) => setPrinterName(e.target.value)}
-                      placeholder="e.g. EPSON TM-T20III"
-                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Connected Printer</label>
                     <button
                       type="button"
                       onClick={handleFindPrinters}
                       disabled={loadingPrinters}
-                      className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap"
+                      className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50"
                     >
-                      {loadingPrinters ? 'Searching…' : 'Find Printers'}
+                      {loadingPrinters ? <Loader2 className="h-3 w-3 animate-spin" /> : <ScanLine className="h-3 w-3" />}
+                      {loadingPrinters ? 'Scanning…' : 'Scan printers'}
                     </button>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Click <strong>Scan printers</strong> to auto-detect — requires <a href="https://qz.io/download" target="_blank" rel="noreferrer" className="underline text-blue-600">QZ Tray</a> running on this PC. Or type the name manually.
+                  </p>
+                  <input
+                    type="text"
+                    value={printerName}
+                    onChange={(e) => setPrinterName(e.target.value)}
+                    placeholder="e.g. STAR TSP143 Cutter (TSP100)"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                   {availablePrinters.length > 0 && (
                     <div className="mt-2 rounded-lg border border-gray-200 divide-y">
                       {availablePrinters.map((p) => (
@@ -945,7 +970,7 @@ const SettingsPage = () => {
                   />
                 </div>
 
-                <div className="pt-2 flex items-center gap-3">
+                <div className="pt-2 flex items-center flex-wrap gap-3">
                   <Button
                     onClick={onSubmitPrinter}
                     disabled={loading}
@@ -953,6 +978,15 @@ const SettingsPage = () => {
                   >
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                     Save Printer Settings
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowPreview(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <EyeIcon className="h-4 w-4" />
+                    Preview Receipt
                   </Button>
                   <Button
                     type="button"
@@ -1169,6 +1203,30 @@ const SettingsPage = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Receipt preview modal */}
+      <ReceiptPreviewModal
+        open={showPreview}
+        onClose={() => setShowPreview(false)}
+        storeName={settings.general.storeName}
+        tradingName={settings.general.tradingName}
+        storeAddress={settings.general.address}
+        storePhone={settings.general.phone}
+        vatNumber={vatNumber || settings.printer.vatNumber}
+        footerText={footerText || settings.printer.footerText}
+        model={printerModel}
+        copies={copies}
+      />
+
+      {/* Printer selector — fires from detection hook when multiple/replacement printers found */}
+      <PrinterSelectorDialog
+        open={printerDetection.showSelector}
+        printers={printerDetection.selectorPrinters}
+        mode={printerDetection.selectorMode}
+        missingPrinter={printerDetection.missingPrinter}
+        onSelect={async (p) => { await printerDetection.confirmSelect(p); setPrinterName(p); }}
+        onDismiss={printerDetection.dismiss}
+      />
     </MainLayout>
   );
 };

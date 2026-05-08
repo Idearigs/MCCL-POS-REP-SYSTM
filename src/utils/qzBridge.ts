@@ -171,6 +171,11 @@ export async function disconnectQZ(): Promise<void> {
 
 // ─── Printer discovery ────────────────────────────────────────────────────────
 
+const THERMAL_KEYWORDS = [
+  'epson', 'tm-', 'star', 'tsp', 'thermal', 'receipt',
+  'pos', 'bixolon', 'citizen', 'xprinter', 'onix', 'rongta',
+];
+
 export async function listPrinters(): Promise<string[]> {
   if (!(await connectQZ())) return [];
   try {
@@ -179,6 +184,19 @@ export async function listPrinters(): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+export async function findThermalPrinters(): Promise<string[]> {
+  const all = await listPrinters();
+  const thermal = all.filter((p) =>
+    THERMAL_KEYWORDS.some((kw) => p.toLowerCase().includes(kw)),
+  );
+  return thermal.length > 0 ? thermal : all;
+}
+
+export async function isPrinterAvailable(name: string): Promise<boolean> {
+  const all = await listPrinters();
+  return all.includes(name);
 }
 
 // ─── Hex encoding ─────────────────────────────────────────────────────────────
