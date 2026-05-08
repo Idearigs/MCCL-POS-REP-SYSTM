@@ -1578,17 +1578,15 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
             <PrinterStatusBadge />
 
-            {/* Manual drawer shortcut — visible whenever a printer is configured */}
-            {settings.printer.printerName && (
-              <button
-                onClick={() => { setDrawerPinInput(''); setDrawerPinError(''); setShowDrawerPinDialog(true); }}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors text-xs font-medium"
-                title="Open cash drawer"
-              >
-                <Archive className="h-3.5 w-3.5" />
-                <Lock className="h-3 w-3" />
-              </button>
-            )}
+            {/* Manual drawer shortcut — always visible */}
+            <button
+              onClick={() => { setDrawerPinInput(''); setDrawerPinError(''); setShowDrawerPinDialog(true); }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors text-xs font-medium"
+              title="Open cash drawer"
+            >
+              <Archive className="h-3.5 w-3.5" />
+              <Lock className="h-3 w-3" />
+            </button>
 
             {/* Search - hidden in category view and appraisal view */}
             {!showCategoryView && !showAppraisalView && (
