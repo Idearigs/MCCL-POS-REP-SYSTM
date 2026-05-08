@@ -62,11 +62,11 @@ interface SettingsContextType {
 
 const defaultSettings: AllSettings = {
   general: {
-    storeName: 'MCCL Jewelry Store',
+    storeName: 'Andrew McCulloch Jewellers',
     tradingName: 'A trading name of Beeston Jewellers Ltd',
-    phone: '+44 20 1234 5678',
-    email: 'contact@mccljewelry.com',
-    address: '123 High Street, London, UK',
+    phone: '0115 925 7552',
+    email: '',
+    address: '7 The Square\nBeeston\nNottingham NG9 2JG',
     currency: 'GBP',
     taxRate: 20,
   },
@@ -87,7 +87,8 @@ const defaultSettings: AllSettings = {
     printerName: '',
     autoPrint: false,
     copies: 1,
-    footerText: 'Thank you for your purchase!\nPlease keep this receipt for your records.',
+    footerText:
+      'Thank you for shopping\nKEEP THIS RECEIPT AS PROOF OF PURCHASE\nRETURNS OR EXCHANGES WITHIN 14 DAYS WITH RECEIPT\nITEMS MUST BE UNWORN IN ORIGINAL CONDITION\nPEARLS RESTRINGING BESPOKE AND EARRINGS CARRIES NO GUARANTEE OR REFUND STATUTORY RIGHTS UNAFFECTED',
     vatNumber: '275322603',
   },
 };

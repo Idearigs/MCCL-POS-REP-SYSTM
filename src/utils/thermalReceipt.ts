@@ -135,7 +135,7 @@ function buildCopyHTML(data: ThermalReceiptData, copyLabel?: string): string {
       data.storeAddress,
       data.storePhone,
       data.storeEmail,
-      data.vatNumber ? `V.A.T No: ${data.vatNumber}` : null,
+      data.vatNumber ? `VAT No: GB ${data.vatNumber}` : null,
     ].filter(Boolean).join('<br>')}</div>
 
     <hr class="divider"/>
