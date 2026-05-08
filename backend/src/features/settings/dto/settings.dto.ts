@@ -1,6 +1,12 @@
 import {
-  IsString, IsOptional, IsBoolean, IsNumber, IsIn,
-  ValidateNested, Min, Max,
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsNumber,
+  IsIn,
+  ValidateNested,
+  Min,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
@@ -12,14 +18,25 @@ export class GeneralSettingsDto {
   @ApiPropertyOptional() @IsOptional() @IsString() email?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() address?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() currency?: string;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) @Max(100) taxRate?: number;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  taxRate?: number;
 }
 
 export class NotificationSettingsDto {
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() emailNotifications?: boolean;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  emailNotifications?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() smsNotifications?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() lowStockAlerts?: boolean;
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() repairStatusUpdates?: boolean;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  repairStatusUpdates?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() dailySummary?: boolean;
 }
 

@@ -1,15 +1,5 @@
-import {
-  Controller,
-  Get,
-  Patch,
-  Body,
-  UseGuards,
-} from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { Controller, Get, Patch, Body, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
@@ -34,7 +24,9 @@ export class SettingsController {
   }
 
   @Patch()
-  @ApiOperation({ summary: 'Update settings (partial — send only changed sections)' })
+  @ApiOperation({
+    summary: 'Update settings (partial — send only changed sections)',
+  })
   updateSettings(
     @CurrentTenant() tenant: TenantInfo,
     @Body() dto: UpdateSettingsDto,
