@@ -94,6 +94,7 @@ Visit us again soon.`,
     autoPrint: false,
     copies: 1,
     footerText: 'Thank you for your purchase!\nPlease keep this receipt for your records.',
+    vatNumber: '275322603',
   },
 };
 
