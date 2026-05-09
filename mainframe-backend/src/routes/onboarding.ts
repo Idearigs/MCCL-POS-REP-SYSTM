@@ -128,7 +128,13 @@ router.post('/:token/submit', async (req, res) => {
       });
     } catch (provErr) {
       console.error('[Onboarding] POS provisioning failed:', provErr);
-      return res.status(502).json({
+      // Explicitly set CORS header — Traefik strips headers from 5xx upstream responses
+      if (req.headers.origin) {
+        res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Vary', 'Origin');
+      }
+      return res.status(503).json({
         message: 'We could not set up your account right now. Please try again or contact support@truedesk.co.uk.',
       });
     }

@@ -31,28 +31,38 @@ export class TenantProvisioningService {
     const hashedPassword = await bcrypt.hash(data.ownerPassword, saltRounds);
     const ownerEmail = data.ownerEmail.toLowerCase();
 
-    await this.prismaService.tenants.upsert({
-      where: { id: data.tenantId },
-      update: {
-        name: data.businessName,
-        subdomain: data.subdomain.toLowerCase(),
-        domain: `${data.subdomain.toLowerCase()}.truedesk.co.uk`,
-        status: 'ACTIVE',
-        updatedAt: new Date(),
-      },
-      create: {
-        id: data.tenantId,
-        name: data.businessName,
-        subdomain: data.subdomain.toLowerCase(),
-        domain: `${data.subdomain.toLowerCase()}.truedesk.co.uk`,
-        status: 'ACTIVE',
-        subscriptionPlan: 'basic',
-        updatedAt: new Date(),
-      },
+    // Look up tenant by subdomain first to avoid unique-constraint conflicts
+    // when the record was previously created with a different id.
+    const subdomain = data.subdomain.toLowerCase();
+    const existingTenant = await this.prismaService.tenants.findUnique({
+      where: { subdomain },
     });
 
+    let tenantId: string;
+    if (existingTenant) {
+      await this.prismaService.tenants.update({
+        where: { id: existingTenant.id },
+        data: { name: data.businessName, status: 'ACTIVE', updatedAt: new Date() },
+      });
+      tenantId = existingTenant.id;
+    } else {
+      await this.prismaService.tenants.create({
+        data: {
+          id: data.tenantId,
+          name: data.businessName,
+          subdomain,
+          domain: `${subdomain}.truedesk.co.uk`,
+          status: 'ACTIVE',
+          subscriptionPlan: 'basic',
+          updatedAt: new Date(),
+        },
+      });
+      tenantId = data.tenantId;
+    }
+
+    // Look up owner by email within this tenant only
     const existingUser = await this.prismaService.users.findFirst({
-      where: { email: ownerEmail, tenantId: data.tenantId },
+      where: { email: ownerEmail, tenantId },
     });
 
     let userId: string;
@@ -76,15 +86,15 @@ export class TenantProvisioningService {
           firstName: data.ownerFirstName,
           lastName: data.ownerLastName,
           role: 'OWNER',
-          tenantId: data.tenantId,
+          tenantId,
           updatedAt: new Date(),
         } as any,
       });
     }
 
-    await this.seedDefaultCategories(data.tenantId);
+    await this.seedDefaultCategories(tenantId);
     await this.outletsService
-      .seedPrimaryOutlet(data.tenantId, data.businessName)
+      .seedPrimaryOutlet(tenantId, data.businessName)
       .catch((e: unknown) => {
         // eslint-disable-next-line @typescript-eslint/no-base-to-string
         const msg = e instanceof Error ? e.message : String(e);
@@ -92,9 +102,9 @@ export class TenantProvisioningService {
       });
 
     this.logger.log(
-      `Tenant provisioned: ${data.tenantId} (${data.businessName})`,
+      `Tenant provisioned: ${tenantId} (${data.businessName})`,
     );
-    return { tenantId: data.tenantId, userId };
+    return { tenantId, userId };
   }
 
   async seedDefaultCategories(tenantId: string): Promise<void> {
