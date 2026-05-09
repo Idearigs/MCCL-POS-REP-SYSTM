@@ -2,9 +2,120 @@ import { Router } from 'express';
 import https from 'https';
 import http from 'http';
 import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 import prisma from '../lib/prisma';
 import { buildHmacHeaders } from '../lib/hmac';
 import { requireAuth } from '../middleware/auth';
+
+// ── Mailer ────────────────────────────────────────────────────────────────────
+function createMailTransport() {
+  const port = parseInt(process.env.SMTP_PORT || '465');
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'mail.spacemail.com',
+    port,
+    secure: port === 465,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+}
+
+async function sendWelcomeEmail(opts: {
+  to: string;
+  firstName: string;
+  businessName: string;
+  companyCode: string;
+  ownerEmail: string;
+  ownerPassword: string;
+}) {
+  const { to, firstName, businessName, companyCode, ownerEmail, ownerPassword } = opts;
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return; // SMTP not configured — skip silently
+
+  const loginUrl = `https://pos.truedesk.co.uk`;
+  const transport = createMailTransport();
+
+  await transport.sendMail({
+    from: `TrueDesk <hello@truedesk.co.uk>`,
+    to,
+    subject: `Welcome to TrueDesk POS — Your account is ready`,
+    html: `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Welcome to TrueDesk</title></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+
+        <!-- Header -->
+        <tr><td style="background:#111;padding:32px 40px;text-align:center;">
+          <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">TrueDesk POS</h1>
+          <p style="margin:6px 0 0;color:#9ca3af;font-size:13px;">Point of Sale &amp; Repair Management</p>
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="padding:40px;">
+          <p style="margin:0 0 8px;font-size:16px;color:#111;font-weight:600;">Hi ${firstName},</p>
+          <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">
+            Your TrueDesk POS account for <strong style="color:#111;">${businessName}</strong> has been set up and is ready to use.
+          </p>
+
+          <!-- Credentials box -->
+          <table width="100%" cellpadding="0" cellspacing="0"
+            style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:24px;margin-bottom:28px;">
+            <tr><td>
+              <p style="margin:0 0 16px;font-size:13px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:0.5px;">Your Login Credentials</p>
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding:4px 0;font-size:13px;color:#6b7280;width:130px;">Company Code</td>
+                  <td style="padding:4px 0;font-size:13px;color:#111;font-weight:600;">${companyCode}</td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 0;font-size:13px;color:#6b7280;">Email</td>
+                  <td style="padding:4px 0;font-size:13px;color:#111;font-weight:600;">${ownerEmail}</td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 0;font-size:13px;color:#6b7280;">Password</td>
+                  <td style="padding:4px 0;font-size:13px;color:#111;font-weight:600;font-family:monospace;">${ownerPassword}</td>
+                </tr>
+              </table>
+            </td></tr>
+          </table>
+
+          <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">
+            ⚠️ Please change your password after your first login.
+          </p>
+
+          <!-- CTA button -->
+          <table cellpadding="0" cellspacing="0" style="margin:28px 0;">
+            <tr><td style="background:#111;border-radius:8px;">
+              <a href="${loginUrl}" style="display:inline-block;padding:14px 32px;color:#fff;font-size:14px;font-weight:600;text-decoration:none;">
+                Log in to TrueDesk POS →
+              </a>
+            </td></tr>
+          </table>
+
+          <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
+            If you have any questions, reply to this email or contact us at
+            <a href="mailto:support@truedesk.co.uk" style="color:#111;">support@truedesk.co.uk</a>.
+          </p>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;">
+            TrueDesk · <a href="https://truedesk.co.uk" style="color:#6b7280;">truedesk.co.uk</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+  });
+}
 
 function generateTempPassword(): string {
   // e.g. "Td#Ab12xY9" - readable but random
@@ -491,6 +602,17 @@ router.post('/', requireAuth, async (req, res) => {
           },
         });
         posProvisioning = { status: 'success', ownerEmail: dto.contactEmail, ownerPassword, companyCode: dto.subdomain.toLowerCase() };
+
+        // Send welcome email with credentials (fire-and-forget — don't fail the request if SMTP is down)
+        sendWelcomeEmail({
+          to: dto.contactEmail.toLowerCase(),
+          firstName: dto.contactFirstName,
+          businessName: dto.businessName,
+          companyCode: dto.subdomain.toLowerCase(),
+          ownerEmail: dto.contactEmail.toLowerCase(),
+          ownerPassword,
+        }).catch((err) => console.error('Welcome email failed (non-fatal):', err.message));
+
       } catch (err: any) {
         console.error('POS provisioning failed (non-fatal):', err.message);
         posProvisioning = { status: 'failed', error: err.message };
