@@ -286,8 +286,11 @@ export class AuthCoreService {
       });
       await this.cacheService.delUserData(userId, 'session');
       this.logger.log(`User logged out: ${userId}`);
-    } catch (error) {
-      this.logger.error(`Logout failed for user ${userId}:`, error.message);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Logout failed for user ${userId}:`,
+        error instanceof Error ? error.message : 'Unknown error',
+      );
       throw error;
     }
   }
@@ -326,15 +329,16 @@ export class AuthCoreService {
       });
 
       this.logger.log(`Password changed for user: ${userId}`);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(
         `Password change failed for user ${userId}:`,
-        error.message,
+        error instanceof Error ? error.message : 'Unknown error',
       );
       throw error;
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async generateTokens(user: any) {
     const payload = {
       sub: user.id,

@@ -46,8 +46,11 @@ export class UserManagementService {
       ]);
 
       return { data: users, total, page, limit };
-    } catch (error) {
-      this.logger.error('Failed to fetch users:', error.message);
+    } catch (error: unknown) {
+      this.logger.error(
+        'Failed to fetch users:',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
       throw error;
     }
   }
@@ -74,8 +77,11 @@ export class UserManagementService {
       }
 
       return user;
-    } catch (error) {
-      this.logger.error(`Failed to fetch user ${userId}:`, error.message);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Failed to fetch user ${userId}:`,
+        error instanceof Error ? error.message : 'Unknown error',
+      );
       throw error;
     }
   }
@@ -118,8 +124,11 @@ export class UserManagementService {
 
       this.logger.log(`User updated: ${userId}`);
       return updatedUser;
-    } catch (error) {
-      this.logger.error(`Failed to update user ${userId}:`, error.message);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Failed to update user ${userId}:`,
+        error instanceof Error ? error.message : 'Unknown error',
+      );
       throw error;
     }
   }
@@ -142,10 +151,10 @@ export class UserManagementService {
       });
 
       this.logger.log(`Password reset for user: ${userId}`);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(
         `Failed to reset password for user ${userId}:`,
-        error.message,
+        error instanceof Error ? error.message : 'Unknown error',
       );
       throw error;
     }
@@ -157,8 +166,11 @@ export class UserManagementService {
         where: { id: userId, tenantId },
       });
       this.logger.log(`User deleted: ${userId}`);
-    } catch (error) {
-      this.logger.error(`Failed to delete user ${userId}:`, error.message);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Failed to delete user ${userId}:`,
+        error instanceof Error ? error.message : 'Unknown error',
+      );
       throw error;
     }
   }
