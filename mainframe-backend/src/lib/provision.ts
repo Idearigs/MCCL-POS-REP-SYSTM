@@ -32,7 +32,7 @@ export async function provisionPosTenant(data: {
   const body = JSON.stringify(data);
 
   return new Promise((resolve, reject) => {
-    const url = new URL(`${posBackendUrl}/internal/provision-tenant`);
+    const url = new URL(`${posBackendUrl}/auth/provision-tenant`);
     const lib = url.protocol === 'https:' ? https : http;
 
     const req = lib.request(

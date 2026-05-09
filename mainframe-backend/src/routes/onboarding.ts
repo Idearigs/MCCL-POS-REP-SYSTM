@@ -92,7 +92,7 @@ router.post('/:token/submit', async (req, res) => {
       return res.status(400).json({ message: 'Business address is required.' });
     }
 
-    // Update profile with business details before provisioning
+    // Save business details — token stays intact so client can retry if provisioning fails
     await prisma.mf_customer_profiles.update({
       where: { id: profile.id },
       data: {
@@ -104,9 +104,6 @@ router.post('/:token/submit', async (req, res) => {
         country,
         businessPhone: businessPhone || profile.contactPhone,
         termsAcceptedAt: new Date(),
-        // Clear token so link can't be reused even if provisioning fails partway
-        onboardingToken: null,
-        onboardingTokenExpiry: null,
       },
     });
 
@@ -131,23 +128,20 @@ router.post('/:token/submit', async (req, res) => {
       });
     } catch (provErr) {
       console.error('[Onboarding] POS provisioning failed:', provErr);
-      // Restore token so the client can retry
-      await prisma.mf_customer_profiles.update({
-        where: { id: profile.id },
-        data: {
-          onboardingToken: req.params.token,
-          onboardingTokenExpiry: profile.onboardingTokenExpiry,
-        },
-      });
       return res.status(502).json({
         message: 'We could not set up your account right now. Please try again or contact support@truedesk.co.uk.',
       });
     }
 
-    // Mark profile ACTIVE
+    // Provisioning succeeded — clear token and mark ACTIVE atomically
     await prisma.mf_customer_profiles.update({
       where: { id: profile.id },
-      data: { status: 'ACTIVE', setupCompletedAt: new Date() },
+      data: {
+        status: 'ACTIVE',
+        setupCompletedAt: new Date(),
+        onboardingToken: null,
+        onboardingTokenExpiry: null,
+      },
     });
 
     await prisma.mf_activity_logs.create({
