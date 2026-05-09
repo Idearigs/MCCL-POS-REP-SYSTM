@@ -6,6 +6,7 @@ import nodemailer from 'nodemailer';
 import prisma from '../lib/prisma';
 import { buildHmacHeaders } from '../lib/hmac';
 import { requireAuth } from '../middleware/auth';
+import { sendOnboardingEmail } from '../lib/mailer';
 
 // ── Mailer ────────────────────────────────────────────────────────────────────
 function createMailTransport() {
@@ -484,9 +485,13 @@ router.post('/', requireAuth, async (req, res) => {
       return res.status(400).json({ message: 'Invalid subdomain format' });
     }
 
+    // New clients go through the onboarding email flow — no business email required,
+    // we use contactEmail as the canonical identifier.
+    const businessEmail = (dto.businessEmail || dto.contactEmail).toLowerCase();
+
     const [existingSub, existingEmail] = await Promise.all([
       prisma.mf_customer_profiles.findUnique({ where: { subdomain: dto.subdomain.toLowerCase() } }),
-      prisma.mf_customer_profiles.findUnique({ where: { businessEmail: dto.businessEmail?.toLowerCase() } }),
+      prisma.mf_customer_profiles.findUnique({ where: { businessEmail } }),
     ]);
 
     if (existingSub) return res.status(409).json({ message: 'Subdomain is already taken' });
@@ -494,10 +499,104 @@ router.post('/', requireAuth, async (req, res) => {
 
     const databaseName = `truedesk_${dto.subdomain.toLowerCase().replace(/-/g, '_')}`;
 
+    // ── ONBOARDING FLOW ──────────────────────────────────────────────────────
+    // When sendOnboardingEmail is true, create the profile in ONBOARDING status
+    // and send the client a link to fill in their business details.
+    // POS provisioning happens only after the client submits that form.
+    if (dto.sendOnboardingEmail) {
+      const onboardingToken = crypto.randomBytes(32).toString('hex');
+      const onboardingTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+      const profile = await prisma.mf_customer_profiles.create({
+        data: {
+          businessName: dto.businessName,
+          businessEmail,
+          subdomain: dto.subdomain.toLowerCase(),
+          databaseName,
+          contactFirstName: dto.contactFirstName,
+          contactLastName: dto.contactLastName,
+          contactEmail: dto.contactEmail.toLowerCase(),
+          contactPhone: dto.contactPhone || null,
+          status: 'ONBOARDING',
+          onboardingToken,
+          onboardingTokenExpiry,
+        },
+      });
+
+      const plan = dto.plan || 'STARTER';
+      const billingCycle = dto.billingCycle || 'MONTHLY';
+      const planConfig = getPlanConfig(plan);
+      const basePrice =
+        plan === 'CUSTOM' && dto.customPrice
+          ? Number(dto.customPrice)
+          : planConfig.basePrice;
+      const nextBillingDate = calcNextBillingDate(billingCycle);
+
+      await prisma.mf_subscriptions.create({
+        data: {
+          customerProfileId: profile.id,
+          plan: plan as any,
+          billingCycle: billingCycle as any,
+          basePrice,
+          perUserPrice: planConfig.perUserPrice,
+          includedUsers: planConfig.includedUsers,
+          maxUsers: planConfig.maxUsers,
+          currentUsers: 1,
+          currentPeriodEnd: nextBillingDate,
+          nextBillingDate,
+        },
+      });
+
+      const baseFeatures = await prisma.mf_features.findMany({
+        where: { isIncludedInBase: true, isEnabled: true },
+      });
+      for (const f of baseFeatures) {
+        await prisma.mf_customer_features.create({
+          data: { customerProfileId: profile.id, featureId: f.id, isEnabled: true },
+        });
+      }
+
+      await prisma.mf_activity_logs.create({
+        data: {
+          customerProfileId: profile.id,
+          action: 'profile.onboarding_started',
+          description: `Onboarding email sent to ${dto.contactEmail}`,
+          actorType: 'admin',
+        },
+      });
+
+      const mainframeUrl =
+        process.env.MAINFRAME_URL || 'https://mainframe.truedesk.co.uk';
+      const onboardingUrl = `${mainframeUrl}/onboarding/${onboardingToken}`;
+
+      // Fire-and-forget — don't fail the request if SMTP is not configured
+      sendOnboardingEmail({
+        to: dto.contactEmail.toLowerCase(),
+        firstName: dto.contactFirstName,
+        businessName: dto.businessName,
+        companyCode: dto.subdomain.toLowerCase(),
+        plan,
+        monthlyPrice: basePrice,
+        onboardingUrl,
+      }).catch((e: unknown) =>
+        console.error('[Onboarding] Failed to send email:', e),
+      );
+
+      return res.status(201).json({
+        id: profile.id,
+        status: 'ONBOARDING',
+        onboardingEmailSent: true,
+        onboardingUrl, // shown in admin UI so it can be shared manually if needed
+        subdomain: profile.subdomain,
+      });
+    }
+
+    // ── FULL PROVISIONING FLOW (existing client or direct provision) ─────────
+
     const profile = await prisma.mf_customer_profiles.create({
       data: {
         businessName: dto.businessName,
-        businessEmail: dto.businessEmail.toLowerCase(),
+        businessEmail,
         businessPhone: dto.businessPhone,
         businessAddress: dto.businessAddress,
         city: dto.city,

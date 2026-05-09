@@ -16,6 +16,7 @@ import tenantFeaturesRouter from './routes/tenant-features';
 import backupRouter from './routes/backup';
 import roadmapRouter from './routes/roadmap';
 import lemonsqueezyWebhookRouter from './routes/lemonsqueezy-webhook';
+import onboardingRouter from './routes/onboarding';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001');
@@ -93,6 +94,8 @@ api.use('/mainframe/credentials', credentialsRouter);
 api.use('/mainframe/tenant-features', tenantFeaturesRouter);
 api.use('/mainframe/backup', backupRouter);
 api.use('/mainframe/roadmap', roadmapRouter);
+// Public — no auth required (client-facing onboarding form)
+api.use('/mainframe/onboarding', onboardingRouter);
 
 app.use('/api/v1', api);
 
@@ -287,6 +290,56 @@ async function seedBuymeTenant() {
   }
 }
 
+async function migrateOnboarding() {
+  const steps: Array<[string, string]> = [
+    [
+      'Add ONBOARDING to CustomerProfileStatus enum',
+      `DO $$ BEGIN ALTER TYPE "CustomerProfileStatus" ADD VALUE IF NOT EXISTS 'ONBOARDING'; EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+    ],
+    [
+      'Add tradingName column',
+      `ALTER TABLE "mf_customer_profiles" ADD COLUMN IF NOT EXISTS "tradingName" TEXT`,
+    ],
+    [
+      'Add vatNumber column',
+      `ALTER TABLE "mf_customer_profiles" ADD COLUMN IF NOT EXISTS "vatNumber" TEXT`,
+    ],
+    [
+      'Add onboardingToken column',
+      `ALTER TABLE "mf_customer_profiles" ADD COLUMN IF NOT EXISTS "onboardingToken" TEXT`,
+    ],
+    [
+      'Add onboardingTokenExpiry column',
+      `ALTER TABLE "mf_customer_profiles" ADD COLUMN IF NOT EXISTS "onboardingTokenExpiry" TIMESTAMP(3)`,
+    ],
+    [
+      'Add termsAcceptedAt column',
+      `ALTER TABLE "mf_customer_profiles" ADD COLUMN IF NOT EXISTS "termsAcceptedAt" TIMESTAMP(3)`,
+    ],
+    [
+      'Add unique index on onboardingToken',
+      `CREATE UNIQUE INDEX IF NOT EXISTS "mf_customer_profiles_onboardingToken_key" ON "mf_customer_profiles"("onboardingToken") WHERE "onboardingToken" IS NOT NULL`,
+    ],
+  ];
+
+  console.log('Running Onboarding migrations…');
+  for (const [name, sql] of steps) {
+    try {
+      await prisma.$executeRawUnsafe(sql);
+      console.log(`  ✅ ${name}`);
+    } catch (err: any) {
+      if (
+        !err.message?.includes('already exists') &&
+        !err.message?.includes('duplicate')
+      ) {
+        console.warn(`  ⚠️  ${name}: ${err.message}`);
+      } else {
+        console.log(`  ⟳  ${name} (already applied)`);
+      }
+    }
+  }
+}
+
 async function migrateDevPortal() {
   const steps: Array<[string, string]> = [
     ['Create InternalRole enum', `DO $$ BEGIN CREATE TYPE "InternalRole" AS ENUM ('SOFTWARE_DEVELOPER','RND','DEVOPS','SUPPORT','CYBER_SECURITY','SYSTEM_ARCHITECT','SERVER_ADMIN'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`],
@@ -326,6 +379,7 @@ async function bootstrap() {
     process.exit(1);
   }
 
+  await migrateOnboarding();
   await migrateDevPortal();
   await seedAdmin();
   await seedFeatures();

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Login from './pages/Login';
 import MainFrameDashboard from './pages/MainFrameDashboard';
 import DevPortalPage from './pages/DevPortalPage';
+import OnboardingPage from './pages/OnboardingPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './index.css';
 
@@ -24,6 +25,9 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* Public — no auth required */}
+      <Route path="/onboarding/:token" element={<OnboardingPage />} />
+
       <Route
         path="/login"
         element={isAuthenticated ? <Navigate to="/" replace /> : <Login />}

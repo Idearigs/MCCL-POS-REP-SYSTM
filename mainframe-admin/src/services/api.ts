@@ -140,6 +140,25 @@ export const adminsApi = {
   update:  (id: string, data: any)  => apiClient.put(`/mainframe/admins/${id}`, data),
 };
 
+// ── Onboarding (public — no auth token needed) ───────────────────────────────
+export const onboardingApi = {
+  getForm: (token: string) =>
+    apiClient.get(`/mainframe/onboarding/${token}`),
+  submitForm: (
+    token: string,
+    data: {
+      tradingName?: string;
+      vatNumber?: string;
+      businessAddress: string;
+      city: string;
+      postalCode: string;
+      country?: string;
+      businessPhone?: string;
+      termsAccepted: boolean;
+    },
+  ) => apiClient.post(`/mainframe/onboarding/${token}/submit`, data),
+};
+
 // ── Backup ────────────────────────────────────────────────────────────────────
 export const backupApi = {
   getStatus:       ()                    => apiClient.get('/mainframe/backup/status'),

@@ -16,6 +16,7 @@ enum UserRole {
 }
 
 enum CustomerProfileStatus {
+  ONBOARDING
   PENDING_SETUP
   ACTIVE
   SUSPENDED
@@ -112,6 +113,11 @@ model mf_customer_profiles {
   contactLastName          String
   contactEmail             String
   contactPhone             String?
+  tradingName              String?
+  vatNumber                String?
+  onboardingToken          String?                @unique
+  onboardingTokenExpiry    DateTime?
+  termsAcceptedAt          DateTime?
   internalNotes            String?
   isAlphaTester            Boolean                @default(false)
   isBetaTester             Boolean                @default(false)

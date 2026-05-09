@@ -33,6 +33,7 @@ const springFast = { type: 'spring', damping: 30, stiffness: 350 } as const;
 // ─── Status helpers ───────────────────────────────────────────────────────────
 const STATUS_META: Record<string, { label: string; dot: string; bg: string; text: string }> = {
   ACTIVE:       { label: 'Active',      dot: '#34C759', bg: '#D1FAE5', text: '#065F46' },
+  ONBOARDING:   { label: 'Onboarding',  dot: '#007AFF', bg: '#DBEAFE', text: '#1E40AF' },
   PENDING_SETUP:{ label: 'Pending',     dot: '#FF9F0A', bg: '#FEF3C7', text: '#92400E' },
   SUSPENDED:    { label: 'Suspended',   dot: '#FF3B30', bg: '#FEE2E2', text: '#991B1B' },
   CANCELLED:    { label: 'Cancelled',   dot: '#8E8E93', bg: '#F3F4F6', text: '#374151' },
@@ -55,6 +56,7 @@ const STATUS_META: Record<string, { label: string; dot: string; bg: string; text
 
 const STATUS_GLOW: Record<string, { ring: string; glow: string }> = {
   ACTIVE:        { ring: 'rgba(52,199,89,0.55)',   glow: '#34C759' },
+  ONBOARDING:    { ring: 'rgba(0,122,255,0.45)',   glow: '#007AFF' },
   PENDING_SETUP: { ring: 'rgba(255,159,10,0.55)',  glow: '#FF9F0A' },
   SUSPENDED:     { ring: 'rgba(255,59,48,0.55)',   glow: '#FF3B30' },
   CANCELLED:     { ring: 'rgba(142,142,147,0.35)', glow: '#8E8E93' },
@@ -757,25 +759,46 @@ const MainFrameDashboard: React.FC = () => {
   };
 
   const createTenant = async () => {
-    if (!newTenant.businessName || !newTenant.subdomain || !newTenant.businessEmail) { toast.error('Fill required fields'); return; }
+    if (!newTenant.businessName || !newTenant.subdomain) { toast.error('Fill required fields'); return; }
     if (!newTenant.contactFirstName || !newTenant.contactLastName || !newTenant.contactEmail) { toast.error('Fill contact information'); return; }
     if (!subdomainValid) { toast.error('Choose a valid company code'); return; }
+
+    // New client flow: requires only contact email (no separate business email)
+    if (!newTenant.isExistingClient && !newTenant.contactEmail) { toast.error('Contact email is required'); return; }
+    // Existing client flow: requires business email
+    if (newTenant.isExistingClient && !newTenant.businessEmail) { toast.error('Business email is required for existing clients'); return; }
+
     setCreating(true);
     try {
-      const r = await customerProfilesApi.create(newTenant);
-      const { posProvisioning } = r.data;
+      const payload = newTenant.isExistingClient
+        ? { ...newTenant, isExistingClient: true }
+        : { ...newTenant, sendOnboardingEmail: true };
+
+      const r = await customerProfilesApi.create(payload);
       setPanel('none');
       setNewTenant({ businessName: '', businessEmail: '', subdomain: '', contactFirstName: '', contactLastName: '', contactEmail: '', contactPhone: '', plan: 'PROFESSIONAL', customPrice: '', billingCycle: 'MONTHLY', isExistingClient: false });
       setSubdomainValid(null);
-      if (posProvisioning?.status === 'success') {
-        setProvisionResult({ ownerEmail: posProvisioning.ownerEmail, ownerPassword: posProvisioning.ownerPassword, companyCode: posProvisioning.companyCode });
-        setPanel('provisionResult');
-      } else if (posProvisioning?.status === 'existing') {
-        toast.success(`Profile created for existing client — Company Code: ${posProvisioning.companyCode}`);
+
+      if (r.data.status === 'ONBOARDING') {
+        // New client — onboarding email sent
+        toast.success(
+          `Onboarding email sent to ${newTenant.contactEmail} — awaiting client setup`,
+          { duration: 5000 }
+        );
+        loadAll();
       } else {
-        toast.success('Profile created. POS: ' + (posProvisioning?.error || 'check backend'));
+        // Existing client / direct provision
+        const { posProvisioning } = r.data;
+        if (posProvisioning?.status === 'success') {
+          setProvisionResult({ ownerEmail: posProvisioning.ownerEmail, ownerPassword: posProvisioning.ownerPassword, companyCode: posProvisioning.companyCode });
+          setPanel('provisionResult');
+        } else if (posProvisioning?.status === 'existing') {
+          toast.success(`Profile created for existing client — Company Code: ${posProvisioning.companyCode}`);
+        } else {
+          toast.success('Profile created. POS: ' + (posProvisioning?.error || 'check backend'));
+        }
+        loadAll();
       }
-      loadAll();
     } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to create'); }
     finally { setCreating(false); }
   };
@@ -2930,122 +2953,23 @@ const MainFrameDashboard: React.FC = () => {
       <SidePanel
         open={panel === 'createTenant'}
         onClose={() => setPanel('none')}
-        title={newTenant.isExistingClient ? 'Add Existing Client' : 'Provision New Tenant'}
-        subtitle={newTenant.isExistingClient ? 'Register an existing client — POS will not be re-provisioned' : 'Create a new customer POS instance'}
+        title={newTenant.isExistingClient ? 'Add Existing Client' : 'Provision New Client'}
+        subtitle={newTenant.isExistingClient
+          ? 'Register an existing client — POS will not be re-provisioned'
+          : 'Send the client an onboarding email to complete their own setup'}
         width="w-[540px]"
         footer={
           <div className="flex justify-end gap-3">
             <AppleBtn variant="secondary" onClick={() => setPanel('none')}>Cancel</AppleBtn>
             <AppleBtn variant="primary" disabled={creating} onClick={createTenant}>
-              <Plus className="w-3.5 h-3.5" />{creating ? 'Creating…' : 'Create Tenant'}
+              {creating ? 'Creating…' : newTenant.isExistingClient ? 'Add Client' : '✉ Send Onboarding Email'}
             </AppleBtn>
           </div>
         }
       >
         <div className="space-y-6">
-          <FormSection title="Business Info">
-            <Field label="Business Name" required>
-              <AppleInput placeholder="B-House Jewellery Ltd" value={newTenant.businessName} onChange={e => setNewTenant(p => ({ ...p, businessName: e.target.value }))} />
-            </Field>
-            <Field label="Business Email" required>
-              <AppleInput type="email" placeholder="admin@bhouse.com" value={newTenant.businessEmail} onChange={e => setNewTenant(p => ({ ...p, businessEmail: e.target.value }))} />
-            </Field>
-          </FormSection>
 
-          <FormSection title="Company Code">
-            <Field label="Company Code" required hint="Customers enter this at the POS login screen">
-              <div className="space-y-1.5">
-                <AppleInput
-                  placeholder="bhouse"
-                  value={newTenant.subdomain}
-                  onChange={e => onSubdomainChange(e.target.value)}
-                  status={subdomainValid === true ? 'ok' : subdomainValid === false ? 'error' : undefined}
-                />
-                <AnimatePresence>
-                  {subdomainChecking && <motion.p key="checking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-xs" style={{ color: '#8E8E93' }}>Checking…</motion.p>}
-                  {subdomainValid === true && <motion.p key="valid" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-xs flex items-center gap-1" style={{ color: '#34C759' }}><Check className="w-3 h-3" />Available</motion.p>}
-                  {subdomainValid === false && <motion.p key="invalid" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-xs flex items-center gap-1" style={{ color: '#FF3B30' }}><AlertCircle className="w-3 h-3" />Already taken</motion.p>}
-                </AnimatePresence>
-              </div>
-            </Field>
-          </FormSection>
-
-          <FormSection title="Primary Contact">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="First Name" required>
-                <AppleInput placeholder="John" value={newTenant.contactFirstName} onChange={e => setNewTenant(p => ({ ...p, contactFirstName: e.target.value }))} />
-              </Field>
-              <Field label="Last Name" required>
-                <AppleInput placeholder="Doe" value={newTenant.contactLastName} onChange={e => setNewTenant(p => ({ ...p, contactLastName: e.target.value }))} />
-              </Field>
-            </div>
-            <Field label="Contact Email" required>
-              <AppleInput type="email" placeholder="john@bhouse.com" value={newTenant.contactEmail} onChange={e => setNewTenant(p => ({ ...p, contactEmail: e.target.value }))} />
-            </Field>
-            <Field label="Phone">
-              <AppleInput placeholder="+44 20 1234 5678" value={newTenant.contactPhone} onChange={e => setNewTenant(p => ({ ...p, contactPhone: e.target.value }))} />
-            </Field>
-          </FormSection>
-
-          <FormSection title="Subscription Plan">
-            <select value={newTenant.plan} onChange={e => setNewTenant(p => ({ ...p, plan: e.target.value }))}
-              className="w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-pointer"
-              style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}>
-              <option value="STARTER">Starter — £29/month</option>
-              <option value="PROFESSIONAL">Professional — £79/month</option>
-              <option value="BUSINESS">Business — £199/month</option>
-              <option value="ENTERPRISE">Enterprise — £499/month</option>
-              <option value="CUSTOM">Custom — set price below</option>
-            </select>
-
-            {/* Custom price — shown only when CUSTOM plan selected */}
-            {newTenant.plan === 'CUSTOM' && (
-              <div className="mt-3 space-y-3">
-                <div>
-                  <p className="text-xs font-medium mb-1.5" style={{ color: '#8E8E93' }}>Custom price per month</p>
-                  <div className="flex items-center rounded-xl overflow-hidden" style={{ border: '1.5px solid rgba(124,58,237,0.45)', background: 'rgba(124,58,237,0.06)' }}>
-                    <span className="px-3 text-sm font-semibold" style={{ color: 'rgba(124,58,237,0.8)' }}>£</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={newTenant.customPrice}
-                      onChange={e => setNewTenant(p => ({ ...p, customPrice: e.target.value }))}
-                      placeholder="0.00"
-                      className="flex-1 py-2.5 pr-3 text-sm outline-none"
-                      style={{ background: 'transparent', color: '#6d28d9' }}
-                    />
-                    <span className="pr-3 text-xs font-medium" style={{ color: 'rgba(124,58,237,0.5)' }}>/mo</span>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-medium mb-1.5" style={{ color: '#8E8E93' }}>Billing cycle</p>
-                  <select value={newTenant.billingCycle} onChange={e => setNewTenant(p => ({ ...p, billingCycle: e.target.value }))}
-                    className="w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-pointer"
-                    style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}>
-                    <option value="MONTHLY">Monthly</option>
-                    <option value="QUARTERLY">Quarterly</option>
-                    <option value="YEARLY">Yearly</option>
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {/* Billing cycle for non-custom plans */}
-            {newTenant.plan !== 'CUSTOM' && (
-              <div className="mt-3">
-                <p className="text-xs font-medium mb-1.5" style={{ color: '#8E8E93' }}>Billing cycle</p>
-                <select value={newTenant.billingCycle} onChange={e => setNewTenant(p => ({ ...p, billingCycle: e.target.value }))}
-                  className="w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-pointer"
-                  style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}>
-                  <option value="MONTHLY">Monthly</option>
-                  <option value="QUARTERLY">Quarterly</option>
-                  <option value="YEARLY">Yearly</option>
-                </select>
-              </div>
-            )}
-          </FormSection>
-
+          {/* ── Client type toggle ─────────────────────────────────────────── */}
           <FormSection title="Client Type">
             <button
               type="button"
@@ -3059,8 +2983,8 @@ const MainFrameDashboard: React.FC = () => {
                 <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>Existing Client</p>
                 <p className="text-xs mt-0.5" style={{ color: '#8E8E93' }}>
                   {newTenant.isExistingClient
-                    ? 'POS provisioning will be skipped — profile activated immediately'
-                    : 'New client — a fresh POS instance will be provisioned'}
+                    ? 'POS provisioning skipped — profile activated immediately'
+                    : 'New client — sends onboarding email, client fills in their details'}
                 </p>
               </div>
               <div className="flex-shrink-0 ml-3">
@@ -3070,6 +2994,172 @@ const MainFrameDashboard: React.FC = () => {
               </div>
             </button>
           </FormSection>
+
+          {/* ── NEW CLIENT: minimal form ───────────────────────────────────── */}
+          {!newTenant.isExistingClient && (
+            <>
+              {/* Info banner */}
+              <div className="flex gap-3 px-4 py-3 rounded-xl" style={{ background: 'rgba(0,122,255,0.07)', border: '1px solid rgba(0,122,255,0.2)' }}>
+                <span className="text-blue-500 text-base flex-shrink-0">✉</span>
+                <p className="text-xs leading-relaxed" style={{ color: '#1E40AF' }}>
+                  An onboarding email will be sent to the client with a secure link.
+                  They fill in their business details, accept T&amp;Cs, and their account is provisioned automatically.
+                </p>
+              </div>
+
+              <FormSection title="Business Info">
+                <Field label="Business Name" required>
+                  <AppleInput placeholder="B-House Jewellery Ltd" value={newTenant.businessName}
+                    onChange={e => setNewTenant(p => ({ ...p, businessName: e.target.value }))} />
+                </Field>
+              </FormSection>
+
+              <FormSection title="Company Code">
+                <Field label="Company Code" required hint="Client enters this at POS login">
+                  <div className="space-y-1.5">
+                    <AppleInput placeholder="bhouse" value={newTenant.subdomain}
+                      onChange={e => onSubdomainChange(e.target.value)}
+                      status={subdomainValid === true ? 'ok' : subdomainValid === false ? 'error' : undefined} />
+                    <AnimatePresence>
+                      {subdomainChecking && <motion.p key="c" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-xs" style={{ color: '#8E8E93' }}>Checking…</motion.p>}
+                      {subdomainValid === true && <motion.p key="v" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-xs flex items-center gap-1" style={{ color: '#34C759' }}><Check className="w-3 h-3" />Available</motion.p>}
+                      {subdomainValid === false && <motion.p key="e" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-xs flex items-center gap-1" style={{ color: '#FF3B30' }}><AlertCircle className="w-3 h-3" />Already taken</motion.p>}
+                    </AnimatePresence>
+                  </div>
+                </Field>
+              </FormSection>
+
+              <FormSection title="Contact Person">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="First Name" required>
+                    <AppleInput placeholder="John" value={newTenant.contactFirstName}
+                      onChange={e => setNewTenant(p => ({ ...p, contactFirstName: e.target.value }))} />
+                  </Field>
+                  <Field label="Last Name" required>
+                    <AppleInput placeholder="Doe" value={newTenant.contactLastName}
+                      onChange={e => setNewTenant(p => ({ ...p, contactLastName: e.target.value }))} />
+                  </Field>
+                </div>
+                <Field label="Email" required hint="Onboarding link sent here">
+                  <AppleInput type="email" placeholder="john@bhouse.com" value={newTenant.contactEmail}
+                    onChange={e => setNewTenant(p => ({ ...p, contactEmail: e.target.value }))} />
+                </Field>
+                <Field label="Phone">
+                  <AppleInput placeholder="+44 20 1234 5678" value={newTenant.contactPhone}
+                    onChange={e => setNewTenant(p => ({ ...p, contactPhone: e.target.value }))} />
+                </Field>
+              </FormSection>
+
+              <FormSection title="Subscription Plan">
+                <select value={newTenant.plan} onChange={e => setNewTenant(p => ({ ...p, plan: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-pointer"
+                  style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}>
+                  <option value="STARTER">Starter — £29/month</option>
+                  <option value="PROFESSIONAL">Professional — £79/month</option>
+                  <option value="BUSINESS">Business — £199/month</option>
+                  <option value="ENTERPRISE">Enterprise — £499/month</option>
+                  <option value="CUSTOM">Custom — set price below</option>
+                </select>
+                {newTenant.plan === 'CUSTOM' && (
+                  <div className="mt-3 flex items-center rounded-xl overflow-hidden" style={{ border: '1.5px solid rgba(124,58,237,0.45)', background: 'rgba(124,58,237,0.06)' }}>
+                    <span className="px-3 text-sm font-semibold" style={{ color: 'rgba(124,58,237,0.8)' }}>£</span>
+                    <input type="number" min="0" step="0.01" value={newTenant.customPrice}
+                      onChange={e => setNewTenant(p => ({ ...p, customPrice: e.target.value }))}
+                      placeholder="0.00" className="flex-1 py-2.5 pr-3 text-sm outline-none"
+                      style={{ background: 'transparent', color: '#6d28d9' }} />
+                    <span className="pr-3 text-xs font-medium" style={{ color: 'rgba(124,58,237,0.5)' }}>/mo</span>
+                  </div>
+                )}
+              </FormSection>
+            </>
+          )}
+
+          {/* ── EXISTING CLIENT: full form ─────────────────────────────────── */}
+          {newTenant.isExistingClient && (
+            <>
+              <FormSection title="Business Info">
+                <Field label="Business Name" required>
+                  <AppleInput placeholder="B-House Jewellery Ltd" value={newTenant.businessName}
+                    onChange={e => setNewTenant(p => ({ ...p, businessName: e.target.value }))} />
+                </Field>
+                <Field label="Business Email" required>
+                  <AppleInput type="email" placeholder="admin@bhouse.com" value={newTenant.businessEmail}
+                    onChange={e => setNewTenant(p => ({ ...p, businessEmail: e.target.value }))} />
+                </Field>
+              </FormSection>
+
+              <FormSection title="Company Code">
+                <Field label="Company Code" required hint="Must match their existing POS subdomain">
+                  <div className="space-y-1.5">
+                    <AppleInput placeholder="bhouse" value={newTenant.subdomain}
+                      onChange={e => onSubdomainChange(e.target.value)}
+                      status={subdomainValid === true ? 'ok' : subdomainValid === false ? 'error' : undefined} />
+                    <AnimatePresence>
+                      {subdomainChecking && <motion.p key="c" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-xs" style={{ color: '#8E8E93' }}>Checking…</motion.p>}
+                      {subdomainValid === true && <motion.p key="v" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-xs flex items-center gap-1" style={{ color: '#34C759' }}><Check className="w-3 h-3" />Available</motion.p>}
+                      {subdomainValid === false && <motion.p key="e" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-xs flex items-center gap-1" style={{ color: '#FF3B30' }}><AlertCircle className="w-3 h-3" />Already taken</motion.p>}
+                    </AnimatePresence>
+                  </div>
+                </Field>
+              </FormSection>
+
+              <FormSection title="Primary Contact">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="First Name" required>
+                    <AppleInput placeholder="John" value={newTenant.contactFirstName}
+                      onChange={e => setNewTenant(p => ({ ...p, contactFirstName: e.target.value }))} />
+                  </Field>
+                  <Field label="Last Name" required>
+                    <AppleInput placeholder="Doe" value={newTenant.contactLastName}
+                      onChange={e => setNewTenant(p => ({ ...p, contactLastName: e.target.value }))} />
+                  </Field>
+                </div>
+                <Field label="Contact Email" required>
+                  <AppleInput type="email" placeholder="john@bhouse.com" value={newTenant.contactEmail}
+                    onChange={e => setNewTenant(p => ({ ...p, contactEmail: e.target.value }))} />
+                </Field>
+                <Field label="Phone">
+                  <AppleInput placeholder="+44 20 1234 5678" value={newTenant.contactPhone}
+                    onChange={e => setNewTenant(p => ({ ...p, contactPhone: e.target.value }))} />
+                </Field>
+              </FormSection>
+
+              <FormSection title="Subscription Plan">
+                <select value={newTenant.plan} onChange={e => setNewTenant(p => ({ ...p, plan: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-pointer"
+                  style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}>
+                  <option value="STARTER">Starter — £29/month</option>
+                  <option value="PROFESSIONAL">Professional — £79/month</option>
+                  <option value="BUSINESS">Business — £199/month</option>
+                  <option value="ENTERPRISE">Enterprise — £499/month</option>
+                  <option value="CUSTOM">Custom — set price below</option>
+                </select>
+                {newTenant.plan === 'CUSTOM' && (
+                  <div className="mt-3 flex items-center rounded-xl overflow-hidden" style={{ border: '1.5px solid rgba(124,58,237,0.45)', background: 'rgba(124,58,237,0.06)' }}>
+                    <span className="px-3 text-sm font-semibold" style={{ color: 'rgba(124,58,237,0.8)' }}>£</span>
+                    <input type="number" min="0" step="0.01" value={newTenant.customPrice}
+                      onChange={e => setNewTenant(p => ({ ...p, customPrice: e.target.value }))}
+                      placeholder="0.00" className="flex-1 py-2.5 pr-3 text-sm outline-none"
+                      style={{ background: 'transparent', color: '#6d28d9' }} />
+                    <span className="pr-3 text-xs font-medium" style={{ color: 'rgba(124,58,237,0.5)' }}>/mo</span>
+                  </div>
+                )}
+                {newTenant.plan !== 'CUSTOM' && (
+                  <div className="mt-3">
+                    <p className="text-xs font-medium mb-1.5" style={{ color: '#8E8E93' }}>Billing cycle</p>
+                    <select value={newTenant.billingCycle} onChange={e => setNewTenant(p => ({ ...p, billingCycle: e.target.value }))}
+                      className="w-full px-4 py-2.5 rounded-xl text-sm font-medium outline-none cursor-pointer"
+                      style={{ background: 'rgba(118,118,128,0.08)', color: '#1D1D1F', border: 'none' }}>
+                      <option value="MONTHLY">Monthly</option>
+                      <option value="QUARTERLY">Quarterly</option>
+                      <option value="YEARLY">Yearly</option>
+                    </select>
+                  </div>
+                )}
+              </FormSection>
+            </>
+          )}
+
         </div>
       </SidePanel>
 
