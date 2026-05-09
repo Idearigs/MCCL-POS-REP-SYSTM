@@ -54,7 +54,8 @@ export const customerProfilesApi = {
   batchUpdateFeatures: (id: string, features: { featureId: string; isEnabled: boolean }[]) =>
     apiClient.put(`/mainframe/customer-profiles/${id}/features/batch`, { features }),
   delete: (id: string) => apiClient.delete(`/mainframe/customer-profiles/${id}`),
-  reprovision: (id: string) => apiClient.post(`/mainframe/customer-profiles/${id}/reprovision`),
+  reprovision:   (id: string) => apiClient.post(`/mainframe/customer-profiles/${id}/reprovision`),
+  sendWelcome:   (id: string) => apiClient.post(`/mainframe/customer-profiles/${id}/send-welcome`),
   updateTesterFlags: (id: string, data: { isAlphaTester?: boolean; isBetaTester?: boolean; betaExpiresAt?: string | null }) =>
     apiClient.put(`/mainframe/customer-profiles/${id}/tester-flags`, data),
   getBetaExpiring: () => apiClient.get('/mainframe/customer-profiles/beta-expiring'),

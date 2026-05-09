@@ -1266,9 +1266,20 @@ const MainFrameDashboard: React.FC = () => {
                             <div className="flex items-center gap-2 px-5 py-3" style={{ background: 'rgba(99,102,241,0.1)', borderBottom: '1px solid rgba(99,102,241,0.15)' }}>
                               <Shield className="w-3.5 h-3.5" style={{ color: '#818CF8' }} />
                               <p className="text-xs font-bold tracking-wider uppercase" style={{ color: '#818CF8' }}>POS Access Credentials</p>
-                              <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(99,102,241,0.18)', color: '#818CF8', border: '1px solid rgba(99,102,241,0.25)' }}>
-                                Share with client
-                              </span>
+                              <button
+                                className="ml-auto text-[10px] font-semibold px-2.5 py-1 rounded-full transition-opacity hover:opacity-80 active:opacity-60"
+                                style={{ background: 'rgba(99,102,241,0.18)', color: '#818CF8', border: '1px solid rgba(99,102,241,0.25)', cursor: 'pointer' }}
+                                onClick={async () => {
+                                  try {
+                                    await customerProfilesApi.sendWelcome(selectedTenant.id);
+                                    toast.success(`Access details emailed to ${selectedTenant.contact?.email || selectedTenant.businessEmail}`);
+                                  } catch (e: any) {
+                                    toast.error(e.response?.data?.message || 'Failed to send email');
+                                  }
+                                }}
+                              >
+                                ✉ Share with client
+                              </button>
                             </div>
                             <div className="grid grid-cols-2 gap-px p-px" style={{ background: 'rgba(255,255,255,0.05)' }}>
                               {[
