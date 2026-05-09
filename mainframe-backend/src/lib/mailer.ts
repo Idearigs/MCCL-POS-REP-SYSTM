@@ -115,7 +115,7 @@ export async function sendOnboardingEmail(opts: {
     plan === 'ENTERPRISE' ? 'Enterprise' : 'Custom';
 
   await transport.sendMail({
-    from: 'TrueDesk <noreply@truedesk.co.uk>',
+    from: 'TrueDesk <hello@truedesk.co.uk>',
     to,
     subject: `Complete your TrueDesk POS setup — ${businessName}`,
     html: `<!DOCTYPE html>
