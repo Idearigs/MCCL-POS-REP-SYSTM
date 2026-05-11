@@ -6,7 +6,7 @@ import {
   Plus, TrendingUp, Users, ChevronRight, Server, Zap,
   CheckCircle, AlertCircle, Search, Eye, ArrowUpRight, DollarSign,
   Bug, Lightbulb, RefreshCw, XCircle, Clock, LogOut, Trash2,
-  Key, UserPlus, ToggleLeft, ToggleRight, FileText,
+  Key, UserPlus, ToggleLeft, ToggleRight, FileText, Mail,
   Check, X, ChevronLeft, Copy, Shield, HardDrive,
   Download, Upload as CloudUpload, Database, FolderOpen,
 } from 'lucide-react';
@@ -414,6 +414,7 @@ const MainFrameDashboard: React.FC = () => {
   const [newFeature, setNewFeature] = useState({ featureKey: '', featureName: '', description: '', category: 'core', isIncludedInBase: true, additionalCost: 0 });
   const [newUser, setNewUser] = useState({ firstName: '', lastName: '', email: '', role: 'STAFF', password: '' });
   const [savingUser, setSavingUser] = useState(false);
+  const [sendingSetupEmail, setSendingSetupEmail] = useState(false);
 
   // ── Load ────────────────────────────────────────────────────────────────────
   const loadAll = useCallback(async () => {
@@ -758,21 +759,21 @@ const MainFrameDashboard: React.FC = () => {
     validateSubdomain(s);
   };
 
-  const createTenant = async () => {
+  const createTenant = async (sendEmail = true) => {
     if (!newTenant.businessName || !newTenant.subdomain) { toast.error('Fill required fields'); return; }
     if (!newTenant.contactFirstName || !newTenant.contactLastName || !newTenant.contactEmail) { toast.error('Fill contact information'); return; }
     if (!subdomainValid) { toast.error('Choose a valid company code'); return; }
 
-    // New client flow: requires only contact email (no separate business email)
     if (!newTenant.isExistingClient && !newTenant.contactEmail) { toast.error('Contact email is required'); return; }
-    // Existing client flow: requires business email
     if (newTenant.isExistingClient && !newTenant.businessEmail) { toast.error('Business email is required for existing clients'); return; }
 
     setCreating(true);
     try {
       const payload = newTenant.isExistingClient
         ? { ...newTenant, isExistingClient: true }
-        : { ...newTenant, sendOnboardingEmail: true };
+        : sendEmail
+          ? { ...newTenant, sendOnboardingEmail: true }
+          : { ...newTenant, isNewClient: true, sendOnboardingEmail: false };
 
       const r = await customerProfilesApi.create(payload);
       setPanel('none');
@@ -780,14 +781,13 @@ const MainFrameDashboard: React.FC = () => {
       setSubdomainValid(null);
 
       if (r.data.status === 'ONBOARDING') {
-        // New client — onboarding email sent
-        toast.success(
-          `Onboarding email sent to ${newTenant.contactEmail} — awaiting client setup`,
-          { duration: 5000 }
-        );
+        if (r.data.onboardingEmailSent) {
+          toast.success(`Setup email sent to ${newTenant.contactEmail} — awaiting client setup`, { duration: 5000 });
+        } else {
+          toast.success(`Profile saved. Send the setup email when ready.`, { duration: 5000 });
+        }
         loadAll();
       } else {
-        // Existing client / direct provision
         const { posProvisioning } = r.data;
         if (posProvisioning?.status === 'success') {
           setProvisionResult({ ownerEmail: posProvisioning.ownerEmail, ownerPassword: posProvisioning.ownerPassword, companyCode: posProvisioning.companyCode });
@@ -801,6 +801,16 @@ const MainFrameDashboard: React.FC = () => {
       }
     } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to create'); }
     finally { setCreating(false); }
+  };
+
+  const sendSetupEmail = async (profileId: string, email: string) => {
+    setSendingSetupEmail(true);
+    try {
+      await customerProfilesApi.sendOnboardingEmail(profileId);
+      toast.success(`Setup email sent to ${email}`, { duration: 5000 });
+      loadAll();
+    } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to send setup email'); }
+    finally { setSendingSetupEmail(false); }
   };
 
   // ── Bugs ────────────────────────────────────────────────────────────────────
@@ -1087,6 +1097,23 @@ const MainFrameDashboard: React.FC = () => {
                       <ChevronLeft className="w-4 h-4" /> All Tenants
                     </motion.button>
                     <div className="flex items-center gap-2">
+                      {/* Incomplete info badge — business address not yet filled */}
+                      {!selectedTenant.businessAddress && (
+                        <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                          style={{ background: 'rgba(255,159,10,0.12)', color: '#FF9F0A', border: '1px solid rgba(255,159,10,0.3)' }}>
+                          ⚠ Info Incomplete
+                        </span>
+                      )}
+                      {/* Send / resend setup email */}
+                      {!selectedTenant.businessAddress && (
+                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                          disabled={sendingSetupEmail}
+                          onClick={() => sendSetupEmail(selectedTenant.id, selectedTenant.contact?.email || selectedTenant.businessEmail)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium"
+                          style={{ background: 'rgba(0,122,255,0.15)', color: '#60A5FA', border: '1px solid rgba(0,122,255,0.25)', opacity: sendingSetupEmail ? 0.6 : 1 }}>
+                          <Mail className="w-3.5 h-3.5" /> {sendingSetupEmail ? 'Sending…' : 'Send Setup Email'}
+                        </motion.button>
+                      )}
                       {selectedTenant.status === 'PENDING_SETUP' && (
                         <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
                           onClick={() => reprovision(selectedTenant.id, selectedTenant.businessName)}
@@ -2668,7 +2695,7 @@ const MainFrameDashboard: React.FC = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
-                          {['Business', 'Plan', 'Monthly', 'Users', 'Status', 'Next Billing'].map(h => (
+                          {['Business', 'Contact', 'Plan', 'Monthly', 'Users', 'Status', 'Next Billing'].map(h => (
                             <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#6E6E73' }}>{h}</th>
                           ))}
                         </tr>
@@ -2679,8 +2706,22 @@ const MainFrameDashboard: React.FC = () => {
                             className="cursor-pointer" style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}
                             onClick={() => openTenant(t)}>
                             <td className="px-5 py-3.5">
-                              <p className="font-semibold text-sm" style={{ color: '#1D1D1F' }}>{t.businessName}</p>
-                              <p className="text-[11px] font-mono" style={{ color: '#8E8E93' }}>{t.subdomain}</p>
+                              <div className="flex items-center gap-2">
+                                <div>
+                                  <p className="font-semibold text-sm" style={{ color: '#1D1D1F' }}>{t.businessName}</p>
+                                  <p className="text-[11px] font-mono" style={{ color: '#8E8E93' }}>{t.subdomain}</p>
+                                </div>
+                                {!t.businessAddress && (
+                                  <span title="Business info incomplete" className="text-[10px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0"
+                                    style={{ background: 'rgba(255,159,10,0.12)', color: '#FF9F0A', border: '1px solid rgba(255,159,10,0.25)' }}>
+                                    ⚠
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <p className="text-sm" style={{ color: '#1D1D1F' }}>{t.contact?.firstName} {t.contact?.lastName}</p>
+                              <p className="text-[11px]" style={{ color: '#8E8E93' }}>{t.contact?.email || '—'}</p>
                             </td>
                             <td className="px-5 py-3.5 text-sm" style={{ color: '#3C3C43' }}>{t.subscription?.plan || '—'}</td>
                             <td className="px-5 py-3.5 text-sm font-medium" style={{ color: '#1D1D1F' }}>{t.subscription?.basePrice ? `£${t.subscription.basePrice}` : '—'}</td>
@@ -2961,7 +3002,12 @@ const MainFrameDashboard: React.FC = () => {
         footer={
           <div className="flex justify-end gap-3">
             <AppleBtn variant="secondary" onClick={() => setPanel('none')}>Cancel</AppleBtn>
-            <AppleBtn variant="primary" disabled={creating} onClick={createTenant}>
+            {!newTenant.isExistingClient && (
+              <AppleBtn variant="secondary" disabled={creating} onClick={() => createTenant(false)}>
+                {creating ? 'Saving…' : 'Save — Send Email Later'}
+              </AppleBtn>
+            )}
+            <AppleBtn variant="primary" disabled={creating} onClick={() => createTenant(true)}>
               {creating ? 'Creating…' : newTenant.isExistingClient ? 'Add Client' : '✉ Send Onboarding Email'}
             </AppleBtn>
           </div>

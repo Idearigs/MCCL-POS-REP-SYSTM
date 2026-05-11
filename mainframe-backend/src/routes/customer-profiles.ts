@@ -476,6 +476,55 @@ router.get('/:id', requireAuth, async (req, res) => {
   }
 });
 
+// POST /mainframe/customer-profiles/:id/send-onboarding-email
+// Send or resend the onboarding setup email for a profile.
+router.post('/:id/send-onboarding-email', requireAuth, async (req, res) => {
+  try {
+    const profile = await prisma.mf_customer_profiles.findUnique({
+      where: { id: req.params.id },
+      include: { subscription: true },
+    });
+    if (!profile) return res.status(404).json({ message: 'Profile not found' });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await prisma.mf_customer_profiles.update({
+      where: { id: profile.id },
+      data: { onboardingToken: token, onboardingTokenExpiry: expiry, status: 'ONBOARDING' },
+    });
+
+    const mainframeUrl = process.env.MAINFRAME_URL || 'https://mainframe.truedesk.co.uk';
+    const onboardingUrl = `${mainframeUrl}/onboarding/${token}`;
+    const plan = (profile.subscription as any)?.plan ?? 'STARTER';
+    const monthlyPrice = Number((profile.subscription as any)?.basePrice ?? 29);
+
+    await sendOnboardingEmail({
+      to: profile.contactEmail,
+      firstName: profile.contactFirstName,
+      businessName: profile.businessName,
+      companyCode: profile.subdomain,
+      plan,
+      monthlyPrice,
+      onboardingUrl,
+    });
+
+    await prisma.mf_activity_logs.create({
+      data: {
+        customerProfileId: profile.id,
+        action: 'profile.onboarding_email_sent',
+        description: `Onboarding email sent to ${profile.contactEmail}`,
+        actorType: 'admin',
+      },
+    });
+
+    return res.json({ success: true, onboardingUrl, to: profile.contactEmail });
+  } catch (err) {
+    console.error('[Onboarding] Resend error:', err);
+    return res.status(500).json({ message: 'Failed to send onboarding email' });
+  }
+});
+
 // POST /mainframe/customer-profiles
 router.post('/', requireAuth, async (req, res) => {
   try {
@@ -500,10 +549,9 @@ router.post('/', requireAuth, async (req, res) => {
     const databaseName = `truedesk_${dto.subdomain.toLowerCase().replace(/-/g, '_')}`;
 
     // ── ONBOARDING FLOW ──────────────────────────────────────────────────────
-    // When sendOnboardingEmail is true, create the profile in ONBOARDING status
-    // and send the client a link to fill in their business details.
-    // POS provisioning happens only after the client submits that form.
-    if (dto.sendOnboardingEmail) {
+    // Triggered when sendOnboardingEmail:true (send now) OR isNewClient:true
+    // (save profile in ONBOARDING status but send the email later manually).
+    if (dto.sendOnboardingEmail || dto.isNewClient) {
       const onboardingToken = crypto.randomBytes(32).toString('hex');
       const onboardingTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
@@ -569,24 +617,28 @@ router.post('/', requireAuth, async (req, res) => {
         process.env.MAINFRAME_URL || 'https://mainframe.truedesk.co.uk';
       const onboardingUrl = `${mainframeUrl}/onboarding/${onboardingToken}`;
 
-      // Fire-and-forget — don't fail the request if SMTP is not configured
-      sendOnboardingEmail({
-        to: dto.contactEmail.toLowerCase(),
-        firstName: dto.contactFirstName,
-        businessName: dto.businessName,
-        companyCode: dto.subdomain.toLowerCase(),
-        plan,
-        monthlyPrice: basePrice,
-        onboardingUrl,
-      }).catch((e: unknown) =>
-        console.error('[Onboarding] Failed to send email:', e),
-      );
+      // Only send the email when the admin explicitly requested it.
+      // If isNewClient:true without sendOnboardingEmail, the profile is saved
+      // and the admin can send the email later via the resend endpoint.
+      if (dto.sendOnboardingEmail) {
+        sendOnboardingEmail({
+          to: dto.contactEmail.toLowerCase(),
+          firstName: dto.contactFirstName,
+          businessName: dto.businessName,
+          companyCode: dto.subdomain.toLowerCase(),
+          plan,
+          monthlyPrice: basePrice,
+          onboardingUrl,
+        }).catch((e: unknown) =>
+          console.error('[Onboarding] Failed to send email:', e),
+        );
+      }
 
       return res.status(201).json({
         id: profile.id,
         status: 'ONBOARDING',
-        onboardingEmailSent: true,
-        onboardingUrl, // shown in admin UI so it can be shared manually if needed
+        onboardingEmailSent: !!dto.sendOnboardingEmail,
+        onboardingUrl,
         subdomain: profile.subdomain,
       });
     }

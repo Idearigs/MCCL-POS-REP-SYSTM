@@ -59,6 +59,7 @@ export const customerProfilesApi = {
   updateTesterFlags: (id: string, data: { isAlphaTester?: boolean; isBetaTester?: boolean; betaExpiresAt?: string | null }) =>
     apiClient.put(`/mainframe/customer-profiles/${id}/tester-flags`, data),
   getBetaExpiring: () => apiClient.get('/mainframe/customer-profiles/beta-expiring'),
+  sendOnboardingEmail: (id: string) => apiClient.post(`/mainframe/customer-profiles/${id}/send-onboarding-email`),
 };
 
 // ── Customer Users ───────────────────────────────────────────────────────────
