@@ -42,7 +42,11 @@ export class TenantProvisioningService {
     if (existingTenant) {
       await this.prismaService.tenants.update({
         where: { id: existingTenant.id },
-        data: { name: data.businessName, status: 'ACTIVE', updatedAt: new Date() },
+        data: {
+          name: data.businessName,
+          status: 'ACTIVE',
+          updatedAt: new Date(),
+        },
       });
       tenantId = existingTenant.id;
     } else {
@@ -101,9 +105,7 @@ export class TenantProvisioningService {
         this.logger.warn(`Could not seed outlet: ${msg}`);
       });
 
-    this.logger.log(
-      `Tenant provisioned: ${tenantId} (${data.businessName})`,
-    );
+    this.logger.log(`Tenant provisioned: ${tenantId} (${data.businessName})`);
     return { tenantId, userId };
   }
 
