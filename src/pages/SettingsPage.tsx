@@ -841,35 +841,6 @@ const SettingsPage = () => {
                   )}
                 </div>
 
-                {/* Printer Model */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Printer Model</label>
-                  <p className="text-sm text-muted-foreground">
-                    Select your printer model. Star TSP100 uses Star Line protocol — different from EPSON/ONIX.
-                  </p>
-                  <div className="flex gap-2 mt-2 flex-wrap">
-                    {([
-                      { id: 'EPSON',       label: 'EPSON' },
-                      { id: 'ONIX',        label: 'ONIX' },
-                      { id: 'STAR_TSP100', label: 'Star TSP100' },
-                      { id: 'OTHER',       label: 'Other 80mm' },
-                    ] as const).map(({ id, label }) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => setPrinterModel(id)}
-                        className={`flex-1 rounded-lg border-2 py-3 text-sm font-semibold transition-colors ${
-                          printerModel === id
-                            ? 'border-blue-600 bg-blue-50 text-blue-700'
-                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 <Separator />
 
                 {/* Auto-print */}
