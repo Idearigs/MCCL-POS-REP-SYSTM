@@ -253,9 +253,10 @@ export async function printReceiptQZ(
 // driver and reaches the printer hardware regardless of Windows driver settings.
 
 const DRAWER_ESCPOS  = '\x1B\x70\x00\x19\xFA';     // ESC p 0 25 250
-// ESC @ resets the printer (a recognised multi-byte sequence so the spooler
-// doesn't drop it as too small), then BEL (0x07) pulses the DK port.
-const DRAWER_STARLINE = '\x1B\x40\x07';             // ESC @ + BEL
+// ESC @ (init) + BEL (DK pulse) + 3×LF: the line-feeds force the printer to
+// flush its input buffer and execute the BEL — without trailing content the
+// printer may not process a standalone BEL before the USB transaction closes.
+const DRAWER_STARLINE = '\x1B\x40\x07\x0A\x0A\x0A'; // ESC @ + BEL + 3 LF
 
 // ─── Drawer event log ─────────────────────────────────────────────────────────
 // Hardware has no status pin readback through the FuturePRNT raster driver, so

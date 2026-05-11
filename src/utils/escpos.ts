@@ -196,7 +196,9 @@ function buildStarCopy(data: ThermalReceiptData, copyLabel?: string): string {
     p(line + STAR.LF);
   }
 
-  p(STAR.FEED, STAR.CUT);
+  // BEL (0x07) kicks the DK port *before* the cutter fires — guaranteed to
+  // reach the printer because it rides inside the same raw job as the receipt.
+  p('\x07', STAR.FEED, STAR.CUT);
 
   return parts.join('');
 }
