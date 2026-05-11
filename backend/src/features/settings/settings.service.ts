@@ -63,7 +63,7 @@ const DEFAULTS: AppSettings = {
     receiptTemplate: '',
   },
   printer: {
-    model: 'EPSON',
+    model: 'STAR_TSP100',
     printerName: '',
     autoPrint: false,
     copies: 1,

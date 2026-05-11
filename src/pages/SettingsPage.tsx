@@ -247,7 +247,7 @@ const SettingsPage = () => {
   const printerDetection = usePrinterDetection();
 
   const onSubmitPrinter = async () => {
-    await updatePrinterSettings({ model: printerModel, printerName, autoPrint, copies, footerText, vatNumber: vatNumber || undefined, drawerPin: drawerPin || undefined });
+    await updatePrinterSettings({ model: 'STAR_TSP100', printerName, autoPrint, copies, footerText, vatNumber: vatNumber || undefined, drawerPin: drawerPin || undefined });
   };
 
   const handleFindPrinters = async () => {
