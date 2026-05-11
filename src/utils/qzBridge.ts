@@ -252,8 +252,10 @@ export async function printReceiptQZ(
 // it pulses the DK port directly.  Sent as a RAW spool job, it bypasses the GDI
 // driver and reaches the printer hardware regardless of Windows driver settings.
 
-const DRAWER_ESCPOS  = '\x1B\x70\x00\x19\xFA'; // ESC p 0 25 250
-const DRAWER_STARLINE = '\x07';                  // BEL = Star Line DK pulse
+const DRAWER_ESCPOS  = '\x1B\x70\x00\x19\xFA';     // ESC p 0 25 250
+// ESC @ resets the printer (a recognised multi-byte sequence so the spooler
+// doesn't drop it as too small), then BEL (0x07) pulses the DK port.
+const DRAWER_STARLINE = '\x1B\x40\x07';             // ESC @ + BEL
 
 // ─── Drawer event log ─────────────────────────────────────────────────────────
 // Hardware has no status pin readback through the FuturePRNT raster driver, so
