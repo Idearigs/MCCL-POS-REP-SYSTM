@@ -6,9 +6,17 @@
  * POST /api/v1/mainframe/onboarding/:token/submit — submit form, provision POS
  */
 import { Router } from 'express';
+import crypto from 'crypto';
 import prisma from '../lib/prisma';
 import { provisionPosTenant, generateTempPassword } from '../lib/provision';
 import { sendWelcomeEmail } from '../lib/mailer';
+
+function hashPassword(password: string): string {
+  return crypto
+    .createHash('sha256')
+    .update(password + (process.env.PASSWORD_SALT || 'truedesk-mainframe-salt'))
+    .digest('hex');
+}
 
 const router = Router();
 
@@ -159,6 +167,41 @@ router.post('/:token/submit', async (req, res) => {
         ipAddress: req.ip,
       },
     });
+
+    // Create or update the owner user record in the mainframe so credentials
+    // are visible on the dashboard without the admin having to ask the client.
+    const existingMfUser = await prisma.mf_customer_users.findFirst({
+      where: { customerProfileId: profile.id, role: 'OWNER' },
+    });
+    if (existingMfUser) {
+      await prisma.mf_customer_users.update({
+        where: { id: existingMfUser.id },
+        data: {
+          passwordHash: hashPassword(ownerPassword),
+          tempPassword: ownerPassword,
+          mustChangePassword: true,
+        },
+      });
+      await prisma.mf_password_history.create({
+        data: { userId: existingMfUser.id, password: ownerPassword },
+      });
+    } else {
+      const mfUser = await prisma.mf_customer_users.create({
+        data: {
+          customerProfileId: profile.id,
+          email: profile.contactEmail,
+          firstName: profile.contactFirstName,
+          lastName: profile.contactLastName,
+          role: 'OWNER',
+          passwordHash: hashPassword(ownerPassword),
+          tempPassword: ownerPassword,
+          mustChangePassword: true,
+        },
+      });
+      await prisma.mf_password_history.create({
+        data: { userId: mfUser.id, password: ownerPassword },
+      });
+    }
 
     // Send welcome email (fire-and-forget)
     sendWelcomeEmail({
