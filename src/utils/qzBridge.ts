@@ -5,7 +5,7 @@
 // delivered via GET /api/v1/auth/qz-config after login. They are NEVER
 // hardcoded here — each tenant's key is only visible to that tenant.
 import type { ThermalReceiptData, PrintOptions } from './thermalReceipt';
-import { buildEscPos } from './escpos';
+import { buildEscPos, buildStarLine } from './escpos';
 import { buildReceiptHTML } from './thermalReceipt';
 
 // ─── Per-tenant QZ config (loaded from API after login) ──────────────────────
@@ -224,14 +224,22 @@ export async function printReceiptQZ(
   }
 
   if (options.model === 'ONIX' || options.model === 'EPSON') {
-    // Direct ESC/POS raw path — bypasses Windows raster driver entirely.
-    // Must use format:'hex' so bytes > 127 (£ sign, drawer timing) aren't UTF-8 mangled.
+    // ESC/POS raw path — bypasses Windows raster driver entirely.
+    // format:'hex' avoids UTF-8 mangling of bytes > 127 (£ sign, timing bytes).
     const escpos = buildEscPos(data, options.copies ?? 1);
     const config = _qz.configs.create(printerName, { scaleContent: false });
     await _qz.print(config, [{ type: 'raw', format: 'hex', data: toHex(escpos) }]);
+  } else if (options.model === 'STAR_TSP100') {
+    // Star Line raw path — QZ Tray submits a RAW-type spool job which bypasses the
+    // GDI driver and writes bytes directly to the USB port.  The printer receives
+    // native Star Line commands, so cut (ESC i) and drawer (BEL) work without any
+    // Windows driver settings.  No "Page Cut Type" or "Peripheral Unit Type"
+    // configuration is required in the Windows printer properties.
+    const starLine = buildStarLine(data, options.copies ?? 1);
+    const config = _qz.configs.create(printerName, { scaleContent: false });
+    await _qz.print(config, [{ type: 'raw', format: 'hex', data: toHex(starLine) }]);
   } else {
-    // STAR_TSP100 + OTHER: FuturePRNT is a Windows raster (GDI) driver.
-    // It does not pass raw Star Line / ESC/POS bytes to the hardware — only HTML jobs work.
+    // OTHER / unknown: HTML fallback via the Windows GDI driver.
     const html = buildReceiptHTML(data, options);
     const htmlConfig = _qz.configs.create(printerName);
     await _qz.print(htmlConfig, [{ type: 'html', format: 'plain', data: html }]);
@@ -239,18 +247,13 @@ export async function printReceiptQZ(
 }
 
 // ─── Cash drawer ──────────────────────────────────────────────────────────────
-// EPSON/ONIX: raw ESC/POS kick command via hex-encoded raw job.
-// STAR_TSP100 / OTHER (FuturePRNT raster driver): the driver cannot execute raw
-// drawer commands — it kicks the DK-port automatically on every print job.
-// We send a sub-1mm blank HTML job so the drawer fires with negligible paper feed.
+// EPSON/ONIX: raw ESC/POS kick — ESC p 0 25 250 (pin 2, ~50ms on / 500ms off).
+// STAR_TSP100: BEL (0x07) is the Star Line "Peripheral Device Drive" command —
+// it pulses the DK port directly.  Sent as a RAW spool job, it bypasses the GDI
+// driver and reaches the printer hardware regardless of Windows driver settings.
 
-const DRAWER_ESCPOS = '\x1B\x70\x00\x19\xFA'; // ESC p 0 25 250 — pin 2, 50ms on / 500ms off
-
-const BLANK_KICK_HTML =
-  '<!DOCTYPE html><html><head><style>' +
-  '@page{size:80mm 1mm;margin:0;}' +
-  'body{margin:0;padding:0;width:80mm;height:1mm;overflow:hidden;}' +
-  '</style></head><body></body></html>';
+const DRAWER_ESCPOS  = '\x1B\x70\x00\x19\xFA'; // ESC p 0 25 250
+const DRAWER_STARLINE = '\x07';                  // BEL = Star Line DK pulse
 
 // ─── Drawer event log ─────────────────────────────────────────────────────────
 // Hardware has no status pin readback through the FuturePRNT raster driver, so
@@ -301,10 +304,10 @@ export async function openCashDrawer(
   }
 
   if (model === 'STAR_TSP100' || model === 'OTHER' || model === undefined) {
-    // FuturePRNT / generic Windows raster driver: kicks drawer on every print job.
-    // Send a 1mm-tall blank HTML page — drawer fires, virtually no paper feeds.
-    const config = _qz.configs.create(printerName);
-    await _qz.print(config, [{ type: 'html', format: 'plain', data: BLANK_KICK_HTML }]);
+    // Star Line BEL — RAW spool job bypasses the GDI driver and pulses the DK port
+    // directly.  No Windows driver peripheral configuration required.
+    const config = _qz.configs.create(printerName, { scaleContent: false });
+    await _qz.print(config, [{ type: 'raw', format: 'hex', data: toHex(DRAWER_STARLINE) }]);
   } else {
     // EPSON / ONIX — raw ESC/POS drawer kick
     const config = _qz.configs.create(printerName, { scaleContent: false });
