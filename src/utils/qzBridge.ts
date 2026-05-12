@@ -137,7 +137,7 @@ export async function connectQZ(): Promise<boolean> {
     }
     try {
       if (!lib.websocket.isActive()) {
-        await lib.websocket.connect({ retries: 2, delay: 1 });
+        await lib.websocket.connect({ retries: 0, delay: 0 });
       }
       setStatus('connected');
 
