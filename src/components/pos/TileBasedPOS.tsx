@@ -63,6 +63,7 @@ import {
   Trash2,
   Archive,
   Lock,
+  Shuffle,
 } from 'lucide-react';
 import { useInventory, InventoryItem } from '@/contexts/InventoryContext';
 import { Customer, useCustomers } from '@/contexts/CustomerContext';
@@ -169,8 +170,10 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
   // Payment states
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'CASH' | 'CARD' | 'BANK_TRANSFER' | 'DIGITAL_WALLET'>('CASH');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'CASH' | 'CARD' | 'BANK_TRANSFER' | 'DIGITAL_WALLET' | 'SPLIT'>('CASH');
   const [cashAmount, setCashAmount] = useState<string>('');
+  const [splitCashAmount, setSplitCashAmount] = useState<string>('');
+  const [changeGiven, setChangeGiven] = useState<number>(0);
   const [processingPayment, setProcessingPayment] = useState(false);
 
   // Quick Product states
@@ -1369,6 +1372,10 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const handleNewSale = () => {
     setCompletedSale(null);
     setShowPaymentDialog(false);
+    setChangeGiven(0);
+    setCashAmount('');
+    setSplitCashAmount('');
+    setSelectedPaymentMethod('CASH');
   };
 
   // Checkout - Open payment dialog
@@ -1387,8 +1394,11 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     setProcessingPayment(true);
 
     try {
-      // Calculate change if cash payment
+      // Validate payment amounts and calculate change
       let change = 0;
+      let splitCash = 0;
+      let splitCard = 0;
+
       if (selectedPaymentMethod === 'CASH') {
         const cash = parseFloat(cashAmount) || 0;
         if (cash < total) {
@@ -1401,6 +1411,27 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
           return;
         }
         change = cash - total;
+      } else if (selectedPaymentMethod === 'SPLIT') {
+        splitCash = parseFloat(splitCashAmount) || 0;
+        splitCard = parseFloat((total - splitCash).toFixed(2));
+        if (splitCash <= 0 || splitCard <= 0) {
+          toast({
+            title: 'Invalid split amount',
+            description: 'Cash and card portions must both be greater than £0',
+            variant: 'destructive'
+          });
+          setProcessingPayment(false);
+          return;
+        }
+        if (splitCash >= total) {
+          toast({
+            title: 'Invalid split amount',
+            description: 'Cash portion must be less than the total — use Cash payment instead',
+            variant: 'destructive'
+          });
+          setProcessingPayment(false);
+          return;
+        }
       }
 
       // Separate products and repairs
@@ -1469,17 +1500,26 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         ? `Quick Mode POS: Repair payment - ${repairItems.map(r => r.name).join(', ')}`
         : 'Quick Mode POS Sale';
 
+      // Build payments array — split sends two entries, everything else sends one
+      const paymentsPayload: CreateSaleData['payments'] =
+        selectedPaymentMethod === 'SPLIT'
+          ? [
+              { method: 'CASH', amount: splitCash, notes: `Split payment: £${splitCash.toFixed(2)} cash` },
+              { method: 'CARD', amount: splitCard, notes: `Split payment: £${splitCard.toFixed(2)} card` },
+            ]
+          : [{
+              method: selectedPaymentMethod as 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'DIGITAL_WALLET',
+              amount: total,
+              notes: selectedPaymentMethod === 'CASH' && change > 0
+                ? `Cash received: £${parseFloat(cashAmount).toFixed(2)}, Change: £${change.toFixed(2)}`
+                : undefined,
+            }];
+
       // Create the sale record for ALL items (products + repairs)
       const saleData: CreateSaleData = {
         customerId: selectedCustomer?.id,
         items: saleItems,
-        payments: [{
-          method: selectedPaymentMethod,
-          amount: total, // Always send the actual total, not the cash amount entered
-          notes: selectedPaymentMethod === 'CASH' && change > 0
-            ? `Cash received: £${parseFloat(cashAmount).toFixed(2)}, Change: £${change.toFixed(2)}`
-            : undefined,
-        }],
+        payments: paymentsPayload,
         discountPercentage: discountPercentage > 0 ? discountPercentage : undefined,
         discountAmount: discount > 0 ? discount : undefined,
         taxRate: 0, // No VAT - prices already include VAT
@@ -1532,18 +1572,22 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       // Show the post-sale receipt screen inside the payment dialog
       setCompletedSale(createdSale);
 
-      // Open cash drawer on cash payments (fire-and-forget — don't block sale)
-      if (selectedPaymentMethod === 'CASH' && settings.printer.printerName) {
-        import('../../utils/qzBridge').then(({ openCashDrawer }) => {
-          openCashDrawer(settings.printer.printerName, settings.printer.model, 'sale').catch(() => {});
-        });
+      // Store change so the post-sale screen can display it from state (not from notes parsing)
+      setChangeGiven(change);
+
+      // Open cash drawer BEFORE printing — cashier needs the drawer open to give change
+      if ((selectedPaymentMethod === 'CASH' || selectedPaymentMethod === 'SPLIT') && settings.printer.printerName) {
+        try {
+          const { openCashDrawer } = await import('../../utils/qzBridge');
+          await openCashDrawer(settings.printer.printerName, settings.printer.model, 'sale');
+        } catch {
+          // Non-fatal — drawer may not be connected
+        }
       }
 
-      // Print receipt on every completed sale when a printer is configured.
-      // cartSnapshot is passed so repair/service items appear even though the
-      // backend doesn't store them as sale_items (FK constraint).
+      // Print receipt after drawer has opened
       if (settings.printer.printerName) {
-        setTimeout(() => handlePrintReceipt(createdSale, cartSnapshot), 400);
+        setTimeout(() => handlePrintReceipt(createdSale, cartSnapshot), 200);
       }
 
     } catch (error: any) {
@@ -3337,18 +3381,22 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
               </div>
 
               {/* Change due */}
-              {completedSale.paymentMethod === 'CASH' && completedSale.notes?.includes('Change:') && (
-                <div className="bg-green-50 border border-green-200 rounded-xl px-6 py-4 w-full">
-                  <p className="text-sm text-green-700 font-medium">Change Due</p>
-                  <p className="text-3xl font-bold text-green-700 mt-1">
-                    £{completedSale.notes.match(/Change: £([\d.]+)/)?.[1] || '0.00'}
-                  </p>
+              {completedSale.paymentMethod === 'CASH' && changeGiven > 0 && (
+                <div className="bg-green-50 border-2 border-green-300 rounded-xl px-6 py-5 w-full">
+                  <p className="text-sm text-green-700 font-medium uppercase tracking-wide">Change to Give Customer</p>
+                  <p className="text-5xl font-bold text-green-700 mt-2">£{changeGiven.toFixed(2)}</p>
                 </div>
               )}
 
               <div className="w-full">
                 <p className="text-2xl font-bold text-gray-900">£{completedSale.totalAmount.toFixed(2)}</p>
-                <p className="text-sm text-gray-500 mt-1">{completedSale.paymentMethod.replace('_', ' ')}</p>
+                {selectedPaymentMethod === 'SPLIT' ? (
+                  <p className="text-sm text-gray-500 mt-1">
+                    Cash £{parseFloat(splitCashAmount || '0').toFixed(2)} + Card £{(completedSale.totalAmount - parseFloat(splitCashAmount || '0')).toFixed(2)}
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-500 mt-1">{completedSale.paymentMethod.replace('_', ' ')}</p>
+                )}
               </div>
 
               <div className="flex flex-col gap-3 w-full">
@@ -3453,13 +3501,47 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                     Digital Wallet
                   </span>
                 </button>
+
+                {/* Split: Cash + Card */}
+                <button
+                  onClick={() => { setSelectedPaymentMethod('SPLIT'); setSplitCashAmount(''); }}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all col-span-2 ${
+                    selectedPaymentMethod === 'SPLIT'
+                      ? 'border-purple-600 bg-purple-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <Shuffle className={`h-8 w-8 ${selectedPaymentMethod === 'SPLIT' ? 'text-purple-600' : 'text-gray-600'}`} />
+                  <span className={`text-sm font-medium ${selectedPaymentMethod === 'SPLIT' ? 'text-purple-600' : 'text-gray-700'}`}>
+                    Split (Cash + Card)
+                  </span>
+                </button>
               </div>
             </div>
 
             {/* Cash Amount Input (only for cash payments) */}
             {selectedPaymentMethod === 'CASH' && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <label className="text-sm font-medium text-gray-700">Cash Amount Received</label>
+
+                {/* Quick denomination buttons */}
+                <div className="grid grid-cols-5 gap-2">
+                  {[5, 10, 20, 50, 100].map((denom) => (
+                    <button
+                      key={denom}
+                      type="button"
+                      onClick={() => setCashAmount(denom.toFixed(2))}
+                      className={`py-2 rounded-lg border-2 text-sm font-semibold transition-all ${
+                        cashAmount === denom.toFixed(2)
+                          ? 'border-blue-600 bg-blue-50 text-blue-700'
+                          : 'border-gray-200 hover:border-blue-400 text-gray-700'
+                      }`}
+                    >
+                      £{denom}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 font-medium">£</span>
                   <Input
@@ -3469,14 +3551,85 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                     value={cashAmount}
                     onChange={(e) => setCashAmount(e.target.value)}
                     placeholder={total.toFixed(2)}
-                    className="pl-8 text-lg font-semibold"
+                    className="pl-8 text-xl font-bold"
+                    autoFocus
                   />
                 </div>
-                {parseFloat(cashAmount) > total && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                    <p className="text-sm text-green-700">
-                      Change: <span className="font-bold">£{(parseFloat(cashAmount) - total).toFixed(2)}</span>
+
+                {/* Change due — large prominent display */}
+                {parseFloat(cashAmount) >= total ? (
+                  <div className={`rounded-xl p-4 text-center border-2 ${
+                    parseFloat(cashAmount) > total
+                      ? 'bg-green-50 border-green-300'
+                      : 'bg-gray-50 border-gray-200'
+                  }`}>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                      {parseFloat(cashAmount) > total ? 'Change to Give' : 'No Change'}
                     </p>
+                    <p className={`text-4xl font-bold ${parseFloat(cashAmount) > total ? 'text-green-700' : 'text-gray-400'}`}>
+                      £{(parseFloat(cashAmount) - total).toFixed(2)}
+                    </p>
+                  </div>
+                ) : parseFloat(cashAmount) > 0 ? (
+                  <div className="rounded-xl p-4 text-center border-2 bg-red-50 border-red-300">
+                    <p className="text-xs font-medium text-red-500 uppercase tracking-wide mb-1">Amount Short</p>
+                    <p className="text-4xl font-bold text-red-600">
+                      £{(total - parseFloat(cashAmount)).toFixed(2)}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {/* Split Payment Input (cash + card on one bill) */}
+            {selectedPaymentMethod === 'SPLIT' && (
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Cash Portion</label>
+
+                <div className="grid grid-cols-5 gap-2">
+                  {[5, 10, 20, 50, 100].filter(d => d < total).map((denom) => (
+                    <button
+                      key={denom}
+                      type="button"
+                      onClick={() => setSplitCashAmount(denom.toFixed(2))}
+                      className={`py-2 rounded-lg border-2 text-sm font-semibold transition-all ${
+                        splitCashAmount === denom.toFixed(2)
+                          ? 'border-purple-600 bg-purple-50 text-purple-700'
+                          : 'border-gray-200 hover:border-purple-400 text-gray-700'
+                      }`}
+                    >
+                      £{denom}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 font-medium">£</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min={0.01}
+                    max={total - 0.01}
+                    value={splitCashAmount}
+                    onChange={(e) => setSplitCashAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="pl-8 text-xl font-bold"
+                    autoFocus
+                  />
+                </div>
+
+                {parseFloat(splitCashAmount) > 0 && parseFloat(splitCashAmount) < total && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl p-3 text-center border-2 bg-green-50 border-green-300">
+                      <p className="text-xs font-medium text-green-700 uppercase tracking-wide mb-1">Cash</p>
+                      <p className="text-2xl font-bold text-green-700">£{parseFloat(splitCashAmount).toFixed(2)}</p>
+                    </div>
+                    <div className="rounded-xl p-3 text-center border-2 bg-blue-50 border-blue-300">
+                      <p className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-1">Card</p>
+                      <p className="text-2xl font-bold text-blue-700">
+                        £{(total - parseFloat(splitCashAmount)).toFixed(2)}
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
