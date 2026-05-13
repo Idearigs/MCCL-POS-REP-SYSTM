@@ -51,7 +51,7 @@ export class FloatController {
     @Body() dto: OpenFloatSessionDto,
   ): Promise<FloatSessionResponseDto> {
     const tenantId = req.user.tenantId;
-    const userId = req.user.sub;
+    const userId = req.user.id;
 
     return this.floatService.openFloatSession(tenantId, userId, dto);
   }
@@ -78,7 +78,7 @@ export class FloatController {
     @Body() dto: CloseFloatSessionDto,
   ): Promise<FloatSessionResponseDto> {
     const tenantId = req.user.tenantId;
-    const userId = req.user.sub;
+    const userId = req.user.id;
 
     return this.floatService.closeFloatSession(
       tenantId,
@@ -105,7 +105,7 @@ export class FloatController {
     @Request() req,
   ): Promise<FloatSessionResponseDto | null> {
     const tenantId = req.user.tenantId;
-    const userId = req.user.sub;
+    const userId = req.user.id;
 
     return this.floatService.getCurrentFloatSession(tenantId, userId);
   }
@@ -162,7 +162,7 @@ export class FloatController {
     @Body() dto: CreateFloatTransactionDto,
   ): Promise<FloatTransactionResponseDto> {
     const tenantId = req.user.tenantId;
-    const userId = req.user.sub;
+    const userId = req.user.id;
 
     return this.floatService.createFloatTransaction(tenantId, userId, dto);
   }

@@ -53,7 +53,7 @@ export class PettyCashController {
     @Body() dto: CreatePettyCashAccountDto,
   ): Promise<PettyCashAccountResponseDto> {
     const tenantId = req.user.tenantId;
-    const userId = req.user.sub;
+    const userId = req.user.id;
 
     return this.pettyCashService.createAccount(tenantId, userId, dto);
   }
@@ -130,7 +130,7 @@ export class PettyCashController {
     @Body() dto: ReplenishPettyCashDto,
   ): Promise<PettyCashAccountResponseDto> {
     const tenantId = req.user.tenantId;
-    const userId = req.user.sub;
+    const userId = req.user.id;
 
     return this.pettyCashService.replenishAccount(
       tenantId,
@@ -165,7 +165,7 @@ export class PettyCashController {
     @Body() dto: CreatePettyCashTransactionDto,
   ): Promise<PettyCashTransactionResponseDto> {
     const tenantId = req.user.tenantId;
-    const userId = req.user.sub;
+    const userId = req.user.id;
 
     return this.pettyCashService.createTransaction(tenantId, userId, dto);
   }
@@ -231,7 +231,7 @@ export class PettyCashController {
     @Body() dto: ApprovePettyCashTransactionDto,
   ): Promise<PettyCashTransactionResponseDto> {
     const tenantId = req.user.tenantId;
-    const userId = req.user.sub;
+    const userId = req.user.id;
 
     return this.pettyCashService.approveTransaction(
       tenantId,
@@ -267,7 +267,7 @@ export class PettyCashController {
     @Body() dto: RejectPettyCashTransactionDto,
   ): Promise<PettyCashTransactionResponseDto> {
     const tenantId = req.user.tenantId;
-    const userId = req.user.sub;
+    const userId = req.user.id;
 
     return this.pettyCashService.rejectTransaction(
       tenantId,
@@ -302,7 +302,7 @@ export class PettyCashController {
     @Param('transactionId') transactionId: string,
   ): Promise<PettyCashTransactionResponseDto> {
     const tenantId = req.user.tenantId;
-    const userId = req.user.sub;
+    const userId = req.user.id;
 
     return this.pettyCashService.cancelTransaction(
       tenantId,
