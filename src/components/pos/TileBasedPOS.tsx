@@ -65,6 +65,8 @@ import {
   Lock,
   Shuffle,
   CalendarClock,
+  PauseCircle,
+  ListOrdered,
 } from 'lucide-react';
 import { useInventory, InventoryItem } from '@/contexts/InventoryContext';
 import { Customer, useCustomers } from '@/contexts/CustomerContext';
@@ -118,8 +120,21 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const { auth } = useAuth();
   const { toast } = useToast();
 
-  // Beta 3-column layout: enabled only for the testb tenant
-  const isBetaTenant = auth.tenantInfo.tenantSlug === 'testb';
+  // Held / suspended transactions
+  const [heldTransactions, setHeldTransactions] = useState<Array<{
+    id: string;
+    label: string;
+    items: typeof cart;
+    customer: typeof selectedCustomer;
+    discountPercentage: number;
+    timestamp: string;
+    type: 'hold' | 'suspend';
+  }>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('mps_held_transactions') || '[]');
+    } catch { return []; }
+  });
+  const [showHeldDialog, setShowHeldDialog] = useState(false);
 
   // Stores the last completed sale so we can show the print receipt screen
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
@@ -1437,13 +1452,56 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       toast({ title: 'Cart is empty', variant: 'destructive' });
       return;
     }
-    if (isBetaTenant) {
-      // Beta layout: payment panel is inline, no dialog needed
-      handleProcessPayment();
-    } else {
-      setShowPaymentDialog(true);
-      setCashAmount(total.toFixed(2)); // Pre-fill with total amount
+    setShowPaymentDialog(true);
+    setCashAmount(total.toFixed(2));
+  };
+
+  const parkTransaction = (type: 'hold' | 'suspend') => {
+    if (cart.length === 0) {
+      toast({ title: 'Cart is empty', variant: 'destructive' });
+      return;
     }
+    const label = selectedCustomer?.name || `Sale ${new Date().toLocaleTimeString()}`;
+    const entry = {
+      id: Date.now().toString(),
+      label,
+      items: cart,
+      customer: selectedCustomer,
+      discountPercentage,
+      timestamp: new Date().toISOString(),
+      type,
+    };
+    const updated = [...heldTransactions, entry];
+    setHeldTransactions(updated);
+    localStorage.setItem('mps_held_transactions', JSON.stringify(updated));
+    handleNewSale();
+    toast({
+      title: type === 'hold' ? 'Transaction held' : 'Transaction suspended',
+      description: `"${label}" parked — recall it from the ${type === 'hold' ? 'Hold' : 'Suspended'} list`,
+    });
+  };
+
+  const recallTransaction = (id: string) => {
+    const entry = heldTransactions.find(h => h.id === id);
+    if (!entry) return;
+    if (cart.length > 0) {
+      toast({ title: 'Clear cart first', description: 'Complete or hold the current sale before recalling', variant: 'destructive' });
+      return;
+    }
+    setCart(entry.items);
+    setSelectedCustomer(entry.customer);
+    setDiscountPercentage(entry.discountPercentage);
+    const updated = heldTransactions.filter(h => h.id !== id);
+    setHeldTransactions(updated);
+    localStorage.setItem('mps_held_transactions', JSON.stringify(updated));
+    setShowHeldDialog(false);
+    toast({ title: 'Transaction recalled', description: `"${entry.label}" restored to cart` });
+  };
+
+  const deleteHeld = (id: string) => {
+    const updated = heldTransactions.filter(h => h.id !== id);
+    setHeldTransactions(updated);
+    localStorage.setItem('mps_held_transactions', JSON.stringify(updated));
   };
 
   // Process payment
@@ -1690,9 +1748,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   };
 
   return (
-    <div className={`h-full flex bg-gray-50 ${isBetaTenant ? 'gap-3 p-3' : 'gap-6 p-6'}`}>
+    <div className="h-full flex bg-gray-50 gap-6 p-6">
       {/* Left Side - Categories/Products */}
-      <div className={`flex-1 flex flex-col bg-white rounded-2xl overflow-hidden shadow-lg ${isBetaTenant ? 'p-4 order-2' : 'p-6'}`}>
+      <div className="flex-1 flex flex-col bg-white rounded-2xl overflow-hidden shadow-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             {/* Back Button for Category View or Appraisal View */}
@@ -2552,7 +2610,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   {/* Rings */}
                   <div
                     onClick={() => handleCategoryViewOpen('Rings')}
-                    className="bg-white border border-gray-200 rounded-xl p-5 cursor-pointer hover:border-amber-400 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-amber-50/60 border border-amber-100 rounded-xl p-5 cursor-pointer hover:border-amber-300 hover:bg-amber-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
                     <Gem className="h-7 w-7 text-amber-600 mb-3" />
                     <h3 className="text-gray-900 font-semibold text-base">Rings</h3>
@@ -2562,7 +2620,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   {/* Necklaces */}
                   <div
                     onClick={() => handleCategoryViewOpen('Necklaces')}
-                    className="bg-white border border-gray-200 rounded-xl p-5 cursor-pointer hover:border-amber-400 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-amber-50/60 border border-amber-100 rounded-xl p-5 cursor-pointer hover:border-amber-300 hover:bg-amber-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
                     <Sparkles className="h-7 w-7 text-amber-600 mb-3" />
                     <h3 className="text-gray-900 font-semibold text-base">Necklaces</h3>
@@ -2572,7 +2630,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   {/* Earrings */}
                   <div
                     onClick={() => handleCategoryViewOpen('Earrings')}
-                    className="bg-white border border-gray-200 rounded-xl p-5 cursor-pointer hover:border-amber-400 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-amber-50/60 border border-amber-100 rounded-xl p-5 cursor-pointer hover:border-amber-300 hover:bg-amber-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
                     <Crown className="h-7 w-7 text-amber-600 mb-3" />
                     <h3 className="text-gray-900 font-semibold text-base">Earrings</h3>
@@ -2582,7 +2640,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   {/* Bracelets */}
                   <div
                     onClick={() => handleCategoryViewOpen('Bracelets')}
-                    className="bg-white border border-gray-200 rounded-xl p-5 cursor-pointer hover:border-amber-400 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-amber-50/60 border border-amber-100 rounded-xl p-5 cursor-pointer hover:border-amber-300 hover:bg-amber-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
                     <Heart className="h-7 w-7 text-amber-600 mb-3" />
                     <h3 className="text-gray-900 font-semibold text-base">Bracelets</h3>
@@ -2592,7 +2650,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   {/* Watches */}
                   <div
                     onClick={() => handleCategoryViewOpen('Watches')}
-                    className="bg-white border border-gray-200 rounded-xl p-5 cursor-pointer hover:border-amber-400 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-amber-50/60 border border-amber-100 rounded-xl p-5 cursor-pointer hover:border-amber-300 hover:bg-amber-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
                     <Watch className="h-7 w-7 text-amber-600 mb-3" />
                     <h3 className="text-gray-900 font-semibold text-base">Watches</h3>
@@ -2602,7 +2660,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   {/* Chains */}
                   <div
                     onClick={() => handleCategoryViewOpen('Chains')}
-                    className="bg-white border border-gray-200 rounded-xl p-5 cursor-pointer hover:border-amber-400 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-amber-50/60 border border-amber-100 rounded-xl p-5 cursor-pointer hover:border-amber-300 hover:bg-amber-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
                     <ShoppingBag className="h-7 w-7 text-amber-600 mb-3" />
                     <h3 className="text-gray-900 font-semibold text-base">Chains</h3>
@@ -2612,7 +2670,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   {/* Pendants */}
                   <div
                     onClick={() => handleCategoryViewOpen('Pendants')}
-                    className="bg-white border border-gray-200 rounded-xl p-5 cursor-pointer hover:border-amber-400 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-amber-50/60 border border-amber-100 rounded-xl p-5 cursor-pointer hover:border-amber-300 hover:bg-amber-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
                     <Award className="h-7 w-7 text-amber-600 mb-3" />
                     <h3 className="text-gray-900 font-semibold text-base">Pendants</h3>
@@ -2647,7 +2705,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                       setServicePrice('15.00');
                       setShowServicePriceDialog(true);
                     }}
-                    className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-xl p-5 cursor-pointer hover:border-blue-400 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-blue-50/60 border border-blue-100 rounded-xl p-5 cursor-pointer hover:border-blue-300 hover:bg-blue-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
                     <Battery className="h-7 w-7 text-blue-600 mb-3" />
                     <h3 className="text-blue-900 font-semibold text-base">Watch Battery</h3>
@@ -2657,7 +2715,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   {/* Repair - list existing */}
                   <div
                     onClick={handleRepairTileClick}
-                    className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-xl p-5 cursor-pointer hover:border-blue-400 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-blue-50/60 border border-blue-100 rounded-xl p-5 cursor-pointer hover:border-blue-300 hover:bg-blue-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
                     <Wrench className="h-7 w-7 text-blue-600 mb-3" />
                     <h3 className="text-blue-900 font-semibold text-base">Repair</h3>
@@ -2667,11 +2725,11 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   {/* New Repair Job - quick create */}
                   <div
                     onClick={() => setShowNewRepairDialog(true)}
-                    className="bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl p-5 cursor-pointer hover:from-violet-400 hover:to-purple-500 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-blue-50/60 border border-blue-100 rounded-xl p-5 cursor-pointer hover:border-blue-300 hover:bg-blue-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
-                    <Wrench className="h-7 w-7 text-white mb-3" />
-                    <h3 className="text-white font-semibold text-base">New Repair</h3>
-                    <p className="text-violet-200 text-xs mt-0.5">Quick Add Job</p>
+                    <Wrench className="h-7 w-7 text-blue-600 mb-3" />
+                    <h3 className="text-blue-900 font-semibold text-base">New Repair</h3>
+                    <p className="text-blue-500 text-xs mt-0.5">Quick Add Job</p>
                   </div>
 
                   {/* Cleaning */}
@@ -2681,7 +2739,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                       setServicePrice('25.00');
                       setShowServicePriceDialog(true);
                     }}
-                    className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-xl p-5 cursor-pointer hover:border-blue-400 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-blue-50/60 border border-blue-100 rounded-xl p-5 cursor-pointer hover:border-blue-300 hover:bg-blue-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
                     <Sparkles className="h-7 w-7 text-blue-600 mb-3" />
                     <h3 className="text-blue-900 font-semibold text-base">Cleaning</h3>
@@ -2691,7 +2749,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   {/* Appraisal */}
                   <div
                     onClick={handleAppraisalOpen}
-                    className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-xl p-5 cursor-pointer hover:border-blue-400 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-blue-50/60 border border-blue-100 rounded-xl p-5 cursor-pointer hover:border-blue-300 hover:bg-blue-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
                     <FileText className="h-7 w-7 text-blue-600 mb-3" />
                     <h3 className="text-blue-900 font-semibold text-base">Appraisal</h3>
@@ -2711,11 +2769,11 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                       setTradeInMetal('18K');
                       setShowTradeInDialog(true);
                     }}
-                    className="bg-gradient-to-br from-amber-500 to-yellow-600 rounded-xl p-5 cursor-pointer hover:from-amber-400 hover:to-yellow-500 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-green-50/60 border border-green-100 rounded-xl p-5 cursor-pointer hover:border-green-300 hover:bg-green-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
-                    <Scale className="h-7 w-7 text-white mb-3" />
-                    <h3 className="text-white font-semibold text-base">Trade-In</h3>
-                    <p className="text-amber-100 text-xs mt-0.5">Scrap Gold</p>
+                    <Scale className="h-7 w-7 text-green-600 mb-3" />
+                    <h3 className="text-green-900 font-semibold text-base">Trade-In</h3>
+                    <p className="text-green-500 text-xs mt-0.5">Scrap Gold</p>
                   </div>
 
                   {/* Calculator */}
@@ -2724,11 +2782,11 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                       calcClear();
                       setShowCalculatorDialog(true);
                     }}
-                    className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl p-5 cursor-pointer hover:from-slate-600 hover:to-slate-700 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-green-50/60 border border-green-100 rounded-xl p-5 cursor-pointer hover:border-green-300 hover:bg-green-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
-                    <Calculator className="h-7 w-7 text-orange-400 mb-3" />
-                    <h3 className="text-white font-semibold text-base">Calculator</h3>
-                    <p className="text-slate-400 text-xs mt-0.5">Quick Math</p>
+                    <Calculator className="h-7 w-7 text-green-600 mb-3" />
+                    <h3 className="text-green-900 font-semibold text-base">Calculator</h3>
+                    <p className="text-green-500 text-xs mt-0.5">Quick Math</p>
                   </div>
 
                   {/* Layaway */}
@@ -2760,21 +2818,21 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                       setLayawayCustomerEmail(selectedCustomer?.email || '');
                       setShowLayawayDialog(true);
                     }}
-                    className="bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-300 rounded-xl p-5 cursor-pointer hover:border-slate-400 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-green-50/60 border border-green-100 rounded-xl p-5 cursor-pointer hover:border-green-300 hover:bg-green-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
-                    <Calendar className="h-7 w-7 text-slate-600 mb-3" />
-                    <h3 className="text-slate-800 font-semibold text-base">Layaway</h3>
-                    <p className="text-slate-500 text-xs mt-0.5">Payment Plan</p>
+                    <Calendar className="h-7 w-7 text-green-600 mb-3" />
+                    <h3 className="text-green-900 font-semibold text-base">Layaway</h3>
+                    <p className="text-green-500 text-xs mt-0.5">Payment Plan</p>
                   </div>
 
                   {/* Discount */}
                   <div
                     onClick={() => setShowDiscountDialog(true)}
-                    className="bg-gradient-to-br from-violet-100 to-purple-100 border border-purple-200 rounded-xl p-5 cursor-pointer hover:border-purple-400 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-green-50/60 border border-green-100 rounded-xl p-5 cursor-pointer hover:border-green-300 hover:bg-green-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
-                    <PercentIcon className="h-7 w-7 text-purple-600 mb-3" />
-                    <h3 className="text-purple-900 font-semibold text-base">Discount</h3>
-                    <p className="text-purple-500 text-xs mt-0.5">Manager Override</p>
+                    <PercentIcon className="h-7 w-7 text-green-600 mb-3" />
+                    <h3 className="text-green-900 font-semibold text-base">Discount</h3>
+                    <p className="text-green-500 text-xs mt-0.5">Manager Override</p>
                   </div>
 
                   {/* Manual Entry - Visually Distinct (Orange/Red) */}
@@ -2784,11 +2842,11 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                       setManualEntryPrice('');
                       setShowManualEntryDialog(true);
                     }}
-                    className="bg-gradient-to-br from-orange-500 to-red-500 rounded-xl p-5 cursor-pointer hover:from-orange-400 hover:to-red-400 hover:shadow-lg hover:scale-[1.02] transition-all"
+                    className="bg-green-50/60 border border-green-100 rounded-xl p-5 cursor-pointer hover:border-green-300 hover:bg-green-50 hover:shadow-md hover:scale-[1.02] transition-all"
                   >
-                    <PenLine className="h-7 w-7 text-white mb-3" />
-                    <h3 className="text-white font-semibold text-base">Manual Entry</h3>
-                    <p className="text-orange-100 text-xs mt-0.5">Custom Price</p>
+                    <PenLine className="h-7 w-7 text-green-600 mb-3" />
+                    <h3 className="text-green-900 font-semibold text-base">Manual Entry</h3>
+                    <p className="text-green-500 text-xs mt-0.5">Custom Price</p>
                   </div>
                 </div>
               </div>
@@ -2858,7 +2916,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       </div>
 
       {/* Cart Panel — LEFT in beta layout, RIGHT in default layout */}
-      <div className={`flex flex-col bg-white/95 backdrop-blur-xl rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.12)] border border-white/50 transition-transform ${cartShake ? 'animate-shake' : ''} ${isBetaTenant ? 'w-[280px] order-1' : 'w-[420px]'}`}>
+      <div className={`flex flex-col bg-white/95 backdrop-blur-xl rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.12)] border border-white/50 transition-transform w-[420px] ${cartShake ? 'animate-shake' : ''}`}>
         {/* Premium Header */}
         <div className="px-6 pt-6 pb-4">
           <div className="flex items-center justify-between">
@@ -2996,339 +3054,101 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             </div>
           </div>
 
-          {/* Customer / monthly / checkout — hidden in beta layout (moved to right payment panel) */}
-          {!isBetaTenant && (
-            <>
-              {/* Customer Selection - iOS Style Dropdown */}
-              {selectedCustomer ? (
-                <div
-                  onClick={() => setIsCustomerDialogOpen(true)}
-                  className="mb-4 p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl cursor-pointer hover:shadow-md transition-all group"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md">
-                        <Users className="h-5 w-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-emerald-800 text-xs font-medium mb-0.5">Customer</p>
-                        <p className="text-slate-900 font-semibold text-sm">{selectedCustomer.name}</p>
-                      </div>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
-                  </div>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setIsCustomerDialogOpen(true)}
-                  className="w-full mb-4 p-3.5 bg-white border border-slate-200 rounded-2xl flex items-center justify-between hover:border-slate-300 hover:shadow-sm transition-all group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
-                      <Users className="h-4 w-4 text-slate-500" />
-                    </div>
-                    <span className="text-slate-500 text-sm font-medium">Select Customer (Optional)</span>
-                  </div>
-                  <ChevronDown className="h-5 w-5 text-slate-400 group-hover:text-slate-500 transition-colors" />
-                </button>
-              )}
-
-              {/* Monthly Account Button */}
-              <button
-                onClick={() => setShowMonthlyDialog(true)}
-                className="w-full h-10 mt-3 rounded-xl font-medium text-sm flex items-center justify-center gap-2 border-2 border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-300 transition-all"
-              >
-                <CalendarClock className="h-4 w-4" />
-                Monthly Account
-              </button>
-
-              {/* Premium Checkout Button */}
-              <button
-                onClick={handleCheckout}
-                disabled={cart.length === 0}
-                className={`
-                  relative w-full h-14 mt-3 rounded-2xl font-semibold text-base
-                  flex items-center justify-center gap-2
-                  transition-all duration-300 ease-out
-                  ${cart.length === 0
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/40 hover:shadow-xl hover:shadow-blue-500/50 hover:scale-[1.02] active:scale-[0.98]'
-                  }
-                `}
-                style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif' }}
-              >
-                {cart.length > 0 && (
-                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-400 via-blue-500 to-indigo-500 opacity-0 hover:opacity-20 blur-xl transition-opacity" />
-                )}
-                <ShoppingBag className="h-5 w-5" />
-                <span>Checkout Now</span>
-                {cart.length > 0 && (
-                  <Sparkles className="h-4 w-4 ml-1 animate-pulse" />
-                )}
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ═══ BETA 3-COLUMN: RIGHT PAYMENT PANEL (order-3) ═══ */}
-      {isBetaTenant && (
-        <div className="w-[270px] flex flex-col gap-3 order-3">
-
-          {/* Customer selector */}
+          {/* Customer Selection */}
           {selectedCustomer ? (
             <div
               onClick={() => setIsCustomerDialogOpen(true)}
-              className="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl cursor-pointer hover:shadow-md transition-all group"
+              className="mb-4 p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl cursor-pointer hover:shadow-md transition-all group"
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow">
-                    <Users className="h-4 w-4 text-white" />
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md">
+                    <Users className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <p className="text-emerald-800 text-[10px] font-medium">Customer</p>
-                    <p className="text-slate-900 font-semibold text-sm leading-tight">{selectedCustomer.name}</p>
+                    <p className="text-emerald-800 text-xs font-medium mb-0.5">Customer</p>
+                    <p className="text-slate-900 font-semibold text-sm">{selectedCustomer.name}</p>
                   </div>
                 </div>
-                <ChevronRight className="h-4 w-4 text-emerald-400" />
+                <ChevronRight className="h-5 w-5 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
               </div>
             </div>
           ) : (
             <button
               onClick={() => setIsCustomerDialogOpen(true)}
-              className="w-full p-3 bg-white border border-slate-200 rounded-2xl flex items-center gap-2.5 hover:border-slate-300 hover:shadow-sm transition-all"
+              className="w-full mb-4 p-3.5 bg-white border border-slate-200 rounded-2xl flex items-center justify-between hover:border-slate-300 hover:shadow-sm transition-all group"
             >
-              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
-                <Users className="h-4 w-4 text-slate-500" />
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
+                  <Users className="h-4 w-4 text-slate-500" />
+                </div>
+                <span className="text-slate-500 text-sm font-medium">Select Customer (Optional)</span>
               </div>
-              <span className="text-slate-500 text-sm">Add Customer</span>
+              <ChevronDown className="h-5 w-5 text-slate-400 group-hover:text-slate-500 transition-colors" />
             </button>
           )}
 
-          {/* Payment method selector */}
-          <div className="bg-white rounded-2xl p-3 shadow-sm border border-slate-100">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Payment</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {[
-                { method: 'CASH' as const, label: 'Cash', icon: Banknote },
-                { method: 'CARD' as const, label: 'Card', icon: CreditCard },
-                { method: 'BANK_TRANSFER' as const, label: 'Bank', icon: Building2 },
-                { method: 'DIGITAL_WALLET' as const, label: 'Digital', icon: Smartphone },
-              ].map(({ method, label, icon: Icon }) => (
-                <button
-                  key={method}
-                  onClick={() => setSelectedPaymentMethod(method)}
-                  className={`flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl border-2 text-xs font-semibold transition-all ${
-                    selectedPaymentMethod === method
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                  }`}
-                >
-                  <Icon className={`h-4 w-4 ${selectedPaymentMethod === method ? 'text-blue-600' : 'text-gray-500'}`} />
-                  {label}
-                </button>
-              ))}
-              {/* Split: full width */}
-              <button
-                onClick={() => { setSelectedPaymentMethod('SPLIT'); setSplitCashAmount(''); }}
-                className={`col-span-2 flex items-center justify-center gap-2 py-2 rounded-xl border-2 text-xs font-semibold transition-all ${
-                  selectedPaymentMethod === 'SPLIT'
-                    ? 'border-purple-500 bg-purple-50 text-purple-700'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                }`}
-              >
-                <Shuffle className="h-4 w-4" />
-                Split (Cash + Card)
-              </button>
-              {/* Monthly Account: full width */}
-              <button
-                onClick={() => setSelectedPaymentMethod('INSTALLMENT')}
-                className={`col-span-2 flex items-center justify-center gap-2 py-2 rounded-xl border-2 text-xs font-semibold transition-all ${
-                  selectedPaymentMethod === 'INSTALLMENT'
-                    ? 'border-orange-500 bg-orange-50 text-orange-700'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                }`}
-              >
-                <CalendarClock className="h-4 w-4" />
-                Monthly Account
-              </button>
-            </div>
-          </div>
+          {/* Monthly Account Button */}
+          <button
+            onClick={() => setShowMonthlyDialog(true)}
+            className="w-full h-10 rounded-xl font-medium text-sm flex items-center justify-center gap-2 border-2 border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-300 transition-all"
+          >
+            <CalendarClock className="h-4 w-4" />
+            Monthly Account
+          </button>
 
-          {/* Monthly Account deposit + info */}
-          {selectedPaymentMethod === 'INSTALLMENT' && (
-            <div className="space-y-2">
-              {!selectedCustomer ? (
-                <div className="rounded-xl p-3 border-2 bg-red-50 border-red-200 text-red-700 text-xs">
-                  ⚠ Select a customer to use Monthly Account
-                </div>
-              ) : (
-                <>
-                  <div className="rounded-xl p-2.5 bg-orange-50 border-2 border-orange-200 text-xs text-orange-800">
-                    <span className="font-semibold">Monthly charge:</span> {selectedCustomer.name}
-                  </div>
-                  <div className="bg-white rounded-xl p-3 shadow-sm border border-slate-100 space-y-2">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Deposit today (optional)</p>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium">£</span>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min={0}
-                        max={total}
-                        value={monthlyDepositAmount}
-                        onChange={(e) => setMonthlyDepositAmount(e.target.value)}
-                        placeholder="0.00"
-                        className="pl-7 text-base font-bold h-9"
-                      />
-                    </div>
-                    <div className="flex justify-between text-xs font-semibold rounded-lg bg-orange-50 border border-orange-200 p-2">
-                      <span className="text-orange-600">Balance on account</span>
-                      <span className="text-orange-800">£{Math.max(0, total - (parseFloat(monthlyDepositAmount) || 0)).toFixed(2)}</span>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Cash amount entry */}
-          {selectedPaymentMethod === 'CASH' && (
-            <div className="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 space-y-2">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Cash Received</p>
-              <div className="grid grid-cols-5 gap-1">
-                {[5, 10, 20, 50, 100].map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setCashAmount(d.toFixed(2))}
-                    className={`py-1.5 rounded-lg border text-xs font-bold transition-all ${
-                      cashAmount === d.toFixed(2)
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 text-gray-700 hover:border-blue-400'
-                    }`}
-                  >
-                    £{d}
-                  </button>
-                ))}
-              </div>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold text-sm">£</span>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min={total}
-                  value={cashAmount}
-                  onChange={(e) => setCashAmount(e.target.value)}
-                  placeholder={total.toFixed(2)}
-                  className="pl-7 font-bold text-base"
-                />
-              </div>
-              {parseFloat(cashAmount) >= total ? (
-                <div className={`rounded-xl p-2.5 text-center border-2 ${parseFloat(cashAmount) > total ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'}`}>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Change</p>
-                  <p className={`text-2xl font-bold ${parseFloat(cashAmount) > total ? 'text-green-700' : 'text-gray-400'}`}>
-                    £{(parseFloat(cashAmount) - total).toFixed(2)}
-                  </p>
-                </div>
-              ) : parseFloat(cashAmount) > 0 ? (
-                <div className="rounded-xl p-2.5 text-center border-2 bg-red-50 border-red-300">
-                  <p className="text-[10px] font-semibold text-red-400 uppercase tracking-wide">Short</p>
-                  <p className="text-2xl font-bold text-red-600">£{(total - parseFloat(cashAmount)).toFixed(2)}</p>
-                </div>
-              ) : null}
-            </div>
-          )}
-
-          {/* Split amount entry */}
-          {selectedPaymentMethod === 'SPLIT' && (
-            <div className="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 space-y-2">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Cash Portion</p>
-              <div className="grid grid-cols-4 gap-1">
-                {[5, 10, 20, 50].filter(d => d < total).map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setSplitCashAmount(d.toFixed(2))}
-                    className={`py-1.5 rounded-lg border text-xs font-bold transition-all ${
-                      splitCashAmount === d.toFixed(2)
-                        ? 'border-purple-500 bg-purple-50 text-purple-700'
-                        : 'border-gray-200 text-gray-700 hover:border-purple-400'
-                    }`}
-                  >
-                    £{d}
-                  </button>
-                ))}
-              </div>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold text-sm">£</span>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min={0.01}
-                  max={total - 0.01}
-                  value={splitCashAmount}
-                  onChange={(e) => setSplitCashAmount(e.target.value)}
-                  placeholder="0.00"
-                  className="pl-7 font-bold text-base"
-                />
-              </div>
-              {parseFloat(splitCashAmount) > 0 && parseFloat(splitCashAmount) < total && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-xl p-2 text-center border-2 bg-green-50 border-green-300">
-                    <p className="text-[10px] text-green-700 font-semibold uppercase">Cash</p>
-                    <p className="text-lg font-bold text-green-700">£{parseFloat(splitCashAmount).toFixed(2)}</p>
-                  </div>
-                  <div className="rounded-xl p-2 text-center border-2 bg-blue-50 border-blue-300">
-                    <p className="text-[10px] text-blue-700 font-semibold uppercase">Card</p>
-                    <p className="text-lg font-bold text-blue-700">£{(total - parseFloat(splitCashAmount)).toFixed(2)}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Actions: Monthly + Discount */}
-          <div className="flex gap-2">
+          {/* Hold / Suspend buttons */}
+          <div className="flex gap-2 mt-1">
             <button
-              onClick={() => setShowMonthlyDialog(true)}
-              className="flex-1 h-9 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border-2 border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 transition-all"
+              onClick={() => parkTransaction('hold')}
+              disabled={cart.length === 0}
+              className="flex-1 h-10 rounded-xl font-medium text-sm flex items-center justify-center gap-1.5 border-2 border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-300 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <CalendarClock className="h-3.5 w-3.5" />
-              Monthly
+              <PauseCircle className="h-4 w-4" />
+              Hold
             </button>
             <button
-              onClick={() => setShowDiscountDialog(true)}
-              className="flex-1 h-9 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border-2 border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-all"
+              onClick={() => parkTransaction('suspend')}
+              disabled={cart.length === 0}
+              className="flex-1 h-10 rounded-xl font-medium text-sm flex items-center justify-center gap-1.5 border-2 border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <PercentIcon className="h-3.5 w-3.5" />
-              Discount
+              <Clock className="h-4 w-4" />
+              Suspend
             </button>
+            {heldTransactions.length > 0 && (
+              <button
+                onClick={() => setShowHeldDialog(true)}
+                className="relative h-10 px-3 rounded-xl font-medium text-sm flex items-center justify-center gap-1.5 border-2 border-slate-200 text-slate-700 bg-slate-50 hover:bg-slate-100 transition-all"
+              >
+                <ListOrdered className="h-4 w-4" />
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
+                  {heldTransactions.length}
+                </span>
+              </button>
+            )}
           </div>
 
-          {/* Checkout button */}
+          {/* Checkout Button */}
           <button
             onClick={handleCheckout}
-            disabled={cart.length === 0 || processingPayment}
-            className={`w-full h-14 rounded-2xl font-bold text-base flex items-center justify-center gap-2 transition-all ${
-              cart.length === 0 || processingPayment
+            disabled={cart.length === 0}
+            className={`
+              relative w-full h-14 mt-2 rounded-2xl font-semibold text-base
+              flex items-center justify-center gap-2
+              transition-all duration-300 ease-out
+              ${cart.length === 0
                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                : 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/40 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]'
-            }`}
+                : 'bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/40 hover:shadow-xl hover:shadow-blue-500/50 hover:scale-[1.02] active:scale-[0.98]'
+              }
+            `}
           >
-            {processingPayment ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <ShoppingBag className="h-5 w-5" />
-                Pay £{total.toFixed(2)}
-              </>
-            )}
+            <ShoppingBag className="h-5 w-5" />
+            <span>Checkout Now</span>
+            {cart.length > 0 && <Sparkles className="h-4 w-4 ml-1 animate-pulse" />}
           </button>
         </div>
-      )}
+      </div>
+
 
       {/* New Repair Job Dialog */}
       <Dialog open={showNewRepairDialog} onOpenChange={setShowNewRepairDialog}>
@@ -3726,7 +3546,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
       {/* Payment Dialog — for beta layout shows post-sale only; for standard layout shows full payment form */}
       <Dialog open={showPaymentDialog || !!completedSale} onOpenChange={(open) => { if (!open) handleNewSale(); }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl">
 
           {/* ── POST-SALE SUCCESS SCREEN ── */}
           {completedSale ? (
@@ -3778,25 +3598,49 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             <DialogDescription>Select payment method and complete transaction</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-4">
-            {/* Order Summary */}
-            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-              <div className="flex justify-between text-sm text-gray-600">
-                <span>Subtotal</span>
-                <span className="font-medium text-gray-900">£{subtotal.toFixed(2)}</span>
+          <div className="grid grid-cols-[1fr_1.4fr] gap-6 py-4">
+            {/* LEFT: Order Summary + cart items */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Order Summary</p>
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                {cart.map(item => (
+                  <div key={item.id} className="flex justify-between text-sm py-1 border-b border-gray-100 last:border-0">
+                    <span className="text-gray-700 truncate mr-2">{item.name} {item.quantity > 1 && <span className="text-gray-400">×{item.quantity}</span>}</span>
+                    <span className="font-medium text-gray-900 shrink-0">£{(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
               </div>
-              {discount > 0 && (
-                <div className="flex justify-between text-sm text-green-600">
-                  <span>Discount ({discountPercentage}%)</span>
-                  <span className="font-medium">-£{discount.toFixed(2)}</span>
+              <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
+                <div className="flex justify-between text-sm text-gray-500">
+                  <span>Subtotal</span>
+                  <span>£{subtotal.toFixed(2)}</span>
+                </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Discount ({discountPercentage}%)</span>
+                    <span>-£{discount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-xl font-bold border-t border-gray-200 pt-2 mt-1">
+                  <span className="text-gray-900">Total</span>
+                  <span className="text-blue-600">£{total.toFixed(2)}</span>
+                </div>
+              </div>
+              {selectedCustomer && (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                  <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+                    <Users className="h-3.5 w-3.5 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-emerald-600 font-medium">Customer</p>
+                    <p className="text-sm font-semibold text-emerald-900 truncate">{selectedCustomer.name}</p>
+                  </div>
                 </div>
               )}
-              <div className="flex justify-between text-lg font-bold border-t border-gray-300 pt-2 mt-2">
-                <span className="text-gray-900">Total</span>
-                <span className="text-blue-600">£{total.toFixed(2)}</span>
-              </div>
             </div>
 
+            {/* RIGHT: Payment methods + amount inputs */}
+            <div className="space-y-4">
             {/* Payment Method Selection */}
             <div className="space-y-3">
               <label className="text-sm font-medium text-gray-700">Payment Method</label>
@@ -4075,11 +3919,12 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                     <span>Processing...</span>
                   </div>
                 ) : (
-                  'Complete Payment'
+                  `Complete Payment — £${total.toFixed(2)}`
                 )}
               </Button>
             </div>
-          </div>
+            </div> {/* close right column */}
+          </div> {/* close grid */}
           </>
           )}
         </DialogContent>
@@ -5321,6 +5166,46 @@ Deposit is non-refundable.
               Open Drawer
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== HELD / SUSPENDED TRANSACTIONS DIALOG ===== */}
+      <Dialog open={showHeldDialog} onOpenChange={setShowHeldDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ListOrdered className="h-5 w-5 text-amber-500" />
+              Parked Transactions
+            </DialogTitle>
+            <DialogDescription>Recall a held or suspended transaction</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {heldTransactions.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-6">No parked transactions</p>
+            ) : (
+              heldTransactions.map(h => (
+                <div key={h.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-200 hover:border-gray-300 bg-white">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${h.type === 'hold' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
+                        {h.type}
+                      </span>
+                      <span className="text-sm font-semibold text-gray-900 truncate">{h.label}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {h.items.length} item{h.items.length !== 1 ? 's' : ''} · {new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 ml-3">
+                    <Button size="sm" onClick={() => recallTransaction(h.id)} className="h-8 text-xs">Recall</Button>
+                    <button onClick={() => deleteHeld(h.id)} className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
