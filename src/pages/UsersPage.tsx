@@ -560,11 +560,13 @@ export const UsersPage: React.FC = () => {
       setDeletingUserId(null);
       fetchUsers();
     } catch (error: any) {
+      const message = error.response?.data?.message || error.message || 'Failed to delete user';
       toast({
-        title: 'Error',
-        description: error.response?.data?.message || 'Failed to delete user',
+        title: 'Cannot Delete User',
+        description: message,
         variant: 'destructive',
       });
+      setDeletingUserId(null);
     } finally {
       setLoading(false);
     }
