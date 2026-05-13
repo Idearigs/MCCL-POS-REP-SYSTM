@@ -815,3 +815,19 @@ export class SalesStatsDto {
   })
   salesByHour: Record<string, number>;
 }
+
+export class RecordInstallmentPaymentDto {
+  @ApiProperty({ description: 'Payment amount', example: 50 })
+  @IsNumber()
+  @Min(0.01)
+  amount: number;
+
+  @ApiProperty({ description: 'Payment method', enum: ['CASH', 'CARD', 'BANK_TRANSFER'] })
+  @IsString()
+  method: 'CASH' | 'CARD' | 'BANK_TRANSFER';
+
+  @ApiProperty({ description: 'Optional notes', required: false })
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}

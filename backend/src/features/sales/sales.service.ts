@@ -25,6 +25,7 @@ import {
   SaleStatus,
   PaymentMethod,
   PaymentStatus,
+  RecordInstallmentPaymentDto,
 } from './dto/sale.dto';
 import { PaginatedResponseDto } from '../../shared/dto/pagination.dto';
 import { generateId } from '../../shared/utils/id-generator';
@@ -604,6 +605,66 @@ export class SalesService {
       this.logger.error(`Failed to update sale ${id}:`, error.message);
       throw error;
     }
+  }
+
+  /**
+   * Record a partial payment against an INSTALLMENT sale
+   */
+  async recordInstallmentPayment(
+    id: string,
+    dto: RecordInstallmentPaymentDto,
+    tenantId: string,
+    userId: string,
+  ): Promise<SaleResponseDto> {
+    return this.prismaService.$transaction(async (prisma) => {
+      const sale = await prisma.sales.findFirst({
+        where: { id, tenantId },
+        include: { sale_items: { include: { products: true } }, payments: true, customers: true, users: true },
+      });
+      if (!sale) throw new NotFoundException(`Sale ${id} not found`);
+      if (sale.paymentMethod !== 'INSTALLMENT')
+        throw new BadRequestException('Sale is not an installment sale');
+      if (Number(sale.balanceDue) <= 0)
+        throw new BadRequestException('Sale is already fully paid');
+
+      const payAmount = Math.min(dto.amount, Number(sale.balanceDue));
+      const newPaid = Number(sale.paidAmount) + payAmount;
+      const newBalance = Number(sale.totalAmount) - newPaid;
+
+      await prisma.payments.create({
+        data: {
+          id: generateId(),
+          saleId: sale.id,
+          amount: payAmount,
+          method: dto.method as any,
+          status: 'COMPLETED',
+          processorData: dto.notes ? { notes: dto.notes } : undefined,
+        },
+      });
+
+      const updated = await prisma.sales.update({
+        where: { id },
+        data: {
+          paidAmount: newPaid,
+          balanceDue: Math.max(0, newBalance),
+          paymentStatus: newBalance <= 0 ? 'COMPLETED' : 'PENDING',
+          notes: dto.notes
+            ? `${sale.notes ? sale.notes + '\n' : ''}Payment of £${payAmount.toFixed(2)} recorded.`
+            : sale.notes,
+          updatedAt: new Date(),
+        },
+        include: { sale_items: { include: { products: true } }, payments: true, customers: true, users: true },
+      });
+
+      await Promise.all([
+        this.cacheService.delTenantData(tenantId, `sale:${id}`),
+        this.cacheService.delTenantData(tenantId, 'sales:list'),
+        this.cacheService.delTenantData(tenantId, 'sales:stats'),
+      ]);
+
+      this.logger.log(`Installment payment £${payAmount} recorded for sale ${id}`);
+      return this.mapToResponseDto(updated);
+    });
   }
 
   /**

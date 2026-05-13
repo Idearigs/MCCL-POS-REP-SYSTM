@@ -195,12 +195,24 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [changeGiven, setChangeGiven] = useState<number>(0);
   const [processingPayment, setProcessingPayment] = useState(false);
 
-  // Monthly Account states
+  // Monthly Account states (create-sale flow)
   const [showMonthlyDialog, setShowMonthlyDialog] = useState(false);
   const [monthlySearch, setMonthlySearch] = useState('');
   const [monthlySearching, setMonthlySearching] = useState(false);
   const [monthlyResults, setMonthlyResults] = useState<any[]>([]);
   const [monthlyDepositAmount, setMonthlyDepositAmount] = useState<string>('0');
+
+  // Monthly Accounts panel (recall & pay existing installment sales)
+  const [showAccountsPanel, setShowAccountsPanel] = useState(false);
+  const [accountSales, setAccountSales] = useState<Sale[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountSearch, setAccountSearch] = useState('');
+  const [accountStep, setAccountStep] = useState<'customers' | 'orders' | 'pay'>('customers');
+  const [accountSelectedCustomerId, setAccountSelectedCustomerId] = useState<string | null>(null);
+  const [accountSelectedSale, setAccountSelectedSale] = useState<Sale | null>(null);
+  const [accountPayAmount, setAccountPayAmount] = useState('');
+  const [accountPayMethod, setAccountPayMethod] = useState<'CASH' | 'CARD' | 'BANK_TRANSFER'>('CASH');
+  const [processingAccountPayment, setProcessingAccountPayment] = useState(false);
 
   // Quick Product states
   const [showQuickProductDialog, setShowQuickProductDialog] = useState(false);
@@ -1008,6 +1020,46 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       setShowCategoryView(false);
       setActiveCategoryName('');
     });
+  };
+
+  // Monthly Accounts panel: load all outstanding INSTALLMENT sales
+  const openAccountsPanel = async () => {
+    setShowAccountsPanel(true);
+    setAccountStep('customers');
+    setAccountSearch('');
+    setAccountSelectedCustomerId(null);
+    setAccountSelectedSale(null);
+    setAccountsLoading(true);
+    try {
+      const res = await salesService.getInstallmentSales(1, 200);
+      setAccountSales(res.data || []);
+    } catch {
+      setAccountSales([]);
+    } finally {
+      setAccountsLoading(false);
+    }
+  };
+
+  const handleAccountPayment = async () => {
+    if (!accountSelectedSale || !accountPayAmount) return;
+    const amount = parseFloat(accountPayAmount);
+    if (isNaN(amount) || amount <= 0) return;
+    setProcessingAccountPayment(true);
+    try {
+      await salesService.recordInstallmentPayment(accountSelectedSale.id, amount, accountPayMethod);
+      toast({ title: 'Payment recorded', description: `£${amount.toFixed(2)} recorded against ${accountSelectedSale.saleNumber || accountSelectedSale.id}` });
+      // Refresh the list
+      const res = await salesService.getInstallmentSales(1, 200);
+      setAccountSales(res.data || []);
+      setAccountStep('customers');
+      setAccountSelectedCustomerId(null);
+      setAccountSelectedSale(null);
+      setAccountPayAmount('');
+    } catch {
+      toast({ title: 'Payment failed', variant: 'destructive' });
+    } finally {
+      setProcessingAccountPayment(false);
+    }
   };
 
   // Handle appraisal view open (inline with smooth Apple-like transition)
@@ -2761,7 +2813,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
               {/* ===== ROW 4: MONEY & ADMIN ===== */}
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-1">Money & Admin</p>
-                <div className="grid grid-cols-5 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   {/* Trade-In */}
                   <div
                     onClick={() => {
@@ -2835,7 +2887,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                     <p className="text-green-500 text-xs mt-0.5">Manager Override</p>
                   </div>
 
-                  {/* Manual Entry - Visually Distinct (Orange/Red) */}
+                  {/* Manual Entry */}
                   <div
                     onClick={() => {
                       setManualEntryName('');
@@ -2847,6 +2899,16 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                     <PenLine className="h-7 w-7 text-green-600 mb-3" />
                     <h3 className="text-green-900 font-semibold text-base">Manual Entry</h3>
                     <p className="text-green-500 text-xs mt-0.5">Custom Price</p>
+                  </div>
+
+                  {/* Monthly Accounts — recall & pay outstanding installment sales */}
+                  <div
+                    onClick={openAccountsPanel}
+                    className="bg-orange-50/60 border border-orange-100 rounded-xl p-5 cursor-pointer hover:border-orange-300 hover:bg-orange-50 hover:shadow-md hover:scale-[1.02] transition-all col-span-1"
+                  >
+                    <CalendarClock className="h-7 w-7 text-orange-600 mb-3" />
+                    <h3 className="text-orange-900 font-semibold text-base">Monthly Accounts</h3>
+                    <p className="text-orange-500 text-xs mt-0.5">Outstanding Balances</p>
                   </div>
                 </div>
               </div>
@@ -3546,386 +3608,260 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
       {/* Payment Dialog — for beta layout shows post-sale only; for standard layout shows full payment form */}
       <Dialog open={showPaymentDialog || !!completedSale} onOpenChange={(open) => { if (!open) handleNewSale(); }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
 
           {/* ── POST-SALE SUCCESS SCREEN ── */}
           {completedSale ? (
-            <div className="flex flex-col items-center gap-6 py-6 px-2 text-center">
-              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle2 className="w-9 h-9 text-green-600" />
+            <div className="flex flex-col items-center gap-5 py-10 px-8 text-center">
+              <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center ring-8 ring-emerald-50">
+                <CheckCircle2 className="w-10 h-10 text-emerald-600" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-900">Payment Complete</h2>
-                <p className="text-sm text-gray-500 mt-1">Receipt #{completedSale.receiptNumber}</p>
+                <h2 className="text-2xl font-bold text-gray-900">Sale Complete</h2>
+                <p className="text-sm text-gray-400 mt-1">Receipt #{completedSale.receiptNumber}</p>
               </div>
-
-              {/* Change due */}
               {completedSale.paymentMethod === 'CASH' && changeGiven > 0 && (
-                <div className="bg-green-50 border-2 border-green-300 rounded-xl px-6 py-5 w-full">
-                  <p className="text-sm text-green-700 font-medium uppercase tracking-wide">Change to Give Customer</p>
-                  <p className="text-5xl font-bold text-green-700 mt-2">£{changeGiven.toFixed(2)}</p>
+                <div className="w-full bg-emerald-50 border border-emerald-200 rounded-2xl px-8 py-6">
+                  <p className="text-xs font-semibold text-emerald-600 uppercase tracking-widest mb-1">Change Due</p>
+                  <p className="text-6xl font-black text-emerald-700 tracking-tight">£{changeGiven.toFixed(2)}</p>
                 </div>
               )}
-
-              <div className="w-full">
-                <p className="text-2xl font-bold text-gray-900">£{completedSale.totalAmount.toFixed(2)}</p>
-                {selectedPaymentMethod === 'SPLIT' ? (
-                  <p className="text-sm text-gray-500 mt-1">
-                    Cash £{parseFloat(splitCashAmount || '0').toFixed(2)} + Card £{(completedSale.totalAmount - parseFloat(splitCashAmount || '0')).toFixed(2)}
-                  </p>
-                ) : (
-                  <p className="text-sm text-gray-500 mt-1">{completedSale.paymentMethod.replace('_', ' ')}</p>
-                )}
+              <div className="w-full bg-gray-50 rounded-xl px-5 py-4">
+                <p className="text-3xl font-bold text-gray-900">£{completedSale.totalAmount.toFixed(2)}</p>
+                <p className="text-sm text-gray-400 mt-1">
+                  {selectedPaymentMethod === 'SPLIT'
+                    ? `Cash £${parseFloat(splitCashAmount || '0').toFixed(2)} + Card £${(completedSale.totalAmount - parseFloat(splitCashAmount || '0')).toFixed(2)}`
+                    : completedSale.paymentMethod.replace(/_/g, ' ')}
+                </p>
               </div>
-
-              <div className="flex flex-col gap-3 w-full">
-                <Button
-                  onClick={() => handlePrintReceipt(completedSale)}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2"
-                >
-                  <Printer className="w-4 h-4" />
-                  Print Receipt
+              <div className="flex gap-3 w-full">
+                <Button onClick={() => handlePrintReceipt(completedSale)} className="flex-1 gap-2 bg-blue-600 hover:bg-blue-700">
+                  <Printer className="w-4 h-4" />Print Receipt
                 </Button>
-                <Button variant="outline" onClick={handleNewSale} className="w-full">
-                  New Sale
-                </Button>
+                <Button variant="outline" onClick={handleNewSale} className="flex-1">New Sale</Button>
               </div>
             </div>
           ) : (
-          <>
-          <DialogHeader>
-            <DialogTitle>Complete Payment</DialogTitle>
-            <DialogDescription>Select payment method and complete transaction</DialogDescription>
-          </DialogHeader>
-
-          <div className="grid grid-cols-[1fr_1.4fr] gap-6 py-4">
-            {/* LEFT: Order Summary + cart items */}
-            <div className="space-y-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Order Summary</p>
-              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-                {cart.map(item => (
-                  <div key={item.id} className="flex justify-between text-sm py-1 border-b border-gray-100 last:border-0">
-                    <span className="text-gray-700 truncate mr-2">{item.name} {item.quantity > 1 && <span className="text-gray-400">×{item.quantity}</span>}</span>
-                    <span className="font-medium text-gray-900 shrink-0">£{(item.price * item.quantity).toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
-                <div className="flex justify-between text-sm text-gray-500">
-                  <span>Subtotal</span>
-                  <span>£{subtotal.toFixed(2)}</span>
-                </div>
-                {discount > 0 && (
-                  <div className="flex justify-between text-sm text-green-600">
-                    <span>Discount ({discountPercentage}%)</span>
-                    <span>-£{discount.toFixed(2)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-xl font-bold border-t border-gray-200 pt-2 mt-1">
-                  <span className="text-gray-900">Total</span>
-                  <span className="text-blue-600">£{total.toFixed(2)}</span>
-                </div>
-              </div>
-              {selectedCustomer && (
-                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                  <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
-                    <Users className="h-3.5 w-3.5 text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-emerald-600 font-medium">Customer</p>
-                    <p className="text-sm font-semibold text-emerald-900 truncate">{selectedCustomer.name}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* RIGHT: Payment methods + amount inputs */}
-            <div className="space-y-4">
-            {/* Payment Method Selection */}
-            <div className="space-y-3">
-              <label className="text-sm font-medium text-gray-700">Payment Method</label>
-              <div className="grid grid-cols-2 gap-3">
-                {/* Cash */}
-                <button
-                  onClick={() => setSelectedPaymentMethod('CASH')}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                    selectedPaymentMethod === 'CASH'
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <Banknote className={`h-8 w-8 ${selectedPaymentMethod === 'CASH' ? 'text-blue-600' : 'text-gray-600'}`} />
-                  <span className={`text-sm font-medium ${selectedPaymentMethod === 'CASH' ? 'text-blue-600' : 'text-gray-700'}`}>
-                    Cash
-                  </span>
-                </button>
-
-                {/* Card */}
-                <button
-                  onClick={() => setSelectedPaymentMethod('CARD')}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                    selectedPaymentMethod === 'CARD'
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <CreditCard className={`h-8 w-8 ${selectedPaymentMethod === 'CARD' ? 'text-blue-600' : 'text-gray-600'}`} />
-                  <span className={`text-sm font-medium ${selectedPaymentMethod === 'CARD' ? 'text-blue-600' : 'text-gray-700'}`}>
-                    Card
-                  </span>
-                </button>
-
-                {/* Bank Transfer */}
-                <button
-                  onClick={() => setSelectedPaymentMethod('BANK_TRANSFER')}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                    selectedPaymentMethod === 'BANK_TRANSFER'
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <Building2 className={`h-8 w-8 ${selectedPaymentMethod === 'BANK_TRANSFER' ? 'text-blue-600' : 'text-gray-600'}`} />
-                  <span className={`text-sm font-medium ${selectedPaymentMethod === 'BANK_TRANSFER' ? 'text-blue-600' : 'text-gray-700'}`}>
-                    Bank Transfer
-                  </span>
-                </button>
-
-                {/* Digital Wallet */}
-                <button
-                  onClick={() => setSelectedPaymentMethod('DIGITAL_WALLET')}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                    selectedPaymentMethod === 'DIGITAL_WALLET'
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <Smartphone className={`h-8 w-8 ${selectedPaymentMethod === 'DIGITAL_WALLET' ? 'text-blue-600' : 'text-gray-600'}`} />
-                  <span className={`text-sm font-medium ${selectedPaymentMethod === 'DIGITAL_WALLET' ? 'text-blue-600' : 'text-gray-700'}`}>
-                    Digital Wallet
-                  </span>
-                </button>
-
-                {/* Split: Cash + Card */}
-                <button
-                  onClick={() => { setSelectedPaymentMethod('SPLIT'); setSplitCashAmount(''); }}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all col-span-2 ${
-                    selectedPaymentMethod === 'SPLIT'
-                      ? 'border-purple-600 bg-purple-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <Shuffle className={`h-8 w-8 ${selectedPaymentMethod === 'SPLIT' ? 'text-purple-600' : 'text-gray-600'}`} />
-                  <span className={`text-sm font-medium ${selectedPaymentMethod === 'SPLIT' ? 'text-purple-600' : 'text-gray-700'}`}>
-                    Split (Cash + Card)
-                  </span>
-                </button>
-
-                {/* Monthly Account / Installment */}
-                <button
-                  onClick={() => setSelectedPaymentMethod('INSTALLMENT')}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all col-span-2 ${
-                    selectedPaymentMethod === 'INSTALLMENT'
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <CalendarClock className={`h-8 w-8 ${selectedPaymentMethod === 'INSTALLMENT' ? 'text-orange-500' : 'text-gray-600'}`} />
-                  <span className={`text-sm font-medium ${selectedPaymentMethod === 'INSTALLMENT' ? 'text-orange-500' : 'text-gray-700'}`}>
-                    Monthly Account
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            {/* Monthly Account deposit + info */}
-            {selectedPaymentMethod === 'INSTALLMENT' && (
-              <div className="space-y-3">
-                {!selectedCustomer && (
-                  <div className="rounded-lg p-3 bg-red-50 border-2 border-red-200">
-                    <p className="text-sm text-red-700 font-medium">⚠ Select a customer first to use Monthly Account</p>
-                  </div>
-                )}
-                {selectedCustomer && (
-                  <>
-                    <div className="rounded-lg p-4 bg-orange-50 border-2 border-orange-200 text-sm text-orange-800">
-                      <p className="font-semibold">Charging to monthly account</p>
-                      <p className="text-orange-600 mt-1">{selectedCustomer.name} — £{total.toFixed(2)} total</p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">Initial deposit today (optional)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 font-medium">£</span>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min={0}
-                          max={total}
-                          value={monthlyDepositAmount}
-                          onChange={(e) => setMonthlyDepositAmount(e.target.value)}
-                          placeholder="0.00"
-                          className="pl-8 text-lg font-semibold"
-                        />
+            <div className="flex flex-col h-full">
+              {/* ── HEADER BAND ── */}
+              <div className="px-6 py-5 bg-gradient-to-r from-slate-800 to-slate-900 flex items-center justify-between">
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-widest font-semibold">Checkout</p>
+                  <p className="text-white text-3xl font-black mt-0.5">£{total.toFixed(2)}</p>
+                  {selectedCustomer && (
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
+                        <Users className="h-2.5 w-2.5 text-white" />
                       </div>
-                      {parseFloat(monthlyDepositAmount) > 0 && parseFloat(monthlyDepositAmount) < total && (
-                        <div className="flex justify-between text-sm font-medium rounded-lg bg-green-50 border border-green-200 p-3">
-                          <span className="text-green-700">Paid today (cash)</span>
-                          <span className="text-green-800">£{parseFloat(monthlyDepositAmount).toFixed(2)}</span>
+                      <span className="text-emerald-400 text-xs font-medium">{selectedCustomer.name}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="text-right">
+                  {discount > 0 && (
+                    <p className="text-emerald-400 text-sm font-medium">-£{discount.toFixed(2)} saved</p>
+                  )}
+                  <p className="text-slate-400 text-xs mt-1">{cart.length} item{cart.length !== 1 ? 's' : ''}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-[1fr_1.5fr]">
+
+                {/* ── LEFT: Order summary ── */}
+                <div className="p-5 border-r border-gray-100 space-y-3 bg-gray-50/50">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Order</p>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {cart.map(item => (
+                      <div key={item.id} className="flex justify-between text-sm gap-2">
+                        <span className="text-gray-600 truncate leading-snug">
+                          {item.name}
+                          {item.quantity > 1 && <span className="text-gray-400 ml-1">×{item.quantity}</span>}
+                        </span>
+                        <span className="font-semibold text-gray-900 shrink-0">£{(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="border-t border-gray-200 pt-2 space-y-1">
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>Subtotal</span><span>£{subtotal.toFixed(2)}</span>
+                    </div>
+                    {discount > 0 && (
+                      <div className="flex justify-between text-xs text-emerald-600">
+                        <span>Discount {discountPercentage}%</span><span>-£{discount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-base font-bold pt-1">
+                      <span>Total</span><span className="text-slate-900">£{total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── RIGHT: Payment ── */}
+                <div className="p-5 space-y-4">
+                  {/* Method pills */}
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Payment Method</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        { m: 'CASH', label: 'Cash', Icon: Banknote, accent: 'blue' },
+                        { m: 'CARD', label: 'Card', Icon: CreditCard, accent: 'blue' },
+                        { m: 'BANK_TRANSFER', label: 'Bank Transfer', Icon: Building2, accent: 'blue' },
+                        { m: 'DIGITAL_WALLET', label: 'Digital Wallet', Icon: Smartphone, accent: 'blue' },
+                      ] as const).map(({ m, label, Icon }) => (
+                        <button
+                          key={m}
+                          onClick={() => setSelectedPaymentMethod(m as any)}
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
+                            selectedPaymentMethod === m
+                              ? 'border-blue-600 bg-blue-50 text-blue-700'
+                              : 'border-gray-200 text-gray-600 hover:border-blue-300 hover:bg-blue-50/50'
+                          }`}
+                        >
+                          <Icon className={`h-4 w-4 shrink-0 ${selectedPaymentMethod === m ? 'text-blue-600' : 'text-gray-500'}`} />
+                          {label}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => { setSelectedPaymentMethod('SPLIT'); setSplitCashAmount(''); }}
+                        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
+                          selectedPaymentMethod === 'SPLIT'
+                            ? 'border-purple-600 bg-purple-50 text-purple-700'
+                            : 'border-gray-200 text-gray-600 hover:border-purple-300'
+                        }`}
+                      >
+                        <Shuffle className={`h-4 w-4 shrink-0 ${selectedPaymentMethod === 'SPLIT' ? 'text-purple-600' : 'text-gray-500'}`} />
+                        Split Payment
+                      </button>
+                      <button
+                        onClick={() => setSelectedPaymentMethod('INSTALLMENT')}
+                        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
+                          selectedPaymentMethod === 'INSTALLMENT'
+                            ? 'border-orange-500 bg-orange-50 text-orange-700'
+                            : 'border-gray-200 text-gray-600 hover:border-orange-300'
+                        }`}
+                      >
+                        <CalendarClock className={`h-4 w-4 shrink-0 ${selectedPaymentMethod === 'INSTALLMENT' ? 'text-orange-500' : 'text-gray-500'}`} />
+                        Monthly Account
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ── CASH input ── */}
+                  {selectedPaymentMethod === 'CASH' && (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cash Received</p>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {[5, 10, 20, 50, 100].map((d) => (
+                          <button key={d} onClick={() => setCashAmount(d.toFixed(2))}
+                            className={`px-3 py-1.5 rounded-lg border text-sm font-semibold transition-all ${cashAmount === d.toFixed(2) ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-blue-400'}`}>
+                            £{d}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">£</span>
+                        <Input type="number" step="0.01" min={total} value={cashAmount} onChange={e => setCashAmount(e.target.value)}
+                          placeholder={total.toFixed(2)} className="pl-7 text-xl font-bold h-12" autoFocus />
+                      </div>
+                      {parseFloat(cashAmount) >= total ? (
+                        <div className={`rounded-xl p-3 flex justify-between items-center border-2 ${parseFloat(cashAmount) > total ? 'bg-emerald-50 border-emerald-300' : 'bg-gray-50 border-gray-200'}`}>
+                          <span className={`text-sm font-semibold ${parseFloat(cashAmount) > total ? 'text-emerald-700' : 'text-gray-400'}`}>
+                            {parseFloat(cashAmount) > total ? 'Change Due' : 'Exact'}
+                          </span>
+                          <span className={`text-2xl font-black ${parseFloat(cashAmount) > total ? 'text-emerald-700' : 'text-gray-400'}`}>
+                            £{(parseFloat(cashAmount) - total).toFixed(2)}
+                          </span>
+                        </div>
+                      ) : parseFloat(cashAmount) > 0 ? (
+                        <div className="rounded-xl p-3 flex justify-between items-center border-2 bg-red-50 border-red-300">
+                          <span className="text-sm font-semibold text-red-600">Short</span>
+                          <span className="text-2xl font-black text-red-600">£{(total - parseFloat(cashAmount)).toFixed(2)}</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+
+                  {/* ── SPLIT input ── */}
+                  {selectedPaymentMethod === 'SPLIT' && (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cash Portion</p>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {[5, 10, 20, 50].filter(d => d < total).map((d) => (
+                          <button key={d} onClick={() => setSplitCashAmount(d.toFixed(2))}
+                            className={`px-3 py-1.5 rounded-lg border text-sm font-semibold transition-all ${splitCashAmount === d.toFixed(2) ? 'border-purple-600 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-600 hover:border-purple-400'}`}>
+                            £{d}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">£</span>
+                        <Input type="number" step="0.01" min={0.01} max={total - 0.01} value={splitCashAmount}
+                          onChange={e => setSplitCashAmount(e.target.value)} placeholder="0.00"
+                          className="pl-7 text-xl font-bold h-12" autoFocus />
+                      </div>
+                      {parseFloat(splitCashAmount) > 0 && parseFloat(splitCashAmount) < total && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-xl p-2.5 text-center border-2 bg-emerald-50 border-emerald-300">
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase">Cash</p>
+                            <p className="text-xl font-bold text-emerald-700">£{parseFloat(splitCashAmount).toFixed(2)}</p>
+                          </div>
+                          <div className="rounded-xl p-2.5 text-center border-2 bg-blue-50 border-blue-300">
+                            <p className="text-[10px] font-bold text-blue-600 uppercase">Card</p>
+                            <p className="text-xl font-bold text-blue-700">£{(total - parseFloat(splitCashAmount)).toFixed(2)}</p>
+                          </div>
                         </div>
                       )}
-                      <div className="flex justify-between text-sm font-medium rounded-lg bg-orange-50 border border-orange-200 p-3">
-                        <span className="text-orange-700">Monthly account balance</span>
-                        <span className="text-orange-800 font-bold">£{Math.max(0, total - (parseFloat(monthlyDepositAmount) || 0)).toFixed(2)}</span>
-                      </div>
                     </div>
-                  </>
-                )}
-              </div>
-            )}
+                  )}
 
-            {/* Cash Amount Input (only for cash payments) */}
-            {selectedPaymentMethod === 'CASH' && (
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Cash Amount Received</label>
-
-                {/* Quick denomination buttons */}
-                <div className="grid grid-cols-5 gap-2">
-                  {[5, 10, 20, 50, 100].map((denom) => (
-                    <button
-                      key={denom}
-                      type="button"
-                      onClick={() => setCashAmount(denom.toFixed(2))}
-                      className={`py-2 rounded-lg border-2 text-sm font-semibold transition-all ${
-                        cashAmount === denom.toFixed(2)
-                          ? 'border-blue-600 bg-blue-50 text-blue-700'
-                          : 'border-gray-200 hover:border-blue-400 text-gray-700'
-                      }`}
-                    >
-                      £{denom}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 font-medium">£</span>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min={total}
-                    value={cashAmount}
-                    onChange={(e) => setCashAmount(e.target.value)}
-                    placeholder={total.toFixed(2)}
-                    className="pl-8 text-xl font-bold"
-                    autoFocus
-                  />
-                </div>
-
-                {/* Change due — large prominent display */}
-                {parseFloat(cashAmount) >= total ? (
-                  <div className={`rounded-xl p-4 text-center border-2 ${
-                    parseFloat(cashAmount) > total
-                      ? 'bg-green-50 border-green-300'
-                      : 'bg-gray-50 border-gray-200'
-                  }`}>
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                      {parseFloat(cashAmount) > total ? 'Change to Give' : 'No Change'}
-                    </p>
-                    <p className={`text-4xl font-bold ${parseFloat(cashAmount) > total ? 'text-green-700' : 'text-gray-400'}`}>
-                      £{(parseFloat(cashAmount) - total).toFixed(2)}
-                    </p>
-                  </div>
-                ) : parseFloat(cashAmount) > 0 ? (
-                  <div className="rounded-xl p-4 text-center border-2 bg-red-50 border-red-300">
-                    <p className="text-xs font-medium text-red-500 uppercase tracking-wide mb-1">Amount Short</p>
-                    <p className="text-4xl font-bold text-red-600">
-                      £{(total - parseFloat(cashAmount)).toFixed(2)}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            )}
-
-            {/* Split Payment Input (cash + card on one bill) */}
-            {selectedPaymentMethod === 'SPLIT' && (
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Cash Portion</label>
-
-                <div className="grid grid-cols-5 gap-2">
-                  {[5, 10, 20, 50, 100].filter(d => d < total).map((denom) => (
-                    <button
-                      key={denom}
-                      type="button"
-                      onClick={() => setSplitCashAmount(denom.toFixed(2))}
-                      className={`py-2 rounded-lg border-2 text-sm font-semibold transition-all ${
-                        splitCashAmount === denom.toFixed(2)
-                          ? 'border-purple-600 bg-purple-50 text-purple-700'
-                          : 'border-gray-200 hover:border-purple-400 text-gray-700'
-                      }`}
-                    >
-                      £{denom}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 font-medium">£</span>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min={0.01}
-                    max={total - 0.01}
-                    value={splitCashAmount}
-                    onChange={(e) => setSplitCashAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="pl-8 text-xl font-bold"
-                    autoFocus
-                  />
-                </div>
-
-                {parseFloat(splitCashAmount) > 0 && parseFloat(splitCashAmount) < total && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-xl p-3 text-center border-2 bg-green-50 border-green-300">
-                      <p className="text-xs font-medium text-green-700 uppercase tracking-wide mb-1">Cash</p>
-                      <p className="text-2xl font-bold text-green-700">£{parseFloat(splitCashAmount).toFixed(2)}</p>
+                  {/* ── INSTALLMENT / monthly ── */}
+                  {selectedPaymentMethod === 'INSTALLMENT' && (
+                    <div className="space-y-2">
+                      {!selectedCustomer ? (
+                        <div className="rounded-xl p-3 bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+                          ⚠ Select a customer to use Monthly Account
+                        </div>
+                      ) : (
+                        <>
+                          <div className="rounded-xl p-3 bg-orange-50 border border-orange-200 text-sm text-orange-800 flex justify-between items-center">
+                            <span className="font-semibold">Monthly account</span>
+                            <span className="font-bold">{selectedCustomer.name}</span>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Deposit today (optional)</p>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">£</span>
+                              <Input type="number" step="0.01" min={0} max={total} value={monthlyDepositAmount}
+                                onChange={e => setMonthlyDepositAmount(e.target.value)} placeholder="0.00"
+                                className="pl-7 text-xl font-bold h-12" />
+                            </div>
+                          </div>
+                          <div className="rounded-xl p-3 bg-orange-50 border border-orange-200 flex justify-between items-center">
+                            <span className="text-sm text-orange-700 font-medium">Account balance</span>
+                            <span className="font-bold text-orange-800">£{Math.max(0, total - (parseFloat(monthlyDepositAmount) || 0)).toFixed(2)}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <div className="rounded-xl p-3 text-center border-2 bg-blue-50 border-blue-300">
-                      <p className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-1">Card</p>
-                      <p className="text-2xl font-bold text-blue-700">
-                        £{(total - parseFloat(splitCashAmount)).toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            )}
 
-            {/* Action Buttons */}
-            <div className="flex gap-3 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setShowPaymentDialog(false)}
-                className="flex-1"
-                disabled={processingPayment}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleProcessPayment}
-                disabled={processingPayment}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {processingPayment ? (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Processing...</span>
-                  </div>
-                ) : (
-                  `Complete Payment — £${total.toFixed(2)}`
-                )}
-              </Button>
+              {/* ── FOOTER ── */}
+              <div className="px-5 py-4 border-t bg-white flex gap-3">
+                <Button variant="outline" onClick={() => setShowPaymentDialog(false)} disabled={processingPayment} className="px-6">
+                  Cancel
+                </Button>
+                <Button onClick={handleProcessPayment} disabled={processingPayment}
+                  className="flex-1 h-11 bg-slate-900 hover:bg-slate-800 text-white font-bold text-base rounded-xl">
+                  {processingPayment ? (
+                    <><Loader2 className="h-4 w-4 animate-spin mr-2" />Processing...</>
+                  ) : (
+                    `Confirm Payment · £${total.toFixed(2)}`
+                  )}
+                </Button>
+              </div>
             </div>
-            </div> {/* close right column */}
-          </div> {/* close grid */}
-          </>
           )}
         </DialogContent>
       </Dialog>
@@ -5206,6 +5142,280 @@ Deposit is non-refundable.
               ))
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== MONTHLY ACCOUNTS PANEL (outstanding installment sales) ===== */}
+      <Dialog open={showAccountsPanel} onOpenChange={(o) => { if (!o) { setShowAccountsPanel(false); setAccountStep('customers'); setAccountSelectedCustomerId(null); setAccountSelectedSale(null); } }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+          {/* Header */}
+          <div className="px-6 py-5 border-b bg-gradient-to-r from-orange-500 to-amber-500 rounded-t-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {accountStep !== 'customers' && (
+                  <button onClick={() => {
+                    if (accountStep === 'pay') setAccountStep('orders');
+                    else { setAccountStep('customers'); setAccountSelectedCustomerId(null); }
+                  }} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors">
+                    <ChevronRight className="h-4 w-4 text-white rotate-180" />
+                  </button>
+                )}
+                <div>
+                  <h2 className="text-white font-bold text-lg">Monthly Accounts</h2>
+                  <p className="text-orange-100 text-xs mt-0.5">
+                    {accountStep === 'customers' ? 'Select a customer' : accountStep === 'orders' ? 'Select an order' : 'Record payment'}
+                  </p>
+                </div>
+              </div>
+              {/* Step indicator */}
+              <div className="flex gap-1.5">
+                {(['customers', 'orders', 'pay'] as const).map((s, i) => (
+                  <div key={s} className={`h-1.5 rounded-full transition-all ${accountStep === s ? 'w-6 bg-white' : i < (['customers','orders','pay'] as const).indexOf(accountStep) ? 'w-3 bg-white/60' : 'w-3 bg-white/30'}`} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {accountsLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500" />
+              </div>
+            ) : (
+              <>
+              {/* STEP 1: Customer list */}
+              {accountStep === 'customers' && (() => {
+                // Group sales by customer
+                const customerMap: Record<string, { id: string; name: string; sales: Sale[] }> = {};
+                for (const s of accountSales) {
+                  const cid = s.customerId || '__walkin__';
+                  const cname = s.customerName || 'Walk-in';
+                  if (!customerMap[cid]) customerMap[cid] = { id: cid, name: cname, sales: [] };
+                  customerMap[cid].sales.push(s);
+                }
+                const customers = Object.values(customerMap).filter(c =>
+                  !accountSearch || c.name.toLowerCase().includes(accountSearch.toLowerCase())
+                );
+                return (
+                  <div className="p-4 space-y-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                      <Input
+                        placeholder="Search customer..."
+                        className="pl-9"
+                        value={accountSearch}
+                        onChange={e => setAccountSearch(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    {customers.length === 0 ? (
+                      <div className="text-center py-12 text-gray-400">
+                        <CalendarClock className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                        <p className="font-medium">No outstanding monthly accounts</p>
+                        <p className="text-xs mt-1">All installment sales are fully paid</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {customers.map(c => {
+                          const totalBalance = c.sales.reduce((sum, s) => sum + (s.balanceDue || 0), 0);
+                          const orderCount = c.sales.length;
+                          return (
+                            <button
+                              key={c.id}
+                              onClick={() => { setAccountSelectedCustomerId(c.id); setAccountStep('orders'); setAccountSearch(''); }}
+                              className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-transparent bg-gray-50 hover:bg-orange-50 hover:border-orange-200 transition-all text-left group"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+                                  <span className="text-orange-700 font-bold text-sm">{c.name.charAt(0).toUpperCase()}</span>
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-gray-900 group-hover:text-orange-900">{c.name}</p>
+                                  <p className="text-xs text-gray-500">{orderCount} outstanding order{orderCount !== 1 ? 's' : ''}</p>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="font-bold text-orange-600 text-lg">£{totalBalance.toFixed(2)}</p>
+                                <p className="text-xs text-gray-400">total balance</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* STEP 2: Orders for selected customer */}
+              {accountStep === 'orders' && (() => {
+                const orders = accountSales.filter(s => (s.customerId || '__walkin__') === accountSelectedCustomerId);
+                return (
+                  <div className="p-4 space-y-3">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1">Outstanding Orders</p>
+                    <div className="space-y-2">
+                      {orders.map(s => {
+                        const balance = s.balanceDue || 0;
+                        const paid = s.paidAmount || 0;
+                        const total = s.totalAmount;
+                        const paidPct = total > 0 ? Math.round((paid / total) * 100) : 0;
+                        return (
+                          <button
+                            key={s.id}
+                            onClick={() => { setAccountSelectedSale(s); setAccountPayAmount(balance.toFixed(2)); setAccountStep('pay'); }}
+                            className="w-full p-4 rounded-xl border-2 border-transparent bg-gray-50 hover:bg-orange-50 hover:border-orange-200 transition-all text-left group"
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <p className="font-semibold text-gray-900 group-hover:text-orange-900">{s.saleNumber || s.id.slice(-8)}</p>
+                                <p className="text-xs text-gray-500 mt-0.5">{new Date(s.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-bold text-orange-600">£{balance.toFixed(2)}</p>
+                                <p className="text-xs text-gray-400">balance</p>
+                              </div>
+                            </div>
+                            {/* Items */}
+                            <p className="text-xs text-gray-500 mb-2 truncate">{(s.items || []).map(i => i.productName || 'Item').join(', ') || 'No items'}</p>
+                            {/* Progress bar */}
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-xs text-gray-400">
+                                <span>Paid £{paid.toFixed(2)} of £{total.toFixed(2)}</span>
+                                <span>{paidPct}%</span>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                                <div className="h-full rounded-full bg-orange-400 transition-all" style={{ width: `${paidPct}%` }} />
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* STEP 3: Record payment */}
+              {accountStep === 'pay' && accountSelectedSale && (() => {
+                const balance = accountSelectedSale.balanceDue || 0;
+                const paid = accountSelectedSale.paidAmount || 0;
+                const total = accountSelectedSale.totalAmount;
+                const payAmt = parseFloat(accountPayAmount) || 0;
+                const remaining = Math.max(0, balance - payAmt);
+                return (
+                  <div className="p-4 space-y-4">
+                    {/* Order summary */}
+                    <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Order</span>
+                        <span className="font-medium">{accountSelectedSale.saleNumber || accountSelectedSale.id.slice(-8)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Customer</span>
+                        <span className="font-medium">{accountSelectedSale.customerName}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Order total</span>
+                        <span className="font-medium">£{total.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Already paid</span>
+                        <span className="font-medium text-green-700">£{paid.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-base font-bold border-t border-gray-200 pt-2 mt-1">
+                        <span className="text-gray-900">Outstanding balance</span>
+                        <span className="text-orange-600">£{balance.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Payment amount */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700">Payment amount</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-lg">£</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min={0.01}
+                          max={balance}
+                          value={accountPayAmount}
+                          onChange={e => setAccountPayAmount(e.target.value)}
+                          className="pl-9 text-2xl font-bold h-14"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        {[balance / 2, balance].map(amt => (
+                          <button
+                            key={amt}
+                            onClick={() => setAccountPayAmount(amt.toFixed(2))}
+                            className="flex-1 py-2 rounded-lg border border-orange-200 text-orange-700 text-sm font-medium hover:bg-orange-50 transition-colors"
+                          >
+                            £{amt.toFixed(2)} {amt === balance ? '(full)' : '(half)'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Payment method */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700">Payment method</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {([
+                          { method: 'CASH' as const, label: 'Cash', icon: Banknote },
+                          { method: 'CARD' as const, label: 'Card', icon: CreditCard },
+                          { method: 'BANK_TRANSFER' as const, label: 'Bank', icon: Building2 },
+                        ]).map(({ method, label, icon: Icon }) => (
+                          <button
+                            key={method}
+                            onClick={() => setAccountPayMethod(method)}
+                            className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
+                              accountPayMethod === method
+                                ? 'border-orange-500 bg-orange-50 text-orange-700'
+                                : 'border-gray-200 text-gray-600 hover:border-orange-300'
+                            }`}
+                          >
+                            <Icon className={`h-5 w-5 ${accountPayMethod === method ? 'text-orange-600' : 'text-gray-500'}`} />
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* After payment summary */}
+                    {payAmt > 0 && payAmt <= balance && (
+                      <div className={`rounded-xl p-3 border-2 ${remaining === 0 ? 'bg-green-50 border-green-300' : 'bg-orange-50 border-orange-300'}`}>
+                        <div className="flex justify-between text-sm font-medium">
+                          <span className={remaining === 0 ? 'text-green-700' : 'text-orange-700'}>Remaining after payment</span>
+                          <span className={`font-bold ${remaining === 0 ? 'text-green-800' : 'text-orange-800'}`}>
+                            {remaining === 0 ? '✓ Fully paid' : `£${remaining.toFixed(2)}`}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              </>
+            )}
+          </div>
+
+          {/* Footer action */}
+          {accountStep === 'pay' && (
+            <div className="px-4 pb-4 pt-3 border-t bg-white">
+              <Button
+                onClick={handleAccountPayment}
+                disabled={processingAccountPayment || !accountPayAmount || parseFloat(accountPayAmount) <= 0}
+                className="w-full h-12 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-base rounded-xl"
+              >
+                {processingAccountPayment ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Processing...</>
+                ) : (
+                  `Confirm Payment — £${parseFloat(accountPayAmount || '0').toFixed(2)}`
+                )}
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

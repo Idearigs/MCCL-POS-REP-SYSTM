@@ -14,6 +14,7 @@ export interface SaleItem {
 
 export interface Sale {
   id: string;
+  saleNumber?: string;
   customerId?: string;
   customerName?: string;
   items: SaleItem[];
@@ -21,6 +22,8 @@ export interface Sale {
   taxAmount: number;
   discountAmount: number;
   totalAmount: number;
+  paidAmount?: number;
+  balanceDue?: number;
   paymentMethod: string;
   paymentStatus: string;
   status: string;
@@ -406,6 +409,16 @@ class SalesService {
 
   async updateSaleItemNotes(itemId: string, notes: string): Promise<void> {
     await apiClient.patch(`${API_CONFIG.ENDPOINTS.SALES}/items/${itemId}`, { notes });
+  }
+
+  async getInstallmentSales(page = 1, limit = 100, customerId?: string): Promise<PaginatedResponse<Sale>> {
+    const params: Record<string, any> = { page, limit, paymentMethod: 'INSTALLMENT', paymentStatus: 'PENDING' };
+    if (customerId) params.customerId = customerId;
+    return apiClient.get<PaginatedResponse<Sale>>(API_CONFIG.ENDPOINTS.SALES, params);
+  }
+
+  async recordInstallmentPayment(saleId: string, amount: number, method: 'CASH' | 'CARD' | 'BANK_TRANSFER', notes?: string): Promise<Sale> {
+    return apiClient.post<Sale>(`${API_CONFIG.ENDPOINTS.SALES}/${saleId}/installment-payment`, { amount, method, notes });
   }
 }
 

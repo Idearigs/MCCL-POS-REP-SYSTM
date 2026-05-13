@@ -32,6 +32,7 @@ import {
   SaleQueryDto,
   SaleResponseDto,
   SalesStatsDto,
+  RecordInstallmentPaymentDto,
 } from './dto/sale.dto';
 import { PaginatedResponseDto } from '../../shared/dto/pagination.dto';
 
@@ -258,6 +259,19 @@ export class SalesController {
     @TenantId() tenantId: string,
   ) {
     return this.salesService.updateSaleItemNotes(itemId, body.notes, tenantId);
+  }
+
+  @Post(':id/installment-payment')
+  @ApiOperation({ summary: 'Record a payment against an installment sale' })
+  @ApiParam({ name: 'id', description: 'Sale ID' })
+  @ApiResponse({ status: 200, description: 'Payment recorded', type: SaleResponseDto })
+  async recordInstallmentPayment(
+    @Param('id') id: string,
+    @Body() dto: RecordInstallmentPaymentDto,
+    @TenantId() tenantId: string,
+    @CurrentUser('id') userId: string,
+  ): Promise<SaleResponseDto> {
+    return this.salesService.recordInstallmentPayment(id, dto, tenantId, userId);
   }
 
   @Post(':id/refund')
