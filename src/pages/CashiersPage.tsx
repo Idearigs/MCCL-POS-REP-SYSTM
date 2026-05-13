@@ -25,10 +25,9 @@ import {
   Edit,
   Ban,
   CheckCircle,
-  TrendingUp,
   Search,
-  Key,
   Trash2,
+  Download,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -187,14 +186,51 @@ const CashiersPage: React.FC = () => {
     return cashierStats.find(stat => stat.cashierId === cashierId);
   };
 
-  const filteredCashiers = cashiers.filter(cashier =>
-    cashier.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cashier.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cashier.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleExportCSV = async (cashier: Cashier) => {
+    try {
+      const response = await cashierService.getCashierSales(cashier.id, 1, 1000) as any;
+      const sales: any[] = response.data || [];
 
-  const totalCashiers = cashiers.length;
-  const activeCashiers = cashiers.filter(c => c.isActive).length;
+      const headers = ['Date', 'Receipt No', 'Customer', 'Payment Method', 'Status', 'Total (GBP)'];
+      const rows = sales.map((sale: any) => [
+        format(new Date(sale.createdAt), 'dd/MM/yyyy HH:mm'),
+        sale.receiptNumber || sale.saleNumber || '',
+        sale.customerName || 'Walk-in',
+        sale.paymentMethod || '',
+        sale.status || '',
+        (sale.totalAmount || 0).toFixed(2),
+      ]);
+
+      const csvContent = [headers, ...rows]
+        .map(row => row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${cashierService.formatCashierName(cashier)}_sales_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      toast({ title: 'Export Complete', description: `${sales.length} sales exported to CSV` });
+    } catch {
+      toast({ title: 'Export Failed', description: 'Could not export sales report', variant: 'destructive' });
+    }
+  };
+
+  // Exclude OWNER accounts — cashier management is for operational staff only
+  const filteredCashiers = cashiers
+    .filter(cashier => cashier.role !== 'OWNER')
+    .filter(cashier =>
+      cashier.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cashier.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cashier.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+  const nonOwnerCashiers = cashiers.filter(c => c.role !== 'OWNER');
+  const totalCashiers = nonOwnerCashiers.length;
+  const activeCashiers = nonOwnerCashiers.filter(c => c.isActive).length;
   const topPerformer = cashierStats.length > 0
     ? cashierStats.reduce((max, stat) => stat.monthRevenue > max.monthRevenue ? stat : max, cashierStats[0])
     : null;
@@ -211,7 +247,7 @@ const CashiersPage: React.FC = () => {
     const roleConfig: Record<string, { variant: any; label: string }> = {
       OWNER: { variant: 'default', label: 'Owner' },
       MANAGER: { variant: 'secondary', label: 'Manager' },
-      STAFF: { variant: 'outline', label: 'Staff' },
+      STAFF: { variant: 'outline', label: 'Cashier' },
       READONLY: { variant: 'outline', label: 'Read Only' }
     };
 
@@ -340,6 +376,10 @@ const CashiersPage: React.FC = () => {
                                 Activate
                               </>
                             )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleExportCSV(cashier)}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Export Sales Report (CSV)
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem

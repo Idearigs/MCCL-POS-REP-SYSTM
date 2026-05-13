@@ -229,7 +229,7 @@ const AddCashierDialog: React.FC<AddCashierDialogProps> = ({
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="STAFF">Staff (Cashier)</SelectItem>
+                  <SelectItem value="STAFF">Cashier</SelectItem>
                   <SelectItem value="MANAGER">Manager</SelectItem>
                   <SelectItem value="READONLY">Read Only</SelectItem>
                 </SelectContent>
