@@ -185,6 +185,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [monthlySearch, setMonthlySearch] = useState('');
   const [monthlySearching, setMonthlySearching] = useState(false);
   const [monthlyResults, setMonthlyResults] = useState<any[]>([]);
+  const [monthlyDepositAmount, setMonthlyDepositAmount] = useState<string>('0');
 
   // Quick Product states
   const [showQuickProductDialog, setShowQuickProductDialog] = useState(false);
@@ -1385,6 +1386,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     setChangeGiven(0);
     setCashAmount('');
     setSplitCashAmount('');
+    setMonthlyDepositAmount('0');
     setSelectedPaymentMethod('CASH');
   };
 
@@ -1572,19 +1574,32 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
               { method: 'CASH', amount: splitCash, notes: `Split payment: £${splitCash.toFixed(2)} cash` },
               { method: 'CARD', amount: splitCard, notes: `Split payment: £${splitCard.toFixed(2)} card` },
             ]
+          : selectedPaymentMethod === 'INSTALLMENT'
+          ? (() => {
+              const deposit = parseFloat(monthlyDepositAmount) || 0;
+              const remaining = parseFloat((total - deposit).toFixed(2));
+              if (deposit > 0) {
+                return [
+                  { method: 'CASH' as const, amount: deposit, notes: `Initial deposit for monthly account` },
+                  { method: 'INSTALLMENT' as const, amount: remaining, notes: `Monthly account balance for ${selectedCustomer?.name}` },
+                ];
+              }
+              return [{ method: 'INSTALLMENT' as const, amount: total, notes: `Monthly account charge for ${selectedCustomer?.name}` }];
+            })()
           : [{
-              method: (selectedPaymentMethod === 'INSTALLMENT' ? 'INSTALLMENT' : selectedPaymentMethod) as 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'DIGITAL_WALLET' | 'INSTALLMENT',
+              method: selectedPaymentMethod as 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'DIGITAL_WALLET',
               amount: total,
               notes: selectedPaymentMethod === 'CASH' && change > 0
                 ? `Cash received: £${parseFloat(cashAmount).toFixed(2)}, Change: £${change.toFixed(2)}`
-                : selectedPaymentMethod === 'INSTALLMENT'
-                ? `Monthly account charge for ${selectedCustomer?.name}`
                 : undefined,
             }];
 
       // Append cash-change info to order notes so the receipt printer can parse it
+      const deposit = selectedPaymentMethod === 'INSTALLMENT' ? (parseFloat(monthlyDepositAmount) || 0) : 0;
       const finalNote = selectedPaymentMethod === 'CASH' && change > 0
         ? `${saleNote}\nCash received: £${parseFloat(cashAmount).toFixed(2)}, Change: £${change.toFixed(2)}`
+        : selectedPaymentMethod === 'INSTALLMENT' && deposit > 0
+        ? `${saleNote}\nMonthly account. Deposit paid: £${deposit.toFixed(2)}, Balance: £${(total - deposit).toFixed(2)}`
         : saleNote;
 
       // Create the sale record for ALL items (products + repairs)
@@ -3141,13 +3156,40 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             </div>
           </div>
 
-          {/* Monthly Account info strip */}
+          {/* Monthly Account deposit + info */}
           {selectedPaymentMethod === 'INSTALLMENT' && (
-            <div className={`rounded-xl p-3 border-2 text-xs ${selectedCustomer ? 'bg-orange-50 border-orange-200 text-orange-800' : 'bg-red-50 border-red-200 text-red-700'}`}>
-              {selectedCustomer
-                ? <><span className="font-semibold">Monthly charge:</span> {selectedCustomer.name} — £{total.toFixed(2)}</>
-                : '⚠ Select a customer to use Monthly Account'
-              }
+            <div className="space-y-2">
+              {!selectedCustomer ? (
+                <div className="rounded-xl p-3 border-2 bg-red-50 border-red-200 text-red-700 text-xs">
+                  ⚠ Select a customer to use Monthly Account
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-xl p-2.5 bg-orange-50 border-2 border-orange-200 text-xs text-orange-800">
+                    <span className="font-semibold">Monthly charge:</span> {selectedCustomer.name}
+                  </div>
+                  <div className="bg-white rounded-xl p-3 shadow-sm border border-slate-100 space-y-2">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Deposit today (optional)</p>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium">£</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        max={total}
+                        value={monthlyDepositAmount}
+                        onChange={(e) => setMonthlyDepositAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="pl-7 text-base font-bold h-9"
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs font-semibold rounded-lg bg-orange-50 border border-orange-200 p-2">
+                      <span className="text-orange-600">Balance on account</span>
+                      <span className="text-orange-800">£{Math.max(0, total - (parseFloat(monthlyDepositAmount) || 0)).toFixed(2)}</span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -3851,16 +3893,47 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
               </div>
             </div>
 
-            {/* Monthly Account info */}
+            {/* Monthly Account deposit + info */}
             {selectedPaymentMethod === 'INSTALLMENT' && (
-              <div className={`rounded-lg p-4 border-2 ${selectedCustomer ? 'bg-orange-50 border-orange-200' : 'bg-red-50 border-red-200'}`}>
-                {selectedCustomer ? (
-                  <div className="text-sm text-orange-800">
-                    <p className="font-semibold">Charging to monthly account</p>
-                    <p className="text-orange-600 mt-1">{selectedCustomer.name} — £{total.toFixed(2)} will be added to their account</p>
+              <div className="space-y-3">
+                {!selectedCustomer && (
+                  <div className="rounded-lg p-3 bg-red-50 border-2 border-red-200">
+                    <p className="text-sm text-red-700 font-medium">⚠ Select a customer first to use Monthly Account</p>
                   </div>
-                ) : (
-                  <p className="text-sm text-red-700 font-medium">⚠ Select a customer first to use Monthly Account</p>
+                )}
+                {selectedCustomer && (
+                  <>
+                    <div className="rounded-lg p-4 bg-orange-50 border-2 border-orange-200 text-sm text-orange-800">
+                      <p className="font-semibold">Charging to monthly account</p>
+                      <p className="text-orange-600 mt-1">{selectedCustomer.name} — £{total.toFixed(2)} total</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Initial deposit today (optional)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 font-medium">£</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          max={total}
+                          value={monthlyDepositAmount}
+                          onChange={(e) => setMonthlyDepositAmount(e.target.value)}
+                          placeholder="0.00"
+                          className="pl-8 text-lg font-semibold"
+                        />
+                      </div>
+                      {parseFloat(monthlyDepositAmount) > 0 && parseFloat(monthlyDepositAmount) < total && (
+                        <div className="flex justify-between text-sm font-medium rounded-lg bg-green-50 border border-green-200 p-3">
+                          <span className="text-green-700">Paid today (cash)</span>
+                          <span className="text-green-800">£{parseFloat(monthlyDepositAmount).toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm font-medium rounded-lg bg-orange-50 border border-orange-200 p-3">
+                        <span className="text-orange-700">Monthly account balance</span>
+                        <span className="text-orange-800 font-bold">£{Math.max(0, total - (parseFloat(monthlyDepositAmount) || 0)).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             )}

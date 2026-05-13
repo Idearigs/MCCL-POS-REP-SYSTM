@@ -139,13 +139,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Helper: build TenantInfo from getMe response
   const buildTenantInfo = (me: any): TenantInfo => {
     const tenant = me.tenant as any;
-    if (!tenant) return { status: 'ACTIVE' };
+    // Fall back to tenantId if subdomain is missing — covers tenants provisioned
+    // before subdomain was reliably stored (e.g. 'testb' company-code tenants).
+    if (!tenant) return { status: 'ACTIVE', tenantSlug: me.tenantId ?? null };
     return {
       status: tenant.status as TenantStatus,
       suspendedReason: tenant.suspendedReason ?? null,
       billingDueDate: tenant.billingDueDate ?? null,
       billingDaysOverdue: calcDaysOverdue(tenant.billingDueDate),
-      tenantSlug: tenant.subdomain ?? tenant.slug ?? null,
+      tenantSlug: tenant.subdomain ?? tenant.slug ?? me.tenantId ?? null,
       tenantName: tenant.name ?? null,
     };
   };
