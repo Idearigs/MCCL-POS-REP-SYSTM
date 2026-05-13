@@ -118,6 +118,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const { auth } = useAuth();
   const { toast } = useToast();
 
+  // Beta 3-column layout: enabled only for the testb tenant
+  const isBetaTenant = auth.tenantInfo.tenantSlug === 'testb';
+
   // Stores the last completed sale so we can show the print receipt screen
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
 
@@ -1432,9 +1435,13 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       toast({ title: 'Cart is empty', variant: 'destructive' });
       return;
     }
-    // Open payment dialog
-    setShowPaymentDialog(true);
-    setCashAmount(total.toFixed(2)); // Pre-fill with total amount
+    if (isBetaTenant) {
+      // Beta layout: payment panel is inline, no dialog needed
+      handleProcessPayment();
+    } else {
+      setShowPaymentDialog(true);
+      setCashAmount(total.toFixed(2)); // Pre-fill with total amount
+    }
   };
 
   // Process payment
@@ -1563,6 +1570,11 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 : undefined,
             }];
 
+      // Append cash-change info to order notes so the receipt printer can parse it
+      const finalNote = selectedPaymentMethod === 'CASH' && change > 0
+        ? `${saleNote}\nCash received: £${parseFloat(cashAmount).toFixed(2)}, Change: £${change.toFixed(2)}`
+        : saleNote;
+
       // Create the sale record for ALL items (products + repairs)
       const saleData: CreateSaleData = {
         customerId: selectedCustomer?.id,
@@ -1571,7 +1583,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         discountPercentage: discountPercentage > 0 ? discountPercentage : undefined,
         discountAmount: discount > 0 ? discount : undefined,
         taxRate: 0, // No VAT - prices already include VAT
-        notes: saleNote,
+        notes: finalNote,
       };
 
       // Create the sale
@@ -1651,9 +1663,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="h-full flex gap-6 p-6 bg-gray-50">
+    <div className={`h-full flex bg-gray-50 ${isBetaTenant ? 'gap-3 p-3' : 'gap-6 p-6'}`}>
       {/* Left Side - Categories/Products */}
-      <div className="flex-1 flex flex-col bg-white rounded-2xl p-6 overflow-hidden shadow-lg">
+      <div className={`flex-1 flex flex-col bg-white rounded-2xl overflow-hidden shadow-lg ${isBetaTenant ? 'p-4 order-2' : 'p-6'}`}>
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             {/* Back Button for Category View or Appraisal View */}
@@ -2818,8 +2830,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         </div>
       </div>
 
-      {/* Right Side - Premium Shopping Bag Panel */}
-      <div className={`w-[420px] flex flex-col bg-white/95 backdrop-blur-xl rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.12)] border border-white/50 transition-transform ${cartShake ? 'animate-shake' : ''}`}>
+      {/* Cart Panel — LEFT in beta layout, RIGHT in default layout */}
+      <div className={`flex flex-col bg-white/95 backdrop-blur-xl rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.12)] border border-white/50 transition-transform ${cartShake ? 'animate-shake' : ''} ${isBetaTenant ? 'w-[280px] order-1' : 'w-[420px]'}`}>
         {/* Premium Header */}
         <div className="px-6 pt-6 pb-4">
           <div className="flex items-center justify-between">
@@ -2957,76 +2969,290 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             </div>
           </div>
 
-          {/* Customer Selection - iOS Style Dropdown */}
+          {/* Customer / monthly / checkout — hidden in beta layout (moved to right payment panel) */}
+          {!isBetaTenant && (
+            <>
+              {/* Customer Selection - iOS Style Dropdown */}
+              {selectedCustomer ? (
+                <div
+                  onClick={() => setIsCustomerDialogOpen(true)}
+                  className="mb-4 p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl cursor-pointer hover:shadow-md transition-all group"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md">
+                        <Users className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-emerald-800 text-xs font-medium mb-0.5">Customer</p>
+                        <p className="text-slate-900 font-semibold text-sm">{selectedCustomer.name}</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsCustomerDialogOpen(true)}
+                  className="w-full mb-4 p-3.5 bg-white border border-slate-200 rounded-2xl flex items-center justify-between hover:border-slate-300 hover:shadow-sm transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
+                      <Users className="h-4 w-4 text-slate-500" />
+                    </div>
+                    <span className="text-slate-500 text-sm font-medium">Select Customer (Optional)</span>
+                  </div>
+                  <ChevronDown className="h-5 w-5 text-slate-400 group-hover:text-slate-500 transition-colors" />
+                </button>
+              )}
+
+              {/* Monthly Account Button */}
+              <button
+                onClick={() => setShowMonthlyDialog(true)}
+                className="w-full h-10 mt-3 rounded-xl font-medium text-sm flex items-center justify-center gap-2 border-2 border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-300 transition-all"
+              >
+                <CalendarClock className="h-4 w-4" />
+                Monthly Account
+              </button>
+
+              {/* Premium Checkout Button */}
+              <button
+                onClick={handleCheckout}
+                disabled={cart.length === 0}
+                className={`
+                  relative w-full h-14 mt-3 rounded-2xl font-semibold text-base
+                  flex items-center justify-center gap-2
+                  transition-all duration-300 ease-out
+                  ${cart.length === 0
+                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/40 hover:shadow-xl hover:shadow-blue-500/50 hover:scale-[1.02] active:scale-[0.98]'
+                  }
+                `}
+                style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif' }}
+              >
+                {cart.length > 0 && (
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-400 via-blue-500 to-indigo-500 opacity-0 hover:opacity-20 blur-xl transition-opacity" />
+                )}
+                <ShoppingBag className="h-5 w-5" />
+                <span>Checkout Now</span>
+                {cart.length > 0 && (
+                  <Sparkles className="h-4 w-4 ml-1 animate-pulse" />
+                )}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ═══ BETA 3-COLUMN: RIGHT PAYMENT PANEL (order-3) ═══ */}
+      {isBetaTenant && (
+        <div className="w-[270px] flex flex-col gap-3 order-3">
+
+          {/* Customer selector */}
           {selectedCustomer ? (
             <div
               onClick={() => setIsCustomerDialogOpen(true)}
-              className="mb-4 p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl cursor-pointer hover:shadow-md transition-all group"
+              className="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl cursor-pointer hover:shadow-md transition-all group"
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md">
-                    <Users className="h-5 w-5 text-white" />
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow">
+                    <Users className="h-4 w-4 text-white" />
                   </div>
                   <div>
-                    <p className="text-emerald-800 text-xs font-medium mb-0.5">Customer</p>
-                    <p className="text-slate-900 font-semibold text-sm">{selectedCustomer.name}</p>
+                    <p className="text-emerald-800 text-[10px] font-medium">Customer</p>
+                    <p className="text-slate-900 font-semibold text-sm leading-tight">{selectedCustomer.name}</p>
                   </div>
                 </div>
-                <ChevronRight className="h-5 w-5 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
+                <ChevronRight className="h-4 w-4 text-emerald-400" />
               </div>
             </div>
           ) : (
             <button
               onClick={() => setIsCustomerDialogOpen(true)}
-              className="w-full mb-4 p-3.5 bg-white border border-slate-200 rounded-2xl flex items-center justify-between hover:border-slate-300 hover:shadow-sm transition-all group"
+              className="w-full p-3 bg-white border border-slate-200 rounded-2xl flex items-center gap-2.5 hover:border-slate-300 hover:shadow-sm transition-all"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">
-                  <Users className="h-4 w-4 text-slate-500" />
-                </div>
-                <span className="text-slate-500 text-sm font-medium">Select Customer (Optional)</span>
+              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+                <Users className="h-4 w-4 text-slate-500" />
               </div>
-              <ChevronDown className="h-5 w-5 text-slate-400 group-hover:text-slate-500 transition-colors" />
+              <span className="text-slate-500 text-sm">Add Customer</span>
             </button>
           )}
 
-          {/* Monthly Account Button */}
-          <button
-            onClick={() => setShowMonthlyDialog(true)}
-            className="w-full h-10 rounded-xl font-medium text-sm flex items-center justify-center gap-2 border-2 border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-300 transition-all"
-          >
-            <CalendarClock className="h-4 w-4" />
-            Monthly Account
-          </button>
+          {/* Payment method selector */}
+          <div className="bg-white rounded-2xl p-3 shadow-sm border border-slate-100">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Payment</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                { method: 'CASH' as const, label: 'Cash', icon: Banknote },
+                { method: 'CARD' as const, label: 'Card', icon: CreditCard },
+                { method: 'BANK_TRANSFER' as const, label: 'Bank', icon: Building2 },
+                { method: 'DIGITAL_WALLET' as const, label: 'Digital', icon: Smartphone },
+              ].map(({ method, label, icon: Icon }) => (
+                <button
+                  key={method}
+                  onClick={() => setSelectedPaymentMethod(method)}
+                  className={`flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl border-2 text-xs font-semibold transition-all ${
+                    selectedPaymentMethod === method
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  <Icon className={`h-4 w-4 ${selectedPaymentMethod === method ? 'text-blue-600' : 'text-gray-500'}`} />
+                  {label}
+                </button>
+              ))}
+              {/* Split: full width */}
+              <button
+                onClick={() => { setSelectedPaymentMethod('SPLIT'); setSplitCashAmount(''); }}
+                className={`col-span-2 flex items-center justify-center gap-2 py-2 rounded-xl border-2 text-xs font-semibold transition-all ${
+                  selectedPaymentMethod === 'SPLIT'
+                    ? 'border-purple-500 bg-purple-50 text-purple-700'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                <Shuffle className="h-4 w-4" />
+                Split (Cash + Card)
+              </button>
+            </div>
+          </div>
 
-          {/* Premium Checkout Button */}
+          {/* Cash amount entry */}
+          {selectedPaymentMethod === 'CASH' && (
+            <div className="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 space-y-2">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Cash Received</p>
+              <div className="grid grid-cols-5 gap-1">
+                {[5, 10, 20, 50, 100].map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setCashAmount(d.toFixed(2))}
+                    className={`py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                      cashAmount === d.toFixed(2)
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 text-gray-700 hover:border-blue-400'
+                    }`}
+                  >
+                    £{d}
+                  </button>
+                ))}
+              </div>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold text-sm">£</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={total}
+                  value={cashAmount}
+                  onChange={(e) => setCashAmount(e.target.value)}
+                  placeholder={total.toFixed(2)}
+                  className="pl-7 font-bold text-base"
+                />
+              </div>
+              {parseFloat(cashAmount) >= total ? (
+                <div className={`rounded-xl p-2.5 text-center border-2 ${parseFloat(cashAmount) > total ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'}`}>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Change</p>
+                  <p className={`text-2xl font-bold ${parseFloat(cashAmount) > total ? 'text-green-700' : 'text-gray-400'}`}>
+                    £{(parseFloat(cashAmount) - total).toFixed(2)}
+                  </p>
+                </div>
+              ) : parseFloat(cashAmount) > 0 ? (
+                <div className="rounded-xl p-2.5 text-center border-2 bg-red-50 border-red-300">
+                  <p className="text-[10px] font-semibold text-red-400 uppercase tracking-wide">Short</p>
+                  <p className="text-2xl font-bold text-red-600">£{(total - parseFloat(cashAmount)).toFixed(2)}</p>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {/* Split amount entry */}
+          {selectedPaymentMethod === 'SPLIT' && (
+            <div className="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 space-y-2">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Cash Portion</p>
+              <div className="grid grid-cols-4 gap-1">
+                {[5, 10, 20, 50].filter(d => d < total).map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setSplitCashAmount(d.toFixed(2))}
+                    className={`py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                      splitCashAmount === d.toFixed(2)
+                        ? 'border-purple-500 bg-purple-50 text-purple-700'
+                        : 'border-gray-200 text-gray-700 hover:border-purple-400'
+                    }`}
+                  >
+                    £{d}
+                  </button>
+                ))}
+              </div>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold text-sm">£</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={0.01}
+                  max={total - 0.01}
+                  value={splitCashAmount}
+                  onChange={(e) => setSplitCashAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="pl-7 font-bold text-base"
+                />
+              </div>
+              {parseFloat(splitCashAmount) > 0 && parseFloat(splitCashAmount) < total && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl p-2 text-center border-2 bg-green-50 border-green-300">
+                    <p className="text-[10px] text-green-700 font-semibold uppercase">Cash</p>
+                    <p className="text-lg font-bold text-green-700">£{parseFloat(splitCashAmount).toFixed(2)}</p>
+                  </div>
+                  <div className="rounded-xl p-2 text-center border-2 bg-blue-50 border-blue-300">
+                    <p className="text-[10px] text-blue-700 font-semibold uppercase">Card</p>
+                    <p className="text-lg font-bold text-blue-700">£{(total - parseFloat(splitCashAmount)).toFixed(2)}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Actions: Monthly + Discount */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowMonthlyDialog(true)}
+              className="flex-1 h-9 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border-2 border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 transition-all"
+            >
+              <CalendarClock className="h-3.5 w-3.5" />
+              Monthly
+            </button>
+            <button
+              onClick={() => setShowDiscountDialog(true)}
+              className="flex-1 h-9 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border-2 border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-all"
+            >
+              <PercentIcon className="h-3.5 w-3.5" />
+              Discount
+            </button>
+          </div>
+
+          {/* Checkout button */}
           <button
             onClick={handleCheckout}
-            disabled={cart.length === 0}
-            className={`
-              relative w-full h-14 rounded-2xl font-semibold text-base
-              flex items-center justify-center gap-2
-              transition-all duration-300 ease-out
-              ${cart.length === 0
+            disabled={cart.length === 0 || processingPayment}
+            className={`w-full h-14 rounded-2xl font-bold text-base flex items-center justify-center gap-2 transition-all ${
+              cart.length === 0 || processingPayment
                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                : 'bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/40 hover:shadow-xl hover:shadow-blue-500/50 hover:scale-[1.02] active:scale-[0.98]'
-              }
-            `}
-            style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif' }}
+                : 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/40 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]'
+            }`}
           >
-            {/* Glow Effect */}
-            {cart.length > 0 && (
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-400 via-blue-500 to-indigo-500 opacity-0 hover:opacity-20 blur-xl transition-opacity" />
-            )}
-            <ShoppingBag className="h-5 w-5" />
-            <span>Checkout Now</span>
-            {cart.length > 0 && (
-              <Sparkles className="h-4 w-4 ml-1 animate-pulse" />
+            {processingPayment ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <ShoppingBag className="h-5 w-5" />
+                Pay £{total.toFixed(2)}
+              </>
             )}
           </button>
         </div>
-      </div>
+      )}
 
       {/* New Repair Job Dialog */}
       <Dialog open={showNewRepairDialog} onOpenChange={setShowNewRepairDialog}>
@@ -3422,8 +3648,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         </DialogContent>
       </Dialog>
 
-      {/* Payment Dialog */}
-      <Dialog open={showPaymentDialog} onOpenChange={(open) => { if (!open) handleNewSale(); }}>
+      {/* Payment Dialog — for beta layout shows post-sale only; for standard layout shows full payment form */}
+      <Dialog open={showPaymentDialog || !!completedSale} onOpenChange={(open) => { if (!open) handleNewSale(); }}>
         <DialogContent className="max-w-md">
 
           {/* ── POST-SALE SUCCESS SCREEN ── */}
