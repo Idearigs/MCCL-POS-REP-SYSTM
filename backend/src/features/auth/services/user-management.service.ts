@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, Logger, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  Logger,
+  ConflictException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -169,7 +174,10 @@ export class UserManagementService {
       this.logger.log(`User deleted: ${userId}`);
     } catch (error: unknown) {
       // P2003 = foreign key constraint — user has linked sales/shifts
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
         throw new ConflictException(
           'Cannot delete this user — they have existing sales or shift records. Deactivate them instead.',
         );
