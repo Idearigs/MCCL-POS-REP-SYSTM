@@ -4,7 +4,7 @@ import MainLayout from '@/components/layout/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Search, Plus, Filter, LayoutGrid, List, Trash2, Mail, Phone, MapPin, Eye, Edit, Users, TrendingUp, Award, DollarSign, UserPlus, Star } from 'lucide-react';
+import { Search, Plus, Filter, LayoutGrid, List, Trash2, Mail, Phone, MapPin, Eye, Edit, Users, TrendingUp, Award, DollarSign, UserPlus, Star, CalendarClock } from 'lucide-react';
 import CustomerCard from '@/components/customers/CustomerCard';
 import CustomerDetail from '@/components/customers/CustomerDetail';
 import AddCustomerForm from '@/components/customers/AddCustomerForm';
@@ -102,6 +102,18 @@ const CustomersPage = () => {
       });
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleToggleMonthlyPayer = async (customer: Customer) => {
+    try {
+      await updateCustomer(customer.id, { isMonthlyPayer: !customer.isMonthlyPayer });
+      toast({
+        title: customer.isMonthlyPayer ? 'Monthly payer removed' : 'Marked as monthly payer',
+        description: `${customer.name || `${customer.firstName} ${customer.lastName}`} updated.`,
+      });
+    } catch {
+      toast({ title: 'Update Failed', description: 'Could not update monthly payer status.', variant: 'destructive' });
     }
   };
 
@@ -280,7 +292,15 @@ const CustomersPage = () => {
                       onClick={() => handleCustomerClick(customer.id)}
                     >
                       <TableCell className="font-medium text-navy">
-                        {customer.name || `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'N/A'}
+                        <div className="flex items-center gap-2">
+                          {customer.name || `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'N/A'}
+                          {customer.isMonthlyPayer && (
+                            <span className="inline-flex items-center gap-1 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
+                              <CalendarClock size={11} />
+                              Monthly
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {customer.email ? (
@@ -345,6 +365,15 @@ const CustomersPage = () => {
                             title="Edit Customer"
                           >
                             <Edit size={16} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); handleToggleMonthlyPayer(customer); }}
+                            className={customer.isMonthlyPayer ? 'text-purple-700 bg-purple-50 hover:bg-purple-100' : 'text-gray-400 hover:text-purple-600 hover:bg-purple-50'}
+                            title={customer.isMonthlyPayer ? 'Monthly Payer — click to remove' : 'Mark as Monthly Payer'}
+                          >
+                            <CalendarClock size={16} />
                           </Button>
                           <Button
                             variant="ghost"

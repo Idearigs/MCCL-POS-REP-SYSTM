@@ -84,6 +84,7 @@ model customers {
   isActive              Boolean        @default(true)
   redFlag               Boolean        @default(false)
   redFlagReason         String?
+  isMonthlyPayer        Boolean        @default(false)
   createdAt             DateTime       @default(now())
   updatedAt             DateTime
   creditLimit           Decimal        @default(0)

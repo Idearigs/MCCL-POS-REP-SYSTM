@@ -122,6 +122,7 @@ export class CustomersService {
         search,
         isActive,
         redFlag,
+        isMonthlyPayer,
         preferredContact,
         sortBy = 'createdAt',
         sortOrder = 'desc',
@@ -134,6 +135,7 @@ export class CustomersService {
         tenantId,
         ...(isActive !== undefined && { isActive }),
         ...(redFlag !== undefined && { redFlag }),
+        ...(isMonthlyPayer !== undefined && { isMonthlyPayer }),
         ...(preferredContact && { preferredContact }),
         ...(search && {
           OR: [
@@ -662,6 +664,7 @@ export class CustomersService {
       isActive: customer.isActive,
       redFlag: customer.redFlag,
       redFlagReason: customer.redFlagReason,
+      isMonthlyPayer: customer.isMonthlyPayer,
       createdAt: customer.createdAt.toISOString(),
       updatedAt: customer.updatedAt.toISOString(),
     };

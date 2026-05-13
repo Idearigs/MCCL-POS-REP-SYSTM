@@ -64,6 +64,7 @@ import {
   Archive,
   Lock,
   Shuffle,
+  CalendarClock,
 } from 'lucide-react';
 import { useInventory, InventoryItem } from '@/contexts/InventoryContext';
 import { Customer, useCustomers } from '@/contexts/CustomerContext';
@@ -175,6 +176,12 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [splitCashAmount, setSplitCashAmount] = useState<string>('');
   const [changeGiven, setChangeGiven] = useState<number>(0);
   const [processingPayment, setProcessingPayment] = useState(false);
+
+  // Monthly Account states
+  const [showMonthlyDialog, setShowMonthlyDialog] = useState(false);
+  const [monthlySearch, setMonthlySearch] = useState('');
+  const [monthlySearching, setMonthlySearching] = useState(false);
+  const [monthlyResults, setMonthlyResults] = useState<any[]>([]);
 
   // Quick Product states
   const [showQuickProductDialog, setShowQuickProductDialog] = useState(false);
@@ -1376,6 +1383,47 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     setCashAmount('');
     setSplitCashAmount('');
     setSelectedPaymentMethod('CASH');
+  };
+
+  // Monthly Account — search customers (monthly payers first) by name/phone
+  const handleMonthlySearch = async (query: string) => {
+    setMonthlySearch(query);
+    if (!query.trim()) { setMonthlyResults([]); return; }
+    setMonthlySearching(true);
+    try {
+      const { customerService } = await import('@/services/customerService');
+      const result = await customerService.getCustomers(query, 1, 20) as any;
+      const customers = result.data || result;
+      // Monthly payers first, then others
+      const sorted = [...customers].sort((a: any, b: any) =>
+        (b.isMonthlyPayer ? 1 : 0) - (a.isMonthlyPayer ? 1 : 0)
+      );
+      setMonthlyResults(sorted);
+    } catch {
+      setMonthlyResults([]);
+    } finally {
+      setMonthlySearching(false);
+    }
+  };
+
+  const handleSelectMonthlyCustomer = (customer: any) => {
+    setSelectedCustomer({
+      id: customer.id,
+      name: customer.name || `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
+      phone: customer.phone || '',
+      email: customer.email || '',
+    });
+    setShowMonthlyDialog(false);
+    setMonthlySearch('');
+    setMonthlyResults([]);
+    // Default to INSTALLMENT for monthly payers
+    if (customer.isMonthlyPayer) {
+      setSelectedPaymentMethod('CARD'); // owner can change — INSTALLMENT not in UI type yet
+    }
+    toast({
+      title: 'Customer loaded',
+      description: `${customer.name || `${customer.firstName} ${customer.lastName}`} selected. Add their items then complete payment.`,
+    });
   };
 
   // Checkout - Open payment dialog
@@ -2942,6 +2990,15 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
               <ChevronDown className="h-5 w-5 text-slate-400 group-hover:text-slate-500 transition-colors" />
             </button>
           )}
+
+          {/* Monthly Account Button */}
+          <button
+            onClick={() => setShowMonthlyDialog(true)}
+            className="w-full h-10 rounded-xl font-medium text-sm flex items-center justify-center gap-2 border-2 border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-300 transition-all"
+          >
+            <CalendarClock className="h-4 w-4" />
+            Monthly Account
+          </button>
 
           {/* Premium Checkout Button */}
           <button
@@ -4902,6 +4959,74 @@ Deposit is non-refundable.
               Open Drawer
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== MONTHLY ACCOUNT DIALOG ===== */}
+      <Dialog open={showMonthlyDialog} onOpenChange={(o) => { if (!o) { setShowMonthlyDialog(false); setMonthlySearch(''); setMonthlyResults([]); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarClock className="h-5 w-5 text-purple-600" />
+              Monthly Account
+            </DialogTitle>
+            <DialogDescription>Search customer by name or phone number to load their account.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Name or phone number..."
+                value={monthlySearch}
+                onChange={(e) => handleMonthlySearch(e.target.value)}
+                className="pl-9"
+                autoFocus
+              />
+            </div>
+
+            {monthlySearching && (
+              <div className="flex items-center justify-center py-6 text-gray-400 text-sm gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Searching...
+              </div>
+            )}
+
+            {!monthlySearching && monthlyResults.length > 0 && (
+              <div className="divide-y rounded-lg border overflow-hidden max-h-72 overflow-y-auto">
+                {monthlyResults.map((customer: any) => {
+                  const name = customer.name || `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
+                  return (
+                    <button
+                      key={customer.id}
+                      onClick={() => handleSelectMonthlyCustomer(customer)}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-purple-50 transition-colors text-left"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-900 truncate">{name}</span>
+                          {customer.isMonthlyPayer && (
+                            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full shrink-0">Monthly</span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-500">{customer.phone}</div>
+                        {(customer.outstandingBalance > 0) && (
+                          <div className="text-sm text-orange-600 font-medium">
+                            Outstanding: £{Number(customer.outstandingBalance).toFixed(2)}
+                          </div>
+                        )}
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-gray-400 shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {!monthlySearching && monthlySearch.trim() && monthlyResults.length === 0 && (
+              <p className="text-center text-sm text-gray-500 py-4">No customers found</p>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

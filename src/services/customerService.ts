@@ -16,6 +16,13 @@ export interface Customer {
   birthDate?: string; // Backend uses birthDate, not dateOfBirth
   notes?: string;
   isActive: boolean;
+  redFlag?: boolean;
+  redFlagReason?: string;
+  isMonthlyPayer?: boolean;
+  totalSpent?: number;
+  visitCount?: number;
+  loyaltyPoints?: number;
+  outstandingBalance?: number;
   tenantId: string;
   createdAt: string;
   updatedAt: string;
@@ -48,11 +55,13 @@ export interface CreateCustomerData {
 
 export interface UpdateCustomerData extends Partial<CreateCustomerData> {
   isActive?: boolean;
+  isMonthlyPayer?: boolean;
 }
 
 export interface CustomerFilters {
   search?: string;
   isActive?: boolean;
+  isMonthlyPayer?: boolean;
   city?: string;
   state?: string;
   country?: string;

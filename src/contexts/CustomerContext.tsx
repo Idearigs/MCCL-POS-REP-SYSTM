@@ -5,10 +5,11 @@ import { useAuth } from './AuthContext';
 // Extended Customer interface that includes backend fields plus legacy UI fields
 export interface Customer extends Omit<ServiceCustomer, 'phone' | 'email' | 'notes'> {
   phone: string;  // Make required for UI
-  email: string;  // Make required for UI  
+  email: string;  // Make required for UI
   notes: string;  // Make required for UI
   redFlag?: boolean;
   redFlagReason?: string;
+  isMonthlyPayer?: boolean;
   since?: string;
   marketingConsent?: {
     email: boolean;
@@ -40,7 +41,8 @@ const convertBackendCustomer = (customer: ServiceCustomer): Customer => ({
   email: customer.email || '',
   notes: customer.notes || '',
   // Legacy UI fields with defaults
-  redFlag: false,
+  redFlag: customer.redFlag ?? false,
+  isMonthlyPayer: customer.isMonthlyPayer ?? false,
   since: new Date(customer.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
   marketingConsent: { 
     email: customer.marketingEmail || false, 

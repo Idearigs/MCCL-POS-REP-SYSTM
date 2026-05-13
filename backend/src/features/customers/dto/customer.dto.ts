@@ -209,6 +209,15 @@ export class UpdateCustomerDto extends PartialType(CreateCustomerDto) {
   @IsBoolean()
   @Transform(({ value }) => value === 'true' || value === true)
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Flag customer as a monthly payer (pays in instalments)',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => value === 'true' || value === true)
+  isMonthlyPayer?: boolean;
 }
 
 export class CustomerQueryDto extends PaginationDto {
@@ -238,6 +247,15 @@ export class CustomerQueryDto extends PaginationDto {
   @IsBoolean()
   @Transform(({ value }) => value === 'true')
   redFlag?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Filter by monthly payer status',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => value === 'true')
+  isMonthlyPayer?: boolean;
 
   @ApiPropertyOptional({
     description: 'Filter by preferred contact method',
@@ -346,6 +364,9 @@ export class CustomerResponseDto {
 
   @ApiPropertyOptional({ example: 'Payment issues' })
   redFlagReason?: string;
+
+  @ApiProperty({ example: false })
+  isMonthlyPayer: boolean;
 
   @ApiProperty({ example: '2024-01-15T10:30:00Z' })
   createdAt: string;
