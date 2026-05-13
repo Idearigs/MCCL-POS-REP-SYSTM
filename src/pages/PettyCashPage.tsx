@@ -125,10 +125,28 @@ const PettyCashPage: React.FC = () => {
   const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!expenseForm.accountId) {
+      toast({
+        title: 'Account Required',
+        description: 'Please select a petty cash account',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (expenseForm.amount <= 0) {
       toast({
         title: 'Invalid Amount',
         description: 'Amount must be greater than zero',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!expenseForm.description.trim()) {
+      toast({
+        title: 'Description Required',
+        description: 'Please enter a description for this expense',
         variant: 'destructive',
       });
       return;
@@ -358,7 +376,13 @@ const PettyCashPage: React.FC = () => {
               <Plus className="h-4 w-4 mr-2" />
               Add Account
             </Button>
-            <Button onClick={() => setExpenseDialogOpen(true)} disabled={accounts.filter(a => a.isActive).length === 0}>
+            <Button onClick={() => {
+              const activeAccounts = accounts.filter(a => a.isActive);
+              if (activeAccounts.length === 1) {
+                setExpenseForm(prev => ({ ...prev, accountId: activeAccounts[0].id }));
+              }
+              setExpenseDialogOpen(true);
+            }} disabled={accounts.filter(a => a.isActive).length === 0}>
               <Plus className="h-4 w-4 mr-2" />
               Record Expense
             </Button>
