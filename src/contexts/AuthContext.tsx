@@ -145,7 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       suspendedReason: tenant.suspendedReason ?? null,
       billingDueDate: tenant.billingDueDate ?? null,
       billingDaysOverdue: calcDaysOverdue(tenant.billingDueDate),
-      tenantSlug: tenant.slug ?? null,
+      tenantSlug: tenant.subdomain ?? tenant.slug ?? null,
       tenantName: tenant.name ?? null,
     };
   };

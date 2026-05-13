@@ -419,7 +419,7 @@ model outlets {
 model users {
   id                           String                    @id
   tenantId                     String
-  email                        String                    @unique
+  email                        String
   password                     String
   firstName                    String
   lastName                     String
@@ -454,6 +454,8 @@ model users {
   task_comments                task_comments[]
   created_tasks                tasks[]                   @relation("TaskCreator")
   tenants                      tenants                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([email, tenantId])
 }
 
 model stock_take_sessions {
