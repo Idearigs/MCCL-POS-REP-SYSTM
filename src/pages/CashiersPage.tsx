@@ -95,9 +95,13 @@ const CashiersPage: React.FC = () => {
       await loadCashiers();
       setIsAddDialogOpen(false);
     } catch (error: any) {
+      const raw = error.response?.data?.message;
+      const errorMessage = Array.isArray(raw)
+        ? raw.map((e: any) => Object.values(e.constraints || {}).join(', ')).join('; ')
+        : raw || error.message || 'Failed to add cashier';
       toast({
         title: 'Error',
-        description: error.message || 'Failed to add cashier',
+        description: errorMessage,
         variant: 'destructive'
       });
       throw error;

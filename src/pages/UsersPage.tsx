@@ -382,7 +382,10 @@ export const UsersPage: React.FC = () => {
       });
       fetchUsers();
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to create user';
+      const raw = error.response?.data?.message;
+      const errorMessage = Array.isArray(raw)
+        ? raw.map((e: any) => Object.values(e.constraints || {}).join(', ')).join('; ')
+        : raw || error.message || 'Failed to create user';
       toast({
         title: 'Error',
         description: errorMessage,
