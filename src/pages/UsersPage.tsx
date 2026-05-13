@@ -103,7 +103,7 @@ const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onToggleS
             <Badge className={getRoleBadgeColor(user.role)}>
               <span className="flex items-center gap-1">
                 {getRoleIcon(user.role)}
-                {user.role}
+                {user.role === UserRole.STAFF ? 'Cashier' : user.role}
               </span>
             </Badge>
             {user.isActive ? (
@@ -665,7 +665,7 @@ export const UsersPage: React.FC = () => {
               <div className="p-4 rounded-lg border border-green-200 bg-white">
                 <div className="flex items-center gap-2 mb-2">
                   <UsersIcon className="h-4 w-4 text-green-600" />
-                  <h3 className="font-semibold text-green-800">Staff</h3>
+                  <h3 className="font-semibold text-green-800">Cashier</h3>
                 </div>
                 <p className="text-xs text-gray-600">Standard POS access for sales, repairs, and customer management</p>
               </div>
@@ -736,7 +736,7 @@ export const UsersPage: React.FC = () => {
                   <SelectItem value="all">All Roles</SelectItem>
                   <SelectItem value={UserRole.OWNER}>Owner</SelectItem>
                   <SelectItem value={UserRole.MANAGER}>Manager</SelectItem>
-                  <SelectItem value={UserRole.STAFF}>Staff</SelectItem>
+                  <SelectItem value={UserRole.STAFF}>Cashier</SelectItem>
                   <SelectItem value={UserRole.READONLY}>Read Only</SelectItem>
                 </SelectContent>
               </Select>
@@ -862,7 +862,7 @@ export const UsersPage: React.FC = () => {
                   <SelectItem value={UserRole.MANAGER}>
                     Manager - Can manage users and approve actions
                   </SelectItem>
-                  <SelectItem value={UserRole.STAFF}>Staff - Standard POS access</SelectItem>
+                  <SelectItem value={UserRole.STAFF}>Cashier - Standard POS access</SelectItem>
                   <SelectItem value={UserRole.READONLY}>Read Only - View access only</SelectItem>
                 </SelectContent>
               </Select>
@@ -922,7 +922,7 @@ export const UsersPage: React.FC = () => {
                 <SelectContent>
                   <SelectItem value={UserRole.OWNER}>Owner</SelectItem>
                   <SelectItem value={UserRole.MANAGER}>Manager</SelectItem>
-                  <SelectItem value={UserRole.STAFF}>Staff</SelectItem>
+                  <SelectItem value={UserRole.STAFF}>Cashier</SelectItem>
                   <SelectItem value={UserRole.READONLY}>Read Only</SelectItem>
                 </SelectContent>
               </Select>
@@ -1024,7 +1024,7 @@ export const UsersPage: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <UsersIcon className="h-4 w-4 text-green-600" />
                       <div>
-                        <p className="font-semibold">Staff</p>
+                        <p className="font-semibold">Cashier</p>
                         <p className="text-xs text-gray-500">Standard POS access</p>
                       </div>
                     </div>
