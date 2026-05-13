@@ -348,6 +348,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error: null
       }));
 
+      // Fetch full tenant info (including subdomain) immediately after login
+      // so tenant-gated features activate without requiring a page refresh.
+      authService.getMe().then(me => {
+        setAuth(prev => ({ ...prev, tenantInfo: buildTenantInfo(me) }));
+      }).catch(() => {});
+
       return true;
     } catch (error: any) {
       console.error('Login failed:', error);
