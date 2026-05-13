@@ -146,7 +146,10 @@ export class PettyCashController {
   @ApiOperation({ summary: 'Delete a petty cash account' })
   @ApiResponse({ status: 204, description: 'Account deleted successfully' })
   @ApiResponse({ status: 404, description: 'Account not found' })
-  @ApiResponse({ status: 400, description: 'Account has transactions and cannot be deleted' })
+  @ApiResponse({
+    status: 400,
+    description: 'Account has transactions and cannot be deleted',
+  })
   async deleteAccount(
     @Request() req,
     @Param('accountId') accountId: string,

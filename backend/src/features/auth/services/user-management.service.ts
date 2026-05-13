@@ -195,6 +195,8 @@ export class UserManagementService {
       where: { id: userId },
     });
 
-    this.logger.log(`User ${userId} deleted; records reassigned to owner ${owner?.id}`);
+    this.logger.log(
+      `User ${userId} deleted; records reassigned to owner ${owner?.id}`,
+    );
   }
 }
