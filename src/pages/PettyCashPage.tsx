@@ -20,6 +20,9 @@ import {
   AlertCircle,
   Eye,
   Printer,
+  Edit,
+  Trash2,
+  PlusCircle,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -60,6 +63,11 @@ const PettyCashPage: React.FC = () => {
   const [selectedTransaction, setSelectedTransaction] = useState<PettyCashTransaction | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
+  const [editAccountDialogOpen, setEditAccountDialogOpen] = useState(false);
+  const [replenishDialogOpen, setReplenishDialogOpen] = useState(false);
+  const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<PettyCashAccount | null>(null);
+  const [replenishAmount, setReplenishAmount] = useState('');
 
   // New account form state
   const [accountForm, setAccountForm] = useState({
@@ -67,6 +75,14 @@ const PettyCashPage: React.FC = () => {
     location: '',
     openingBalance: 0,
     monthlyBudget: 0,
+  });
+
+  // Edit account form state
+  const [editForm, setEditForm] = useState({
+    accountName: '',
+    location: '',
+    monthlyBudget: 0,
+    isActive: true,
   });
 
   // Expense form state
@@ -167,6 +183,57 @@ const PettyCashPage: React.FC = () => {
       loadData();
     } catch (error: any) {
       toast({ title: 'Failed to Create Account', description: error.response?.data?.message || 'An error occurred', variant: 'destructive' });
+    }
+  };
+
+  const handleEditAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAccount) return;
+    try {
+      await pettyCashService.updateAccount(selectedAccount.id, {
+        accountName: editForm.accountName.trim(),
+        location: editForm.location.trim() || undefined,
+        monthlyBudget: editForm.monthlyBudget || undefined,
+        isActive: editForm.isActive,
+      });
+      toast({ title: 'Account Updated' });
+      setEditAccountDialogOpen(false);
+      setSelectedAccount(null);
+      loadData();
+    } catch (error: any) {
+      toast({ title: 'Failed to Update Account', description: error.response?.data?.message || 'An error occurred', variant: 'destructive' });
+    }
+  };
+
+  const handleReplenish = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAccount) return;
+    const amount = parseFloat(replenishAmount);
+    if (!amount || amount <= 0) {
+      toast({ title: 'Enter a valid amount', variant: 'destructive' });
+      return;
+    }
+    try {
+      await pettyCashService.replenishAccount(selectedAccount.id, { amount });
+      toast({ title: 'Balance Updated', description: `£${amount.toFixed(2)} added to ${selectedAccount.accountName}` });
+      setReplenishDialogOpen(false);
+      setReplenishAmount('');
+      setSelectedAccount(null);
+      loadData();
+    } catch (error: any) {
+      toast({ title: 'Failed to Replenish', description: error.response?.data?.message || 'An error occurred', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteAccount = async (account: PettyCashAccount) => {
+    try {
+      await pettyCashService.deleteAccount(account.id);
+      toast({ title: 'Account Deleted', description: `${account.accountName} has been removed` });
+      setDeletingAccountId(null);
+      loadData();
+    } catch (error: any) {
+      toast({ title: 'Cannot Delete', description: error.response?.data?.message || 'An error occurred', variant: 'destructive' });
+      setDeletingAccountId(null);
     }
   };
 
@@ -367,10 +434,13 @@ const PettyCashPage: React.FC = () => {
                     <CardContent className="pt-4">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="font-semibold text-lg">{account.accountName}</h3>
-                          <p className="text-sm text-gray-500 font-mono">
-                            {account.accountNumber}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-lg">{account.accountName}</h3>
+                            <Badge variant={account.isActive ? 'default' : 'secondary'}>
+                              {account.isActive ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-gray-500 font-mono">{account.accountNumber}</p>
                           {account.location && (
                             <p className="text-xs text-gray-500 mt-1">{account.location}</p>
                           )}
@@ -386,6 +456,71 @@ const PettyCashPage: React.FC = () => {
                             </p>
                           )}
                         </div>
+                      </div>
+                      {/* Account actions */}
+                      <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200 relative">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedAccount(account);
+                            setEditForm({
+                              accountName: account.accountName,
+                              location: account.location || '',
+                              monthlyBudget: account.monthlyBudget || 0,
+                              isActive: account.isActive,
+                            });
+                            setEditAccountDialogOpen(true);
+                          }}
+                        >
+                          <Edit className="h-3 w-3 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-green-200 text-green-700 hover:bg-green-50"
+                          onClick={() => {
+                            setSelectedAccount(account);
+                            setReplenishAmount('');
+                            setReplenishDialogOpen(true);
+                          }}
+                        >
+                          <PlusCircle className="h-3 w-3 mr-1" />
+                          Add Funds
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-red-200 text-red-600 hover:bg-red-50 ml-auto"
+                          onClick={() => setDeletingAccountId(account.id)}
+                        >
+                          <Trash2 className="h-3 w-3 mr-1" />
+                          Delete
+                        </Button>
+                        {/* Inline delete confirm */}
+                        {deletingAccountId === account.id && (
+                          <div className="absolute right-0 bottom-10 z-50 w-64 rounded-lg border border-red-200 bg-white p-3 shadow-lg">
+                            <p className="text-sm font-medium text-gray-900 mb-1">Delete account?</p>
+                            <p className="text-xs text-gray-500 mb-3">
+                              Only accounts with no transactions can be deleted. Use Edit to deactivate instead.
+                            </p>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleDeleteAccount(account)}
+                                className="flex-1 rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-colors"
+                              >
+                                Delete
+                              </button>
+                              <button
+                                onClick={() => setDeletingAccountId(null)}
+                                className="flex-1 rounded-md border border-gray-200 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -808,6 +943,90 @@ const PettyCashPage: React.FC = () => {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      {/* Edit Account Dialog */}
+      <Dialog open={editAccountDialogOpen} onOpenChange={setEditAccountDialogOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Edit Account</DialogTitle>
+            <DialogDescription>Update account details</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditAccount} className="space-y-4">
+            <div>
+              <Label>Account Name <span className="text-red-500">*</span></Label>
+              <Input
+                value={editForm.accountName}
+                onChange={(e) => setEditForm({ ...editForm, accountName: e.target.value })}
+                placeholder="Main Branch Petty Cash"
+              />
+            </div>
+            <div>
+              <Label>Location</Label>
+              <Input
+                value={editForm.location}
+                onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                placeholder="e.g. Front Desk"
+              />
+            </div>
+            <div>
+              <Label>Monthly Budget (£)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={editForm.monthlyBudget}
+                onChange={(e) => setEditForm({ ...editForm, monthlyBudget: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="editIsActive"
+                checked={editForm.isActive}
+                onChange={(e) => setEditForm({ ...editForm, isActive: e.target.checked })}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <Label htmlFor="editIsActive" className="cursor-pointer">Account is Active</Label>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditAccountDialogOpen(false)}>Cancel</Button>
+              <Button type="submit">Save Changes</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Funds / Replenish Dialog */}
+      <Dialog open={replenishDialogOpen} onOpenChange={setReplenishDialogOpen}>
+        <DialogContent className="sm:max-w-[360px]">
+          <DialogHeader>
+            <DialogTitle>Add Funds</DialogTitle>
+            <DialogDescription>
+              Add money to <strong>{selectedAccount?.accountName}</strong>
+              {selectedAccount && (
+                <span className="block text-sm mt-1">Current balance: £{selectedAccount.currentBalance.toFixed(2)}</span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleReplenish} className="space-y-4">
+            <div>
+              <Label>Amount to Add (£) <span className="text-red-500">*</span></Label>
+              <Input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={replenishAmount}
+                onChange={(e) => setReplenishAmount(e.target.value)}
+                placeholder="0.00"
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setReplenishDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" className="bg-green-600 hover:bg-green-700">Add Funds</Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </MainLayout>

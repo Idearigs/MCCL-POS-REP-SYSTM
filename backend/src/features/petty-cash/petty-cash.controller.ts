@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Body,
   Param,
   Query,
@@ -138,6 +139,20 @@ export class PettyCashController {
       accountId,
       dto,
     );
+  }
+
+  @Delete('accounts/:accountId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a petty cash account' })
+  @ApiResponse({ status: 204, description: 'Account deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Account not found' })
+  @ApiResponse({ status: 400, description: 'Account has transactions and cannot be deleted' })
+  async deleteAccount(
+    @Request() req,
+    @Param('accountId') accountId: string,
+  ): Promise<void> {
+    const tenantId = req.user.tenantId;
+    return this.pettyCashService.deleteAccount(tenantId, accountId);
   }
 
   // ===== TRANSACTIONS =====

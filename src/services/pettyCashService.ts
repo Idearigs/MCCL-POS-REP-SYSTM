@@ -188,6 +188,10 @@ class PettyCashService {
     );
   }
 
+  async deleteAccount(accountId: string): Promise<void> {
+    return apiClient.delete(`${this.baseUrl}/accounts/${accountId}`);
+  }
+
   // ===== TRANSACTIONS =====
 
   async createTransaction(

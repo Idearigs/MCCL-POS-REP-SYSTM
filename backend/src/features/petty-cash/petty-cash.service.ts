@@ -270,6 +270,29 @@ export class PettyCashService {
     return this.transformAccount(updated);
   }
 
+  /**
+   * Delete petty cash account (only if no transactions exist)
+   */
+  async deleteAccount(tenantId: string, accountId: string): Promise<void> {
+    const account = await this.prisma.petty_cash_accounts.findFirst({
+      where: { id: accountId, tenantId },
+      include: { _count: { select: { petty_cash_transactions: true } } },
+    });
+
+    if (!account) {
+      throw new NotFoundException('Petty cash account not found');
+    }
+
+    if (account._count.petty_cash_transactions > 0) {
+      throw new BadRequestException(
+        'Cannot delete account with existing transactions. Deactivate it instead.',
+      );
+    }
+
+    await this.prisma.petty_cash_accounts.delete({ where: { id: accountId } });
+    this.logger.log(`Petty cash account ${account.accountNumber} deleted`);
+  }
+
   // ===== TRANSACTION MANAGEMENT =====
 
   /**
