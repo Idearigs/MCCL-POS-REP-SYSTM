@@ -54,4 +54,9 @@ export const userService = {
   activateUser: async (userId: string): Promise<User> => {
     return await apiClient.patch(`/auth/users/${userId}`, { isActive: true });
   },
+
+  // Permanently delete user
+  deleteUser: async (userId: string): Promise<void> => {
+    await apiClient.delete(`/auth/users/${userId}`);
+  },
 };

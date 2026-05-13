@@ -14,6 +14,7 @@ import {
   Filter,
   AlertCircle,
   Lock,
+  Trash2,
 } from 'lucide-react';
 import MainLayout from '../components/layout/MainLayout';
 import { Button } from '../components/ui/button';
@@ -51,10 +52,14 @@ interface UserCardProps {
   onToggleStatus: (user: User) => void;
   onChangeRole: (user: User) => void;
   onManagePermissions: (user: User) => void;
+  onDelete: (user: User) => void;
   currentUserId: string;
+  deletingUserId: string | null;
+  onDeleteConfirm: (user: User) => void;
+  onDeleteCancel: () => void;
 }
 
-const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onToggleStatus, onChangeRole, onManagePermissions, currentUserId }) => {
+const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onToggleStatus, onChangeRole, onManagePermissions, onDelete, currentUserId, deletingUserId, onDeleteConfirm, onDeleteCancel }) => {
   const getRoleBadgeColor = useCallback((role: UserRole) => {
     switch (role) {
       case UserRole.OWNER:
@@ -121,7 +126,7 @@ const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onToggleS
           </div>
         </div>
       </div>
-      <div className="flex gap-2 flex-shrink-0 flex-wrap">
+      <div className="flex gap-2 flex-shrink-0 flex-wrap items-center relative">
         <Button variant="outline" size="sm" onClick={() => onEdit(user)}>
           <Edit className="h-4 w-4 mr-1" />
           Edit
@@ -169,6 +174,42 @@ const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onToggleS
             </>
           )}
         </Button>
+        {/* Delete — not available for own account */}
+        {user.id !== currentUserId && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onDelete(user)}
+            className="border-red-200 text-red-600 hover:bg-red-50"
+          >
+            <Trash2 className="h-4 w-4 mr-1" />
+            Delete
+          </Button>
+        )}
+
+        {/* Inline delete confirmation */}
+        {deletingUserId === user.id && (
+          <div className="absolute right-0 top-10 z-50 w-64 rounded-lg border border-red-200 bg-white p-3 shadow-lg">
+            <p className="text-sm font-medium text-gray-900 mb-1">Delete this user?</p>
+            <p className="text-xs text-gray-500 mb-3">
+              Permanently removes <strong>{user.firstName} {user.lastName}</strong>. Their sales history is kept.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => onDeleteConfirm(user)}
+                className="flex-1 rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+              <button
+                onClick={onDeleteCancel}
+                className="flex-1 rounded-md border border-gray-200 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -221,6 +262,7 @@ export const UsersPage: React.FC = () => {
   const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.STAFF);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   // Form states
   const [formData, setFormData] = useState<CreateUserDto>({
@@ -510,6 +552,24 @@ export const UsersPage: React.FC = () => {
     }
   }, [toast]);
 
+  const handleDeleteUser = useCallback(async (user: User) => {
+    try {
+      setLoading(true);
+      await userService.deleteUser(user.id);
+      toast({ title: 'User Deleted', description: `${user.firstName} ${user.lastName} has been removed` });
+      setDeletingUserId(null);
+      fetchUsers();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to delete user',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast, fetchUsers]);
+
   const handleChangeRole = useCallback(async () => {
     if (!selectedUser) return;
 
@@ -726,7 +786,11 @@ export const UsersPage: React.FC = () => {
                   onToggleStatus={handleToggleUserStatus}
                   onChangeRole={openRoleDialog}
                   onManagePermissions={openPermissionDialog}
+                  onDelete={(u) => setDeletingUserId(u.id)}
                   currentUserId={auth.user?.id || ''}
+                  deletingUserId={deletingUserId}
+                  onDeleteConfirm={handleDeleteUser}
+                  onDeleteCancel={() => setDeletingUserId(null)}
                 />
               ))}
             </div>
