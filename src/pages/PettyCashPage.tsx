@@ -27,6 +27,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import MainLayout from '@/components/layout/MainLayout';
+import { printThermalReceipt } from '@/utils/thermalReceipt';
+import { useSettings } from '@/contexts/SettingsContext';
 import {
   pettyCashService,
   PettyCashAccount,
@@ -56,6 +58,7 @@ import {
 
 const PettyCashPage: React.FC = () => {
   const { toast } = useToast();
+  const { settings } = useSettings();
   const [accounts, setAccounts] = useState<PettyCashAccount[]>([]);
   const [pendingTransactions, setPendingTransactions] = useState<PettyCashTransaction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -255,42 +258,58 @@ const PettyCashPage: React.FC = () => {
     }
   };
 
-  const handlePrintExpenseReceipt = (transaction: PettyCashTransaction) => {
+  const handlePrintExpenseReceipt = async (transaction: PettyCashTransaction) => {
     const account = accounts.find(a => a.id === transaction.accountId);
-    const lines = [
-      '================================',
-      '         PETTY CASH EXPENSE     ',
-      '================================',
-      `Date:     ${format(new Date(transaction.createdAt), 'dd MMM yyyy HH:mm')}`,
-      `Ref:      ${transaction.transactionNumber || transaction.id.slice(0, 8).toUpperCase()}`,
-      `Account:  ${account?.accountName || 'N/A'}`,
-      '--------------------------------',
-      `Category: ${transaction.category.replace(/_/g, ' ')}`,
-      `Vendor:   ${transaction.vendor || 'N/A'}`,
-      `Desc:     ${transaction.description}`,
-      '--------------------------------',
-      `AMOUNT:   £${transaction.amount.toFixed(2)}`,
-      `Status:   ${transaction.status}`,
-      '================================',
+    const categoryLabel = transaction.category.replace(/_/g, ' ');
+    const itemName = transaction.vendor
+      ? `${categoryLabel} - ${transaction.vendor}`
+      : categoryLabel;
+    const footerLines = [
+      transaction.description,
       transaction.notes ? `Notes: ${transaction.notes}` : '',
       '',
-      'Authorised signature: ___________',
+      `Status: ${transaction.status}`,
       '',
-    ].filter(l => l !== null);
+      'Authorised signature: ___________',
+    ].filter(Boolean).join('\n');
 
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
-    if (!printWindow) return;
-    printWindow.document.write(`
-      <html><head><title>Petty Cash Receipt</title>
-      <style>
-        body { font-family: monospace; font-size: 12px; margin: 20px; white-space: pre-wrap; }
-        @media print { body { margin: 0; } }
-      </style></head>
-      <body>${lines.join('\n')}</body></html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => { printWindow.print(); printWindow.close(); }, 300);
+    try {
+      await printThermalReceipt(
+        {
+          storeName: settings.general.storeName || 'Store',
+          storeAddress: settings.general.address,
+          storePhone: settings.general.phone,
+          tradingName: settings.general.tradingName,
+          receiptNumber: transaction.transactionNumber || transaction.id.slice(0, 8).toUpperCase(),
+          date: transaction.createdAt,
+          cashierName: 'Petty Cash',
+          customerName: account?.accountName || 'Petty Cash Account',
+          items: [{
+            name: itemName,
+            quantity: 1,
+            unitPrice: transaction.amount,
+            total: transaction.amount,
+          }],
+          subtotal: transaction.amount,
+          discountAmount: 0,
+          taxAmount: 0,
+          totalAmount: transaction.amount,
+          paymentMethod: 'CASH',
+          footerMessage: footerLines,
+        },
+        {
+          model: settings.printer.model,
+          copies: 1,
+        },
+        settings.printer.printerName || undefined,
+      );
+    } catch (err: any) {
+      toast({
+        title: 'Print Failed',
+        description: err?.message || 'Could not send to printer',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleApprove = async (transactionId: string) => {

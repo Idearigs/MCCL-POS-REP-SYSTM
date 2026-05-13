@@ -1295,7 +1295,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
           const apiItems = sale.items || [];
           if (apiItems.length > 0) {
             return apiItems.map((item: any) => ({
-              name: item.productName || item.name || 'Item',
+              name: item.productName || item.name ||
+                (item.notes?.startsWith('REPAIR SERVICE:') ? item.notes.replace('REPAIR SERVICE: ', '') : 'Item'),
               sku: item.productSku || item.sku,
               quantity: item.quantity,
               unitPrice: item.unitPrice ?? 0,
