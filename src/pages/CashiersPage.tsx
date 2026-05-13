@@ -223,18 +223,18 @@ const CashiersPage: React.FC = () => {
     }
   };
 
-  // Exclude OWNER accounts — cashier management is for operational staff only
+  // Only show STAFF (Cashier) role — OWNER and MANAGER belong in User Management
   const filteredCashiers = cashiers
-    .filter(cashier => cashier.role !== 'OWNER')
+    .filter(cashier => cashier.role === 'STAFF')
     .filter(cashier =>
       cashier.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cashier.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cashier.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-  const nonOwnerCashiers = cashiers.filter(c => c.role !== 'OWNER');
-  const totalCashiers = nonOwnerCashiers.length;
-  const activeCashiers = nonOwnerCashiers.filter(c => c.isActive).length;
+  const staffOnly = cashiers.filter(c => c.role === 'STAFF');
+  const totalCashiers = staffOnly.length;
+  const activeCashiers = staffOnly.filter(c => c.isActive).length;
   const topPerformer = cashierStats.length > 0
     ? cashierStats.reduce((max, stat) => stat.monthRevenue > max.monthRevenue ? stat : max, cashierStats[0])
     : null;
