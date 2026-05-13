@@ -176,6 +176,17 @@ export class AuthResponseDto {
   };
 
   @ApiProperty({
+    description: 'Tenant information',
+    required: false,
+  })
+  tenant?: {
+    id: string;
+    name: string;
+    subdomain: string;
+    status: string;
+  };
+
+  @ApiProperty({
     description: 'Token expiration time in seconds',
     example: 900,
   })

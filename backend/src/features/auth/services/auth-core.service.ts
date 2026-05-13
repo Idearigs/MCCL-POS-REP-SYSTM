@@ -113,6 +113,14 @@ export class AuthCoreService {
           role: user.role,
           tenantId: user.tenantId,
         },
+        tenant: user.tenants
+          ? {
+              id: user.tenants.id,
+              name: user.tenants.name,
+              subdomain: user.tenants.subdomain,
+              status: user.tenants.status,
+            }
+          : undefined,
         expiresIn: this.getExpirationTime(),
       };
     } catch (error: unknown) {
