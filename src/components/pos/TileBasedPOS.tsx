@@ -174,7 +174,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
   // Payment states
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'CASH' | 'CARD' | 'BANK_TRANSFER' | 'DIGITAL_WALLET' | 'SPLIT'>('CASH');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'CASH' | 'CARD' | 'BANK_TRANSFER' | 'DIGITAL_WALLET' | 'SPLIT' | 'INSTALLMENT'>('CASH');
   const [cashAmount, setCashAmount] = useState<string>('');
   const [splitCashAmount, setSplitCashAmount] = useState<string>('');
   const [changeGiven, setChangeGiven] = useState<number>(0);
@@ -1487,6 +1487,16 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
           setProcessingPayment(false);
           return;
         }
+      } else if (selectedPaymentMethod === 'INSTALLMENT') {
+        if (!selectedCustomer) {
+          toast({
+            title: 'Customer required',
+            description: 'Select a customer before using Monthly Account payment',
+            variant: 'destructive'
+          });
+          setProcessingPayment(false);
+          return;
+        }
       }
 
       // Separate products and repairs
@@ -1563,10 +1573,12 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
               { method: 'CARD', amount: splitCard, notes: `Split payment: £${splitCard.toFixed(2)} card` },
             ]
           : [{
-              method: selectedPaymentMethod as 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'DIGITAL_WALLET',
+              method: (selectedPaymentMethod === 'INSTALLMENT' ? 'INSTALLMENT' : selectedPaymentMethod) as 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'DIGITAL_WALLET' | 'INSTALLMENT',
               amount: total,
               notes: selectedPaymentMethod === 'CASH' && change > 0
                 ? `Cash received: £${parseFloat(cashAmount).toFixed(2)}, Change: £${change.toFixed(2)}`
+                : selectedPaymentMethod === 'INSTALLMENT'
+                ? `Monthly account charge for ${selectedCustomer?.name}`
                 : undefined,
             }];
 
@@ -3114,8 +3126,30 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 <Shuffle className="h-4 w-4" />
                 Split (Cash + Card)
               </button>
+              {/* Monthly Account: full width */}
+              <button
+                onClick={() => setSelectedPaymentMethod('INSTALLMENT')}
+                className={`col-span-2 flex items-center justify-center gap-2 py-2 rounded-xl border-2 text-xs font-semibold transition-all ${
+                  selectedPaymentMethod === 'INSTALLMENT'
+                    ? 'border-orange-500 bg-orange-50 text-orange-700'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                <CalendarClock className="h-4 w-4" />
+                Monthly Account
+              </button>
             </div>
           </div>
+
+          {/* Monthly Account info strip */}
+          {selectedPaymentMethod === 'INSTALLMENT' && (
+            <div className={`rounded-xl p-3 border-2 text-xs ${selectedCustomer ? 'bg-orange-50 border-orange-200 text-orange-800' : 'bg-red-50 border-red-200 text-red-700'}`}>
+              {selectedCustomer
+                ? <><span className="font-semibold">Monthly charge:</span> {selectedCustomer.name} — £{total.toFixed(2)}</>
+                : '⚠ Select a customer to use Monthly Account'
+              }
+            </div>
+          )}
 
           {/* Cash amount entry */}
           {selectedPaymentMethod === 'CASH' && (
@@ -3799,8 +3833,37 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                     Split (Cash + Card)
                   </span>
                 </button>
+
+                {/* Monthly Account / Installment */}
+                <button
+                  onClick={() => setSelectedPaymentMethod('INSTALLMENT')}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all col-span-2 ${
+                    selectedPaymentMethod === 'INSTALLMENT'
+                      ? 'border-orange-500 bg-orange-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <CalendarClock className={`h-8 w-8 ${selectedPaymentMethod === 'INSTALLMENT' ? 'text-orange-500' : 'text-gray-600'}`} />
+                  <span className={`text-sm font-medium ${selectedPaymentMethod === 'INSTALLMENT' ? 'text-orange-500' : 'text-gray-700'}`}>
+                    Monthly Account
+                  </span>
+                </button>
               </div>
             </div>
+
+            {/* Monthly Account info */}
+            {selectedPaymentMethod === 'INSTALLMENT' && (
+              <div className={`rounded-lg p-4 border-2 ${selectedCustomer ? 'bg-orange-50 border-orange-200' : 'bg-red-50 border-red-200'}`}>
+                {selectedCustomer ? (
+                  <div className="text-sm text-orange-800">
+                    <p className="font-semibold">Charging to monthly account</p>
+                    <p className="text-orange-600 mt-1">{selectedCustomer.name} — £{total.toFixed(2)} will be added to their account</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-red-700 font-medium">⚠ Select a customer first to use Monthly Account</p>
+                )}
+              </div>
+            )}
 
             {/* Cash Amount Input (only for cash payments) */}
             {selectedPaymentMethod === 'CASH' && (
