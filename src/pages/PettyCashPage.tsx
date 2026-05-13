@@ -27,7 +27,6 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import MainLayout from '@/components/layout/MainLayout';
-import { printThermalReceipt } from '@/utils/thermalReceipt';
 import { useSettings } from '@/contexts/SettingsContext';
 import {
   pettyCashService,
@@ -259,6 +258,15 @@ const PettyCashPage: React.FC = () => {
   };
 
   const handlePrintExpenseReceipt = async (transaction: PettyCashTransaction) => {
+    if (!settings.printer.printerName) {
+      toast({
+        title: 'No Printer Configured',
+        description: 'Go to Settings → Printer to configure your printer.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const account = accounts.find(a => a.id === transaction.accountId);
     const categoryLabel = transaction.category.replace(/_/g, ' ');
     const itemName = transaction.vendor
@@ -266,15 +274,16 @@ const PettyCashPage: React.FC = () => {
       : categoryLabel;
     const footerLines = [
       transaction.description,
-      transaction.notes ? `Notes: ${transaction.notes}` : '',
-      '',
+      transaction.notes ? `Notes: ${transaction.notes}` : null,
       `Status: ${transaction.status}`,
       '',
       'Authorised signature: ___________',
     ].filter(Boolean).join('\n');
 
     try {
-      await printThermalReceipt(
+      const { printReceiptQZ } = await import('@/utils/qzBridge');
+      await printReceiptQZ(
+        settings.printer.printerName,
         {
           storeName: settings.general.storeName || 'Store',
           storeAddress: settings.general.address,
@@ -301,12 +310,11 @@ const PettyCashPage: React.FC = () => {
           model: settings.printer.model,
           copies: 1,
         },
-        settings.printer.printerName || undefined,
       );
     } catch (err: any) {
       toast({
         title: 'Print Failed',
-        description: err?.message || 'Could not send to printer',
+        description: err?.message || 'QZ Tray is not running. Make sure QZ Tray is open on this PC.',
         variant: 'destructive',
       });
     }
