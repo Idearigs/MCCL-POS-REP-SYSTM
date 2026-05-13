@@ -19,6 +19,7 @@ import {
   TrendingDown,
   AlertCircle,
   Eye,
+  Printer,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -58,6 +59,15 @@ const PettyCashPage: React.FC = () => {
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<PettyCashTransaction | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [accountDialogOpen, setAccountDialogOpen] = useState(false);
+
+  // New account form state
+  const [accountForm, setAccountForm] = useState({
+    accountName: '',
+    location: '',
+    openingBalance: 0,
+    monthlyBudget: 0,
+  });
 
   // Expense form state
   const [expenseForm, setExpenseForm] = useState({
@@ -138,6 +148,66 @@ const PettyCashPage: React.FC = () => {
     }
   };
 
+  const handleCreateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accountForm.accountName.trim()) {
+      toast({ title: 'Account name required', variant: 'destructive' });
+      return;
+    }
+    try {
+      await pettyCashService.createAccount({
+        accountName: accountForm.accountName.trim(),
+        location: accountForm.location.trim() || undefined,
+        openingBalance: accountForm.openingBalance,
+        monthlyBudget: accountForm.monthlyBudget || undefined,
+      });
+      toast({ title: 'Account Created', description: `${accountForm.accountName} is ready to use` });
+      setAccountDialogOpen(false);
+      setAccountForm({ accountName: '', location: '', openingBalance: 0, monthlyBudget: 0 });
+      loadData();
+    } catch (error: any) {
+      toast({ title: 'Failed to Create Account', description: error.response?.data?.message || 'An error occurred', variant: 'destructive' });
+    }
+  };
+
+  const handlePrintExpenseReceipt = (transaction: PettyCashTransaction) => {
+    const account = accounts.find(a => a.id === transaction.accountId);
+    const lines = [
+      '================================',
+      '         PETTY CASH EXPENSE     ',
+      '================================',
+      `Date:     ${format(new Date(transaction.createdAt), 'dd MMM yyyy HH:mm')}`,
+      `Ref:      ${transaction.transactionNumber || transaction.id.slice(0, 8).toUpperCase()}`,
+      `Account:  ${account?.accountName || 'N/A'}`,
+      '--------------------------------',
+      `Category: ${transaction.category.replace(/_/g, ' ')}`,
+      `Vendor:   ${transaction.vendor || 'N/A'}`,
+      `Desc:     ${transaction.description}`,
+      '--------------------------------',
+      `AMOUNT:   £${transaction.amount.toFixed(2)}`,
+      `Status:   ${transaction.status}`,
+      '================================',
+      transaction.notes ? `Notes: ${transaction.notes}` : '',
+      '',
+      'Authorised signature: ___________',
+      '',
+    ].filter(l => l !== null);
+
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html><head><title>Petty Cash Receipt</title>
+      <style>
+        body { font-family: monospace; font-size: 12px; margin: 20px; white-space: pre-wrap; }
+        @media print { body { margin: 0; } }
+      </style></head>
+      <body>${lines.join('\n')}</body></html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 300);
+  };
+
   const handleApprove = async (transactionId: string) => {
     try {
       await pettyCashService.approveTransaction(transactionId);
@@ -216,10 +286,16 @@ const PettyCashPage: React.FC = () => {
               Manage expenses and petty cash accounts
             </p>
           </div>
-          <Button onClick={() => setExpenseDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Record Expense
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setAccountDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Account
+            </Button>
+            <Button onClick={() => setExpenseDialogOpen(true)} disabled={accounts.filter(a => a.isActive).length === 0}>
+              <Plus className="h-4 w-4 mr-2" />
+              Record Expense
+            </Button>
+          </div>
         </div>
 
         {/* Summary Cards */}
@@ -388,6 +464,14 @@ const PettyCashPage: React.FC = () => {
                           </Button>
                           <Button
                             size="sm"
+                            variant="outline"
+                            onClick={() => handlePrintExpenseReceipt(transaction)}
+                            title="Print Receipt"
+                          >
+                            <Printer className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
                             variant="default"
                             onClick={() => handleApprove(transaction.id)}
                           >
@@ -403,6 +487,58 @@ const PettyCashPage: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Create Account Dialog */}
+      <Dialog open={accountDialogOpen} onOpenChange={setAccountDialogOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Create Petty Cash Account</DialogTitle>
+            <DialogDescription>Add a new account to track petty cash expenses</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateAccount} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Account Name <span className="text-red-500">*</span></Label>
+              <Input
+                placeholder="e.g. Main Till, Back Office"
+                value={accountForm.accountName}
+                onChange={e => setAccountForm(p => ({ ...p, accountName: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Location</Label>
+              <Input
+                placeholder="e.g. Shop Floor"
+                value={accountForm.location}
+                onChange={e => setAccountForm(p => ({ ...p, location: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Opening Balance (£)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={accountForm.openingBalance}
+                onChange={e => setAccountForm(p => ({ ...p, openingBalance: parseFloat(e.target.value) || 0 }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Monthly Budget (£) — optional</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={accountForm.monthlyBudget}
+                onChange={e => setAccountForm(p => ({ ...p, monthlyBudget: parseFloat(e.target.value) || 0 }))}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setAccountDialogOpen(false)}>Cancel</Button>
+              <Button type="submit">Create Account</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Expense Dialog */}
       <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>

@@ -1266,7 +1266,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   };
 
   // Print thermal receipt for a completed sale
-  const handlePrintReceipt = async (sale: Sale) => {
+  // cartSnapshot is passed for immediate post-sale prints so repair/service items
+  // (which are stored as notes in the backend, not as sale_items) appear on the receipt.
+  const handlePrintReceipt = async (sale: Sale, cartSnapshot?: CartItem[]) => {
     const cashMatch = sale.notes?.match(/Cash received: £([\d.]+)/);
     const cashReceived = sale.paymentMethod === 'CASH' && cashMatch
       ? parseFloat(cashMatch[1]) || undefined
@@ -1286,15 +1288,32 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         date: sale.createdAt,
         cashierName: sale.cashierName || auth.user?.name || 'Staff',
         customerName: sale.customerName || undefined,
-        items: (sale.items || []).map((item: any) => ({
-          name: item.productName || item.name || 'Item',
-          sku: item.productSku || item.sku,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice ?? 0,
-          discount: item.discountAmount ?? item.discount ?? 0,
-          total: item.totalPrice ?? item.total ?? 0,
-          isRepair: item.isRepair,
-        })),
+        items: (() => {
+          // Prefer API response items (have DB-confirmed names/SKUs).
+          // Fall back to cart snapshot so repair/service items — stored as notes,
+          // not as sale_items — still appear on the printed receipt.
+          const apiItems = sale.items || [];
+          if (apiItems.length > 0) {
+            return apiItems.map((item: any) => ({
+              name: item.productName || item.name || 'Item',
+              sku: item.productSku || item.sku,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice ?? 0,
+              discount: item.discountAmount ?? item.discount ?? 0,
+              total: item.totalPrice ?? item.total ?? 0,
+              isRepair: item.isRepair,
+            }));
+          }
+          return (cartSnapshot || []).map((item) => ({
+            name: item.name,
+            sku: item.sku,
+            quantity: item.quantity,
+            unitPrice: item.price,
+            discount: 0,
+            total: item.price * item.quantity,
+            isRepair: item.isRepair,
+          }));
+        })(),
         subtotal: sale.subtotal,
         discountAmount: sale.discountAmount,
         taxAmount: sale.taxAmount,
@@ -1495,6 +1514,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       }
       refreshInventory().catch(() => {});
 
+      // Snapshot cart before clearing — used for receipt so service/repair items appear
+      const cartSnapshot = [...cart];
+
       // Clear cart state
       setCart([]);
       setSelectedCustomer(null);
@@ -1516,9 +1538,11 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         });
       }
 
-      // Print receipt on every completed sale when a printer is configured
+      // Print receipt on every completed sale when a printer is configured.
+      // cartSnapshot is passed so repair/service items appear even though the
+      // backend doesn't store them as sale_items (FK constraint).
       if (settings.printer.printerName) {
-        setTimeout(() => handlePrintReceipt(createdSale), 400);
+        setTimeout(() => handlePrintReceipt(createdSale, cartSnapshot), 400);
       }
 
     } catch (error: any) {

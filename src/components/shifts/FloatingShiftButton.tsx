@@ -200,9 +200,8 @@ const FloatingShiftButton: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Don't render if loading or no active shift
-  if (loading || !activeShift) {
-    console.log('FloatingShiftButton: Not rendering - loading:', loading, 'hasShift:', !!activeShift);
+  // Don't render while loading or inside Quick POS
+  if (loading || isInQuickPOS) {
     return null;
   }
 
@@ -241,9 +240,9 @@ const FloatingShiftButton: React.FC = () => {
           {/* Shift Info Badge */}
           <div className="bg-white px-4 py-2 rounded-full shadow-lg border border-gray-200 pointer-events-none">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <div className={`w-2 h-2 rounded-full animate-pulse ${activeShift ? 'bg-green-500' : 'bg-gray-400'}`} />
               <span className="text-xs font-semibold text-gray-700">
-                {activeShift.shiftNumber}
+                {activeShift ? activeShift.shiftNumber : 'No Shift'}
               </span>
             </div>
           </div>
@@ -297,29 +296,33 @@ const FloatingShiftButton: React.FC = () => {
             </button>
           </div>
 
-          {/* End Shift Button */}
-          <div className={`flex items-center gap-3 group ${isOnRight ? 'flex-row' : 'flex-row-reverse'}`}>
-            <div className="bg-white px-3 py-2 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-              <span className="text-sm font-medium text-gray-700">End Shift</span>
+          {/* End Shift Button — only when shift is active */}
+          {activeShift && (
+            <div className={`flex items-center gap-3 group ${isOnRight ? 'flex-row' : 'flex-row-reverse'}`}>
+              <div className="bg-white px-3 py-2 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+                <span className="text-sm font-medium text-gray-700">End Shift</span>
+              </div>
+              <button
+                onClick={handleEndShift}
+                className="relative flex items-center justify-center w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-200"
+              >
+                <LogOut size={20} />
+                <div className="absolute inset-0 rounded-full bg-white opacity-0 hover:opacity-20 transition-opacity duration-200" />
+              </button>
             </div>
-            <button
-              onClick={handleEndShift}
-              className="relative flex items-center justify-center w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-200"
-            >
-              <LogOut size={20} />
-              <div className="absolute inset-0 rounded-full bg-white opacity-0 hover:opacity-20 transition-opacity duration-200" />
-            </button>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Close Shift Dialog */}
-      <CloseShiftDialog
-        open={isCloseShiftDialogOpen}
-        onClose={() => setIsCloseShiftDialogOpen(false)}
-        activeShift={activeShift}
-        onShiftClosed={handleShiftClosed}
-      />
+      {/* Close Shift Dialog — only mount when shift exists */}
+      {activeShift && (
+        <CloseShiftDialog
+          open={isCloseShiftDialogOpen}
+          onClose={() => setIsCloseShiftDialogOpen(false)}
+          activeShift={activeShift}
+          onShiftClosed={handleShiftClosed}
+        />
+      )}
     </>
   );
 };
