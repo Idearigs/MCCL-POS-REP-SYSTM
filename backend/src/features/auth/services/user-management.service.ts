@@ -4,7 +4,6 @@ import {
   Logger,
   ConflictException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../../core/prisma/prisma.service';
@@ -167,26 +166,35 @@ export class UserManagementService {
   }
 
   async deleteUser(tenantId: string, userId: string): Promise<void> {
-    try {
-      await this.prismaService.users.delete({
-        where: { id: userId, tenantId },
-      });
-      this.logger.log(`User deleted: ${userId}`);
-    } catch (error: unknown) {
-      // P2003 = foreign key constraint — user has linked sales/shifts
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2003'
-      ) {
-        throw new ConflictException(
-          'Cannot delete this user — they have existing sales or shift records. Deactivate them instead.',
-        );
-      }
-      this.logger.error(
-        `Failed to delete user ${userId}:`,
-        error instanceof Error ? error.message : 'Unknown error',
-      );
-      throw error;
+    const user = await this.prismaService.users.findFirst({
+      where: { id: userId, tenantId },
+    });
+
+    if (!user) {
+      throw new ConflictException('User not found');
     }
+
+    // Find the tenant owner to reassign historical records before deletion
+    const owner = await this.prismaService.users.findFirst({
+      where: { tenantId, role: 'OWNER', id: { not: userId } },
+    });
+
+    if (owner) {
+      // Reassign sales and shifts so FK constraints don't block deletion
+      await this.prismaService.sales.updateMany({
+        where: { tenantId, createdBy: userId },
+        data: { createdBy: owner.id },
+      });
+      await this.prismaService.shifts.updateMany({
+        where: { tenantId, userId },
+        data: { userId: owner.id },
+      });
+    }
+
+    await this.prismaService.users.delete({
+      where: { id: userId },
+    });
+
+    this.logger.log(`User ${userId} deleted; records reassigned to owner ${owner?.id}`);
   }
 }
