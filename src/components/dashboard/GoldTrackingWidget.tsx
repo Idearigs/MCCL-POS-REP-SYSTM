@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { TrendingUp, TrendingDown, RefreshCw, Wifi, WifiOff, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { RefreshCw, Wifi, WifiOff, ArrowUpRight, ArrowDownRight, Calculator } from 'lucide-react';
+import { useSettings } from '../../contexts/SettingsContext';
 
 // Constants
 const GOLD_API_URL = 'https://www.goldapi.io/api/XAU/USD';
+const SILVER_API_URL = 'https://www.goldapi.io/api/XAG/USD';
+const PLATINUM_API_URL = 'https://www.goldapi.io/api/XPT/USD';
 const GOLD_API_KEY = 'goldapi-1inbzfsmice24ik-io';
 const TROY_OUNCE_TO_GRAMS = 31.1035;
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 60 minutes
@@ -17,6 +20,8 @@ const PURITY_MAP = {
   '22K': { multiplier: 0.916, label: '22 Karat', color: 'from-yellow-400 to-amber-500' },
   '24K': { multiplier: 1.000, label: '24 Karat', color: 'from-yellow-300 to-yellow-500' },
 };
+
+const USD_TO_GBP = 0.79;
 
 interface CachedData {
   pricePerOunce: number;
@@ -122,6 +127,9 @@ const AnimatedPrice: React.FC<{ value: number; prefix?: string; decimals?: numbe
 };
 
 const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' }) => {
+  const { settings } = useSettings();
+
+  // Rate view state
   const [pricePerGram, setPricePerGram] = useState<number>(0);
   const [pricePerOunce, setPricePerOunce] = useState<number>(0);
   const [previousPrice, setPreviousPrice] = useState<number>(0);
@@ -131,8 +139,16 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
   const [priceHistory, setPriceHistory] = useState<PriceHistoryPoint[]>([]);
   const [selectedKarat, setSelectedKarat] = useState<string>('24K');
 
-  // USD to GBP conversion
-  const usdToGbp = 0.79;
+  // Calculator state
+  const [showCalc, setShowCalc] = useState(false);
+  const [calcMetal, setCalcMetal] = useState<'GOLD' | 'SILVER' | 'PLATINUM'>('GOLD');
+  const [calcKarat, setCalcKarat] = useState<'9K' | '14K' | '18K' | '22K' | '24K'>('18K');
+  const [calcGrams, setCalcGrams] = useState('');
+  const [silverPricePerGram, setSilverPricePerGram] = useState(0);
+  const [platinumPricePerGram, setPlatinumPricePerGram] = useState(0);
+  const [silverLive, setSilverLive] = useState(false);
+  const [platinumLive, setPlatinumLive] = useState(false);
+  const [calcFetching, setCalcFetching] = useState(false);
 
   // Load cached data from localStorage
   const loadCachedData = useCallback((): CachedData | null => {
@@ -163,7 +179,6 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
   // Save price history
   const savePriceHistory = useCallback((history: PriceHistoryPoint[]) => {
     try {
-      // Keep only last 30 data points
       const trimmedHistory = history.slice(-30);
       localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmedHistory));
     } catch (e) {
@@ -187,7 +202,6 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
 
   // Fetch gold price from API
   const fetchGoldPrice = useCallback(async (forceRefresh = false) => {
-    // Check cache first
     if (!forceRefresh) {
       const cached = loadCachedData();
       if (cached && isCacheValid(cached.timestamp)) {
@@ -196,8 +210,6 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
         setPreviousPrice(cached.previousPrice);
         setLastUpdated(new Date(cached.timestamp));
         setIsLive(true);
-
-        // Load history
         const history = loadPriceHistory();
         setPriceHistory(history);
         return;
@@ -221,23 +233,19 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
 
       const data = await response.json();
 
-      // API returns price in USD per troy ounce
       const priceUsdPerOunce = data.price;
       const prevPriceUsd = data.prev_close_price || priceUsdPerOunce;
 
-      // Convert to GBP
-      const priceGbpPerOunce = priceUsdPerOunce * usdToGbp;
+      const priceGbpPerOunce = priceUsdPerOunce * USD_TO_GBP;
       const priceGbpPerGram = priceGbpPerOunce / TROY_OUNCE_TO_GRAMS;
-      const prevPriceGbpPerGram = (prevPriceUsd * usdToGbp) / TROY_OUNCE_TO_GRAMS;
+      const prevPriceGbpPerGram = (prevPriceUsd * USD_TO_GBP) / TROY_OUNCE_TO_GRAMS;
 
-      // Update state
       setPreviousPrice(pricePerGram || prevPriceGbpPerGram);
       setPricePerOunce(priceGbpPerOunce);
       setPricePerGram(priceGbpPerGram);
       setLastUpdated(new Date());
       setIsLive(true);
 
-      // Cache the data
       const cacheData: CachedData = {
         pricePerOunce: priceGbpPerOunce,
         pricePerGram: priceGbpPerGram,
@@ -247,17 +255,15 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
       };
       saveCachedData(cacheData);
 
-      // Update history
       const history = loadPriceHistory();
       const newHistory = [...history, { timestamp: Date.now(), price: priceGbpPerGram }];
       savePriceHistory(newHistory);
       setPriceHistory(newHistory);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to fetch gold price:', err);
       setIsLive(false);
 
-      // Try to use cached data even if expired
       const cached = loadCachedData();
       if (cached) {
         setPricePerOunce(cached.pricePerOunce);
@@ -271,13 +277,89 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
     } finally {
       setIsLoading(false);
     }
-  }, [loadCachedData, isCacheValid, saveCachedData, pricePerGram, usdToGbp, loadPriceHistory, savePriceHistory]);
+  }, [loadCachedData, isCacheValid, saveCachedData, pricePerGram, loadPriceHistory, savePriceHistory]);
+
+  // Fetch silver and platinum prices
+  const fetchSilverPlatinum = useCallback(async () => {
+    setCalcFetching(true);
+    try {
+      const silverCacheKey = 'liveMetalCache_silver';
+      const platinumCacheKey = 'liveMetalCache_platinum';
+
+      const silverCached = localStorage.getItem(silverCacheKey);
+      const platinumCached = localStorage.getItem(platinumCacheKey);
+
+      let silverDone = false;
+      let platinumDone = false;
+
+      if (silverCached) {
+        const parsed = JSON.parse(silverCached);
+        if (Date.now() - parsed.timestamp < CACHE_DURATION_MS) {
+          setSilverPricePerGram(parsed.pricePerGram);
+          setSilverLive(true);
+          silverDone = true;
+        }
+      }
+
+      if (platinumCached) {
+        const parsed = JSON.parse(platinumCached);
+        if (Date.now() - parsed.timestamp < CACHE_DURATION_MS) {
+          setPlatinumPricePerGram(parsed.pricePerGram);
+          setPlatinumLive(true);
+          platinumDone = true;
+        }
+      }
+
+      if (!silverDone) {
+        try {
+          const res = await fetch(SILVER_API_URL, {
+            headers: { 'x-access-token': GOLD_API_KEY, 'Content-Type': 'application/json' },
+          });
+          if (res.ok) {
+            const d = await res.json();
+            const gbpPerGram = (d.price * USD_TO_GBP) / TROY_OUNCE_TO_GRAMS;
+            setSilverPricePerGram(gbpPerGram);
+            setSilverLive(true);
+            localStorage.setItem(silverCacheKey, JSON.stringify({ pricePerGram: gbpPerGram, timestamp: Date.now() }));
+          }
+        } catch {
+          // use fallback
+        }
+      }
+
+      if (!platinumDone) {
+        try {
+          const res = await fetch(PLATINUM_API_URL, {
+            headers: { 'x-access-token': GOLD_API_KEY, 'Content-Type': 'application/json' },
+          });
+          if (res.ok) {
+            const d = await res.json();
+            const gbpPerGram = (d.price * USD_TO_GBP) / TROY_OUNCE_TO_GRAMS;
+            setPlatinumPricePerGram(gbpPerGram);
+            setPlatinumLive(true);
+            localStorage.setItem(platinumCacheKey, JSON.stringify({ pricePerGram: gbpPerGram, timestamp: Date.now() }));
+          }
+        } catch {
+          // use fallback
+        }
+      }
+    } finally {
+      setCalcFetching(false);
+    }
+  }, []);
 
   // Initial load
   useEffect(() => {
     fetchGoldPrice();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Fetch silver/platinum when calculator opens
+  useEffect(() => {
+    if (showCalc) {
+      fetchSilverPlatinum();
+    }
+  }, [showCalc, fetchSilverPlatinum]);
 
   // Price change calculations
   const priceChange = useMemo(() => {
@@ -290,9 +372,8 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
   // Get sparkline data
   const sparklineData = useMemo(() => {
     if (priceHistory.length < 2) {
-      // Generate mock trend data if no history
       const basePrice = pricePerGram || 50;
-      return Array.from({ length: 10 }, (_, i) =>
+      return Array.from({ length: 10 }, () =>
         basePrice + (Math.random() - 0.5) * 2
       );
     }
@@ -304,6 +385,32 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
     const purity = PURITY_MAP[selectedKarat as keyof typeof PURITY_MAP];
     return pricePerGram * (purity?.multiplier || 1);
   }, [pricePerGram, selectedKarat]);
+
+  // Calculator result
+  const calcResult = useMemo(() => {
+    const grams = parseFloat(calcGrams);
+    if (!grams || grams <= 0) return null;
+
+    let spotPerGram = 0;
+    let margin = 0;
+
+    if (calcMetal === 'GOLD') {
+      const purity = PURITY_MAP[calcKarat as keyof typeof PURITY_MAP];
+      spotPerGram = pricePerGram * (purity?.multiplier || 1);
+      margin = settings?.metals?.goldMarginPercent ?? 0;
+    } else if (calcMetal === 'SILVER') {
+      spotPerGram = silverPricePerGram;
+      margin = settings?.metals?.silverMarginPercent ?? 0;
+    } else {
+      spotPerGram = platinumPricePerGram;
+      margin = settings?.metals?.platinumMarginPercent ?? 0;
+    }
+
+    const spotTotal = spotPerGram * grams;
+    const finalTotal = spotTotal * (1 + margin / 100);
+
+    return { spotPerGram, spotTotal, finalTotal, margin };
+  }, [calcGrams, calcMetal, calcKarat, pricePerGram, silverPricePerGram, platinumPricePerGram, settings]);
 
   // Format time ago
   const timeAgo = useMemo(() => {
@@ -319,6 +426,11 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
   // Daily high/low (simulated from current price)
   const dailyHigh = useMemo(() => pricePerGram * 1.005, [pricePerGram]);
   const dailyLow = useMemo(() => pricePerGram * 0.995, [pricePerGram]);
+
+  const metalTabClass = (metal: string) =>
+    calcMetal === metal
+      ? 'bg-amber-500 text-white shadow-sm'
+      : 'bg-gray-100 text-gray-600 hover:bg-gray-200';
 
   return (
     <div className={`bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg rounded-xl border border-gray-100 shadow-sm overflow-hidden ${className}`}>
@@ -350,113 +462,238 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
               </div>
             </div>
           </div>
-          <button
-            onClick={() => fetchGoldPrice(true)}
-            disabled={isLoading}
-            className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowCalc(v => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                showCalc
+                  ? 'bg-white text-amber-600 shadow-md'
+                  : 'bg-white/20 hover:bg-white/30 text-white'
+              }`}
+            >
+              <Calculator className="w-3.5 h-3.5" />
+              {showCalc ? 'Rates' : 'Calculate'}
+            </button>
+            {!showCalc && (
+              <button
+                onClick={() => fetchGoldPrice(true)}
+                disabled={isLoading}
+                className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="p-5">
-        {/* Price Display with Trend */}
-        <div className="flex items-start justify-between mb-5">
-          <div>
-            <p className="text-xs text-gray-500 mb-1">24K Gold / Gram</p>
-            <div className="flex items-baseline gap-2">
-              <AnimatedPrice
-                value={pricePerGram}
-                className="text-3xl font-bold text-gray-900"
+      {showCalc ? (
+        /* ── Calculator Panel ── */
+        <div className="p-5">
+          {/* Metal Tabs */}
+          <div className="flex gap-1.5 mb-4">
+            {(['GOLD', 'SILVER', 'PLATINUM'] as const).map(m => (
+              <button
+                key={m}
+                onClick={() => setCalcMetal(m)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${metalTabClass(m)}`}
+              >
+                {m === 'GOLD' ? '🥇 Gold' : m === 'SILVER' ? '🥈 Silver' : '⬜ Platinum'}
+              </button>
+            ))}
+          </div>
+
+          {/* Karat selector for Gold */}
+          {calcMetal === 'GOLD' && (
+            <div className="mb-4">
+              <p className="text-xs text-gray-500 mb-2">Karat</p>
+              <div className="flex gap-1.5">
+                {(Object.keys(PURITY_MAP) as Array<keyof typeof PURITY_MAP>).map(k => (
+                  <button
+                    key={k}
+                    onClick={() => setCalcKarat(k)}
+                    className={`flex-1 py-1.5 px-1 rounded-lg text-xs font-semibold transition-all ${
+                      calcKarat === k
+                        ? `bg-gradient-to-br ${PURITY_MAP[k].color} text-white shadow-md`
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {k}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Live price badge for Silver/Platinum */}
+          {calcMetal !== 'GOLD' && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-xs text-gray-500">
+                {calcMetal === 'SILVER' ? 'Silver' : 'Platinum'} spot
+              </span>
+              {calcFetching ? (
+                <span className="text-xs text-gray-400">Fetching…</span>
+              ) : (
+                <>
+                  <span className="font-semibold text-sm">
+                    £{(calcMetal === 'SILVER' ? silverPricePerGram : platinumPricePerGram).toFixed(3)}/g
+                  </span>
+                  {(calcMetal === 'SILVER' ? silverLive : platinumLive) && (
+                    <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Live</span>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Gram Input */}
+          <div className="mb-4">
+            <label className="text-xs text-gray-500 mb-1.5 block">Weight (grams)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={calcGrams}
+              onChange={e => setCalcGrams(e.target.value)}
+              placeholder="e.g. 10.5"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
+
+          {/* Result */}
+          {calcResult ? (
+            <div className="bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200/60 rounded-xl p-4 space-y-2">
+              <div className="flex justify-between text-xs text-amber-700">
+                <span>Spot price/g</span>
+                <span className="font-semibold">£{calcResult.spotPerGram.toFixed(3)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-amber-700">
+                <span>Spot total ({calcGrams}g)</span>
+                <span className="font-semibold">£{calcResult.spotTotal.toFixed(2)}</span>
+              </div>
+              {calcResult.margin > 0 && (
+                <div className="flex justify-between text-xs text-amber-700">
+                  <span>Margin ({calcResult.margin}%)</span>
+                  <span className="font-semibold">+£{(calcResult.finalTotal - calcResult.spotTotal).toFixed(2)}</span>
+                </div>
+              )}
+              <div className="pt-2 border-t border-amber-200 flex justify-between">
+                <span className="text-sm font-bold text-amber-900">Total</span>
+                <span className="text-xl font-bold text-amber-900">£{calcResult.finalTotal.toFixed(2)}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center text-sm text-gray-400">
+              Enter a weight to see the price
+            </div>
+          )}
+
+          {/* Gold spot reminder */}
+          {calcMetal === 'GOLD' && (
+            <p className="mt-3 text-xs text-gray-400 text-center">
+              Based on 24K £{pricePerGram.toFixed(3)}/g live rate
+            </p>
+          )}
+        </div>
+      ) : (
+        /* ── Rate Panel (original) ── */
+        <div className="p-5">
+          {/* Price Display with Trend */}
+          <div className="flex items-start justify-between mb-5">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">24K Gold / Gram</p>
+              <div className="flex items-baseline gap-2">
+                <AnimatedPrice
+                  value={pricePerGram}
+                  className="text-3xl font-bold text-gray-900"
+                />
+                <div className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                  isUp ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                }`}>
+                  {isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                  {Math.abs(priceChange).toFixed(2)}%
+                </div>
+              </div>
+            </div>
+
+            {/* Sparkline Chart */}
+            <div className="mt-2">
+              <SparklineChart data={sparklineData} isUp={isUp} width={100} height={35} />
+            </div>
+          </div>
+
+          {/* Daily Range Bar */}
+          <div className="mb-5">
+            <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+              <span>Daily Range</span>
+              <span>£{dailyLow.toFixed(2)} - £{dailyHigh.toFixed(2)}</span>
+            </div>
+            <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="absolute inset-y-0 left-0 bg-gradient-to-r from-amber-400 to-yellow-500 rounded-full"
+                style={{
+                  width: `${((pricePerGram - dailyLow) / (dailyHigh - dailyLow)) * 100}%`,
+                  minWidth: '10%'
+                }}
               />
-              <div className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                isUp ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-              }`}>
-                {isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                {Math.abs(priceChange).toFixed(2)}%
+              {/* Current price marker */}
+              <div
+                className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white border-2 border-amber-500 rounded-full shadow-sm"
+                style={{
+                  left: `calc(${((pricePerGram - dailyLow) / (dailyHigh - dailyLow)) * 100}% - 6px)`,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Karat Quick Select */}
+          <div className="mb-4">
+            <p className="text-xs text-gray-500 mb-2">Quick Karat Prices</p>
+            <div className="flex gap-1.5">
+              {Object.entries(PURITY_MAP).map(([karat, data]) => (
+                <button
+                  key={karat}
+                  onClick={() => setSelectedKarat(karat)}
+                  className={`flex-1 py-2 px-1 rounded-lg text-xs font-semibold transition-all ${
+                    selectedKarat === karat
+                      ? `bg-gradient-to-br ${data.color} text-white shadow-md`
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {karat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Selected Karat Price */}
+          <div className="bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200/50 rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-amber-700 font-medium mb-0.5">
+                  {PURITY_MAP[selectedKarat as keyof typeof PURITY_MAP]?.label}
+                </p>
+                <p className="text-xs text-amber-600/80">
+                  {(PURITY_MAP[selectedKarat as keyof typeof PURITY_MAP]?.multiplier * 100).toFixed(1)}% pure gold
+                </p>
+              </div>
+              <div className="text-right">
+                <AnimatedPrice
+                  value={karatPrice}
+                  className="text-2xl font-bold text-amber-900"
+                />
+                <p className="text-xs text-amber-600">/gram</p>
               </div>
             </div>
           </div>
 
-          {/* Sparkline Chart */}
-          <div className="mt-2">
-            <SparklineChart data={sparklineData} isUp={isUp} width={100} height={35} />
+          {/* Per Ounce Price */}
+          <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-sm">
+            <span className="text-gray-500">Per Troy Ounce (24K)</span>
+            <span className="font-semibold text-gray-900">£{pricePerOunce.toFixed(2)}</span>
           </div>
         </div>
-
-        {/* Daily Range Bar */}
-        <div className="mb-5">
-          <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-            <span>Daily Range</span>
-            <span>£{dailyLow.toFixed(2)} - £{dailyHigh.toFixed(2)}</span>
-          </div>
-          <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className="absolute inset-y-0 left-0 bg-gradient-to-r from-amber-400 to-yellow-500 rounded-full"
-              style={{
-                width: `${((pricePerGram - dailyLow) / (dailyHigh - dailyLow)) * 100}%`,
-                minWidth: '10%'
-              }}
-            />
-            {/* Current price marker */}
-            <div
-              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white border-2 border-amber-500 rounded-full shadow-sm"
-              style={{
-                left: `calc(${((pricePerGram - dailyLow) / (dailyHigh - dailyLow)) * 100}% - 6px)`,
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Karat Quick Select */}
-        <div className="mb-4">
-          <p className="text-xs text-gray-500 mb-2">Quick Karat Prices</p>
-          <div className="flex gap-1.5">
-            {Object.entries(PURITY_MAP).map(([karat, data]) => (
-              <button
-                key={karat}
-                onClick={() => setSelectedKarat(karat)}
-                className={`flex-1 py-2 px-1 rounded-lg text-xs font-semibold transition-all ${
-                  selectedKarat === karat
-                    ? `bg-gradient-to-br ${data.color} text-white shadow-md`
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {karat}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Selected Karat Price */}
-        <div className="bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200/50 rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-amber-700 font-medium mb-0.5">
-                {PURITY_MAP[selectedKarat as keyof typeof PURITY_MAP]?.label}
-              </p>
-              <p className="text-xs text-amber-600/80">
-                {(PURITY_MAP[selectedKarat as keyof typeof PURITY_MAP]?.multiplier * 100).toFixed(1)}% pure gold
-              </p>
-            </div>
-            <div className="text-right">
-              <AnimatedPrice
-                value={karatPrice}
-                className="text-2xl font-bold text-amber-900"
-              />
-              <p className="text-xs text-amber-600">/gram</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Per Ounce Price */}
-        <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-sm">
-          <span className="text-gray-500">Per Troy Ounce (24K)</span>
-          <span className="font-semibold text-gray-900">£{pricePerOunce.toFixed(2)}</span>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
