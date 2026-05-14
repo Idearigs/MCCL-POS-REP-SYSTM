@@ -816,7 +816,7 @@ const CashUpPage = () => {
 
                     {/* Receipt Footer */}
                     <div className="bg-gradient-to-r from-gray-800 to-gray-900 text-white p-4 text-center">
-                      <div className="text-xs opacity-75">Powered By MCCL POS System</div>
+                      <div className="text-xs opacity-75">Powered By TrueDesk</div>
                       <div className="text-xs opacity-60 mt-1">Generated: {new Date().toLocaleString()}</div>
                     </div>
                   </div>

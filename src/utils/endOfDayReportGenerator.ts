@@ -389,7 +389,7 @@ export const generateEndOfDayReportText = (data: EndOfDayReportData): string => 
   // Footer
   lines.push('');
   lines.push('*'.repeat(width));
-  lines.push(centerText('Powered By MCCL POS System'));
+  lines.push(centerText('Powered By TrueDesk'));
 
   return lines.join('\n');
 };
