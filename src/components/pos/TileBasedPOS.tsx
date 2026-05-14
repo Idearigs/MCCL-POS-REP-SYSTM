@@ -69,6 +69,7 @@ import {
   ListOrdered,
   UserPlus,
   Beaker,
+  LogOut,
 } from 'lucide-react';
 import { useInventory, InventoryItem } from '@/contexts/InventoryContext';
 import { Customer, useCustomers } from '@/contexts/CustomerContext';
@@ -2047,6 +2048,16 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 Back to Categories
               </Button>
             )}
+
+            {/* Exit POS — always visible */}
+            <button
+              onClick={onClose}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition-colors text-xs font-medium"
+              title="Exit POS / Back to Admin"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span>Exit POS</span>
+            </button>
           </div>
         </div>
 
