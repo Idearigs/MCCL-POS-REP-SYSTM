@@ -325,9 +325,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [layawaySelectedCustomer, setLayawaySelectedCustomer] = useState<Customer | null>(null);
 
-  // Quick Service Price Dialog (for Cleaning and Watch Battery)
+  // Quick Service Price Dialog (for Cleaning, Watch Battery, Watch Links, Spring Bar, Watch Straps)
   const [showServicePriceDialog, setShowServicePriceDialog] = useState(false);
-  const [serviceType, setServiceType] = useState<'cleaning' | 'battery'>('cleaning');
+  const [serviceType, setServiceType] = useState<'cleaning' | 'battery' | 'watch-links' | 'spring-bar' | 'watch-straps'>('cleaning');
   const [servicePrice, setServicePrice] = useState('');
 
   // Purity multipliers for different metals
@@ -2944,6 +2944,48 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                     <p className="text-blue-500 text-xs mt-0.5">Quick Add</p>
                   </div>
 
+                  {/* Watch Links */}
+                  <div
+                    onClick={() => {
+                      setServiceType('watch-links');
+                      setServicePrice('');
+                      setShowServicePriceDialog(true);
+                    }}
+                    className="bg-blue-50/60 border border-blue-100 rounded-xl p-5 cursor-pointer hover:border-blue-300 hover:bg-blue-50 hover:shadow-md hover:scale-[1.02] transition-all"
+                  >
+                    <Watch className="h-7 w-7 text-blue-600 mb-3" />
+                    <h3 className="text-blue-900 font-semibold text-base">Watch Links</h3>
+                    <p className="text-blue-500 text-xs mt-0.5">Quick Add</p>
+                  </div>
+
+                  {/* Spring Bar */}
+                  <div
+                    onClick={() => {
+                      setServiceType('spring-bar');
+                      setServicePrice('');
+                      setShowServicePriceDialog(true);
+                    }}
+                    className="bg-blue-50/60 border border-blue-100 rounded-xl p-5 cursor-pointer hover:border-blue-300 hover:bg-blue-50 hover:shadow-md hover:scale-[1.02] transition-all"
+                  >
+                    <Ruler className="h-7 w-7 text-blue-600 mb-3" />
+                    <h3 className="text-blue-900 font-semibold text-base">Spring Bar</h3>
+                    <p className="text-blue-500 text-xs mt-0.5">Quick Add</p>
+                  </div>
+
+                  {/* Watch Straps */}
+                  <div
+                    onClick={() => {
+                      setServiceType('watch-straps');
+                      setServicePrice('');
+                      setShowServicePriceDialog(true);
+                    }}
+                    className="bg-blue-50/60 border border-blue-100 rounded-xl p-5 cursor-pointer hover:border-blue-300 hover:bg-blue-50 hover:shadow-md hover:scale-[1.02] transition-all"
+                  >
+                    <Scissors className="h-7 w-7 text-blue-600 mb-3" />
+                    <h3 className="text-blue-900 font-semibold text-base">Watch Straps</h3>
+                    <p className="text-blue-500 text-xs mt-0.5">Quick Add</p>
+                  </div>
+
                   {/* Repair - list existing */}
                   <div
                     onClick={handleRepairTileClick}
@@ -5123,109 +5165,101 @@ Deposit is non-refundable.
       </Dialog>
 
       {/* Quick Service Price Dialog */}
-      <Dialog open={showServicePriceDialog} onOpenChange={setShowServicePriceDialog}>
-        <DialogContent className="max-w-sm p-0 overflow-hidden rounded-2xl border-0 shadow-2xl">
-          {/* Header */}
-          <div className={`px-6 py-4 ${serviceType === 'battery' ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-gradient-to-r from-amber-500 to-orange-500'}`}>
-            <div className="flex items-center gap-3">
-              {serviceType === 'battery' ? (
-                <Battery className="h-6 w-6 text-white" />
-              ) : (
-                <Sparkles className="h-6 w-6 text-white" />
-              )}
-              <div>
-                <h2 className="text-lg font-semibold text-white">
-                  {serviceType === 'battery' ? 'Watch Battery' : 'Cleaning Service'}
-                </h2>
-                <p className="text-white/80 text-xs">Set service price and add to cart</p>
+      {(() => {
+        const SERVICE_META: Record<string, { label: string; icon: React.ReactNode; color: string; activeColor: string; sku: string; presets: string[] }> = {
+          'battery':      { label: 'Watch Battery',    icon: <Battery className="h-6 w-6 text-white" />,  color: 'from-blue-500 to-blue-600',   activeColor: 'bg-blue-500',   sku: 'SERVICE-BATTERY',      presets: ['10','15','20','25'] },
+          'cleaning':     { label: 'Cleaning Service', icon: <Sparkles className="h-6 w-6 text-white" />, color: 'from-amber-500 to-orange-500', activeColor: 'bg-amber-500',  sku: 'SERVICE-CLEANING',     presets: ['15','25','35','50'] },
+          'watch-links':  { label: 'Watch Links',      icon: <Watch className="h-6 w-6 text-white" />,    color: 'from-blue-500 to-blue-600',   activeColor: 'bg-blue-500',   sku: 'SERVICE-WATCH-LINKS',  presets: ['5','10','15','20']  },
+          'spring-bar':   { label: 'Spring Bar',       icon: <Ruler className="h-6 w-6 text-white" />,    color: 'from-blue-500 to-blue-600',   activeColor: 'bg-blue-500',   sku: 'SERVICE-SPRING-BAR',   presets: ['5','10','15','20']  },
+          'watch-straps': { label: 'Watch Straps',     icon: <Scissors className="h-6 w-6 text-white" />, color: 'from-blue-500 to-blue-600',   activeColor: 'bg-blue-500',   sku: 'SERVICE-WATCH-STRAPS', presets: ['10','15','20','25'] },
+        };
+        const meta = SERVICE_META[serviceType] ?? SERVICE_META['cleaning'];
+        return (
+        <Dialog open={showServicePriceDialog} onOpenChange={setShowServicePriceDialog}>
+          <DialogContent className="max-w-sm p-0 overflow-hidden rounded-2xl border-0 shadow-2xl">
+            {/* Header */}
+            <div className={`px-6 py-4 bg-gradient-to-r ${meta.color}`}>
+              <div className="flex items-center gap-3">
+                {meta.icon}
+                <div>
+                  <h2 className="text-lg font-semibold text-white">{meta.label}</h2>
+                  <p className="text-white/80 text-xs">Set price and add to cart</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Price Input */}
-          <div className="p-6">
-            <Label className="text-slate-600 text-sm font-medium">Service Price</Label>
-            <div className="relative mt-2">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">£</span>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={servicePrice}
-                onChange={(e) => setServicePrice(e.target.value)}
-                className="pl-8 h-14 text-2xl font-bold text-center border-2 border-slate-200 focus:border-blue-500 rounded-xl"
-                placeholder="0.00"
-                autoFocus
-              />
-            </div>
+            {/* Price Input */}
+            <div className="p-6">
+              <Label className="text-slate-600 text-sm font-medium">Service Price</Label>
+              <div className="relative mt-2">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">£</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={servicePrice}
+                  onChange={(e) => setServicePrice(e.target.value)}
+                  className="pl-8 h-14 text-2xl font-bold text-center border-2 border-slate-200 focus:border-blue-500 rounded-xl"
+                  placeholder="0.00"
+                  autoFocus
+                />
+              </div>
 
-            {/* Quick Price Buttons */}
-            <div className="grid grid-cols-4 gap-2 mt-4">
-              {(serviceType === 'battery' ? ['10', '15', '20', '25'] : ['15', '25', '35', '50']).map((price) => (
-                <button
-                  key={price}
-                  onClick={() => setServicePrice(price + '.00')}
-                  className={`py-2 rounded-lg text-sm font-semibold transition-all ${
-                    servicePrice === price + '.00'
-                      ? serviceType === 'battery'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-amber-500 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
+              {/* Quick Price Buttons */}
+              <div className="grid grid-cols-4 gap-2 mt-4">
+                {meta.presets.map((price) => (
+                  <button
+                    key={price}
+                    onClick={() => setServicePrice(price + '.00')}
+                    className={`py-2 rounded-lg text-sm font-semibold transition-all ${
+                      servicePrice === price + '.00'
+                        ? `${meta.activeColor} text-white`
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    £{price}
+                  </button>
+                ))}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowServicePriceDialog(false)}
+                  className="flex-1 h-12 rounded-xl"
                 >
-                  £{price}
-                </button>
-              ))}
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    const price = parseFloat(servicePrice) || 0;
+                    if (price <= 0) {
+                      toast({ title: 'Invalid Price', description: 'Please enter a valid price', variant: 'destructive' });
+                      return;
+                    }
+                    const serviceItem: CartItem = {
+                      id: `${serviceType}-${Date.now()}`,
+                      name: meta.label,
+                      price,
+                      quantity: 1,
+                      sku: meta.sku,
+                    };
+                    setCart(prev => [...prev, serviceItem]);
+                    toast({ title: 'Added to Cart', description: `${meta.label} — £${price.toFixed(2)}` });
+                    setShowServicePriceDialog(false);
+                  }}
+                  className={`flex-1 h-12 rounded-xl text-white ${meta.activeColor} hover:opacity-90`}
+                >
+                  <Plus className="h-5 w-5 mr-2" />
+                  Add to Cart
+                </Button>
+              </div>
             </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-3 mt-6">
-              <Button
-                variant="outline"
-                onClick={() => setShowServicePriceDialog(false)}
-                className="flex-1 h-12 rounded-xl"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  const price = parseFloat(servicePrice) || 0;
-                  if (price <= 0) {
-                    toast({
-                      title: 'Invalid Price',
-                      description: 'Please enter a valid price',
-                      variant: 'destructive',
-                    });
-                    return;
-                  }
-
-                  const serviceItem: CartItem = {
-                    id: `${serviceType}-${Date.now()}`,
-                    name: serviceType === 'battery' ? 'Watch Battery Replacement' : 'Professional Cleaning',
-                    price: price,
-                    quantity: 1,
-                    sku: serviceType === 'battery' ? 'SERVICE-BATTERY' : 'SERVICE-CLEANING',
-                  };
-                  setCart(prev => [...prev, serviceItem]);
-                  toast({
-                    title: 'Added to Cart',
-                    description: `${serviceType === 'battery' ? 'Watch Battery' : 'Cleaning'} Service - £${price.toFixed(2)}`,
-                  });
-                  setShowServicePriceDialog(false);
-                }}
-                className={`flex-1 h-12 rounded-xl text-white ${
-                  serviceType === 'battery'
-                    ? 'bg-blue-500 hover:bg-blue-600'
-                    : 'bg-amber-500 hover:bg-amber-600'
-                }`}
-              >
-                <Plus className="h-5 w-5 mr-2" />
-                Add to Cart
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+        );
+      })()}
 
       {/* ===== CASH DRAWER PIN DIALOG ===== */}
       <Dialog open={showDrawerPinDialog} onOpenChange={(o) => { if (!o) { setShowDrawerPinDialog(false); setDrawerPinInput(''); setDrawerPinError(''); }}}>
