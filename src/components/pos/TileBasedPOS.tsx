@@ -167,7 +167,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
-  const { customers } = useCustomers();
+  const { customers, refreshCustomers } = useCustomers();
 
   // Discount state - starts at 0 (no localStorage loading on mount)
   const [discountPercentage, setDiscountPercentage] = useState<number>(0);
@@ -1153,6 +1153,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         dataProcessingConsent: true, // customer is physically present in-store
       } as any);
       setSelectedCustomer(newCustomer);
+      refreshCustomers(); // update the Select Customer list immediately
       toast({ title: 'Customer Added', description: `${newCustomer.firstName || quickAddFirstName} added and selected` });
       setShowQuickAddCustomer(false);
       setQuickAddFirstName(''); setQuickAddLastName(''); setQuickAddPhone('');
