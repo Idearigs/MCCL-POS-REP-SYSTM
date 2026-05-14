@@ -67,6 +67,8 @@ import {
   CalendarClock,
   PauseCircle,
   ListOrdered,
+  UserPlus,
+  Beaker,
 } from 'lucide-react';
 import { useInventory, InventoryItem } from '@/contexts/InventoryContext';
 import { Customer, useCustomers } from '@/contexts/CustomerContext';
@@ -356,6 +358,38 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     return weight * basePrice * purity * payoutMultiplier;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tradeInWeight, tradeInGoldPrice, tradeInMetal, tradeInPayoutPercent]);
+
+  // Quick Add Customer state
+  const [showQuickAddCustomer, setShowQuickAddCustomer] = useState(false);
+  const [quickAddFirstName, setQuickAddFirstName] = useState('');
+  const [quickAddLastName, setQuickAddLastName] = useState('');
+  const [quickAddPhone, setQuickAddPhone] = useState('');
+  const [quickAddEmail, setQuickAddEmail] = useState('');
+  const [quickAddAddress, setQuickAddAddress] = useState('');
+  const [quickAddCity, setQuickAddCity] = useState('');
+  const [isCreatingQuickCustomer, setIsCreatingQuickCustomer] = useState(false);
+
+  // Metal Price Calculator state
+  const [showMetalCalcDialog, setShowMetalCalcDialog] = useState(false);
+  const [metalCalcType, setMetalCalcType] = useState<'GOLD' | 'SILVER' | 'PLATINUM'>('GOLD');
+  const [metalCalcKarat, setMetalCalcKarat] = useState<'10K' | '14K' | '18K' | '22K' | '24K'>('18K');
+  const [metalCalcGrams, setMetalCalcGrams] = useState('');
+  const [metalCalcSilverPrice, setMetalCalcSilverPrice] = useState('0.82');
+  const [metalCalcPlatinumPrice, setMetalCalcPlatinumPrice] = useState('26.50');
+
+  const metalCalcResult = useMemo(() => {
+    const grams = parseFloat(metalCalcGrams) || 0;
+    if (metalCalcType === 'GOLD') {
+      const base = parseFloat(tradeInGoldPrice) || 0;
+      const purity = metalPurityMap[metalCalcKarat]?.purity || 0;
+      return grams * base * purity;
+    } else if (metalCalcType === 'SILVER') {
+      return grams * (parseFloat(metalCalcSilverPrice) || 0) * 0.925;
+    } else {
+      return grams * (parseFloat(metalCalcPlatinumPrice) || 0) * 0.950;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metalCalcGrams, metalCalcType, metalCalcKarat, tradeInGoldPrice, metalCalcSilverPrice, metalCalcPlatinumPrice]);
 
   // Get categories with product counts from inventory
   const categories = useMemo(() => {
@@ -1020,6 +1054,30 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       setShowCategoryView(false);
       setActiveCategoryName('');
     });
+  };
+
+  // Quick Add Customer
+  const handleQuickAddCustomer = async () => {
+    if (!quickAddFirstName.trim() || !quickAddPhone.trim()) return;
+    setIsCreatingQuickCustomer(true);
+    try {
+      const newCustomer = await customerService.createCustomer({
+        name: `${quickAddFirstName.trim()}${quickAddLastName.trim() ? ' ' + quickAddLastName.trim() : ''}`,
+        phone: quickAddPhone.trim(),
+        email: quickAddEmail.trim() || undefined,
+        address: quickAddAddress.trim() || undefined,
+        city: quickAddCity.trim() || undefined,
+      });
+      setSelectedCustomer(newCustomer);
+      toast({ title: 'Customer Added', description: `${newCustomer.firstName || quickAddFirstName} added and selected` });
+      setShowQuickAddCustomer(false);
+      setQuickAddFirstName(''); setQuickAddLastName(''); setQuickAddPhone('');
+      setQuickAddEmail(''); setQuickAddAddress(''); setQuickAddCity('');
+    } catch {
+      toast({ title: 'Failed to add customer', variant: 'destructive' });
+    } finally {
+      setIsCreatingQuickCustomer(false);
+    }
   };
 
   // Monthly Accounts panel: load all outstanding INSTALLMENT sales
@@ -1831,15 +1889,24 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             )}
           </div>
           <div className="flex items-center gap-3">
-            {/* Live Gold Rate Widget - Compact pill button */}
+            {/* Live Gold Rate Widget + Metal Price Calculator */}
             {!showCategoryView && !showAppraisalView && !showRepairView && (
-              <LiveGoldRate
-                compact
-                onPriceUpdate={(price) => {
-                  // Update the trade-in gold price when live rate changes
-                  setTradeInGoldPrice(price.toFixed(2));
-                }}
-              />
+              <div className="flex items-center gap-2">
+                <LiveGoldRate
+                  compact
+                  onPriceUpdate={(price) => {
+                    setTradeInGoldPrice(price.toFixed(2));
+                  }}
+                />
+                <button
+                  onClick={() => { setMetalCalcType('GOLD'); setMetalCalcKarat('18K'); setMetalCalcGrams(''); setShowMetalCalcDialog(true); }}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-white/80 backdrop-blur-xl border border-gray-200/50 rounded-full shadow-lg shadow-black/5 hover:shadow-xl hover:scale-105 transition-all duration-300 text-xs font-medium text-gray-700"
+                  title="Metal Price Calculator"
+                >
+                  <Beaker className="w-3.5 h-3.5 text-violet-600" />
+                  <span className="hidden sm:inline">Calculate</span>
+                </button>
+              </div>
             )}
 
             <PrinterStatusBadge />
@@ -2742,6 +2809,23 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                     <GiftCard className="h-7 w-7 text-white mb-3" />
                     <h3 className="text-white font-semibold text-base">Gift Card</h3>
                     <p className="text-pink-100 text-xs mt-0.5">Sell or Redeem</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ===== CUSTOMERS ROW ===== */}
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-1">Customers</p>
+                <div className="grid grid-cols-1 gap-3">
+                  <div
+                    onClick={() => { setQuickAddFirstName(''); setQuickAddLastName(''); setQuickAddPhone(''); setQuickAddEmail(''); setQuickAddAddress(''); setQuickAddCity(''); setShowQuickAddCustomer(true); }}
+                    className="bg-violet-50/60 border border-violet-100 rounded-xl p-4 cursor-pointer hover:border-violet-300 hover:bg-violet-50 hover:shadow-md hover:scale-[1.02] transition-all flex items-center gap-4"
+                  >
+                    <UserPlus className="h-7 w-7 text-violet-600 shrink-0" />
+                    <div>
+                      <h3 className="text-violet-900 font-semibold text-base">Quick Add Customer</h3>
+                      <p className="text-violet-500 text-xs mt-0.5">Name &amp; phone — saved to customer database</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -5483,6 +5567,241 @@ Deposit is non-refundable.
             {!monthlySearching && monthlySearch.trim() && monthlyResults.length === 0 && (
               <p className="text-center text-sm text-gray-500 py-4">No customers found</p>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== QUICK ADD CUSTOMER DIALOG ===== */}
+      <Dialog open={showQuickAddCustomer} onOpenChange={setShowQuickAddCustomer}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center">
+                <UserPlus className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg">Quick Add Customer</DialogTitle>
+                <DialogDescription className="text-sm">Required: name and phone. Everything else is optional.</DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Name row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-slate-700 text-xs font-semibold">First Name <span className="text-red-500">*</span></Label>
+                <Input
+                  autoFocus
+                  placeholder="John"
+                  value={quickAddFirstName}
+                  onChange={(e) => setQuickAddFirstName(e.target.value)}
+                  className="mt-1 h-11 rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="text-slate-700 text-xs font-semibold">Last Name</Label>
+                <Input
+                  placeholder="Smith"
+                  value={quickAddLastName}
+                  onChange={(e) => setQuickAddLastName(e.target.value)}
+                  className="mt-1 h-11 rounded-xl"
+                />
+              </div>
+            </div>
+
+            {/* Phone */}
+            <div>
+              <Label className="text-slate-700 text-xs font-semibold">Phone Number <span className="text-red-500">*</span></Label>
+              <Input
+                type="tel"
+                placeholder="07xxx xxx xxx"
+                value={quickAddPhone}
+                onChange={(e) => setQuickAddPhone(e.target.value)}
+                className="mt-1 h-11 rounded-xl"
+              />
+            </div>
+
+            <div className="border-t border-slate-100 pt-3 space-y-3">
+              <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">Optional Details</p>
+
+              {/* Email */}
+              <div>
+                <Label className="text-slate-600 text-xs">Email</Label>
+                <Input
+                  type="email"
+                  placeholder="john@example.com"
+                  value={quickAddEmail}
+                  onChange={(e) => setQuickAddEmail(e.target.value)}
+                  className="mt-1 h-11 rounded-xl"
+                />
+              </div>
+
+              {/* Address */}
+              <div>
+                <Label className="text-slate-600 text-xs">Address</Label>
+                <Input
+                  placeholder="123 High Street"
+                  value={quickAddAddress}
+                  onChange={(e) => setQuickAddAddress(e.target.value)}
+                  className="mt-1 h-11 rounded-xl"
+                />
+              </div>
+
+              {/* City */}
+              <div>
+                <Label className="text-slate-600 text-xs">City</Label>
+                <Input
+                  placeholder="London"
+                  value={quickAddCity}
+                  onChange={(e) => setQuickAddCity(e.target.value)}
+                  className="mt-1 h-11 rounded-xl"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowQuickAddCustomer(false)}>Cancel</Button>
+            <Button
+              onClick={handleQuickAddCustomer}
+              disabled={!quickAddFirstName.trim() || !quickAddPhone.trim() || isCreatingQuickCustomer}
+              className="bg-violet-600 hover:bg-violet-700 text-white"
+            >
+              {isCreatingQuickCustomer ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
+              Add Customer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== METAL PRICE CALCULATOR DIALOG ===== */}
+      <Dialog open={showMetalCalcDialog} onOpenChange={setShowMetalCalcDialog}>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden rounded-3xl">
+          {/* Header */}
+          <div className="px-6 py-5 bg-gradient-to-br from-violet-600 to-purple-700 text-white">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                <Beaker className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold">Metal Price Calculator</h2>
+                <p className="text-violet-200 text-xs">Calculate value by weight</p>
+              </div>
+            </div>
+
+            {/* Metal type tabs */}
+            <div className="bg-white/10 p-1 rounded-xl flex gap-1">
+              {(['GOLD', 'SILVER', 'PLATINUM'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMetalCalcType(m)}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${metalCalcType === m ? 'bg-white text-violet-700 shadow' : 'text-white/80 hover:text-white'}`}
+                >
+                  {m === 'GOLD' ? '🥇 Gold' : m === 'SILVER' ? '🥈 Silver' : '💎 Platinum'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="px-6 py-5 space-y-5">
+            {/* Karat selector — Gold only */}
+            {metalCalcType === 'GOLD' && (
+              <div>
+                <Label className="text-slate-700 text-xs font-semibold mb-2 block">Carat / Karat</Label>
+                <div className="grid grid-cols-5 gap-2">
+                  {(['10K', '14K', '18K', '22K', '24K'] as const).map((k) => (
+                    <button
+                      key={k}
+                      onClick={() => setMetalCalcKarat(k)}
+                      className={`py-2 rounded-xl text-xs font-bold border-2 transition-all ${metalCalcKarat === k ? 'border-violet-500 bg-violet-50 text-violet-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                    >
+                      {k}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-400 mt-1.5">
+                  Purity: {((metalPurityMap[metalCalcKarat]?.purity || 0) * 100).toFixed(1)}% · Live rate: £{parseFloat(tradeInGoldPrice).toFixed(2)}/g
+                </p>
+              </div>
+            )}
+
+            {/* Silver price per gram — editable */}
+            {metalCalcType === 'SILVER' && (
+              <div>
+                <Label className="text-slate-700 text-xs font-semibold">Silver Spot Price (£/gram)</Label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">£</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={metalCalcSilverPrice}
+                    onChange={(e) => setMetalCalcSilverPrice(e.target.value)}
+                    className="pl-7 h-11 rounded-xl"
+                  />
+                </div>
+                <p className="text-xs text-slate-400 mt-1">Sterling silver (92.5% purity) applied automatically</p>
+              </div>
+            )}
+
+            {/* Platinum price per gram — editable */}
+            {metalCalcType === 'PLATINUM' && (
+              <div>
+                <Label className="text-slate-700 text-xs font-semibold">Platinum Spot Price (£/gram)</Label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">£</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={metalCalcPlatinumPrice}
+                    onChange={(e) => setMetalCalcPlatinumPrice(e.target.value)}
+                    className="pl-7 h-11 rounded-xl"
+                  />
+                </div>
+                <p className="text-xs text-slate-400 mt-1">Platinum (95.0% purity) applied automatically</p>
+              </div>
+            )}
+
+            {/* Grams input */}
+            <div>
+              <Label className="text-slate-700 text-xs font-semibold">Weight (grams)</Label>
+              <div className="relative mt-1">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="e.g. 5.50"
+                  value={metalCalcGrams}
+                  onChange={(e) => setMetalCalcGrams(e.target.value)}
+                  className="h-14 text-xl font-semibold rounded-xl pr-12"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">g</span>
+              </div>
+            </div>
+
+            {/* Result */}
+            <div className={`rounded-2xl p-5 text-center ${metalCalcResult > 0 ? 'bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200' : 'bg-slate-50 border border-slate-200'}`}>
+              <p className="text-xs text-slate-500 mb-1">Estimated Value</p>
+              <p className={`text-4xl font-black ${metalCalcResult > 0 ? 'text-violet-700' : 'text-slate-300'}`}>
+                £{metalCalcResult.toFixed(2)}
+              </p>
+              {metalCalcResult > 0 && metalCalcGrams && (
+                <p className="text-xs text-slate-400 mt-2">
+                  {parseFloat(metalCalcGrams).toFixed(2)}g ×{' '}
+                  {metalCalcType === 'GOLD'
+                    ? `£${parseFloat(tradeInGoldPrice).toFixed(2)}/g × ${((metalPurityMap[metalCalcKarat]?.purity || 0) * 100).toFixed(1)}%`
+                    : metalCalcType === 'SILVER'
+                    ? `£${parseFloat(metalCalcSilverPrice).toFixed(2)}/g × 92.5%`
+                    : `£${parseFloat(metalCalcPlatinumPrice).toFixed(2)}/g × 95.0%`}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="px-6 pb-5">
+            <Button variant="outline" className="w-full" onClick={() => setShowMetalCalcDialog(false)}>Close</Button>
           </div>
         </DialogContent>
       </Dialog>
