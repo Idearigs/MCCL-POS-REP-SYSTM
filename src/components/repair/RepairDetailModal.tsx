@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { repairService } from '@/services/repairService';
+import { API_CONFIG } from '@/config/api';
 import { customerService, Customer } from '@/services/customerService';
 import { useRepairTags } from '@/contexts/RepairTagsContext';
 import RepairTagBadge from './RepairTagBadge';
@@ -326,19 +327,35 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
     try {
       setSendingMessage(true);
 
-      // TODO: Implement actual SMS/Email sending via backend
-      // For now, just show a success message
-      console.log('📱 Sending message to customer:', {
-        customerId: customerData.id,
-        phone: customerData.phone,
-        email: customerData.email,
-        message: messageToSend
-      });
+      if (!customerData.phone) {
+        toast.error('Customer has no phone number for SMS');
+        return;
+      }
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const axios = (await import('axios')).default;
+      const token = localStorage.getItem('accessToken');
 
-      toast.success(`Message sent to ${customerData.firstName} ${customerData.lastName}`);
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}/sms/send`,
+        {
+          to: customerData.phone,
+          message: messageToSend,
+          reference: currentRepair.repairNumber || currentRepair.id,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'x-tenant-id': API_CONFIG.TENANT_ID,
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+        }
+      );
+
+      if (response.data?.success) {
+        toast.success(`SMS sent to ${customerData.firstName} ${customerData.lastName}`);
+      } else {
+        toast.error(`SMS failed: ${response.data?.error || 'Unknown error'}`);
+      }
 
       // Reset message fields
       setMessageTemplate('');
@@ -346,7 +363,8 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
 
     } catch (error: any) {
       console.error('Failed to send message:', error);
-      toast.error(`Failed to send message: ${error.message}`);
+      const msg = error.response?.data?.message || error.message;
+      toast.error(`Failed to send SMS: ${msg}`);
     } finally {
       setSendingMessage(false);
     }

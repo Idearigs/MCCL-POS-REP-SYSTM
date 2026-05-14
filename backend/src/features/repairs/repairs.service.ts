@@ -943,6 +943,8 @@ export class RepairsService {
         repair.status !== 'COLLECTED'
           ? new Date() > repair.estimatedDueDate
           : false,
+      tagId: repair.tagId || null,
+      rmaId: repair.rmaId || null,
       createdBy: repair.createdBy,
       createdByName: repair.users
         ? `${repair.users.firstName} ${repair.users.lastName}`

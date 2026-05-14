@@ -3,19 +3,21 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, Trash2, MoreHorizontal } from 'lucide-react';
+import { Calendar, Tag, MoreHorizontal, Trash2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useRepairTags } from '@/contexts/RepairTagsContext';
 
 interface RepairJobCardProps {
   id: string;
   customerName: string;
   itemDescription: string;
   status: 'received' | 'in-progress' | 'completed' | 'collected';
+  tagId?: string | null;
   dueDate: string;
   estimatedPrice?: string;
   onClick: (id: string) => void;
@@ -36,26 +38,41 @@ const statusLabels = {
   'collected': 'Collected',
 };
 
-const RepairJobCard: React.FC<RepairJobCardProps> = ({ 
-  id, 
-  customerName, 
-  itemDescription, 
-  status, 
+const tagColorClasses: Record<string, string> = {
+  blue: 'bg-blue-100 text-blue-700 border border-blue-200',
+  yellow: 'bg-yellow-100 text-yellow-700 border border-yellow-200',
+  orange: 'bg-orange-100 text-orange-700 border border-orange-200',
+  red: 'bg-red-100 text-red-700 border border-red-200',
+  green: 'bg-green-100 text-green-700 border border-green-200',
+  purple: 'bg-purple-100 text-purple-700 border border-purple-200',
+  pink: 'bg-pink-100 text-pink-700 border border-pink-200',
+  gray: 'bg-gray-100 text-gray-700 border border-gray-200',
+};
+
+const RepairJobCard: React.FC<RepairJobCardProps> = ({
+  id,
+  customerName,
+  itemDescription,
+  status,
+  tagId,
   dueDate,
   estimatedPrice,
   onClick,
-  onDelete 
+  onDelete
 }) => {
-  
+  const { tags } = useRepairTags();
+  const currentTag = tagId ? tags.find(t => t.id === tagId) : null;
+
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (onDelete) {
       onDelete(id);
     }
   };
+
   return (
-    <Card 
-      className="cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden border-gray-100 bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg rounded-xl" 
+    <Card
+      className="cursor-pointer transition-all duration-200 hover:shadow-md overflow-hidden border-gray-100 bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg rounded-xl"
       onClick={() => onClick(id)}
     >
       <CardHeader className="pb-2">
@@ -90,6 +107,14 @@ const RepairJobCard: React.FC<RepairJobCardProps> = ({
             )}
           </div>
         </div>
+        {currentTag && (
+          <div className="flex items-center gap-1 mt-1">
+            <Tag size={11} className="text-gray-400" />
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${tagColorClasses[currentTag.color] || tagColorClasses.gray}`}>
+              {currentTag.name}
+            </span>
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         <p className="text-sm text-gray-600 line-clamp-2 mb-3">

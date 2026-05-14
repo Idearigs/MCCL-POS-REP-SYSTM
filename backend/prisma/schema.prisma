@@ -395,6 +395,7 @@ model tenants {
   suppliers               suppliers[]
   tasks                   tasks[]
   users                   users[]
+  gift_cards              gift_cards[]
 }
 
 model outlets {
@@ -453,6 +454,7 @@ model users {
   task_activities              task_activities[]
   task_comments                task_comments[]
   created_tasks                tasks[]                   @relation("TaskCreator")
+  created_gift_cards           gift_cards[]              @relation("GiftCardCreatedBy")
   tenants                      tenants                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([email, tenantId])
@@ -1179,6 +1181,14 @@ enum PaymentMethod {
   CHEQUE
   DIGITAL_WALLET
   INSTALLMENT
+  GIFT_CARD
+}
+
+enum GiftCardStatus {
+  ACTIVE
+  REDEEMED
+  EXPIRED
+  CANCELLED
 }
 
 enum PaymentStatus {
@@ -1935,4 +1945,42 @@ model hrms_p11d_benefits {
 
   @@index([tenantId, taxYear])
   @@index([tenantId, employeeId, taxYear])
+}
+
+model gift_cards {
+  id             String        @id
+  tenantId       String
+  code           String        @unique
+  initialBalance Decimal       @db.Decimal(10, 2)
+  balance        Decimal       @db.Decimal(10, 2)
+  status         GiftCardStatus @default(ACTIVE)
+  recipientName  String?
+  recipientEmail String?
+  purchasedBy    String?
+  expiresAt      DateTime?
+  notes          String?
+  createdBy      String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  tenants        tenants       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  users          users         @relation("GiftCardCreatedBy", fields: [createdBy], references: [id])
+  transactions   gift_card_transactions[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, code])
+}
+
+model gift_card_transactions {
+  id          String   @id
+  giftCardId  String
+  amount      Decimal  @db.Decimal(10, 2)
+  type        String
+  reference   String?
+  performedBy String
+  createdAt   DateTime @default(now())
+
+  giftCard    gift_cards @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+
+  @@index([giftCardId])
 }

@@ -226,10 +226,13 @@ export class SalesService {
               taxAmount,
               totalAmount,
               paymentMethod: primaryPayment.method as PrismaPaymentMethod,
-              paymentStatus: PrismaPaymentStatus.COMPLETED,
+              paymentStatus:
+                totalPayments >= totalAmount - 0.01
+                  ? PrismaPaymentStatus.COMPLETED
+                  : PrismaPaymentStatus.PENDING,
               paidAmount: totalPayments,
               refundedAmount: 0,
-              // balanceDue: 0, // Field doesn't exist
+              balanceDue: Math.max(0, totalAmount - totalPayments),
               notes: saleNotes,
               // expectedDeliveryDate: createSaleDto.expectedDeliveryDate ? new Date(createSaleDto.expectedDeliveryDate) : null,
               createdBy: userId,
@@ -296,7 +299,10 @@ export class SalesService {
                     data: {
                       totalSpent: { increment: totalAmount },
                       visitCount: { increment: 1 },
-                      // lastVisitDate: new Date(), // Field doesn't exist
+                      // Mark as monthly payer when an installment sale is created
+                      ...(primaryPayment.method === 'INSTALLMENT' && {
+                        isMonthlyPayer: true,
+                      }),
                     },
                   }),
                 ]
@@ -448,7 +454,7 @@ export class SalesService {
             },
             payments: true,
             customers: true,
-            // users: true, // Temporarily disabled to debug
+            users: true,
           },
         }),
         this.salesRepo.count({ where }),

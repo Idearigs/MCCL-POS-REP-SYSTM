@@ -81,6 +81,7 @@ interface UIRepairJob {
   customerName: string;
   itemDescription: string;
   status: UIRepairStatus;
+  tagId?: string | null;
   dueDate: string;
   estimatedPrice?: string;
   phoneNumber?: string;
@@ -100,6 +101,7 @@ const convertRepairToUI = (repair: Repair): UIRepairJob => ({
   customerName: repair.customerName,
   itemDescription: repair.itemDescription || (repair.items && repair.items[0]?.itemDescription) || 'No description',
   status: statusMapping[repair.status] || 'received',
+  tagId: repair.tagId || null,
   dueDate: repair.estimatedCompletion || repair.expectedCompletionDate || repair.createdAt,
   estimatedPrice: (repair.estimatedCost || repair.totalCost || 0).toString(),
   phoneNumber: '',
@@ -548,6 +550,7 @@ const RepairsPage: React.FC = () => {
                   customerName={job.customerName}
                   itemDescription={job.itemDescription}
                   status={job.status}
+                  tagId={job.tagId}
                   dueDate={job.dueDate}
                   estimatedPrice={job.estimatedPrice}
                   onClick={handleJobClick}

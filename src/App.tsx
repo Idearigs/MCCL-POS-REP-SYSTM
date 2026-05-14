@@ -44,6 +44,7 @@ import CashUpPage from "./pages/CashUpPage";
 import FloatManagementPage from "./pages/FloatManagementPage";
 import TasksPage from "./pages/TasksPage";
 import PettyCashPage from "./pages/PettyCashPage";
+import GiftCardsPage from "./pages/GiftCardsPage";
 import ShiftsPage from "./pages/ShiftsPage";
 import FinancialIntelligencePage from "./pages/FinancialIntelligencePage";
 import MobileAddProduct from "./pages/MobileAddProduct";
@@ -297,6 +298,14 @@ const App = () => (
                             <PettyCashPage />
                           </PermissionGuard>
                         </FeatureGuard>
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/gift-cards"
+                    element={
+                      <PrivateRoute>
+                        <GiftCardsPage />
                       </PrivateRoute>
                     }
                   />

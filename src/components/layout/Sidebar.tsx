@@ -18,7 +18,7 @@ import {
   LogOut, CreditCard, History, TrendingUp, Users, ClipboardCheck,
   UserCog, Calculator, DollarSign, Wallet, ChevronDown, ChevronRight,
   ShoppingCart, Wrench, Briefcase, Cog, Clock, Brain, Server, CheckSquare,
-  UserSquare2, LayoutDashboard,
+  UserSquare2, LayoutDashboard, Gift,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -58,6 +58,7 @@ const navigationCategories: NavigationCategory[] = [
       { title: 'End of Day Cash-Up',  path: '/cash-up',                icon: Calculator,   permissionKey: 'sales',                 featureKey: 'sales'                  },
       { title: 'Float Management',    path: '/float',                  icon: DollarSign,   permissionKey: 'floatManagement',       featureKey: 'float_management'       },
       { title: 'Petty Cash',          path: '/petty-cash',             icon: Wallet,       permissionKey: 'pettyCash',             featureKey: 'petty_cash'             },
+      { title: 'Gift Cards',          path: '/gift-cards',             icon: Gift,         permissionKey: 'sales',                 featureKey: 'sales'                  },
     ]
   },
   {

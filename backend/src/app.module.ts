@@ -28,6 +28,7 @@ import { TasksModule } from './features/tasks/tasks.module';
 import { HrmsModule } from './features/hrms/hrms.module';
 import { OutletsModule } from './features/outlets/outlets.module';
 import { SettingsModule } from './features/settings/settings.module';
+import { GiftCardsModule } from './features/gift-cards/gift-cards.module';
 
 // External integrations
 import {
@@ -121,6 +122,7 @@ import { OpenAIModule } from './integrations/openai/openai.module';
     HrmsModule,
     OutletsModule,
     SettingsModule,
+    GiftCardsModule,
   ],
   controllers: [AppController],
   providers: [AppService, CacheService],

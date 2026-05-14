@@ -12,7 +12,6 @@ import {
   HttpStatus,
   UploadedFiles,
   UseInterceptors,
-  BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -710,14 +709,9 @@ export class RepairsController {
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
   ) {
-    // Check if files were provided
-    if (!files || files.length === 0) {
-      throw new BadRequestException('No files provided for upload');
-    }
-
     return this.repairsService.uploadImages(
       id,
-      files,
+      files || [],
       metadata || {},
       tenantId,
       userId,

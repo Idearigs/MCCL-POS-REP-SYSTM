@@ -80,6 +80,7 @@ import { repairService, Repair } from '@/services/repairService';
 import { salesService, CreateSaleData, Sale } from '@/services/salesService';
 import { customerService } from '@/services/customerService';
 import { productService } from '@/services/productService';
+import { giftCardService } from '@/services/giftCardService';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useOutlet } from '@/contexts/OutletContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -3325,6 +3326,13 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 <span className="text-emerald-600 text-sm flex items-center gap-1">
                   <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-600 text-[10px] font-bold">%</span>
                   Discount ({discountPercentage}%)
+                  <button
+                    onClick={() => { setDiscountPercentage(0); setDiscountValue(''); }}
+                    className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-100 text-red-500 hover:bg-red-200 transition-colors"
+                    title="Remove discount"
+                  >
+                    <X size={10} />
+                  </button>
                 </span>
                 <span className="text-emerald-600 font-medium tabular-nums">-£{discount.toFixed(2)}</span>
               </div>
@@ -3371,15 +3379,6 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
               <ChevronDown className="h-5 w-5 text-slate-400 group-hover:text-slate-500 transition-colors" />
             </button>
           )}
-
-          {/* Monthly Account Button */}
-          <button
-            onClick={() => setShowMonthlyDialog(true)}
-            className="w-full h-10 rounded-xl font-medium text-sm flex items-center justify-center gap-2 border-2 border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-300 transition-all"
-          >
-            <CalendarClock className="h-4 w-4" />
-            Monthly Account
-          </button>
 
           {/* Hold / Suspend buttons */}
           <div className="flex gap-2 mt-1">
@@ -4642,22 +4641,26 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 </div>
 
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
                     const amount = parseFloat(giftCardAmount);
-                    if (amount > 0) {
+                    if (amount <= 0) return;
+                    try {
+                      const card = await giftCardService.create({ initialBalance: amount });
                       const giftItem: CartItem = {
                         id: `giftcard-${Date.now()}`,
-                        name: `Gift Card - £${amount.toFixed(2)}`,
+                        name: `Gift Card ${card.code} - £${amount.toFixed(2)}`,
                         price: amount,
                         quantity: 1,
                         sku: 'GIFT-CARD-SALE',
                       };
                       setCart(prev => [...prev, giftItem]);
                       toast({
-                        title: 'Gift Card Added',
-                        description: `£${amount.toFixed(2)} gift card added to cart`,
+                        title: 'Gift Card Created',
+                        description: `Code: ${card.code} — £${amount.toFixed(2)}`,
                       });
                       setShowGiftCardDialog(false);
+                    } catch {
+                      toast({ title: 'Error', description: 'Failed to create gift card', variant: 'destructive' });
                     }
                   }}
                   disabled={!giftCardAmount || parseFloat(giftCardAmount) <= 0}
@@ -4698,22 +4701,43 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 </div>
 
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
                     const amount = parseFloat(giftCardAmount);
-                    if (amount > 0 && giftCardCode.trim()) {
+                    if (!amount || amount <= 0 || !giftCardCode.trim()) return;
+
+                    try {
+                      // Validate first
+                      const validation = await giftCardService.validate(giftCardCode.trim());
+                      if (!validation.valid) {
+                        toast({ title: 'Invalid Gift Card', description: validation.reason, variant: 'destructive' });
+                        return;
+                      }
+                      if ((validation.balance ?? 0) < amount) {
+                        toast({
+                          title: 'Insufficient Balance',
+                          description: `Available: £${(validation.balance ?? 0).toFixed(2)}`,
+                          variant: 'destructive',
+                        });
+                        return;
+                      }
+
+                      // Redeem from backend
+                      const result = await giftCardService.redeem(giftCardCode.trim(), amount);
                       const redeemItem: CartItem = {
                         id: `giftcard-redeem-${Date.now()}`,
-                        name: `Gift Card Redemption (${giftCardCode})`,
-                        price: -amount, // Negative to act as credit
+                        name: `Gift Card (${giftCardCode.trim()})`,
+                        price: -amount,
                         quantity: 1,
                         sku: 'GIFT-CARD-REDEEM',
                       };
                       setCart(prev => [...prev, redeemItem]);
                       toast({
-                        title: 'Gift Card Redeemed',
-                        description: `£${amount.toFixed(2)} credit applied`,
+                        title: 'Gift Card Applied',
+                        description: `£${amount.toFixed(2)} redeemed. Remaining: £${result.remainingBalance.toFixed(2)}`,
                       });
                       setShowGiftCardDialog(false);
+                    } catch (e: any) {
+                      toast({ title: 'Error', description: e.message || 'Failed to redeem gift card', variant: 'destructive' });
                     }
                   }}
                   disabled={!giftCardAmount || parseFloat(giftCardAmount) <= 0 || !giftCardCode.trim()}

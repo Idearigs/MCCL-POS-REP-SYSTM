@@ -4,27 +4,35 @@ import { API_CONFIG, PaginatedResponse } from '../config/api';
 
 export interface Repair {
   id: string;
+  repairNumber?: string;
   customerId: string;
   customerName: string;
   itemDescription: string;
   problemDescription: string;
-  repairType: string;
+  repairType?: string;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
-  status: 'RECEIVED' | 'ASSESSED' | 'IN_PROGRESS' | 'COMPLETED' | 'READY_FOR_PICKUP' | 'DELIVERED' | 'CANCELLED';
+  status: 'RECEIVED' | 'ASSESSED' | 'IN_PROGRESS' | 'COMPLETED' | 'READY_FOR_PICKUP' | 'DELIVERED' | 'CANCELLED' | 'QUOTED' | 'APPROVED' | 'READY_FOR_COLLECTION' | 'COLLECTED';
+  tagId?: string | null;
+  rmaId?: string | null;
   estimatedCost: number;
+  totalCost?: number;
   actualCost?: number;
   estimatedCompletion?: string;
+  expectedCompletionDate?: string;
   actualCompletion?: string;
-  dateReceived: string;
+  dateReceived?: string;
   dateCompleted?: string;
   notes?: string;
+  internalNotes?: string;
+  customerInstructions?: string;
+  items?: { itemDescription: string; estimatedCost?: number }[];
   images?: string[];
   beforeImages?: string[];
   afterImages?: string[];
   progressImages?: string[];
   assignedTo?: string;
   technicianName?: string;
-  tenantId: string;
+  tenantId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -58,12 +66,15 @@ export interface CreateRepairData {
 export interface UpdateRepairData {
   status?: 'RECEIVED' | 'QUOTED' | 'APPROVED' | 'IN_PROGRESS' | 'COMPLETED' | 'READY_FOR_COLLECTION' | 'COLLECTED' | 'CANCELLED';
   priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+  tagId?: string | null;
+  rmaId?: string | null;
   expectedCompletionDate?: string;
   actualCompletionDate?: string;
   itemDescription?: string;
   problemDescription?: string;
   estimatedCost?: number;
   statusNotes?: string;
+  notes?: string;
   customerInstructions?: string;
   internalNotes?: string;
   totalCost?: number;
