@@ -66,7 +66,8 @@ function buildCopy(data: ThermalReceiptData, copyLabel?: string): string {
   const parts: string[] = [];
   const p = (...s: string[]) => parts.push(...s);
 
-  p(CMD.INIT);
+  // ESC t 16 = WPC1252 codepage — makes 0xA3 print as £ on EPSON/ONIX printers
+  p(CMD.INIT, '\x1B\x74\x10');
 
   if (copyLabel) {
     p(CMD.ALIGN_CENTER, CMD.BOLD_ON, copyLabel + CMD.LF, CMD.BOLD_OFF);
@@ -143,7 +144,8 @@ function buildStarCopy(data: ThermalReceiptData, copyLabel?: string): string {
   const parts: string[] = [];
   const p = (...s: string[]) => parts.push(...s);
 
-  p(STAR.INIT);
+  // ESC t 16 = WPC1252 codepage — makes 0xA3 print as £ on Star TSP100
+  p(STAR.INIT, '\x1B\x74\x10');
 
   if (copyLabel) {
     p(STAR.ALIGN_CENTER, STAR.BOLD_ON, copyLabel + STAR.LF, STAR.BOLD_OFF);

@@ -1104,7 +1104,7 @@ export class SalesService {
         : 'Unknown User',
       cashierId: sale.createdBy,
       cashierName: sale.users
-        ? `${sale.users.firstName} ${sale.users.lastName}`.trim()
+        ? sale.users.firstName
         : 'Unknown',
       createdAt: sale.createdAt.toISOString(),
       updatedAt: sale.updatedAt.toISOString(),
