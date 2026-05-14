@@ -376,6 +376,78 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [metalCalcGrams, setMetalCalcGrams] = useState('');
   const [metalCalcSilverPrice, setMetalCalcSilverPrice] = useState('0.82');
   const [metalCalcPlatinumPrice, setMetalCalcPlatinumPrice] = useState('26.50');
+  const [metalCalcSilverLive, setMetalCalcSilverLive] = useState(false);
+  const [metalCalcPlatinumLive, setMetalCalcPlatinumLive] = useState(false);
+  const [metalCalcFetching, setMetalCalcFetching] = useState(false);
+
+  // Fetch live silver + platinum from goldapi.io (same key/pattern as LiveGoldRate)
+  const fetchSilverPlatinum = async () => {
+    const GOLD_API_KEY = 'goldapi-1inbzfsmice24ik-io';
+    const USD_TO_GBP = 0.79;
+    const TROY_TO_GRAM = 31.1035;
+    const CACHE_TTL = 60 * 60 * 1000; // 60 min
+
+    const loadCache = (key: string) => {
+      try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; }
+    };
+    const saveCache = (key: string, data: object) => {
+      try { localStorage.setItem(key, JSON.stringify(data)); } catch { /* ignore */ }
+    };
+
+    let silverFetched = false;
+    let platinumFetched = false;
+
+    // Silver
+    const silverCache = loadCache('liveMetalCache_silver');
+    if (silverCache && Date.now() - silverCache.timestamp < CACHE_TTL) {
+      setMetalCalcSilverPrice(silverCache.pricePerGram.toFixed(4));
+      setMetalCalcSilverLive(true);
+      silverFetched = true;
+    }
+
+    // Platinum
+    const platCache = loadCache('liveMetalCache_platinum');
+    if (platCache && Date.now() - platCache.timestamp < CACHE_TTL) {
+      setMetalCalcPlatinumPrice(platCache.pricePerGram.toFixed(2));
+      setMetalCalcPlatinumLive(true);
+      platinumFetched = true;
+    }
+
+    if (silverFetched && platinumFetched) return;
+
+    setMetalCalcFetching(true);
+    try {
+      const fetchMetal = async (symbol: string) => {
+        const res = await fetch(`https://www.goldapi.io/api/${symbol}/USD`, {
+          headers: { 'x-access-token': GOLD_API_KEY, 'Content-Type': 'application/json' },
+        });
+        if (!res.ok) throw new Error(`${symbol} API error ${res.status}`);
+        return res.json();
+      };
+
+      if (!silverFetched) {
+        try {
+          const data = await fetchMetal('XAG');
+          const pricePerGram = (data.price * USD_TO_GBP) / TROY_TO_GRAM;
+          setMetalCalcSilverPrice(pricePerGram.toFixed(4));
+          setMetalCalcSilverLive(true);
+          saveCache('liveMetalCache_silver', { pricePerGram, timestamp: Date.now() });
+        } catch { /* keep default */ }
+      }
+
+      if (!platinumFetched) {
+        try {
+          const data = await fetchMetal('XPT');
+          const pricePerGram = (data.price * USD_TO_GBP) / TROY_TO_GRAM;
+          setMetalCalcPlatinumPrice(pricePerGram.toFixed(2));
+          setMetalCalcPlatinumLive(true);
+          saveCache('liveMetalCache_platinum', { pricePerGram, timestamp: Date.now() });
+        } catch { /* keep default */ }
+      }
+    } finally {
+      setMetalCalcFetching(false);
+    }
+  };
 
   const metalCalcResult = useMemo(() => {
     const grams = parseFloat(metalCalcGrams) || 0;
@@ -1899,7 +1971,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   }}
                 />
                 <button
-                  onClick={() => { setMetalCalcType('GOLD'); setMetalCalcKarat('18K'); setMetalCalcGrams(''); setShowMetalCalcDialog(true); }}
+                  onClick={() => { setMetalCalcType('GOLD'); setMetalCalcKarat('18K'); setMetalCalcGrams(''); setShowMetalCalcDialog(true); fetchSilverPlatinum(); }}
                   className="flex items-center gap-1.5 px-3 py-2 bg-white/80 backdrop-blur-xl border border-gray-200/50 rounded-full shadow-lg shadow-black/5 hover:shadow-xl hover:scale-105 transition-all duration-300 text-xs font-medium text-gray-700"
                   title="Metal Price Calculator"
                 >
@@ -5720,24 +5792,31 @@ Deposit is non-refundable.
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-slate-400 mt-1.5">
-                  Purity: {((metalPurityMap[metalCalcKarat]?.purity || 0) * 100).toFixed(1)}% · Live rate: £{parseFloat(tradeInGoldPrice).toFixed(2)}/g
+                <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5">
+                  <span className="flex items-center gap-1 text-green-600 font-medium"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />Live</span>
+                  · Purity: {((metalPurityMap[metalCalcKarat]?.purity || 0) * 100).toFixed(1)}% · £{parseFloat(tradeInGoldPrice).toFixed(2)}/g
                 </p>
               </div>
             )}
 
-            {/* Silver price per gram — editable */}
+            {/* Silver price per gram — live fetched, editable override */}
             {metalCalcType === 'SILVER' && (
               <div>
-                <Label className="text-slate-700 text-xs font-semibold">Silver Spot Price (£/gram)</Label>
-                <div className="relative mt-1">
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-slate-700 text-xs font-semibold">Silver Spot Price (£/gram)</Label>
+                  <span className={`flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${metalCalcSilverLive ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {metalCalcFetching ? <Loader2 className="w-3 h-3 animate-spin" /> : <span className={`w-1.5 h-1.5 rounded-full ${metalCalcSilverLive ? 'bg-green-500' : 'bg-amber-500'}`} />}
+                    {metalCalcFetching ? 'Fetching…' : metalCalcSilverLive ? 'Live' : 'Manual'}
+                  </span>
+                </div>
+                <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">£</span>
                   <Input
                     type="number"
-                    step="0.01"
+                    step="0.0001"
                     min="0"
                     value={metalCalcSilverPrice}
-                    onChange={(e) => setMetalCalcSilverPrice(e.target.value)}
+                    onChange={(e) => { setMetalCalcSilverPrice(e.target.value); setMetalCalcSilverLive(false); }}
                     className="pl-7 h-11 rounded-xl"
                   />
                 </div>
@@ -5745,18 +5824,24 @@ Deposit is non-refundable.
               </div>
             )}
 
-            {/* Platinum price per gram — editable */}
+            {/* Platinum price per gram — live fetched, editable override */}
             {metalCalcType === 'PLATINUM' && (
               <div>
-                <Label className="text-slate-700 text-xs font-semibold">Platinum Spot Price (£/gram)</Label>
-                <div className="relative mt-1">
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-slate-700 text-xs font-semibold">Platinum Spot Price (£/gram)</Label>
+                  <span className={`flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${metalCalcPlatinumLive ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {metalCalcFetching ? <Loader2 className="w-3 h-3 animate-spin" /> : <span className={`w-1.5 h-1.5 rounded-full ${metalCalcPlatinumLive ? 'bg-green-500' : 'bg-amber-500'}`} />}
+                    {metalCalcFetching ? 'Fetching…' : metalCalcPlatinumLive ? 'Live' : 'Manual'}
+                  </span>
+                </div>
+                <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">£</span>
                   <Input
                     type="number"
                     step="0.01"
                     min="0"
                     value={metalCalcPlatinumPrice}
-                    onChange={(e) => setMetalCalcPlatinumPrice(e.target.value)}
+                    onChange={(e) => { setMetalCalcPlatinumPrice(e.target.value); setMetalCalcPlatinumLive(false); }}
                     className="pl-7 h-11 rounded-xl"
                   />
                 </div>
