@@ -310,6 +310,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [giftCardMode, setGiftCardMode] = useState<'sell' | 'redeem'>('sell');
   const [giftCardAmount, setGiftCardAmount] = useState('');
   const [giftCardCode, setGiftCardCode] = useState('');
+  const [giftCardValidation, setGiftCardValidation] = useState<{ valid: boolean; balance?: number; reason?: string; recipientName?: string } | null>(null);
+  const [giftCardValidating, setGiftCardValidating] = useState(false);
 
   // Layaway state
   const [showLayawayDialog, setShowLayawayDialog] = useState(false);
@@ -2899,6 +2901,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                       setGiftCardMode('sell');
                       setGiftCardAmount('');
                       setGiftCardCode('');
+                      setGiftCardValidation(null);
                       setShowGiftCardDialog(true);
                     }}
                     className="bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl p-5 cursor-pointer hover:from-pink-400 hover:to-rose-400 hover:shadow-lg hover:scale-[1.02] transition-all"
@@ -4579,7 +4582,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
           <div className="px-6 pt-5">
             <div className="bg-gray-100 p-1 rounded-xl flex">
               <button
-                onClick={() => setGiftCardMode('sell')}
+                onClick={() => { setGiftCardMode('sell'); setGiftCardCode(''); setGiftCardAmount(''); setGiftCardValidation(null); }}
                 className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all ${
                   giftCardMode === 'sell'
                     ? 'bg-white shadow-sm text-gray-900'
@@ -4589,7 +4592,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 Sell New Card
               </button>
               <button
-                onClick={() => setGiftCardMode('redeem')}
+                onClick={() => { setGiftCardMode('redeem'); setGiftCardCode(''); setGiftCardAmount(''); setGiftCardValidation(null); }}
                 className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all ${
                   giftCardMode === 'redeem'
                     ? 'bg-white shadow-sm text-gray-900'
@@ -4678,10 +4681,48 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   <Input
                     placeholder="Enter card code or scan..."
                     value={giftCardCode}
-                    onChange={(e) => setGiftCardCode(e.target.value.toUpperCase())}
+                    onChange={(e) => {
+                      setGiftCardCode(e.target.value.toUpperCase());
+                      setGiftCardValidation(null);
+                    }}
+                    onBlur={async () => {
+                      const code = giftCardCode.trim();
+                      if (!code) return;
+                      setGiftCardValidating(true);
+                      try {
+                        const result = await giftCardService.validate(code);
+                        setGiftCardValidation(result);
+                        if (result.valid && result.balance != null) {
+                          const cap = Math.min(result.balance, total > 0 ? total : result.balance);
+                          setGiftCardAmount(cap.toFixed(2));
+                        }
+                      } catch {
+                        setGiftCardValidation({ valid: false, reason: 'Failed to validate card' });
+                      } finally {
+                        setGiftCardValidating(false);
+                      }
+                    }}
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter') {
+                        (e.target as HTMLInputElement).blur();
+                      }
+                    }}
                     className="mt-2 h-14 text-xl font-mono text-center tracking-widest rounded-xl uppercase"
                     autoFocus
                   />
+                  {giftCardValidating && (
+                    <p className="text-sm text-gray-500 mt-1 text-center">Checking card...</p>
+                  )}
+                  {!giftCardValidating && giftCardValidation && (
+                    giftCardValidation.valid ? (
+                      <p className="text-sm text-green-600 mt-1 text-center font-medium">
+                        ✓ Valid — Available balance: £{(giftCardValidation.balance ?? 0).toFixed(2)}
+                        {giftCardValidation.recipientName ? ` · ${giftCardValidation.recipientName}` : ''}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-red-500 mt-1 text-center">{giftCardValidation.reason}</p>
+                    )
+                  )}
                 </div>
 
                 <div>
@@ -4692,6 +4733,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                       type="number"
                       step="0.01"
                       min="0"
+                      max={giftCardValidation?.balance ?? undefined}
                       placeholder="0.00"
                       value={giftCardAmount}
                       onChange={(e) => setGiftCardAmount(e.target.value)}
@@ -4706,8 +4748,10 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                     if (!amount || amount <= 0 || !giftCardCode.trim()) return;
 
                     try {
-                      // Validate first
-                      const validation = await giftCardService.validate(giftCardCode.trim());
+                      const validation = giftCardValidation?.valid
+                        ? giftCardValidation
+                        : await giftCardService.validate(giftCardCode.trim());
+
                       if (!validation.valid) {
                         toast({ title: 'Invalid Gift Card', description: validation.reason, variant: 'destructive' });
                         return;
@@ -4721,7 +4765,6 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                         return;
                       }
 
-                      // Redeem from backend
                       const result = await giftCardService.redeem(giftCardCode.trim(), amount);
                       const redeemItem: CartItem = {
                         id: `giftcard-redeem-${Date.now()}`,
@@ -4740,7 +4783,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                       toast({ title: 'Error', description: e.message || 'Failed to redeem gift card', variant: 'destructive' });
                     }
                   }}
-                  disabled={!giftCardAmount || parseFloat(giftCardAmount) <= 0 || !giftCardCode.trim()}
+                  disabled={!giftCardValidation?.valid || !giftCardAmount || parseFloat(giftCardAmount) <= 0 || giftCardValidating}
                   className="w-full h-14 rounded-xl text-base font-semibold bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg"
                 >
                   <Check className="h-5 w-5 mr-2" />
