@@ -39,11 +39,18 @@ export interface PrinterSettings {
   vatNumber?: string;
 }
 
+export interface MetalSettings {
+  goldMarginPercent: number;
+  silverMarginPercent: number;
+  platinumMarginPercent: number;
+}
+
 export interface AllSettings {
   general: GeneralSettings;
   notifications: NotificationSettings;
   appearance: AppearanceSettings;
   printer: PrinterSettings;
+  metals: MetalSettings;
 }
 
 interface SettingsContextType {
@@ -53,6 +60,7 @@ interface SettingsContextType {
   updateNotificationSettings: (settings: NotificationSettings) => Promise<boolean>;
   updateAppearanceSettings: (settings: AppearanceSettings) => Promise<boolean>;
   updatePrinterSettings: (settings: PrinterSettings) => Promise<boolean>;
+  updateMetalSettings: (settings: MetalSettings) => Promise<boolean>;
   toggleDarkMode: () => void;
   toggleCompactView: () => void;
   resetToDefaults: () => void;
@@ -61,6 +69,11 @@ interface SettingsContextType {
 // ─── Defaults (used when DB returns nothing) ──────────────────────────────────
 
 const defaultSettings: AllSettings = {
+  metals: {
+    goldMarginPercent: 0,
+    silverMarginPercent: 0,
+    platinumMarginPercent: 0,
+  },
   general: {
     storeName: 'Andrew McCulloch Jewellers',
     tradingName: 'A trading name of Beeston Jewellers Ltd',
@@ -117,6 +130,7 @@ function mergeWithDefaults(raw: Partial<AllSettings>): AllSettings {
     notifications: { ...defaultSettings.notifications, ...(raw.notifications ?? {}) },
     appearance: { ...defaultSettings.appearance, ...(raw.appearance ?? {}) },
     printer: { ...defaultSettings.printer, ...(raw.printer ?? {}) },
+    metals: { ...defaultSettings.metals, ...(raw.metals ?? {}) },
   };
 }
 
@@ -257,6 +271,22 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const updateMetalSettings = async (newSettings: MetalSettings): Promise<boolean> => {
+    setLoading(true);
+    try {
+      const updated = await patchSettings({ metals: newSettings });
+      setSettings(updated);
+      writeCache(updated);
+      toast.success('Metal margins saved');
+      return true;
+    } catch {
+      toast.error('Failed to save metal margins');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Dark mode / compact view toggle immediately (also persists via appearance update)
   const toggleDarkMode = () => {
     const newValue = !settings.appearance.darkMode;
@@ -292,6 +322,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updateNotificationSettings,
         updateAppearanceSettings,
         updatePrinterSettings,
+        updateMetalSettings,
         toggleDarkMode,
         toggleCompactView,
         resetToDefaults,

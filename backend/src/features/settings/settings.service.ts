@@ -38,9 +38,19 @@ export interface AppSettings {
     drawerPin?: string;
     vatNumber?: string;
   };
+  metals: {
+    goldMarginPercent: number;
+    silverMarginPercent: number;
+    platinumMarginPercent: number;
+  };
 }
 
 const DEFAULTS: AppSettings = {
+  metals: {
+    goldMarginPercent: 0,
+    silverMarginPercent: 0,
+    platinumMarginPercent: 0,
+  },
   general: {
     storeName: 'Andrew McCulloch Jewellers',
     tradingName: 'A trading name of Beeston Jewellers Ltd',
@@ -94,6 +104,7 @@ export class SettingsService {
       },
       appearance: { ...DEFAULTS.appearance, ...(stored.appearance ?? {}) },
       printer: { ...DEFAULTS.printer, ...(stored.printer ?? {}) },
+      metals: { ...DEFAULTS.metals, ...(stored.metals ?? {}) },
     };
   }
 
@@ -118,6 +129,9 @@ export class SettingsService {
       printer: dto.printer
         ? { ...current.printer, ...dto.printer }
         : current.printer,
+      metals: dto.metals
+        ? { ...current.metals, ...dto.metals }
+        : current.metals,
     };
 
     // Preserve reserved keys (QZ certs) while writing appSettings

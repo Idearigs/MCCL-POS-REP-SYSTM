@@ -117,7 +117,7 @@ interface TileBasedPOSProps {
 
 const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const { inventory, refreshInventory } = useInventory();
-  const { settings } = useSettings();
+  const { settings, updateMetalSettings } = useSettings();
   const { currentOutlet } = useOutlet();
   const { auth } = useAuth();
   const { toast } = useToast();
@@ -377,6 +377,11 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [metalCalcSilverPrice, setMetalCalcSilverPrice] = useState('0.82');
   const [metalCalcPlatinumPrice, setMetalCalcPlatinumPrice] = useState('26.50');
   const [metalCalcGoldColour, setMetalCalcGoldColour] = useState<'YELLOW' | 'WHITE' | 'ROSE'>('YELLOW');
+  const [showMarginEditor, setShowMarginEditor] = useState(false);
+  const [marginGold, setMarginGold] = useState('');
+  const [marginSilver, setMarginSilver] = useState('');
+  const [marginPlatinum, setMarginPlatinum] = useState('');
+  const [savingMargins, setSavingMargins] = useState(false);
   const [metalCalcSilverLive, setMetalCalcSilverLive] = useState(false);
   const [metalCalcPlatinumLive, setMetalCalcPlatinumLive] = useState(false);
   const [metalCalcFetching, setMetalCalcFetching] = useState(false);
@@ -452,17 +457,22 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
   const metalCalcResult = useMemo(() => {
     const grams = parseFloat(metalCalcGrams) || 0;
+    const metals = settings.metals ?? { goldMarginPercent: 0, silverMarginPercent: 0, platinumMarginPercent: 0 };
+    let spotValue = 0;
+    let marginPct = 0;
     if (metalCalcType === 'GOLD') {
-      const base = parseFloat(tradeInGoldPrice) || 0;
-      const purity = metalPurityMap[metalCalcKarat]?.purity || 0;
-      return grams * base * purity;
+      spotValue = grams * (parseFloat(tradeInGoldPrice) || 0) * (metalPurityMap[metalCalcKarat]?.purity || 0);
+      marginPct = metals.goldMarginPercent || 0;
     } else if (metalCalcType === 'SILVER') {
-      return grams * (parseFloat(metalCalcSilverPrice) || 0) * 0.925;
+      spotValue = grams * (parseFloat(metalCalcSilverPrice) || 0) * 0.925;
+      marginPct = metals.silverMarginPercent || 0;
     } else {
-      return grams * (parseFloat(metalCalcPlatinumPrice) || 0) * 0.950;
+      spotValue = grams * (parseFloat(metalCalcPlatinumPrice) || 0) * 0.950;
+      marginPct = metals.platinumMarginPercent || 0;
     }
+    return spotValue * (1 + marginPct / 100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [metalCalcGrams, metalCalcType, metalCalcKarat, tradeInGoldPrice, metalCalcSilverPrice, metalCalcPlatinumPrice]);
+  }, [metalCalcGrams, metalCalcType, metalCalcKarat, tradeInGoldPrice, metalCalcSilverPrice, metalCalcPlatinumPrice, settings.metals]);
 
   // Get categories with product counts from inventory
   const categories = useMemo(() => {
@@ -5758,11 +5768,73 @@ Deposit is non-refundable.
               <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
                 <Beaker className="h-5 w-5 text-white" />
               </div>
-              <div>
+              <div className="flex-1">
                 <h2 className="text-lg font-bold">Metal Price Calculator</h2>
                 <p className="text-violet-200 text-xs">Calculate value by weight</p>
               </div>
+              <button
+                onClick={() => {
+                  const m = settings.metals ?? { goldMarginPercent: 0, silverMarginPercent: 0, platinumMarginPercent: 0 };
+                  setMarginGold(String(m.goldMarginPercent));
+                  setMarginSilver(String(m.silverMarginPercent));
+                  setMarginPlatinum(String(m.platinumMarginPercent));
+                  setShowMarginEditor(v => !v);
+                }}
+                className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-all"
+                title="Set margins"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+              </button>
             </div>
+
+            {/* Margin editor panel */}
+            {showMarginEditor && (
+              <div className="bg-white/15 rounded-2xl p-4 mb-4 space-y-3">
+                <p className="text-xs font-semibold text-white/80 uppercase tracking-wide">Markup / Margin Settings</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: '🥇 Gold', value: marginGold, set: setMarginGold },
+                    { label: '🥈 Silver', value: marginSilver, set: setMarginSilver },
+                    { label: '💎 Platinum', value: marginPlatinum, set: setMarginPlatinum },
+                  ].map(({ label, value, set }) => (
+                    <div key={label}>
+                      <p className="text-white/70 text-xs mb-1">{label}</p>
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="200"
+                          step="0.5"
+                          value={value}
+                          onChange={e => set(e.target.value)}
+                          className="h-9 text-sm pr-7 bg-white/20 border-white/30 text-white placeholder-white/50 rounded-lg"
+                          placeholder="0"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-white/60 text-xs">%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  size="sm"
+                  disabled={savingMargins}
+                  onClick={async () => {
+                    setSavingMargins(true);
+                    await updateMetalSettings({
+                      goldMarginPercent: parseFloat(marginGold) || 0,
+                      silverMarginPercent: parseFloat(marginSilver) || 0,
+                      platinumMarginPercent: parseFloat(marginPlatinum) || 0,
+                    });
+                    setSavingMargins(false);
+                    setShowMarginEditor(false);
+                  }}
+                  className="w-full bg-white/20 hover:bg-white/30 text-white border-0 text-xs"
+                >
+                  {savingMargins ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                  Save Margins
+                </Button>
+              </div>
+            )}
 
             {/* Metal type tabs */}
             <div className="bg-white/10 p-1 rounded-xl flex gap-1">
@@ -5898,22 +5970,37 @@ Deposit is non-refundable.
             </div>
 
             {/* Result */}
-            <div className={`rounded-2xl p-5 text-center ${metalCalcResult > 0 ? 'bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200' : 'bg-slate-50 border border-slate-200'}`}>
-              <p className="text-xs text-slate-500 mb-1">Estimated Value</p>
-              <p className={`text-4xl font-black ${metalCalcResult > 0 ? 'text-violet-700' : 'text-slate-300'}`}>
-                £{metalCalcResult.toFixed(2)}
-              </p>
-              {metalCalcResult > 0 && metalCalcGrams && (
-                <p className="text-xs text-slate-400 mt-2">
-                  {parseFloat(metalCalcGrams).toFixed(2)}g ×{' '}
-                  {metalCalcType === 'GOLD'
-                    ? `${metalCalcKarat} ${metalCalcGoldColour.charAt(0) + metalCalcGoldColour.slice(1).toLowerCase()} Gold · £${parseFloat(tradeInGoldPrice).toFixed(2)}/g × ${((metalPurityMap[metalCalcKarat]?.purity || 0) * 100).toFixed(1)}%`
-                    : metalCalcType === 'SILVER'
-                    ? `£${parseFloat(metalCalcSilverPrice).toFixed(2)}/g × 92.5%`
-                    : `£${parseFloat(metalCalcPlatinumPrice).toFixed(2)}/g × 95.0%`}
-                </p>
-              )}
-            </div>
+            {(() => {
+              const metals = settings.metals ?? { goldMarginPercent: 0, silverMarginPercent: 0, platinumMarginPercent: 0 };
+              const marginPct = metalCalcType === 'GOLD' ? metals.goldMarginPercent : metalCalcType === 'SILVER' ? metals.silverMarginPercent : metals.platinumMarginPercent;
+              const grams = parseFloat(metalCalcGrams) || 0;
+              let spotValue = 0;
+              if (metalCalcType === 'GOLD') spotValue = grams * (parseFloat(tradeInGoldPrice) || 0) * (metalPurityMap[metalCalcKarat]?.purity || 0);
+              else if (metalCalcType === 'SILVER') spotValue = grams * (parseFloat(metalCalcSilverPrice) || 0) * 0.925;
+              else spotValue = grams * (parseFloat(metalCalcPlatinumPrice) || 0) * 0.950;
+              const hasMargin = marginPct > 0;
+              return (
+                <div className={`rounded-2xl p-5 text-center ${metalCalcResult > 0 ? 'bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200' : 'bg-slate-50 border border-slate-200'}`}>
+                  <p className="text-xs text-slate-500 mb-1">{hasMargin ? `Estimated Value (incl. ${marginPct}% margin)` : 'Estimated Value (spot)'}</p>
+                  <p className={`text-4xl font-black ${metalCalcResult > 0 ? 'text-violet-700' : 'text-slate-300'}`}>
+                    £{metalCalcResult.toFixed(2)}
+                  </p>
+                  {hasMargin && spotValue > 0 && (
+                    <p className="text-xs text-slate-400 mt-1">Spot: £{spotValue.toFixed(2)} + {marginPct}% = £{metalCalcResult.toFixed(2)}</p>
+                  )}
+                  {metalCalcResult > 0 && metalCalcGrams && (
+                    <p className="text-xs text-slate-400 mt-1">
+                      {parseFloat(metalCalcGrams).toFixed(2)}g ×{' '}
+                      {metalCalcType === 'GOLD'
+                        ? `${metalCalcKarat} ${metalCalcGoldColour.charAt(0) + metalCalcGoldColour.slice(1).toLowerCase()} Gold · £${parseFloat(tradeInGoldPrice).toFixed(2)}/g × ${((metalPurityMap[metalCalcKarat]?.purity || 0) * 100).toFixed(1)}%`
+                        : metalCalcType === 'SILVER'
+                        ? `£${parseFloat(metalCalcSilverPrice).toFixed(2)}/g × 92.5%`
+                        : `£${parseFloat(metalCalcPlatinumPrice).toFixed(2)}/g × 95.0%`}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="px-6 pb-5">
