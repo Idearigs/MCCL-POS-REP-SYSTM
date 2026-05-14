@@ -6,10 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { generateId } from '../../shared/utils/id-generator';
-import {
-  CreateGiftCardDto,
-  RedeemGiftCardDto,
-} from './dto/gift-card.dto';
+import { CreateGiftCardDto, RedeemGiftCardDto } from './dto/gift-card.dto';
 
 function generateGiftCardCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -26,16 +23,14 @@ export class GiftCardsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(
-    dto: CreateGiftCardDto,
-    tenantId: string,
-    userId: string,
-  ) {
+  async create(dto: CreateGiftCardDto, tenantId: string, userId: string) {
     let code: string;
     let attempts = 0;
     do {
       code = generateGiftCardCode();
-      const existing = await this.prisma.gift_cards.findUnique({ where: { code } });
+      const existing = await this.prisma.gift_cards.findUnique({
+        where: { code },
+      });
       if (!existing) break;
       attempts++;
     } while (attempts < 10);
@@ -68,7 +63,9 @@ export class GiftCardsService {
       },
     });
 
-    this.logger.log(`Gift card ${code} created with balance £${dto.initialBalance}`);
+    this.logger.log(
+      `Gift card ${code} created with balance £${dto.initialBalance}`,
+    );
     return this.mapToResponse(card);
   }
 
@@ -82,7 +79,7 @@ export class GiftCardsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return cards.map(c => this.mapToResponse(c));
+    return cards.map((c) => this.mapToResponse(c));
   }
 
   async findByCode(code: string, tenantId: string) {
@@ -114,7 +111,10 @@ export class GiftCardsService {
       return { valid: false, reason: 'Gift card not found' };
     }
     if (card.status !== 'ACTIVE') {
-      return { valid: false, reason: `Gift card is ${card.status.toLowerCase()}` };
+      return {
+        valid: false,
+        reason: `Gift card is ${card.status.toLowerCase()}`,
+      };
     }
     if (card.expiresAt && new Date() > card.expiresAt) {
       await this.prisma.gift_cards.update({
@@ -139,10 +139,15 @@ export class GiftCardsService {
 
     if (!card) throw new NotFoundException('Gift card not found');
     if (card.status !== 'ACTIVE') {
-      throw new BadRequestException(`Gift card is ${card.status.toLowerCase()}`);
+      throw new BadRequestException(
+        `Gift card is ${card.status.toLowerCase()}`,
+      );
     }
     if (card.expiresAt && new Date() > card.expiresAt) {
-      await this.prisma.gift_cards.update({ where: { id: card.id }, data: { status: 'EXPIRED' } });
+      await this.prisma.gift_cards.update({
+        where: { id: card.id },
+        data: { status: 'EXPIRED' },
+      });
       throw new BadRequestException('Gift card has expired');
     }
     if (Number(card.balance) < dto.amount) {
@@ -172,7 +177,9 @@ export class GiftCardsService {
       }),
     ]);
 
-    this.logger.log(`Gift card ${dto.code} redeemed £${dto.amount}, remaining: £${newBalance}`);
+    this.logger.log(
+      `Gift card ${dto.code} redeemed £${dto.amount}, remaining: £${newBalance}`,
+    );
     return {
       success: true,
       amountRedeemed: dto.amount,
@@ -182,7 +189,9 @@ export class GiftCardsService {
   }
 
   async cancel(id: string, tenantId: string, userId: string) {
-    const card = await this.prisma.gift_cards.findFirst({ where: { id, tenantId } });
+    const card = await this.prisma.gift_cards.findFirst({
+      where: { id, tenantId },
+    });
     if (!card) throw new NotFoundException('Gift card not found');
     if (card.status === 'REDEEMED') {
       throw new BadRequestException('Cannot cancel a fully redeemed gift card');

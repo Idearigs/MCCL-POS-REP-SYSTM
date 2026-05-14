@@ -82,19 +82,13 @@ export class GiftCardsController {
 
   @Get('code/:code')
   @ApiOperation({ summary: 'Get gift card by code' })
-  async findByCode(
-    @Param('code') code: string,
-    @TenantId() tenantId: string,
-  ) {
+  async findByCode(@Param('code') code: string, @TenantId() tenantId: string) {
     return this.giftCardsService.findByCode(code, tenantId);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get gift card by ID' })
-  async findById(
-    @Param('id') id: string,
-    @TenantId() tenantId: string,
-  ) {
+  async findById(@Param('id') id: string, @TenantId() tenantId: string) {
     return this.giftCardsService.findById(id, tenantId);
   }
 
