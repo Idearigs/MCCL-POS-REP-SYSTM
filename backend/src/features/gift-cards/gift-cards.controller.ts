@@ -104,4 +104,13 @@ export class GiftCardsController {
   ) {
     return this.giftCardsService.cancel(id, tenantId, userId);
   }
+
+  @Delete(':id/hard')
+  @UseGuards(RolesGuard)
+  @Roles('OWNER', 'MANAGER')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Permanently delete a gift card' })
+  async hardDelete(@Param('id') id: string, @TenantId() tenantId: string) {
+    return this.giftCardsService.hardDelete(id, tenantId);
+  }
 }

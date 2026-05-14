@@ -34,6 +34,8 @@ import {
   Ban,
   Eye,
   RefreshCw,
+  Trash2,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import MainLayout from '@/components/layout/MainLayout';
@@ -53,8 +55,13 @@ export default function GiftCardsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
+  const [showQuickIssue, setShowQuickIssue] = useState(false);
   const [selectedCard, setSelectedCard] = useState<GiftCard | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const [quickAmount, setQuickAmount] = useState('');
+  const [quickCreating, setQuickCreating] = useState(false);
 
   const [form, setForm] = useState<CreateGiftCardData>({
     initialBalance: 50,
@@ -82,6 +89,26 @@ export default function GiftCardsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
+  const handleQuickIssue = async () => {
+    const amount = parseFloat(quickAmount);
+    if (!amount || amount <= 0) {
+      toast.error('Enter a valid amount');
+      return;
+    }
+    try {
+      setQuickCreating(true);
+      const card = await giftCardService.create({ initialBalance: amount });
+      setCards(prev => [card, ...prev]);
+      setShowQuickIssue(false);
+      setQuickAmount('');
+      toast.success(`Gift card ${card.code} issued for £${amount.toFixed(2)}`);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to create gift card');
+    } finally {
+      setQuickCreating(false);
+    }
+  };
+
   const handleCreate = async () => {
     if (!form.initialBalance || form.initialBalance <= 0) {
       toast.error('Please enter a valid initial balance');
@@ -102,7 +129,7 @@ export default function GiftCardsPage() {
   };
 
   const handleCancel = async (card: GiftCard) => {
-    if (!confirm(`Cancel gift card ${card.code}? This cannot be undone.`)) return;
+    if (!confirm(`Cancel gift card ${card.code}? It will no longer be usable.`)) return;
     try {
       setCancelling(true);
       await giftCardService.cancel(card.id);
@@ -113,6 +140,21 @@ export default function GiftCardsPage() {
       toast.error(e.message || 'Failed to cancel gift card');
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const handleDelete = async (card: GiftCard) => {
+    if (!confirm(`Permanently delete gift card ${card.code}? This removes it from the system entirely and cannot be undone.`)) return;
+    try {
+      setDeleting(true);
+      await giftCardService.hardDelete(card.id);
+      setCards(prev => prev.filter(c => c.id !== card.id));
+      setShowDetail(false);
+      toast.success(`Gift card ${card.code} deleted`);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to delete gift card');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -174,10 +216,20 @@ export default function GiftCardsPage() {
               <p className="text-sm text-gray-500">Issue, manage, and track gift cards</p>
             </div>
           </div>
-          <Button onClick={() => setShowCreate(true)} className="bg-purple-600 hover:bg-purple-700">
-            <Plus size={16} className="mr-2" />
-            Issue Gift Card
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setShowQuickIssue(true)}
+              variant="outline"
+              className="border-purple-300 text-purple-700 hover:bg-purple-50"
+            >
+              <Zap size={16} className="mr-2" />
+              Quick Issue
+            </Button>
+            <Button onClick={() => setShowCreate(true)} className="bg-purple-600 hover:bg-purple-700">
+              <Plus size={16} className="mr-2" />
+              Issue with Details
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -266,7 +318,7 @@ export default function GiftCardsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-sm text-gray-600">
-                        {card.recipientName || '—'}
+                        {card.recipientName || <span className="text-gray-300 italic">Anonymous</span>}
                       </TableCell>
                       <TableCell className="font-medium">£{card.initialBalance.toFixed(2)}</TableCell>
                       <TableCell>
@@ -304,13 +356,24 @@ export default function GiftCardsPage() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="text-red-500 hover:text-red-700"
+                              className="text-orange-500 hover:text-orange-700"
                               onClick={() => handleCancel(card)}
                               disabled={cancelling}
+                              title="Cancel card"
                             >
                               <Ban size={14} />
                             </Button>
                           )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-500 hover:text-red-700"
+                            onClick={() => handleDelete(card)}
+                            disabled={deleting}
+                            title="Permanently delete"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -322,13 +385,67 @@ export default function GiftCardsPage() {
         </Card>
       </div>
 
-      {/* Create Dialog */}
+      {/* Quick Issue Dialog */}
+      <Dialog open={showQuickIssue} onOpenChange={v => { setShowQuickIssue(v); if (!v) setQuickAmount(''); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap size={20} className="text-purple-600" />
+              Quick Issue Gift Card
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-500 mb-4">Creates an anonymous gift card instantly — no customer details needed.</p>
+            <Label htmlFor="quickAmount">Amount (£)</Label>
+            <div className="relative mt-2">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-xl font-medium">£</span>
+              <Input
+                id="quickAmount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                placeholder="0.00"
+                value={quickAmount}
+                onChange={e => setQuickAmount(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleQuickIssue()}
+                className="h-14 pl-10 text-2xl font-bold text-center rounded-xl"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2 mt-3">
+              {[10, 20, 50, 100].map(v => (
+                <Button
+                  key={v}
+                  size="sm"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setQuickAmount(v.toString())}
+                >
+                  £{v}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowQuickIssue(false); setQuickAmount(''); }}>Cancel</Button>
+            <Button
+              onClick={handleQuickIssue}
+              disabled={quickCreating || !quickAmount || parseFloat(quickAmount) <= 0}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {quickCreating ? 'Creating...' : 'Issue Card'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create with Details Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Gift size={20} className="text-purple-600" />
-              Issue New Gift Card
+              Issue Gift Card with Details
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -451,10 +568,21 @@ export default function GiftCardsPage() {
               )}
             </div>
             <DialogFooter className="gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-red-500 hover:text-red-700 hover:bg-red-50 mr-auto"
+                onClick={() => handleDelete(selectedCard)}
+                disabled={deleting}
+              >
+                <Trash2 size={14} className="mr-1" />
+                Delete
+              </Button>
               {selectedCard.status === 'ACTIVE' && (
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   size="sm"
+                  className="text-orange-600 border-orange-200 hover:bg-orange-50"
                   onClick={() => handleCancel(selectedCard)}
                   disabled={cancelling}
                 >

@@ -216,6 +216,21 @@ export class GiftCardsService {
     return this.mapToResponse(updated);
   }
 
+  async hardDelete(id: string, tenantId: string) {
+    const card = await this.prisma.gift_cards.findFirst({
+      where: { id, tenantId },
+    });
+    if (!card) throw new NotFoundException('Gift card not found');
+
+    await this.prisma.$transaction([
+      this.prisma.gift_card_transactions.deleteMany({ where: { giftCardId: id } }),
+      this.prisma.gift_cards.delete({ where: { id } }),
+    ]);
+
+    this.logger.log(`Gift card ${card.code} permanently deleted`);
+    return { success: true };
+  }
+
   private mapToResponse(card: any) {
     return {
       id: card.id,

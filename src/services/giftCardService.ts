@@ -79,6 +79,10 @@ class GiftCardService {
   async cancel(id: string): Promise<GiftCard> {
     return apiClient.delete<GiftCard>(`/gift-cards/${id}`);
   }
+
+  async hardDelete(id: string): Promise<{ success: boolean }> {
+    return apiClient.delete<{ success: boolean }>(`/gift-cards/${id}/hard`);
+  }
 }
 
 export const giftCardService = new GiftCardService();
