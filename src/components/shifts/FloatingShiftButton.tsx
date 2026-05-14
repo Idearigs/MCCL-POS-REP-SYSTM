@@ -200,8 +200,8 @@ const FloatingShiftButton: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Don't render while loading or inside Quick POS
-  if (loading || isInQuickPOS) {
+  // Don't render while loading
+  if (loading) {
     return null;
   }
 
