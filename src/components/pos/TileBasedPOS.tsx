@@ -1139,7 +1139,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         email: quickAddEmail.trim() || undefined,
         address: quickAddAddress.trim() || undefined,
         city: quickAddCity.trim() || undefined,
-      });
+        dataProcessingConsent: true, // customer is physically present in-store
+      } as any);
       setSelectedCustomer(newCustomer);
       toast({ title: 'Customer Added', description: `${newCustomer.firstName || quickAddFirstName} added and selected` });
       setShowQuickAddCustomer(false);
