@@ -376,6 +376,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [metalCalcGrams, setMetalCalcGrams] = useState('');
   const [metalCalcSilverPrice, setMetalCalcSilverPrice] = useState('0.82');
   const [metalCalcPlatinumPrice, setMetalCalcPlatinumPrice] = useState('26.50');
+  const [metalCalcGoldColour, setMetalCalcGoldColour] = useState<'YELLOW' | 'WHITE' | 'ROSE'>('YELLOW');
   const [metalCalcSilverLive, setMetalCalcSilverLive] = useState(false);
   const [metalCalcPlatinumLive, setMetalCalcPlatinumLive] = useState(false);
   const [metalCalcFetching, setMetalCalcFetching] = useState(false);
@@ -5797,6 +5798,35 @@ Deposit is non-refundable.
                   <span className="flex items-center gap-1 text-green-600 font-medium"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />Live</span>
                   · Purity: {((metalPurityMap[metalCalcKarat]?.purity || 0) * 100).toFixed(1)}% · £{parseFloat(tradeInGoldPrice).toFixed(2)}/g
                 </p>
+
+                {/* Gold colour selector */}
+                <div className="mt-3">
+                  <Label className="text-slate-700 text-xs font-semibold mb-2 block">Gold Colour</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => setMetalCalcGoldColour('YELLOW')}
+                      className={`py-2.5 rounded-xl text-xs font-semibold border-2 transition-all flex flex-col items-center gap-1 ${metalCalcGoldColour === 'YELLOW' ? 'border-yellow-500 bg-yellow-50 text-yellow-800' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                    >
+                      <span className="w-5 h-5 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 border border-yellow-400" />
+                      Yellow
+                    </button>
+                    <button
+                      onClick={() => setMetalCalcGoldColour('WHITE')}
+                      className={`py-2.5 rounded-xl text-xs font-semibold border-2 transition-all flex flex-col items-center gap-1 ${metalCalcGoldColour === 'WHITE' ? 'border-slate-500 bg-slate-50 text-slate-800' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                    >
+                      <span className="w-5 h-5 rounded-full bg-gradient-to-br from-slate-200 to-slate-400 border border-slate-300" />
+                      White
+                    </button>
+                    <button
+                      onClick={() => setMetalCalcGoldColour('ROSE')}
+                      className={`py-2.5 rounded-xl text-xs font-semibold border-2 transition-all flex flex-col items-center gap-1 ${metalCalcGoldColour === 'ROSE' ? 'border-rose-400 bg-rose-50 text-rose-800' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                    >
+                      <span className="w-5 h-5 rounded-full bg-gradient-to-br from-rose-300 to-rose-500 border border-rose-400" />
+                      Rose
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1.5">Yellow, White &amp; Rose Gold have the same spot price at the same karat — colour doesn't change metal value.</p>
+                </div>
               </div>
             )}
 
@@ -5877,7 +5907,7 @@ Deposit is non-refundable.
                 <p className="text-xs text-slate-400 mt-2">
                   {parseFloat(metalCalcGrams).toFixed(2)}g ×{' '}
                   {metalCalcType === 'GOLD'
-                    ? `£${parseFloat(tradeInGoldPrice).toFixed(2)}/g × ${((metalPurityMap[metalCalcKarat]?.purity || 0) * 100).toFixed(1)}%`
+                    ? `${metalCalcKarat} ${metalCalcGoldColour.charAt(0) + metalCalcGoldColour.slice(1).toLowerCase()} Gold · £${parseFloat(tradeInGoldPrice).toFixed(2)}/g × ${((metalPurityMap[metalCalcKarat]?.purity || 0) * 100).toFixed(1)}%`
                     : metalCalcType === 'SILVER'
                     ? `£${parseFloat(metalCalcSilverPrice).toFixed(2)}/g × 92.5%`
                     : `£${parseFloat(metalCalcPlatinumPrice).toFixed(2)}/g × 95.0%`}
