@@ -619,7 +619,12 @@ export class SalesService {
     return this.prismaService.$transaction(async (prisma) => {
       const sale = await prisma.sales.findFirst({
         where: { id, tenantId },
-        include: { sale_items: { include: { products: true } }, payments: true, customers: true, users: true },
+        include: {
+          sale_items: { include: { products: true } },
+          payments: true,
+          customers: true,
+          users: true,
+        },
       });
       if (!sale) throw new NotFoundException(`Sale ${id} not found`);
       if (sale.paymentMethod !== 'INSTALLMENT')
@@ -653,7 +658,12 @@ export class SalesService {
             : sale.notes,
           updatedAt: new Date(),
         },
-        include: { sale_items: { include: { products: true } }, payments: true, customers: true, users: true },
+        include: {
+          sale_items: { include: { products: true } },
+          payments: true,
+          customers: true,
+          users: true,
+        },
       });
 
       await Promise.all([
@@ -662,7 +672,9 @@ export class SalesService {
         this.cacheService.delTenantData(tenantId, 'sales:stats'),
       ]);
 
-      this.logger.log(`Installment payment £${payAmount} recorded for sale ${id}`);
+      this.logger.log(
+        `Installment payment £${payAmount} recorded for sale ${id}`,
+      );
       return this.mapToResponseDto(updated);
     });
   }

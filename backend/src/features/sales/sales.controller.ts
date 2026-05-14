@@ -264,14 +264,23 @@ export class SalesController {
   @Post(':id/installment-payment')
   @ApiOperation({ summary: 'Record a payment against an installment sale' })
   @ApiParam({ name: 'id', description: 'Sale ID' })
-  @ApiResponse({ status: 200, description: 'Payment recorded', type: SaleResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment recorded',
+    type: SaleResponseDto,
+  })
   async recordInstallmentPayment(
     @Param('id') id: string,
     @Body() dto: RecordInstallmentPaymentDto,
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
   ): Promise<SaleResponseDto> {
-    return this.salesService.recordInstallmentPayment(id, dto, tenantId, userId);
+    return this.salesService.recordInstallmentPayment(
+      id,
+      dto,
+      tenantId,
+      userId,
+    );
   }
 
   @Post(':id/refund')

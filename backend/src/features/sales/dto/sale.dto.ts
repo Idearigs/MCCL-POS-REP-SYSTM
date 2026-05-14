@@ -822,7 +822,10 @@ export class RecordInstallmentPaymentDto {
   @Min(0.01)
   amount: number;
 
-  @ApiProperty({ description: 'Payment method', enum: ['CASH', 'CARD', 'BANK_TRANSFER'] })
+  @ApiProperty({
+    description: 'Payment method',
+    enum: ['CASH', 'CARD', 'BANK_TRANSFER'],
+  })
   @IsString()
   method: 'CASH' | 'CARD' | 'BANK_TRANSFER';
 

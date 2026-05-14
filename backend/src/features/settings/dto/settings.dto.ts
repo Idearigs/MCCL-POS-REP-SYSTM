@@ -61,14 +61,38 @@ export class PrinterSettingsDto {
 }
 
 export class MetalSettingsDto {
-  @ApiPropertyOptional({ description: 'Gold margin %', minimum: 0, maximum: 200 })
-  @IsOptional() @IsNumber() @Min(0) @Max(200) goldMarginPercent?: number;
+  @ApiPropertyOptional({
+    description: 'Gold margin %',
+    minimum: 0,
+    maximum: 200,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(200)
+  goldMarginPercent?: number;
 
-  @ApiPropertyOptional({ description: 'Silver margin %', minimum: 0, maximum: 200 })
-  @IsOptional() @IsNumber() @Min(0) @Max(200) silverMarginPercent?: number;
+  @ApiPropertyOptional({
+    description: 'Silver margin %',
+    minimum: 0,
+    maximum: 200,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(200)
+  silverMarginPercent?: number;
 
-  @ApiPropertyOptional({ description: 'Platinum margin %', minimum: 0, maximum: 200 })
-  @IsOptional() @IsNumber() @Min(0) @Max(200) platinumMarginPercent?: number;
+  @ApiPropertyOptional({
+    description: 'Platinum margin %',
+    minimum: 0,
+    maximum: 200,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(200)
+  platinumMarginPercent?: number;
 }
 
 export class UpdateSettingsDto {
