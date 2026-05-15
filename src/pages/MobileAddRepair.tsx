@@ -166,13 +166,15 @@ export default function MobileAddRepair() {
         }],
       });
 
+      console.log('[MobileAddRepair] Repair created:', newRepair.repairNumber, 'id=', newRepair.id);
+
       let photoError: string | null = null;
       if (photoFiles.length > 0) {
         try {
           await repairService.uploadRepairImages(newRepair.id, photoFiles, 'before');
         } catch (uploadErr: any) {
-          console.error('Photo upload failed:', uploadErr);
-          photoError = `Repair ${newRepair.repairNumber} created — but photos failed to upload. Open the repair to add photos.`;
+          console.error('[MobileAddRepair] Photo upload failed for repair', newRepair.id, uploadErr);
+          photoError = `${newRepair.repairNumber || newRepair.id} created — photos failed (${uploadErr?.statusCode ?? uploadErr?.message ?? 'error'}). Open the repair to add photos.`;
         }
       }
 

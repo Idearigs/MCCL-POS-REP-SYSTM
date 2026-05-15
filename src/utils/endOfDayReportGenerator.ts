@@ -413,7 +413,7 @@ export const printEndOfDayReport = (data: EndOfDayReportData) => {
   const reportText = generateEndOfDayReportText(data);
   const printWindow = window.open('', '', 'width=800,height=600');
   if (printWindow) {
-    printWindow.document.write('<html><head><title>Shift End Report</title>');
+    printWindow.document.write('<html><head><meta charset="UTF-8"><title>Shift End Report</title>');
     printWindow.document.write('<style>');
     printWindow.document.write('body { font-family: "Courier New", monospace; font-size: 12px; white-space: pre; padding: 20px; }');
     printWindow.document.write('</style>');

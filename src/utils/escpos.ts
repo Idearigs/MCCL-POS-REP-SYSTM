@@ -43,7 +43,9 @@ const PAYMENT_LABELS: Record<string, string> = {
 };
 
 function fmt(amount: number | undefined | null): string {
-  return `\xA3${(amount ?? 0).toFixed(2)}`; // £ as latin-1 byte 0xA3
+  // 0x23 = '#' which maps to £ when UK NRC (ESC R 3) is active.
+  // More universally supported than WPC1252 codepage on clone printers.
+  return `\x23${(amount ?? 0).toFixed(2)}`;
 }
 
 function divider(): string {
@@ -66,8 +68,9 @@ function buildCopy(data: ThermalReceiptData, copyLabel?: string): string {
   const parts: string[] = [];
   const p = (...s: string[]) => parts.push(...s);
 
-  // ESC t 16 = WPC1252 codepage — makes 0xA3 print as £ on EPSON/ONIX printers
-  p(CMD.INIT, '\x1B\x74\x10');
+  // ESC R 3 = UK National Replacement Character Set: maps 0x23 (#) → £.
+  // Supported by all ESC/POS printers including cheap clones.
+  p(CMD.INIT, '\x1B\x52\x03');
 
   if (copyLabel) {
     p(CMD.ALIGN_CENTER, CMD.BOLD_ON, copyLabel + CMD.LF, CMD.BOLD_OFF);
@@ -144,8 +147,8 @@ function buildStarCopy(data: ThermalReceiptData, copyLabel?: string): string {
   const parts: string[] = [];
   const p = (...s: string[]) => parts.push(...s);
 
-  // ESC t 16 = WPC1252 codepage — makes 0xA3 print as £ on Star TSP100
-  p(STAR.INIT, '\x1B\x74\x10');
+  // ESC R 3 = UK National Replacement Character Set: maps 0x23 (#) → £.
+  p(STAR.INIT, '\x1B\x52\x03');
 
   if (copyLabel) {
     p(STAR.ALIGN_CENTER, STAR.BOLD_ON, copyLabel + STAR.LF, STAR.BOLD_OFF);

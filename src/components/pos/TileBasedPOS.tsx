@@ -5173,6 +5173,7 @@ Deposit is non-refundable.
                       printWindow.document.write(`
                         <html>
                           <head>
+                            <meta charset="UTF-8"/>
                             <title>Layaway Receipt</title>
                             <style>
                               body { font-family: 'Courier New', monospace; font-size: 12px; padding: 20px; max-width: 300px; margin: 0 auto; }

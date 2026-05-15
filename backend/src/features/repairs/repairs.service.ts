@@ -112,7 +112,9 @@ export class RepairsService {
         },
       });
 
-      this.logger.log(`Repair created: ${repairNumber} in tenant ${tenantId}`);
+      this.logger.log(
+        `Repair created: ${repairNumber} (id=${repair.id}) in tenant ${tenantId}`,
+      );
       return this.mapToResponseDto(repair, createRepairDto.items);
     } catch (error) {
       this.logger.error('Failed to create repair:', error.message);
@@ -643,7 +645,10 @@ export class RepairsService {
       });
 
       if (!repair) {
-        this.logger.error(`Repair not found: ${repairId}`);
+        const totalRepairs = await this.repairsRepo.count({});
+        this.logger.error(
+          `Repair not found: ${repairId}. Total repairs in DB: ${totalRepairs}`,
+        );
         throw new NotFoundException('Repair not found');
       }
 
