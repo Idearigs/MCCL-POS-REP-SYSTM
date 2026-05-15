@@ -18,15 +18,21 @@ export class ReceiptTypeConfigDto {
 
 export class ReceiptTypesSettingsDto {
   @ApiPropertyOptional({ type: ReceiptTypeConfigDto })
-  @IsOptional() @ValidateNested() @Type(() => ReceiptTypeConfigDto)
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ReceiptTypeConfigDto)
   sales?: ReceiptTypeConfigDto;
 
   @ApiPropertyOptional({ type: ReceiptTypeConfigDto })
-  @IsOptional() @ValidateNested() @Type(() => ReceiptTypeConfigDto)
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ReceiptTypeConfigDto)
   pettyCash?: ReceiptTypeConfigDto;
 
   @ApiPropertyOptional({ type: ReceiptTypeConfigDto })
-  @IsOptional() @ValidateNested() @Type(() => ReceiptTypeConfigDto)
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ReceiptTypeConfigDto)
   layaway?: ReceiptTypeConfigDto;
 }
 

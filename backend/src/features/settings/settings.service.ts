@@ -65,15 +65,18 @@ const DEFAULTS: AppSettings = {
   receiptTypes: {
     sales: {
       headerText: '',
-      footerText: 'Thank you for shopping\nKEEP THIS RECEIPT AS PROOF OF PURCHASE\nRETURNS OR EXCHANGES WITHIN 14 DAYS WITH RECEIPT\nITEMS MUST BE UNWORN IN ORIGINAL CONDITION\nPEARLS RESTRINGING BESPOKE AND EARRINGS CARRIES NO GUARANTEE OR REFUND STATUTORY RIGHTS UNAFFECTED',
+      footerText:
+        'Thank you for shopping\nKEEP THIS RECEIPT AS PROOF OF PURCHASE\nRETURNS OR EXCHANGES WITHIN 14 DAYS WITH RECEIPT\nITEMS MUST BE UNWORN IN ORIGINAL CONDITION\nPEARLS RESTRINGING BESPOKE AND EARRINGS CARRIES NO GUARANTEE OR REFUND STATUTORY RIGHTS UNAFFECTED',
     },
     pettyCash: {
       headerText: 'PETTY CASH VOUCHER',
-      footerText: 'Authorised signature: ___________\nKEEP THIS VOUCHER FOR YOUR RECORDS',
+      footerText:
+        'Authorised signature: ___________\nKEEP THIS VOUCHER FOR YOUR RECORDS',
     },
     layaway: {
       headerText: 'LAYAWAY RECEIPT',
-      footerText: 'Thank you for your layaway deposit.\nPlease keep this receipt as proof of your reservation.',
+      footerText:
+        'Thank you for your layaway deposit.\nPlease keep this receipt as proof of your reservation.',
     },
   },
   general: {
@@ -122,7 +125,9 @@ export class SettingsService {
     const stored = (blob[APP_SETTINGS_KEY] ?? {}) as Partial<AppSettings>;
 
     // Deep merge stored values over defaults so missing keys always resolve
-    const storedReceiptTypes = (stored.receiptTypes ?? {}) as Partial<AppSettings['receiptTypes']>;
+    const storedReceiptTypes = (stored.receiptTypes ?? {}) as Partial<
+      AppSettings['receiptTypes']
+    >;
     return {
       general: { ...DEFAULTS.general, ...(stored.general ?? {}) },
       notifications: {

@@ -529,9 +529,13 @@ export class PettyCashService {
       where: { id: transactionId },
       data: {
         ...(dto.amount !== undefined ? { amount: dto.amount } : {}),
-        ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.description !== undefined
+          ? { description: dto.description }
+          : {}),
         ...(dto.vendor !== undefined ? { vendor: dto.vendor } : {}),
-        ...(dto.receiptNumber !== undefined ? { receiptNumber: dto.receiptNumber } : {}),
+        ...(dto.receiptNumber !== undefined
+          ? { receiptNumber: dto.receiptNumber }
+          : {}),
         ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
         ...(dto.category !== undefined ? { category: dto.category } : {}),
         updatedAt: new Date(),

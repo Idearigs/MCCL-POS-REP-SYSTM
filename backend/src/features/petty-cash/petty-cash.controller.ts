@@ -237,7 +237,11 @@ export class PettyCashController {
     @Body() dto: UpdatePettyCashTransactionDto,
   ): Promise<PettyCashTransactionResponseDto> {
     const tenantId = req.user.tenantId;
-    return this.pettyCashService.updateTransaction(tenantId, transactionId, dto);
+    return this.pettyCashService.updateTransaction(
+      tenantId,
+      transactionId,
+      dto,
+    );
   }
 
   @Post('transactions/:transactionId/approve')
