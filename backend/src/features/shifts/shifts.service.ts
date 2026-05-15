@@ -160,8 +160,8 @@ export class ShiftsService {
     );
 
     // Deduct approved petty cash expenses that occurred during this shift
-    const pettyCashExpenses = await this.prisma.petty_cash_transactions.findMany(
-      {
+    const pettyCashExpenses =
+      await this.prisma.petty_cash_transactions.findMany({
         where: {
           tenantId: shift.tenantId,
           status: 'APPROVED',
@@ -170,8 +170,7 @@ export class ShiftsService {
             lte: new Date(),
           },
         },
-      },
-    );
+      });
     const totalPettyCash = pettyCashExpenses.reduce(
       (sum, t) => sum + Number(t.amount),
       0,
