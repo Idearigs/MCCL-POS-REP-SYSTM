@@ -390,6 +390,16 @@ const SettingsPage = () => {
     if (settings.printer.printerName) setPrinterName(settings.printer.printerName);
   }, [settings.printer.printerName]);
 
+  // Sync receipt type text areas when settings loads from server
+  useEffect(() => {
+    setRtSalesHeader(settings.receiptTypes.sales.headerText);
+    setRtSalesFooter(settings.receiptTypes.sales.footerText);
+    setRtPettyCashHeader(settings.receiptTypes.pettyCash.headerText);
+    setRtPettyCashFooter(settings.receiptTypes.pettyCash.footerText);
+    setRtLayawayHeader(settings.receiptTypes.layaway.headerText);
+    setRtLayawayFooter(settings.receiptTypes.layaway.footerText);
+  }, [settings.receiptTypes]);
+
   // Form submission handlers
   const onSubmitGeneral = async (data: GeneralFormValues) => {
     await updateGeneralSettings({

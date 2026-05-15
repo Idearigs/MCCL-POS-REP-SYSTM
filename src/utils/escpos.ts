@@ -22,8 +22,9 @@ const CMD = {
 };
 
 // Star Line commands — for Star TSP100 FuturePRNT in Star Line mode
-// Key differences vs ESC/POS: bold uses ESC E / ESC F (no param), cut uses ESC i,
-// double-size uses ESC ! flags, GS commands do not exist in Star Line mode.
+// Key differences vs ESC/POS: bold uses ESC E / ESC F (no param), cut uses ESC i.
+// ESC ! 0x30 (double-size) causes the TSP100 to emit '0' as a literal character,
+// so we use BOLD_ON/BOLD_OFF for the store name header instead.
 const STAR = {
   INIT:         ESC + '@',
   CUT:          ESC + 'd\x03' + ESC + 'i', // feed 3 lines then full cut
@@ -31,8 +32,6 @@ const STAR = {
   ALIGN_CENTER: ESC + 'a\x01',
   BOLD_ON:      ESC + 'E',          // ESC E  (no parameter — different from ESC/POS)
   BOLD_OFF:     ESC + 'F',          // ESC F
-  SIZE_DOUBLE:  ESC + '!\x30',      // ESC ! 0x30 = double width (0x20) + double height (0x10)
-  SIZE_NORMAL:  ESC + '!\x00',
   LF:           '\n',
   FEED:         ESC + 'd\x03',      // feed 3 lines before cut
 };
@@ -159,7 +158,7 @@ function buildStarCopy(data: ThermalReceiptData, copyLabel?: string): string {
     p(STAR.ALIGN_CENTER, STAR.BOLD_ON, copyLabel + STAR.LF, STAR.BOLD_OFF);
   }
 
-  p(STAR.ALIGN_CENTER, STAR.SIZE_DOUBLE, data.storeName + STAR.LF, STAR.SIZE_NORMAL);
+  p(STAR.ALIGN_CENTER, STAR.BOLD_ON, data.storeName + STAR.LF, STAR.BOLD_OFF);
   if (data.storeAddress) p(data.storeAddress + STAR.LF);
   if (data.storePhone)   p('Tel: ' + data.storePhone + STAR.LF);
   if (data.storeEmail)   p(data.storeEmail + STAR.LF);
