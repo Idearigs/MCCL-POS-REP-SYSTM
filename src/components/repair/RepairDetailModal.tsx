@@ -601,7 +601,7 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
               <Wrench size={20} className="text-purple-500" />
             </div>
             <div>
-              <div>Repair {repair.repairNumber}</div>
+              <div>Repair {repair.repairNumber || currentRepair.id?.substring(0, 8)}</div>
               {currentRepair.rmaId && (
                 <div className="text-sm font-normal text-gray-500 flex items-center gap-1 mt-0.5">
                   <Hash size={12} />

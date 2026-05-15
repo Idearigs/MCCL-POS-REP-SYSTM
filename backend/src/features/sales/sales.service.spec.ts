@@ -1,4 +1,5 @@
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import type { CreateSaleDto, CreateRefundDto } from './dto/sale.dto';
 import { SalesService } from './sales.service';
 import { SalesRepository } from './sales.repository';
 import { PrismaService } from '../../core/prisma/prisma.service';
@@ -255,6 +256,200 @@ describe('SalesService', () => {
 
       expect(result).toBeDefined();
       expect(result).toHaveProperty('totalRevenue');
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // create()
+  // ────────────────────────────────────────────────────────────────────────────
+
+  describe('create()', () => {
+    const validDto: CreateSaleDto = {
+      items: [
+        {
+          productId: 'prod-001',
+          quantity: 1,
+          unitPrice: 500,
+        },
+      ],
+      payments: [{ method: 'CASH' as any, amount: 500 }],
+    } as CreateSaleDto;
+
+    it('should create a sale and return a sale response', async () => {
+      const result = await service.create(validDto, 'tenant-001', 'user-001');
+
+      expect(result).toBeDefined();
+      expect(result).toHaveProperty('id');
+      expect(result).toHaveProperty('saleNumber');
+    });
+
+    it('should throw NotFoundException when a product does not exist', async () => {
+      // Override the $transaction mock so products.findFirst returns null
+      mockPrismaService.$transaction.mockImplementationOnce(async (fn) => {
+        const prismaMock = {
+          sales: { create: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+          products: {
+            findFirst: jest.fn().mockResolvedValue(null), // product not found
+            update: jest.fn(),
+          },
+          customers: { findFirst: jest.fn().mockResolvedValue(null) },
+          sale_items: { create: jest.fn() },
+          payments: { create: jest.fn() },
+          audit_logs: { create: jest.fn() },
+        };
+        return fn(prismaMock);
+      });
+
+      await expect(
+        service.create(validDto, 'tenant-001', 'user-001'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException when stock is insufficient', async () => {
+      const lowStockProduct = { ...mockProduct, stockQuantity: 0 };
+
+      mockPrismaService.$transaction.mockImplementationOnce(async (fn) => {
+        const prismaMock = {
+          sales: { create: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+          products: {
+            findFirst: jest.fn().mockResolvedValue(lowStockProduct),
+            update: jest.fn(),
+          },
+          customers: { findFirst: jest.fn().mockResolvedValue(null) },
+          sale_items: { create: jest.fn() },
+          payments: { create: jest.fn() },
+          audit_logs: { create: jest.fn() },
+        };
+        return fn(prismaMock);
+      });
+
+      const dtoRequestingMore: CreateSaleDto = {
+        ...validDto,
+        items: [{ productId: 'prod-001', quantity: 5, unitPrice: 500 }],
+        payments: [{ method: 'CASH' as any, amount: 2500 }],
+      } as CreateSaleDto;
+
+      await expect(
+        service.create(dtoRequestingMore, 'tenant-001', 'user-001'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException when payment amount does not match total', async () => {
+      const wrongPaymentDto: CreateSaleDto = {
+        ...validDto,
+        items: [
+          { productId: 'prod-001', quantity: 1, unitPrice: 500, taxRate: 0 },
+        ],
+        payments: [{ method: 'CASH' as any, amount: 100 }], // 100 ≠ 500
+        taxRate: 0,
+      } as CreateSaleDto;
+
+      await expect(
+        service.create(wrongPaymentDto, 'tenant-001', 'user-001'),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // createRefund()
+  // ────────────────────────────────────────────────────────────────────────────
+
+  describe('createRefund()', () => {
+    const refundDto: CreateRefundDto = {
+      items: [{ saleItemId: 'item-001', quantity: 1 }],
+      reason: 'Customer changed mind',
+    } as CreateRefundDto;
+
+    it('should throw NotFoundException when sale does not exist', async () => {
+      mockPrismaService.$transaction.mockImplementationOnce(async (fn) => {
+        const prismaMock = {
+          sales: {
+            findFirst: jest.fn().mockResolvedValue(null), // sale not found
+            update: jest.fn(),
+          },
+          products: { update: jest.fn() },
+          sale_items: { delete: jest.fn(), update: jest.fn() },
+          payments: { create: jest.fn() },
+          audit_logs: { create: jest.fn() },
+        };
+        return fn(prismaMock);
+      });
+
+      await expect(
+        service.createRefund(
+          'nonexistent-id',
+          refundDto,
+          'tenant-001',
+          'user-001',
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException when sale is not COMPLETED', async () => {
+      const cancelledSale = { ...mockSale, status: 'CANCELLED' };
+
+      mockPrismaService.$transaction.mockImplementationOnce(async (fn) => {
+        const prismaMock = {
+          sales: {
+            findFirst: jest.fn().mockResolvedValue(cancelledSale),
+            update: jest.fn(),
+          },
+          products: { update: jest.fn() },
+          sale_items: { delete: jest.fn(), update: jest.fn() },
+          payments: { create: jest.fn() },
+          audit_logs: { create: jest.fn() },
+        };
+        return fn(prismaMock);
+      });
+
+      await expect(
+        service.createRefund('sale-001', refundDto, 'tenant-001', 'user-001'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException when refund quantity exceeds sold quantity', async () => {
+      const saleWithItem = {
+        ...mockSale,
+        status: 'COMPLETED',
+        sale_items: [
+          {
+            id: 'item-001',
+            quantity: 1,
+            productId: 'prod-001',
+            totalPrice: 500,
+            products: mockProduct,
+          },
+        ],
+        payments: [],
+      };
+
+      mockPrismaService.$transaction.mockImplementationOnce(async (fn) => {
+        const prismaMock = {
+          sales: {
+            findFirst: jest.fn().mockResolvedValue(saleWithItem),
+            update: jest.fn(),
+          },
+          products: { update: jest.fn() },
+          sale_items: { delete: jest.fn(), update: jest.fn() },
+          payments: { create: jest.fn() },
+          audit_logs: { create: jest.fn() },
+        };
+        return fn(prismaMock);
+      });
+
+      const overRefundDto: CreateRefundDto = {
+        items: [{ saleItemId: 'item-001', quantity: 5 }], // sold 1, refunding 5
+        reason: 'Test',
+      } as CreateRefundDto;
+
+      await expect(
+        service.createRefund(
+          'sale-001',
+          overRefundDto,
+          'tenant-001',
+          'user-001',
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

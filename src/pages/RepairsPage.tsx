@@ -81,11 +81,16 @@ interface UIRepairJob {
   customerId: string;
   customerName: string;
   itemDescription: string;
+  problemDescription?: string;
   status: UIRepairStatus;
   tagId?: string | null;
   rmaId?: string | null;
   dueDate: string;
   estimatedPrice?: string;
+  estimatedCost?: number;
+  expectedCompletionDate?: string;
+  customerInstructions?: string;
+  internalNotes?: string;
   phoneNumber?: string;
   email?: string;
   notes?: string;
@@ -103,11 +108,16 @@ const convertRepairToUI = (repair: Repair): UIRepairJob => ({
   customerId: repair.customerId,
   customerName: repair.customerName,
   itemDescription: repair.itemDescription || (repair.items && repair.items[0]?.itemDescription) || 'No description',
+  problemDescription: repair.problemDescription || '',
   status: statusMapping[repair.status] || 'received',
   tagId: repair.tagId || null,
   rmaId: repair.rmaId || null,
   dueDate: repair.estimatedCompletion || repair.expectedCompletionDate || repair.createdAt,
   estimatedPrice: (repair.estimatedCost || repair.totalCost || 0).toString(),
+  estimatedCost: repair.estimatedCost,
+  expectedCompletionDate: repair.expectedCompletionDate,
+  customerInstructions: repair.customerInstructions || '',
+  internalNotes: repair.internalNotes || '',
   phoneNumber: '',
   email: '',
   notes: repair.notes || repair.internalNotes || repair.customerInstructions || '',

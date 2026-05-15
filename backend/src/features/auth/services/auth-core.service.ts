@@ -165,7 +165,6 @@ export class AuthCoreService {
       );
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const user = await this.prismaService.users.create({
         data: {
           id: generateId(),
@@ -173,7 +172,7 @@ export class AuthCoreService {
           password: hashedPassword,
           firstName,
           lastName,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           role: role as any,
           tenantId,
           updatedAt: new Date(),
@@ -346,7 +345,6 @@ export class AuthCoreService {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async generateTokens(user: any) {
     const payload = {
       sub: user.id,

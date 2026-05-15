@@ -1,9 +1,13 @@
-import { UnauthorizedException, ConflictException } from '@nestjs/common';
+import {
+  UnauthorizedException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthCoreService } from './services/auth-core.service';
 import { UserManagementService } from './services/user-management.service';
 import { TenantProvisioningService } from './services/tenant-provisioning.service';
-import type { RegisterDto } from './dto/auth.dto';
+import type { RegisterDto, RefreshTokenDto } from './dto/auth.dto';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Test fixtures
@@ -116,6 +120,29 @@ describe('AuthService', () => {
 
       expect(authCore.login).toHaveBeenCalledWith(loginDto, 'tenant-001');
     });
+
+    it('should throw ForbiddenException when tenant is SUSPENDED', async () => {
+      authCore.login.mockRejectedValue(
+        new ForbiddenException('Tenant is suspended'),
+      );
+
+      await expect(service.login(loginDto, 'tenant-001')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should seed default categories after successful login (fire-and-forget)', async () => {
+      authCore.login.mockResolvedValue(mockAuthResponse);
+      tenantProvisioning.seedDefaultCategories.mockResolvedValue(undefined);
+
+      await service.login(loginDto, 'tenant-001');
+
+      // Give the fire-and-forget promise a tick to register the call
+      await Promise.resolve();
+      expect(tenantProvisioning.seedDefaultCategories).toHaveBeenCalledWith(
+        mockAuthResponse.user.tenantId,
+      );
+    });
   });
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -155,6 +182,63 @@ describe('AuthService', () => {
       await expect(
         service.register(registerDto as RegisterDto, 'tenant-001'),
       ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // refreshToken()
+  // ────────────────────────────────────────────────────────────────────────────
+
+  describe('refreshToken()', () => {
+    const dto: RefreshTokenDto = { refreshToken: 'valid.refresh.token' };
+
+    it('should return new tokens when refresh token is valid', async () => {
+      const refreshed = {
+        ...mockAuthResponse,
+        accessToken: 'new.access.token',
+        refreshToken: 'new.refresh.token',
+      };
+      authCore.refreshToken.mockResolvedValue(refreshed);
+
+      const result = await service.refreshToken(dto);
+
+      expect(result.accessToken).toBe('new.access.token');
+      expect(result.refreshToken).toBe('new.refresh.token');
+      expect(authCore.refreshToken).toHaveBeenCalledWith(dto);
+    });
+
+    it('should throw UnauthorizedException when refresh token is expired', async () => {
+      authCore.refreshToken.mockRejectedValue(
+        new UnauthorizedException('Refresh token expired'),
+      );
+
+      await expect(service.refreshToken(dto)).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('should throw UnauthorizedException when refresh token has been revoked', async () => {
+      authCore.refreshToken.mockRejectedValue(
+        new UnauthorizedException('Refresh token revoked'),
+      );
+
+      await expect(service.refreshToken(dto)).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // logout()
+  // ────────────────────────────────────────────────────────────────────────────
+
+  describe('logout()', () => {
+    it('should delegate to authCore.logout with the user id', async () => {
+      authCore.logout.mockResolvedValue(undefined);
+
+      await service.logout('user-001');
+
+      expect(authCore.logout).toHaveBeenCalledWith('user-001');
     });
   });
 });

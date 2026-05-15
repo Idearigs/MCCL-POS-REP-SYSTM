@@ -335,46 +335,30 @@ class RepairService {
 
   async uploadRepairImages(repairId: string, files: File[], uploadType: 'before' | 'after' | 'progress' = 'progress'): Promise<{ imageUrls: string[] }> {
     try {
-      // Validate files
       if (!files || files.length === 0) {
         throw new Error('No files provided for upload');
       }
 
       const formData = new FormData();
-
-      // Append all files with field name 'images' (backend expects this)
       files.forEach((file, index) => {
         console.log(`Appending ${uploadType} file ${index + 1}:`, file.name, file.type, file.size);
         formData.append('images', file);
       });
-
-      // Append metadata with uploadType to categorize images
       formData.append('uploadType', uploadType);
 
-      // Use axios directly to preserve FormData and let it set Content-Type automatically
-      const axios = (await import('axios')).default;
-      const token = localStorage.getItem('accessToken');
-
-      const response = await axios.post(
-        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.REPAIRS}/${repairId}/images`,
-        formData,
-        {
-          headers: {
-            'x-tenant-id': API_CONFIG.TENANT_ID,
-            ...(token && { 'Authorization': `Bearer ${token}` }),
-            // Don't set Content-Type - let axios set it automatically with boundary
-          },
-        }
+      // Use apiClient so x-tenant-id is read from localStorage (set at login)
+      const result = await apiClient.post<{ results: any[]; summary: any }>(
+        `${API_CONFIG.ENDPOINTS.REPAIRS}/${repairId}/images`,
+        formData
       );
 
-      // The backend returns { results: [...], summary: {...} }
-      console.log(`Upload response for ${uploadType} images:`, response.data);
+      console.log(`Upload response for ${uploadType} images:`, result);
       return {
-        imageUrls: response.data.results?.map((result: any) => result.fileUrl).filter(Boolean) || []
+        imageUrls: result.results?.map((r: any) => r.fileUrl).filter(Boolean) || []
       };
     } catch (error: any) {
       console.error(`Failed to upload ${uploadType} images for repair ${repairId}:`, error);
-      console.error('Error details:', error.response?.data);
+      console.error('Error details:', error.data);
       throw error;
     }
   }

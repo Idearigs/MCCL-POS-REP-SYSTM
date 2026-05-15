@@ -8,7 +8,7 @@ import {
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../../core/prisma/prisma.service';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+
 const PDFDocument = require('pdfkit') as typeof import('pdfkit');
 
 interface DayEntry {

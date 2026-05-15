@@ -1,7 +1,7 @@
 import { Module, Global, Logger } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const redisStore = require('cache-manager-redis-store') as object;
 import { CacheService } from './cache.service';
 
