@@ -13,6 +13,7 @@ import {
   UploadedFiles,
   UseInterceptors,
   NotFoundException,
+  Put,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -781,6 +782,41 @@ export class RepairsController {
         ? 'Image deleted successfully'
         : 'Failed to delete image',
     };
+  }
+
+  // ─── Repair Tags ─────────────────────────────────────────────────────────────
+
+  @Get('tags')
+  @ApiOperation({ summary: 'Get all repair tags for tenant' })
+  async getTags(@TenantId() tenantId: string) {
+    return this.repairsService.getTags(tenantId);
+  }
+
+  @Post('tags')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a repair tag' })
+  async createTag(
+    @Body() body: { name: string; color: string; description?: string },
+    @TenantId() tenantId: string,
+  ) {
+    return this.repairsService.createTag(tenantId, body);
+  }
+
+  @Put('tags/:tagId')
+  @ApiOperation({ summary: 'Update a repair tag' })
+  async updateTag(
+    @Param('tagId') tagId: string,
+    @Body() body: { name?: string; color?: string; description?: string },
+    @TenantId() tenantId: string,
+  ) {
+    return this.repairsService.updateTag(tagId, tenantId, body);
+  }
+
+  @Delete('tags/:tagId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a repair tag' })
+  async deleteTag(@Param('tagId') tagId: string, @TenantId() tenantId: string) {
+    return this.repairsService.deleteTag(tagId, tenantId);
   }
 
   private getRepairTypeFrequency(repairs: RepairResponseDto[]) {

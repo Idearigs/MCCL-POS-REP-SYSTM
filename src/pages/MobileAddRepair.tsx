@@ -166,8 +166,14 @@ export default function MobileAddRepair() {
         }],
       });
 
+      let photoError: string | null = null;
       if (photoFiles.length > 0) {
-        await repairService.uploadRepairImages(newRepair.id, photoFiles, 'before').catch(() => {});
+        try {
+          await repairService.uploadRepairImages(newRepair.id, photoFiles, 'before');
+        } catch (uploadErr: any) {
+          console.error('Photo upload failed:', uploadErr);
+          photoError = `Repair ${newRepair.repairNumber} created — but photos failed to upload. Open the repair to add photos.`;
+        }
       }
 
       setAddedCount(c => c + 1);
@@ -184,6 +190,8 @@ export default function MobileAddRepair() {
       }));
       setPhotoFiles([]);
       setPhotoPreviews([]);
+
+      if (photoError) setError(photoError);
     } catch (err: any) {
       setError(err?.message || 'Failed to create repair job. Please try again.');
     } finally {
@@ -226,7 +234,11 @@ export default function MobileAddRepair() {
       <form onSubmit={handleSubmit} className="flex-1 px-4 py-5 space-y-5 pb-32">
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
+          <div className={`text-sm px-4 py-3 rounded-xl ${
+            error.includes('Repair created')
+              ? 'bg-amber-50 border border-amber-200 text-amber-800'
+              : 'bg-red-50 border border-red-200 text-red-700'
+          }`}>
             {error}
           </div>
         )}

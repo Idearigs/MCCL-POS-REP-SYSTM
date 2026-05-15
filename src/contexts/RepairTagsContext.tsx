@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { apiClient } from '@/services/apiClient';
+import { API_CONFIG } from '@/config/api';
 
 export interface RepairTag {
   id: string;
@@ -9,12 +11,15 @@ export interface RepairTag {
 
 interface RepairTagsContextType {
   tags: RepairTag[];
-  addTag: (tag: Omit<RepairTag, 'id'>) => void;
-  updateTag: (id: string, updates: Partial<RepairTag>) => void;
-  deleteTag: (id: string) => void;
+  loading: boolean;
+  addTag: (tag: Omit<RepairTag, 'id'>) => Promise<void>;
+  updateTag: (id: string, updates: Partial<RepairTag>) => Promise<void>;
+  deleteTag: (id: string) => Promise<void>;
   getTag: (id: string) => RepairTag | undefined;
-  resetToDefaults: () => void;
+  reload: () => Promise<void>;
 }
+
+const TAGS_ENDPOINT = `${API_CONFIG.ENDPOINTS.REPAIRS}/tags`;
 
 const defaultTags: RepairTag[] = [
   { id: '1', name: 'Allied Gold', color: 'blue', description: 'Allied Gold jobs' },
@@ -28,41 +33,82 @@ const defaultTags: RepairTag[] = [
 const RepairTagsContext = createContext<RepairTagsContextType | undefined>(undefined);
 
 export const RepairTagsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [tags, setTags] = useState<RepairTag[]>(() => {
-    const stored = localStorage.getItem('repairTags');
-    return stored ? JSON.parse(stored) : defaultTags;
-  });
+  const [tags, setTags] = useState<RepairTag[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadTags = async () => {
+    try {
+      setLoading(true);
+      const data = await apiClient.get<RepairTag[]>(TAGS_ENDPOINT);
+      if (Array.isArray(data) && data.length > 0) {
+        setTags(data);
+      } else {
+        // Seed defaults if tenant has no tags yet
+        await seedDefaults();
+      }
+    } catch {
+      // Fallback to localStorage if API unavailable
+      const stored = localStorage.getItem('repairTags');
+      setTags(stored ? JSON.parse(stored) : defaultTags);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const seedDefaults = async () => {
+    try {
+      const created: RepairTag[] = [];
+      for (const tag of defaultTags) {
+        const newTag = await apiClient.post<RepairTag>(TAGS_ENDPOINT, {
+          name: tag.name,
+          color: tag.color,
+          description: tag.description,
+        });
+        created.push(newTag);
+      }
+      setTags(created);
+    } catch {
+      setTags(defaultTags);
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem('repairTags', JSON.stringify(tags));
-  }, [tags]);
+    loadTags();
+  }, []);
 
-  const addTag = (tag: Omit<RepairTag, 'id'>) => {
-    const newTag: RepairTag = {
-      ...tag,
-      id: Date.now().toString(),
-    };
-    setTags([...tags, newTag]);
+  const addTag = async (tag: Omit<RepairTag, 'id'>) => {
+    try {
+      const newTag = await apiClient.post<RepairTag>(TAGS_ENDPOINT, tag);
+      setTags(prev => [...prev, newTag]);
+    } catch {
+      // Fallback: add locally with temp id
+      const temp: RepairTag = { ...tag, id: Date.now().toString() };
+      setTags(prev => [...prev, temp]);
+    }
   };
 
-  const updateTag = (id: string, updates: Partial<RepairTag>) => {
-    setTags(tags.map(tag => tag.id === id ? { ...tag, ...updates } : tag));
+  const updateTag = async (id: string, updates: Partial<RepairTag>) => {
+    try {
+      const updated = await apiClient.put<RepairTag>(`${TAGS_ENDPOINT}/${id}`, updates);
+      setTags(prev => prev.map(t => t.id === id ? updated : t));
+    } catch {
+      setTags(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    }
   };
 
-  const deleteTag = (id: string) => {
-    setTags(tags.filter(tag => tag.id !== id));
+  const deleteTag = async (id: string) => {
+    try {
+      await apiClient.delete(`${TAGS_ENDPOINT}/${id}`);
+    } catch {
+      // Ignore errors on delete
+    }
+    setTags(prev => prev.filter(t => t.id !== id));
   };
 
-  const getTag = (id: string) => {
-    return tags.find(tag => tag.id === id);
-  };
-
-  const resetToDefaults = () => {
-    setTags(defaultTags);
-  };
+  const getTag = (id: string) => tags.find(t => t.id === id);
 
   return (
-    <RepairTagsContext.Provider value={{ tags, addTag, updateTag, deleteTag, getTag, resetToDefaults }}>
+    <RepairTagsContext.Provider value={{ tags, loading, addTag, updateTag, deleteTag, getTag, reload: loadTags }}>
       {children}
     </RepairTagsContext.Provider>
   );
@@ -71,8 +117,6 @@ export const RepairTagsProvider: React.FC<{ children: ReactNode }> = ({ children
 // eslint-disable-next-line react-refresh/only-export-components
 export const useRepairTags = () => {
   const context = useContext(RepairTagsContext);
-  if (!context) {
-    throw new Error('useRepairTags must be used within RepairTagsProvider');
-  }
+  if (!context) throw new Error('useRepairTags must be used within RepairTagsProvider');
   return context;
 };

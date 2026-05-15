@@ -77,11 +77,13 @@ const reverseStatusMapping: Record<UIRepairStatus, BackendRepairStatus> = {
 
 interface UIRepairJob {
   id: string;
-  customerId: string;  // Added missing customerId field
+  repairNumber?: string;
+  customerId: string;
   customerName: string;
   itemDescription: string;
   status: UIRepairStatus;
   tagId?: string | null;
+  rmaId?: string | null;
   dueDate: string;
   estimatedPrice?: string;
   phoneNumber?: string;
@@ -97,11 +99,13 @@ interface UIRepairJob {
 // Convert backend repair to UI format
 const convertRepairToUI = (repair: Repair): UIRepairJob => ({
   id: repair.id,
-  customerId: repair.customerId,  // Added missing customerId field
+  repairNumber: repair.repairNumber,
+  customerId: repair.customerId,
   customerName: repair.customerName,
   itemDescription: repair.itemDescription || (repair.items && repair.items[0]?.itemDescription) || 'No description',
   status: statusMapping[repair.status] || 'received',
   tagId: repair.tagId || null,
+  rmaId: repair.rmaId || null,
   dueDate: repair.estimatedCompletion || repair.expectedCompletionDate || repair.createdAt,
   estimatedPrice: (repair.estimatedCost || repair.totalCost || 0).toString(),
   phoneNumber: '',
@@ -547,12 +551,14 @@ const RepairsPage: React.FC = () => {
                 <RepairJobCard
                   key={job.id}
                   id={job.id}
+                  repairNumber={job.repairNumber}
                   customerName={job.customerName}
                   itemDescription={job.itemDescription}
                   status={job.status}
                   tagId={job.tagId}
                   dueDate={job.dueDate}
                   estimatedPrice={job.estimatedPrice}
+                  firstImage={job.images?.[0]}
                   onClick={handleJobClick}
                   onDelete={handleDeleteClick}
                 />
@@ -584,7 +590,7 @@ const RepairsPage: React.FC = () => {
                         {new Date(job.createdAt).toLocaleDateString('en-GB')}
                       </TableCell>
                       <TableCell className="text-sm text-gray-600 font-mono">
-                        {job.id.substring(0, 8)}...
+                        {job.repairNumber || job.id.substring(0, 8) + '...'}
                       </TableCell>
                       <TableCell className="font-medium text-navy">{job.customerName}</TableCell>
                       <TableCell className="text-sm text-gray-600">{job.itemDescription}</TableCell>

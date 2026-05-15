@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Edit2, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Edit2 } from 'lucide-react';
 import { useRepairTags } from '@/contexts/RepairTagsContext';
 import RepairTagBadge from './RepairTagBadge';
 import {
@@ -25,7 +25,7 @@ import {
 import { toast } from 'sonner';
 
 const RepairTagsSettings: React.FC = () => {
-  const { tags, addTag, updateTag, deleteTag, resetToDefaults } = useRepairTags();
+  const { tags, addTag, updateTag, deleteTag } = useRepairTags();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingTag, setEditingTag] = useState<any>(null);
@@ -90,12 +90,7 @@ const RepairTagsSettings: React.FC = () => {
     }
   };
 
-  const handleResetDefaults = () => {
-    if (confirm('Reset all tags to default? This will remove any custom tags you have created.')) {
-      resetToDefaults();
-      toast.success('Tags reset to defaults');
-    }
-  };
+
 
   const openEditDialog = (tag: any) => {
     setEditingTag(tag);
@@ -115,23 +110,13 @@ const RepairTagsSettings: React.FC = () => {
               Manage custom tags for categorizing repair jobs
             </CardDescription>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleResetDefaults}
-            >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Reset Defaults
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => setIsAddDialogOpen(true)}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Tag
-            </Button>
-          </div>
+          <Button
+            size="sm"
+            onClick={() => setIsAddDialogOpen(true)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Tag
+          </Button>
         </div>
       </CardHeader>
       <CardContent>

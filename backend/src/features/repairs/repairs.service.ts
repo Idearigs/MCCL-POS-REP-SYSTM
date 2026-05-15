@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  HttpException,
 } from '@nestjs/common';
 import { RepairStatus } from '@prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
@@ -162,6 +163,7 @@ export class RepairsService {
             ],
           },
         },
+        { rmaId: { contains: queryDto.search, mode: 'insensitive' } },
       ];
     }
 
@@ -738,6 +740,7 @@ export class RepairsService {
 
       return { results, summary };
     } catch (error) {
+      if (error instanceof HttpException) throw error;
       this.logger.error(
         `Error in uploadImages for repair ${repairId}:`,
         error.message,
@@ -1025,5 +1028,43 @@ export class RepairsService {
         updatedAt: new Date().toISOString(),
       };
     });
+  }
+
+  // ─── Repair Tags CRUD ────────────────────────────────────────────────────────
+
+  async getTags(tenantId: string) {
+    return this.prismaService.repair_tags.findMany({
+      where: { tenantId },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async createTag(tenantId: string, data: { name: string; color: string; description?: string }) {
+    return this.prismaService.repair_tags.create({
+      data: {
+        id: generateId(),
+        tenantId,
+        name: data.name,
+        color: data.color,
+        description: data.description || null,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  async updateTag(id: string, tenantId: string, data: { name?: string; color?: string; description?: string }) {
+    const tag = await this.prismaService.repair_tags.findFirst({ where: { id, tenantId } });
+    if (!tag) throw new NotFoundException('Tag not found');
+    return this.prismaService.repair_tags.update({
+      where: { id },
+      data: { ...data, updatedAt: new Date() },
+    });
+  }
+
+  async deleteTag(id: string, tenantId: string) {
+    const tag = await this.prismaService.repair_tags.findFirst({ where: { id, tenantId } });
+    if (!tag) throw new NotFoundException('Tag not found');
+    await this.prismaService.repair_tags.delete({ where: { id } });
+    return { success: true };
   }
 }

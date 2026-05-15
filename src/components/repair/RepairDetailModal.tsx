@@ -37,8 +37,12 @@ import {
   FileText,
   Search,
   UserCheck,
-  XCircle
+  XCircle,
+  Edit,
+  Hash,
+  Save,
 } from 'lucide-react';
+import { Input } from "@/components/ui/input";
 import { toast } from 'sonner';
 import { repairService } from '@/services/repairService';
 import { API_CONFIG } from '@/config/api';
@@ -86,8 +90,35 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
   const [statusUpdateNotes, setStatusUpdateNotes] = useState('');
   const [updatingRepairStatus, setUpdatingRepairStatus] = useState(false);
 
+  // Edit states
+  const [editItemDescription, setEditItemDescription] = useState('');
+  const [editProblemDescription, setEditProblemDescription] = useState('');
+  const [editRmaId, setEditRmaId] = useState('');
+  const [editExpectedDate, setEditExpectedDate] = useState('');
+  const [editEstimatedCost, setEditEstimatedCost] = useState('');
+  const [editCustomerNotes, setEditCustomerNotes] = useState('');
+  const [editInternalNotes, setEditInternalNotes] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const beforeFileInputRef = useRef<HTMLInputElement>(null);
   const afterFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Populate edit fields when repair opens
+  useEffect(() => {
+    if (repair && isOpen) {
+      setEditItemDescription(repair.itemDescription || '');
+      setEditProblemDescription(repair.problemDescription || '');
+      setEditRmaId(repair.rmaId || '');
+      setEditExpectedDate(
+        repair.expectedCompletionDate
+          ? new Date(repair.expectedCompletionDate).toISOString().split('T')[0]
+          : ''
+      );
+      setEditEstimatedCost(repair.estimatedCost != null ? String(repair.estimatedCost) : '');
+      setEditCustomerNotes(repair.customerInstructions || '');
+      setEditInternalNotes(repair.internalNotes || '');
+    }
+  }, [repair?.id, isOpen]);
 
   // Sync currentRepair state when repair prop changes
   useEffect(() => {
@@ -488,6 +519,32 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
     }
   };
 
+  const saveEdit = async () => {
+    try {
+      setSavingEdit(true);
+      const updates: any = {
+        itemDescription: editItemDescription.trim() || undefined,
+        problemDescription: editProblemDescription.trim() || undefined,
+        rmaId: editRmaId.trim() || null,
+        expectedCompletionDate: editExpectedDate || undefined,
+        estimatedCost: editEstimatedCost ? parseFloat(editEstimatedCost) : undefined,
+        customerInstructions: editCustomerNotes.trim() || undefined,
+        internalNotes: editInternalNotes.trim() || undefined,
+      };
+
+      await repairService.updateRepair(currentRepair.id, updates);
+
+      setCurrentRepair({ ...currentRepair, ...updates });
+      toast.success('Repair details updated');
+
+      if (onUpdate) await onUpdate(currentRepair.id, null);
+    } catch (error: any) {
+      toast.error(`Failed to save: ${error.message}`);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status?.toUpperCase()) {
       case 'COMPLETED':
@@ -543,7 +600,15 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
             <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center">
               <Wrench size={20} className="text-purple-500" />
             </div>
-            Repair {repair.repairNumber}
+            <div>
+              <div>Repair {repair.repairNumber}</div>
+              {currentRepair.rmaId && (
+                <div className="text-sm font-normal text-gray-500 flex items-center gap-1 mt-0.5">
+                  <Hash size={12} />
+                  RMA: {currentRepair.rmaId}
+                </div>
+              )}
+            </div>
           </DialogTitle>
           <DialogDescription asChild>
             <div className="flex items-center gap-4">
@@ -556,10 +621,11 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="images">Images</TabsTrigger>
             <TabsTrigger value="progress">Progress</TabsTrigger>
+            <TabsTrigger value="edit">Edit</TabsTrigger>
             <TabsTrigger value="notes">Notes</TabsTrigger>
           </TabsList>
 
@@ -1205,6 +1271,120 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="edit" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Edit size={16} />
+                  Edit Repair Details
+                </CardTitle>
+                <p className="text-sm text-gray-600">Update job information, RMA ID, costs and notes</p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="edit-item">Item Description</Label>
+                    <Input
+                      id="edit-item"
+                      value={editItemDescription}
+                      onChange={(e) => setEditItemDescription(e.target.value)}
+                      placeholder="e.g. Gold ring with diamond"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-rma" className="flex items-center gap-1">
+                      <Hash size={12} />
+                      RMA ID / Reference
+                    </Label>
+                    <Input
+                      id="edit-rma"
+                      value={editRmaId}
+                      onChange={(e) => setEditRmaId(e.target.value)}
+                      placeholder="e.g. RMA-2024-001"
+                      className="font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-problem">Problem Description</Label>
+                  <Textarea
+                    id="edit-problem"
+                    value={editProblemDescription}
+                    onChange={(e) => setEditProblemDescription(e.target.value)}
+                    placeholder="Describe the issue..."
+                    rows={3}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="edit-cost">Estimated Cost (£)</Label>
+                    <Input
+                      id="edit-cost"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editEstimatedCost}
+                      onChange={(e) => setEditEstimatedCost(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-date">Expected Completion Date</Label>
+                    <Input
+                      id="edit-date"
+                      type="date"
+                      value={editExpectedDate}
+                      onChange={(e) => setEditExpectedDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-customer-notes">Customer Instructions / Notes</Label>
+                  <Textarea
+                    id="edit-customer-notes"
+                    value={editCustomerNotes}
+                    onChange={(e) => setEditCustomerNotes(e.target.value)}
+                    placeholder="Visible to customer..."
+                    rows={2}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-internal-notes">Internal Notes</Label>
+                  <Textarea
+                    id="edit-internal-notes"
+                    value={editInternalNotes}
+                    onChange={(e) => setEditInternalNotes(e.target.value)}
+                    placeholder="Internal staff notes (not visible to customer)..."
+                    rows={2}
+                  />
+                </div>
+
+                <Button
+                  onClick={saveEdit}
+                  disabled={savingEdit}
+                  className="w-full flex items-center gap-2"
+                  size="lg"
+                >
+                  {savingEdit ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={16} />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>

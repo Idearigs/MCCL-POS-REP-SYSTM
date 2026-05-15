@@ -264,6 +264,17 @@ model repairs {
   @@unique([tenantId, repairNumber])
 }
 
+model repair_tags {
+  id          String   @id
+  tenantId    String
+  name        String
+  color       String   @default("gray")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+  tenants     tenants  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
 model sale_items {
   id         String   @id
   saleId     String
@@ -388,6 +399,7 @@ model tenants {
   products                products[]
   repair_assignments      repair_assignments[]
   repair_status_updates   repair_status_updates[]
+  repair_tags             repair_tags[]
   repairs                 repairs[]
   sales                   sales[]
   shifts                  shifts[]                  @relation("TenantShifts")
