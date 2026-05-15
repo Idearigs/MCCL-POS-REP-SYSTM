@@ -138,7 +138,10 @@ export class SettingsService {
       printer: { ...DEFAULTS.printer, ...(stored.printer ?? {}) },
       metals: { ...DEFAULTS.metals, ...(stored.metals ?? {}) },
       receiptTypes: {
-        sales: { ...DEFAULTS.receiptTypes.sales, ...(storedReceiptTypes.sales ?? {}) },
+        sales: {
+          ...DEFAULTS.receiptTypes.sales,
+          ...(storedReceiptTypes.sales ?? {}),
+        },
         pettyCash: {
           ...DEFAULTS.receiptTypes.pettyCash,
           ...(storedReceiptTypes.pettyCash ?? {}),
