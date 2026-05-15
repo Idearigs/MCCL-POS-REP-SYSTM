@@ -40,11 +40,31 @@ export const RepairTagsProvider: React.FC<{ children: ReactNode }> = ({ children
     try {
       setLoading(true);
       const data = await apiClient.get<RepairTag[]>(TAGS_ENDPOINT);
-      if (Array.isArray(data) && data.length > 0) {
-        setTags(data);
+      const existing = Array.isArray(data) ? data : [];
+
+      // Seed any default tags missing from the DB (by name)
+      const existingNames = new Set(existing.map((t) => t.name.toLowerCase()));
+      const missing = defaultTags.filter(
+        (t) => !existingNames.has(t.name.toLowerCase())
+      );
+
+      if (missing.length > 0) {
+        const seeded: RepairTag[] = [];
+        for (const tag of missing) {
+          try {
+            const newTag = await apiClient.post<RepairTag>(TAGS_ENDPOINT, {
+              name: tag.name,
+              color: tag.color,
+              description: tag.description,
+            });
+            seeded.push(newTag);
+          } catch {
+            // skip individual failures
+          }
+        }
+        setTags([...existing, ...seeded]);
       } else {
-        // Seed defaults if tenant has no tags yet
-        await seedDefaults();
+        setTags(existing.length > 0 ? existing : defaultTags);
       }
     } catch {
       // Fallback to localStorage if API unavailable
@@ -52,23 +72,6 @@ export const RepairTagsProvider: React.FC<{ children: ReactNode }> = ({ children
       setTags(stored ? JSON.parse(stored) : defaultTags);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const seedDefaults = async () => {
-    try {
-      const created: RepairTag[] = [];
-      for (const tag of defaultTags) {
-        const newTag = await apiClient.post<RepairTag>(TAGS_ENDPOINT, {
-          name: tag.name,
-          color: tag.color,
-          description: tag.description,
-        });
-        created.push(newTag);
-      }
-      setTags(created);
-    } catch {
-      setTags(defaultTags);
     }
   };
 

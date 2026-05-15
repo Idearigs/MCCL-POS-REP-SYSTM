@@ -183,6 +183,7 @@ export class RepairsService {
             },
           },
           users: { select: { firstName: true, lastName: true } },
+          repair_photos: { take: 1, orderBy: { createdAt: 'asc' } },
         },
       }),
       this.repairsRepo.count({ where }),
