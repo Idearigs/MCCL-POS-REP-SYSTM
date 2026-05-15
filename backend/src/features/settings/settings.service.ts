@@ -7,6 +7,11 @@ import { UpdateSettingsDto } from './dto/settings.dto';
 const RESERVED_KEYS = new Set(['qzCertificate', 'qzPrivateKey']);
 const APP_SETTINGS_KEY = 'appSettings';
 
+interface ReceiptTypeConfig {
+  headerText: string;
+  footerText: string;
+}
+
 export interface AppSettings {
   general: {
     storeName: string;
@@ -44,6 +49,11 @@ export interface AppSettings {
     silverMarginPercent: number;
     platinumMarginPercent: number;
   };
+  receiptTypes: {
+    sales: ReceiptTypeConfig;
+    pettyCash: ReceiptTypeConfig;
+    layaway: ReceiptTypeConfig;
+  };
 }
 
 const DEFAULTS: AppSettings = {
@@ -51,6 +61,20 @@ const DEFAULTS: AppSettings = {
     goldMarginPercent: 0,
     silverMarginPercent: 0,
     platinumMarginPercent: 0,
+  },
+  receiptTypes: {
+    sales: {
+      headerText: '',
+      footerText: 'Thank you for shopping\nKEEP THIS RECEIPT AS PROOF OF PURCHASE\nRETURNS OR EXCHANGES WITHIN 14 DAYS WITH RECEIPT\nITEMS MUST BE UNWORN IN ORIGINAL CONDITION\nPEARLS RESTRINGING BESPOKE AND EARRINGS CARRIES NO GUARANTEE OR REFUND STATUTORY RIGHTS UNAFFECTED',
+    },
+    pettyCash: {
+      headerText: 'PETTY CASH VOUCHER',
+      footerText: 'Authorised signature: ___________\nKEEP THIS VOUCHER FOR YOUR RECORDS',
+    },
+    layaway: {
+      headerText: 'LAYAWAY RECEIPT',
+      footerText: 'Thank you for your layaway deposit.\nPlease keep this receipt as proof of your reservation.',
+    },
   },
   general: {
     storeName: 'Andrew McCulloch Jewellers',
@@ -98,6 +122,7 @@ export class SettingsService {
     const stored = (blob[APP_SETTINGS_KEY] ?? {}) as Partial<AppSettings>;
 
     // Deep merge stored values over defaults so missing keys always resolve
+    const storedReceiptTypes = (stored.receiptTypes ?? {}) as Partial<AppSettings['receiptTypes']>;
     return {
       general: { ...DEFAULTS.general, ...(stored.general ?? {}) },
       notifications: {
@@ -107,6 +132,11 @@ export class SettingsService {
       appearance: { ...DEFAULTS.appearance, ...(stored.appearance ?? {}) },
       printer: { ...DEFAULTS.printer, ...(stored.printer ?? {}) },
       metals: { ...DEFAULTS.metals, ...(stored.metals ?? {}) },
+      receiptTypes: {
+        sales: { ...DEFAULTS.receiptTypes.sales, ...(storedReceiptTypes.sales ?? {}) },
+        pettyCash: { ...DEFAULTS.receiptTypes.pettyCash, ...(storedReceiptTypes.pettyCash ?? {}) },
+        layaway: { ...DEFAULTS.receiptTypes.layaway, ...(storedReceiptTypes.layaway ?? {}) },
+      },
     };
   }
 
@@ -118,6 +148,7 @@ export class SettingsService {
     const current = await this.getSettings(tenantId);
 
     // Merge only the sections that were sent
+    const dtoAny = dto as any;
     const next: AppSettings = {
       general: dto.general
         ? { ...current.general, ...dto.general }
@@ -134,6 +165,13 @@ export class SettingsService {
       metals: dto.metals
         ? { ...current.metals, ...dto.metals }
         : current.metals,
+      receiptTypes: dtoAny.receiptTypes
+        ? {
+            sales: { ...current.receiptTypes.sales, ...(dtoAny.receiptTypes.sales ?? {}) },
+            pettyCash: { ...current.receiptTypes.pettyCash, ...(dtoAny.receiptTypes.pettyCash ?? {}) },
+            layaway: { ...current.receiptTypes.layaway, ...(dtoAny.receiptTypes.layaway ?? {}) },
+          }
+        : current.receiptTypes,
     };
 
     // Preserve reserved keys (QZ certs) while writing appSettings

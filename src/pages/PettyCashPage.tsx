@@ -272,12 +272,14 @@ const PettyCashPage: React.FC = () => {
     const itemName = transaction.vendor
       ? `${categoryLabel} - ${transaction.vendor}`
       : categoryLabel;
+
+    const pcReceiptType = settings.receiptTypes?.pettyCash;
     const footerLines = [
       transaction.description,
       transaction.notes ? `Notes: ${transaction.notes}` : null,
       `Status: ${transaction.status}`,
       '',
-      'Authorised signature: ___________',
+      pcReceiptType?.footerText || 'Authorised signature: ___________\nKEEP THIS VOUCHER FOR YOUR RECORDS',
     ].filter(Boolean).join('\n');
 
     try {
@@ -289,6 +291,7 @@ const PettyCashPage: React.FC = () => {
           storeAddress: settings.general.address,
           storePhone: settings.general.phone,
           tradingName: settings.general.tradingName,
+          vatNumber: settings.printer.vatNumber,
           receiptNumber: transaction.transactionNumber || transaction.id.slice(0, 8).toUpperCase(),
           date: transaction.createdAt,
           cashierName: 'Petty Cash',
@@ -304,6 +307,7 @@ const PettyCashPage: React.FC = () => {
           taxAmount: 0,
           totalAmount: transaction.amount,
           paymentMethod: 'CASH',
+          headerMessage: pcReceiptType?.headerText || undefined,
           footerMessage: footerLines,
         },
         {

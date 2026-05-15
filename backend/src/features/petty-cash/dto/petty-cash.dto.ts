@@ -225,6 +225,39 @@ export class CreatePettyCashTransactionDto {
   transactionDate?: string;
 }
 
+export class UpdatePettyCashTransactionDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  amount?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  vendor?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  receiptNumber?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @ApiPropertyOptional({ enum: PettyCashCategory })
+  @IsOptional()
+  @IsEnum(PettyCashCategory)
+  category?: PettyCashCategory;
+}
+
 export class ApprovePettyCashTransactionDto {
   @ApiPropertyOptional({
     description: 'Approval notes',

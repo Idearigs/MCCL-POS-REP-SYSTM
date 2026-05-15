@@ -178,7 +178,7 @@ const SettingsPage = () => {
   const navigate = useNavigate();
   const { changePassword, auth } = useAuth();
   const isBuyme = auth.tenantInfo?.tenantSlug === 'buymejewellery';
-  const { settings, loading, updateGeneralSettings, updateNotificationSettings, updateAppearanceSettings, updatePrinterSettings, resetToDefaults, toggleDarkMode, toggleCompactView } = useSettings();
+  const { settings, loading, updateGeneralSettings, updateNotificationSettings, updateAppearanceSettings, updatePrinterSettings, updateReceiptTypes, resetToDefaults, toggleDarkMode, toggleCompactView } = useSettings();
 
   // Password visibility states
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -244,6 +244,25 @@ const SettingsPage = () => {
   });
   const [showDrawerLog, setShowDrawerLog] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+
+  // Receipt type states
+  const [rtSalesHeader, setRtSalesHeader] = useState(settings.receiptTypes.sales.headerText);
+  const [rtSalesFooter, setRtSalesFooter] = useState(settings.receiptTypes.sales.footerText);
+  const [rtPettyCashHeader, setRtPettyCashHeader] = useState(settings.receiptTypes.pettyCash.headerText);
+  const [rtPettyCashFooter, setRtPettyCashFooter] = useState(settings.receiptTypes.pettyCash.footerText);
+  const [rtLayawayHeader, setRtLayawayHeader] = useState(settings.receiptTypes.layaway.headerText);
+  const [rtLayawayFooter, setRtLayawayFooter] = useState(settings.receiptTypes.layaway.footerText);
+  const [savingReceiptTypes, setSavingReceiptTypes] = useState(false);
+
+  const onSubmitReceiptTypes = async () => {
+    setSavingReceiptTypes(true);
+    await updateReceiptTypes({
+      sales: { headerText: rtSalesHeader, footerText: rtSalesFooter },
+      pettyCash: { headerText: rtPettyCashHeader, footerText: rtPettyCashFooter },
+      layaway: { headerText: rtLayawayHeader, footerText: rtLayawayFooter },
+    });
+    setSavingReceiptTypes(false);
+  };
 
   const printerDetection = usePrinterDetection();
 
@@ -461,12 +480,13 @@ const SettingsPage = () => {
         <Separator className="my-6" />
 
         <Tabs defaultValue="general" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-7">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
             <TabsTrigger value="outlets">Outlets</TabsTrigger>
             <TabsTrigger value="printer">Printer</TabsTrigger>
+            <TabsTrigger value="receipt-types">Receipts</TabsTrigger>
             <TabsTrigger value="repair-tags">Repair Tags</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
           </TabsList>
@@ -1054,7 +1074,143 @@ const SettingsPage = () => {
             </Card>
           </TabsContent>
 
-          {/* Security Settings Tab */}
+          {/* Receipt Types Tab */}
+          <TabsContent value="receipt-types">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Printer className="h-5 w-5" />
+                  Receipt Templates
+                </CardTitle>
+                <CardDescription>
+                  Configure header and footer text for each receipt type. Changes apply immediately when printing.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-8">
+
+                {/* Sales Receipt */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                      <Printer className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold">Sales Receipt</h3>
+                      <p className="text-xs text-muted-foreground">Printed after every POS sale</p>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 pl-11">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Header</label>
+                      <p className="text-xs text-muted-foreground">Printed below the store address. Leave blank to omit. Use \n for new lines.</p>
+                      <textarea
+                        value={rtSalesHeader}
+                        onChange={(e) => setRtSalesHeader(e.target.value)}
+                        rows={2}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        placeholder="e.g. SALE ON NOW — 20% OFF ALL RINGS"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Footer</label>
+                      <p className="text-xs text-muted-foreground">Printed at the bottom of the receipt.</p>
+                      <textarea
+                        value={rtSalesFooter}
+                        onChange={(e) => setRtSalesFooter(e.target.value)}
+                        rows={4}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        placeholder="Thank you for your purchase!"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Petty Cash Receipt */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                      <Printer className="h-4 w-4 text-amber-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold">Petty Cash Voucher</h3>
+                      <p className="text-xs text-muted-foreground">Printed for petty cash expenses</p>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 pl-11">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Header</label>
+                      <textarea
+                        value={rtPettyCashHeader}
+                        onChange={(e) => setRtPettyCashHeader(e.target.value)}
+                        rows={2}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        placeholder="e.g. PETTY CASH VOUCHER"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Footer</label>
+                      <textarea
+                        value={rtPettyCashFooter}
+                        onChange={(e) => setRtPettyCashFooter(e.target.value)}
+                        rows={3}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        placeholder="Authorised signature: ___________"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Layaway Receipt */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                      <Printer className="h-4 w-4 text-purple-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold">Layaway Receipt</h3>
+                      <p className="text-xs text-muted-foreground">Printed for layaway deposits and reservations</p>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 pl-11">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Header</label>
+                      <textarea
+                        value={rtLayawayHeader}
+                        onChange={(e) => setRtLayawayHeader(e.target.value)}
+                        rows={2}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        placeholder="e.g. LAYAWAY RECEIPT"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Footer</label>
+                      <textarea
+                        value={rtLayawayFooter}
+                        onChange={(e) => setRtLayawayFooter(e.target.value)}
+                        rows={3}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        placeholder="Thank you for your layaway deposit."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <Button onClick={onSubmitReceiptTypes} disabled={savingReceiptTypes} className="flex items-center gap-2">
+                    {savingReceiptTypes ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    Save Receipt Templates
+                  </Button>
+                </div>
+
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Outlets Tab */}
           <TabsContent value="outlets">
             <OutletManagement />
           </TabsContent>

@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -24,6 +25,7 @@ import {
   UpdatePettyCashAccountDto,
   ReplenishPettyCashDto,
   CreatePettyCashTransactionDto,
+  UpdatePettyCashTransactionDto,
   ApprovePettyCashTransactionDto,
   RejectPettyCashTransactionDto,
   GetPettyCashTransactionsDto,
@@ -221,6 +223,21 @@ export class PettyCashController {
     const tenantId = req.user.tenantId;
 
     return this.pettyCashService.getTransactionById(tenantId, transactionId);
+  }
+
+  @Patch('transactions/:transactionId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update a petty cash transaction (PENDING only)' })
+  @ApiResponse({ status: 200, type: PettyCashTransactionResponseDto })
+  @ApiResponse({ status: 400, description: 'Not in PENDING status' })
+  @ApiResponse({ status: 404, description: 'Transaction not found' })
+  async updateTransaction(
+    @Request() req,
+    @Param('transactionId') transactionId: string,
+    @Body() dto: UpdatePettyCashTransactionDto,
+  ): Promise<PettyCashTransactionResponseDto> {
+    const tenantId = req.user.tenantId;
+    return this.pettyCashService.updateTransaction(tenantId, transactionId, dto);
   }
 
   @Post('transactions/:transactionId/approve')

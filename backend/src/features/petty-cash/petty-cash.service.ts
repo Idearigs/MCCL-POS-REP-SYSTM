@@ -12,6 +12,7 @@ import {
   UpdatePettyCashAccountDto,
   ReplenishPettyCashDto,
   CreatePettyCashTransactionDto,
+  UpdatePettyCashTransactionDto,
   ApprovePettyCashTransactionDto,
   RejectPettyCashTransactionDto,
   GetPettyCashTransactionsDto,
@@ -498,6 +499,51 @@ export class PettyCashService {
     }
 
     return this.transformTransaction(transaction);
+  }
+
+  /**
+   * Update petty cash transaction fields (amount, description, etc.)
+   * Only allowed when status is PENDING.
+   */
+  async updateTransaction(
+    tenantId: string,
+    transactionId: string,
+    dto: UpdatePettyCashTransactionDto,
+  ) {
+    const transaction = await this.prisma.petty_cash_transactions.findFirst({
+      where: { id: transactionId, tenantId },
+      include: { account: true },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    if (transaction.status !== PettyCashStatus.PENDING) {
+      throw new BadRequestException(
+        'Only PENDING transactions can be edited. Cancel and re-create to change approved transactions.',
+      );
+    }
+
+    const updated = await this.prisma.petty_cash_transactions.update({
+      where: { id: transactionId },
+      data: {
+        ...(dto.amount !== undefined ? { amount: dto.amount } : {}),
+        ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.vendor !== undefined ? { vendor: dto.vendor } : {}),
+        ...(dto.receiptNumber !== undefined ? { receiptNumber: dto.receiptNumber } : {}),
+        ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+        ...(dto.category !== undefined ? { category: dto.category } : {}),
+        updatedAt: new Date(),
+      },
+      include: {
+        requester: { select: { id: true, firstName: true, lastName: true } },
+        approver: { select: { id: true, firstName: true, lastName: true } },
+        account: true,
+      },
+    });
+
+    return this.transformTransaction(updated);
   }
 
   /**

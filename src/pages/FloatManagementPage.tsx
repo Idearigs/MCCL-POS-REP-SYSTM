@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -11,6 +12,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
   DollarSign,
   TrendingUp,
   TrendingDown,
@@ -19,17 +27,57 @@ import {
   Calendar,
   User,
   AlertCircle,
+  Edit2,
+  Scale,
+  Wallet,
+  RefreshCw,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { format, subDays } from 'date-fns';
+import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import MainLayout from '@/components/layout/MainLayout';
 import { shiftService, Shift } from '@/services/shiftService';
+import {
+  pettyCashService,
+  PettyCashTransaction,
+  PettyCashStatus,
+  PettyCashCategory,
+  UpdatePettyCashTransactionDto,
+} from '@/services/pettyCashService';
 
 const FloatManagementPage: React.FC = () => {
   const { toast } = useToast();
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
   const [shiftHistory, setShiftHistory] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Petty cash reconciliation state
+  const [todayPettyCash, setTodayPettyCash] = useState<PettyCashTransaction[]>([]);
+  const [loadingPettyCash, setLoadingPettyCash] = useState(false);
+  const [editingTx, setEditingTx] = useState<PettyCashTransaction | null>(null);
+  const [editAmount, setEditAmount] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editVendor, setEditVendor] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const loadPettyCashForShift = useCallback(async (shift: Shift) => {
+    setLoadingPettyCash(true);
+    try {
+      const startDate = startOfDay(new Date(shift.startTime)).toISOString();
+      const endDate = endOfDay(new Date()).toISOString();
+      const result = await pettyCashService.getTransactions({
+        startDate,
+        endDate,
+        status: PettyCashStatus.APPROVED,
+        limit: 100,
+      });
+      setTodayPettyCash(result.data);
+    } catch {
+      // non-fatal — just show zero
+      setTodayPettyCash([]);
+    } finally {
+      setLoadingPettyCash(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -41,6 +89,7 @@ const FloatManagementPage: React.FC = () => {
       // Load active shift
       const active = await shiftService.getActiveShift();
       setActiveShift(active);
+      if (active) loadPettyCashForShift(active);
 
       // Load shift history for the last 30 days
       const endDate = new Date();
@@ -101,6 +150,33 @@ const FloatManagementPage: React.FC = () => {
         {numVariance > 0 ? '+' : ''}£{numVariance.toFixed(2)}
       </span>
     );
+  };
+
+  const handleOpenEdit = (tx: PettyCashTransaction) => {
+    setEditingTx(tx);
+    setEditAmount(String(tx.amount));
+    setEditDesc(tx.description);
+    setEditVendor(tx.vendor || '');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingTx) return;
+    setSavingEdit(true);
+    try {
+      const dto: UpdatePettyCashTransactionDto = {
+        amount: parseFloat(editAmount) || editingTx.amount,
+        description: editDesc || editingTx.description,
+        vendor: editVendor || undefined,
+      };
+      await pettyCashService.updateTransaction(editingTx.id, dto);
+      toast({ title: 'Transaction updated' });
+      setEditingTx(null);
+      if (activeShift) loadPettyCashForShift(activeShift);
+    } catch (err: any) {
+      toast({ title: 'Failed to update', description: err?.message || 'Error', variant: 'destructive' });
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   // Calculate statistics
@@ -204,6 +280,131 @@ const FloatManagementPage: React.FC = () => {
               <p className="text-muted-foreground mb-6">
                 Start a new shift to begin tracking your float. Use the floating shift button or go to the Shifts page.
               </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Petty Cash + Float Reconciliation — only shown when a shift is active */}
+        {activeShift && (
+          <Card className="border-amber-200 dark:border-amber-800">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Scale className="h-5 w-5 text-amber-600" />
+                  <div>
+                    <CardTitle className="text-base">Daily Reconciliation</CardTitle>
+                    <CardDescription>Float vs Petty Cash — shift since {format(new Date(activeShift.startTime), 'HH:mm dd/MM/yyyy')}</CardDescription>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => loadPettyCashForShift(activeShift)} disabled={loadingPettyCash}>
+                  <RefreshCw className={`h-4 w-4 ${loadingPettyCash ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {(() => {
+                const opening = Number(activeShift.openingFloat || 0);
+                const pettyCashTotal = todayPettyCash.reduce((s, t) => s + Number(t.amount || 0), 0);
+                const expectedFloat = opening - pettyCashTotal;
+                const actual = activeShift.closingFloat !== undefined && activeShift.closingFloat !== null
+                  ? Number(activeShift.closingFloat)
+                  : null;
+                const diff = actual !== null ? actual - expectedFloat : null;
+
+                return (
+                  <>
+                    {/* Summary row */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-3 text-center">
+                        <p className="text-xs text-muted-foreground mb-1">Opening Float</p>
+                        <p className="text-lg font-bold">£{opening.toFixed(2)}</p>
+                      </div>
+                      <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 p-3 text-center">
+                        <p className="text-xs text-muted-foreground mb-1">Petty Cash Out</p>
+                        <p className="text-lg font-bold text-amber-700">-£{pettyCashTotal.toFixed(2)}</p>
+                        <p className="text-xs text-muted-foreground">{todayPettyCash.length} expense{todayPettyCash.length !== 1 ? 's' : ''}</p>
+                      </div>
+                      <div className="rounded-lg bg-green-50 dark:bg-green-900/20 p-3 text-center">
+                        <p className="text-xs text-muted-foreground mb-1">Expected Float</p>
+                        <p className="text-lg font-bold text-green-700">£{expectedFloat.toFixed(2)}</p>
+                      </div>
+                      <div className={`rounded-lg p-3 text-center ${
+                        diff === null ? 'bg-gray-50 dark:bg-gray-800/40' :
+                        Math.abs(diff) < 0.01 ? 'bg-green-100 dark:bg-green-900/30' :
+                        diff < 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-blue-50 dark:bg-blue-900/20'
+                      }`}>
+                        <p className="text-xs text-muted-foreground mb-1">Difference</p>
+                        {diff === null ? (
+                          <p className="text-sm text-muted-foreground italic">Shift open</p>
+                        ) : Math.abs(diff) < 0.01 ? (
+                          <p className="text-lg font-bold text-green-700 flex items-center justify-center gap-1">
+                            <CheckCircle className="h-4 w-4" /> Balanced
+                          </p>
+                        ) : (
+                          <p className={`text-lg font-bold ${diff < 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                            {diff > 0 ? '+' : ''}£{diff.toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Petty cash transaction list */}
+                    {todayPettyCash.length > 0 && (
+                      <div className="rounded-lg border">
+                        <div className="px-4 py-2.5 border-b bg-muted/40 flex items-center gap-2">
+                          <Wallet className="h-4 w-4 text-amber-600" />
+                          <span className="text-sm font-medium">Approved Petty Cash Expenses This Shift</span>
+                        </div>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Description</TableHead>
+                              <TableHead>Category</TableHead>
+                              <TableHead>Vendor</TableHead>
+                              <TableHead className="text-right">Amount</TableHead>
+                              <TableHead className="w-16"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {todayPettyCash.map((tx) => (
+                              <TableRow key={tx.id}>
+                                <TableCell className="text-sm">{tx.description}</TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="text-xs">
+                                    {tx.category.replace(/_/g, ' ')}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">{tx.vendor || '—'}</TableCell>
+                                <TableCell className="text-right font-semibold text-amber-700">
+                                  £{Number(tx.amount).toFixed(2)}
+                                </TableCell>
+                                <TableCell>
+                                  {tx.status === PettyCashStatus.APPROVED && (
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(tx)} title="Edit">
+                                      <Edit2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            <TableRow className="font-semibold bg-muted/30">
+                              <TableCell colSpan={3}>Total Petty Cash</TableCell>
+                              <TableCell className="text-right text-amber-700">-£{pettyCashTotal.toFixed(2)}</TableCell>
+                              <TableCell />
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                    {loadingPettyCash && (
+                      <p className="text-sm text-center text-muted-foreground py-4">Loading petty cash...</p>
+                    )}
+                    {!loadingPettyCash && todayPettyCash.length === 0 && (
+                      <p className="text-sm text-center text-muted-foreground py-4">No approved petty cash expenses recorded this shift.</p>
+                    )}
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
         )}
@@ -370,6 +571,53 @@ const FloatManagementPage: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Edit Petty Cash Transaction Dialog */}
+      <Dialog open={!!editingTx} onOpenChange={(o) => { if (!o) setEditingTx(null); }}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Edit Petty Cash Entry</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Amount (£)</label>
+              <Input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={editAmount}
+                onChange={(e) => setEditAmount(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Description</label>
+              <Input
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Vendor</label>
+              <Input
+                value={editVendor}
+                onChange={(e) => setEditVendor(e.target.value)}
+                placeholder="Optional"
+              />
+            </div>
+            {editingTx?.status !== 'PENDING' && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                Only PENDING transactions can be edited. This entry is {editingTx?.status} — cancel it first if you need to change the amount.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingTx(null)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={savingEdit || editingTx?.status !== 'PENDING'}>
+              {savingEdit ? 'Saving…' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 };

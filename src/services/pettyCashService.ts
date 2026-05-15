@@ -120,6 +120,15 @@ export interface CreatePettyCashTransactionDto {
   transactionDate?: string;
 }
 
+export interface UpdatePettyCashTransactionDto {
+  amount?: number;
+  description?: string;
+  vendor?: string;
+  receiptNumber?: string;
+  notes?: string;
+  category?: PettyCashCategory;
+}
+
 export interface ApprovePettyCashTransactionDto {
   notes?: string;
 }
@@ -208,6 +217,13 @@ class PettyCashService {
 
   async getTransactionById(transactionId: string): Promise<PettyCashTransaction> {
     return apiClient.get(`${this.baseUrl}/transactions/${transactionId}`);
+  }
+
+  async updateTransaction(
+    transactionId: string,
+    data: UpdatePettyCashTransactionDto
+  ): Promise<PettyCashTransaction> {
+    return apiClient.patch(`${this.baseUrl}/transactions/${transactionId}`, data);
   }
 
   async approveTransaction(

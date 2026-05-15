@@ -11,6 +11,25 @@ import {
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
+export class ReceiptTypeConfigDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() headerText?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() footerText?: string;
+}
+
+export class ReceiptTypesSettingsDto {
+  @ApiPropertyOptional({ type: ReceiptTypeConfigDto })
+  @IsOptional() @ValidateNested() @Type(() => ReceiptTypeConfigDto)
+  sales?: ReceiptTypeConfigDto;
+
+  @ApiPropertyOptional({ type: ReceiptTypeConfigDto })
+  @IsOptional() @ValidateNested() @Type(() => ReceiptTypeConfigDto)
+  pettyCash?: ReceiptTypeConfigDto;
+
+  @ApiPropertyOptional({ type: ReceiptTypeConfigDto })
+  @IsOptional() @ValidateNested() @Type(() => ReceiptTypeConfigDto)
+  layaway?: ReceiptTypeConfigDto;
+}
+
 export class GeneralSettingsDto {
   @ApiPropertyOptional() @IsOptional() @IsString() storeName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() tradingName?: string;
@@ -126,4 +145,10 @@ export class UpdateSettingsDto {
   @ValidateNested()
   @Type(() => MetalSettingsDto)
   metals?: MetalSettingsDto;
+
+  @ApiPropertyOptional({ type: ReceiptTypesSettingsDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ReceiptTypesSettingsDto)
+  receiptTypes?: ReceiptTypesSettingsDto;
 }

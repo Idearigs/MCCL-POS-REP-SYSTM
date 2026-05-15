@@ -46,12 +46,24 @@ export interface MetalSettings {
   platinumMarginPercent: number;
 }
 
+export interface ReceiptTypeConfig {
+  headerText: string;
+  footerText: string;
+}
+
+export interface ReceiptTypesSettings {
+  sales: ReceiptTypeConfig;
+  pettyCash: ReceiptTypeConfig;
+  layaway: ReceiptTypeConfig;
+}
+
 export interface AllSettings {
   general: GeneralSettings;
   notifications: NotificationSettings;
   appearance: AppearanceSettings;
   printer: PrinterSettings;
   metals: MetalSettings;
+  receiptTypes: ReceiptTypesSettings;
 }
 
 interface SettingsContextType {
@@ -62,6 +74,7 @@ interface SettingsContextType {
   updateAppearanceSettings: (settings: AppearanceSettings) => Promise<boolean>;
   updatePrinterSettings: (settings: PrinterSettings) => Promise<boolean>;
   updateMetalSettings: (settings: MetalSettings) => Promise<boolean>;
+  updateReceiptTypes: (settings: ReceiptTypesSettings) => Promise<boolean>;
   toggleDarkMode: () => void;
   toggleCompactView: () => void;
   resetToDefaults: () => void;
@@ -74,6 +87,20 @@ const defaultSettings: AllSettings = {
     goldMarginPercent: 0,
     silverMarginPercent: 0,
     platinumMarginPercent: 0,
+  },
+  receiptTypes: {
+    sales: {
+      headerText: '',
+      footerText: 'Thank you for shopping\nKEEP THIS RECEIPT AS PROOF OF PURCHASE\nRETURNS OR EXCHANGES WITHIN 14 DAYS WITH RECEIPT\nITEMS MUST BE UNWORN IN ORIGINAL CONDITION\nPEARLS RESTRINGING BESPOKE AND EARRINGS CARRIES NO GUARANTEE OR REFUND STATUTORY RIGHTS UNAFFECTED',
+    },
+    pettyCash: {
+      headerText: 'PETTY CASH VOUCHER',
+      footerText: 'Authorised signature: ___________\nKEEP THIS VOUCHER FOR YOUR RECORDS',
+    },
+    layaway: {
+      headerText: 'LAYAWAY RECEIPT',
+      footerText: 'Thank you for your layaway deposit.\nPlease keep this receipt as proof of your reservation.',
+    },
   },
   general: {
     storeName: 'Andrew McCulloch Jewellers',
@@ -127,12 +154,18 @@ function authHeaders(): HeadersInit {
 }
 
 function mergeWithDefaults(raw: Partial<AllSettings>): AllSettings {
+  const rawRT = (raw.receiptTypes ?? {}) as Partial<ReceiptTypesSettings>;
   return {
     general: { ...defaultSettings.general, ...(raw.general ?? {}) },
     notifications: { ...defaultSettings.notifications, ...(raw.notifications ?? {}) },
     appearance: { ...defaultSettings.appearance, ...(raw.appearance ?? {}) },
     printer: { ...defaultSettings.printer, ...(raw.printer ?? {}) },
     metals: { ...defaultSettings.metals, ...(raw.metals ?? {}) },
+    receiptTypes: {
+      sales: { ...defaultSettings.receiptTypes.sales, ...(rawRT.sales ?? {}) },
+      pettyCash: { ...defaultSettings.receiptTypes.pettyCash, ...(rawRT.pettyCash ?? {}) },
+      layaway: { ...defaultSettings.receiptTypes.layaway, ...(rawRT.layaway ?? {}) },
+    },
   };
 }
 
@@ -289,6 +322,22 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const updateReceiptTypes = async (newSettings: ReceiptTypesSettings): Promise<boolean> => {
+    setLoading(true);
+    try {
+      const updated = await patchSettings({ receiptTypes: newSettings } as any);
+      setSettings(updated);
+      writeCache(updated);
+      toast.success('Receipt templates saved');
+      return true;
+    } catch {
+      toast.error('Failed to save receipt templates');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Dark mode / compact view toggle immediately (also persists via appearance update)
   const toggleDarkMode = () => {
     const newValue = !settings.appearance.darkMode;
@@ -325,6 +374,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updateAppearanceSettings,
         updatePrinterSettings,
         updateMetalSettings,
+        updateReceiptTypes,
         toggleDarkMode,
         toggleCompactView,
         resetToDefaults,
