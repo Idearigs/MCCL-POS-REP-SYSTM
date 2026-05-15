@@ -139,8 +139,14 @@ export class SettingsService {
       metals: { ...DEFAULTS.metals, ...(stored.metals ?? {}) },
       receiptTypes: {
         sales: { ...DEFAULTS.receiptTypes.sales, ...(storedReceiptTypes.sales ?? {}) },
-        pettyCash: { ...DEFAULTS.receiptTypes.pettyCash, ...(storedReceiptTypes.pettyCash ?? {}) },
-        layaway: { ...DEFAULTS.receiptTypes.layaway, ...(storedReceiptTypes.layaway ?? {}) },
+        pettyCash: {
+          ...DEFAULTS.receiptTypes.pettyCash,
+          ...(storedReceiptTypes.pettyCash ?? {}),
+        },
+        layaway: {
+          ...DEFAULTS.receiptTypes.layaway,
+          ...(storedReceiptTypes.layaway ?? {}),
+        },
       },
     };
   }
@@ -172,9 +178,18 @@ export class SettingsService {
         : current.metals,
       receiptTypes: dtoAny.receiptTypes
         ? {
-            sales: { ...current.receiptTypes.sales, ...(dtoAny.receiptTypes.sales ?? {}) },
-            pettyCash: { ...current.receiptTypes.pettyCash, ...(dtoAny.receiptTypes.pettyCash ?? {}) },
-            layaway: { ...current.receiptTypes.layaway, ...(dtoAny.receiptTypes.layaway ?? {}) },
+            sales: {
+              ...current.receiptTypes.sales,
+              ...(dtoAny.receiptTypes.sales ?? {}),
+            },
+            pettyCash: {
+              ...current.receiptTypes.pettyCash,
+              ...(dtoAny.receiptTypes.pettyCash ?? {}),
+            },
+            layaway: {
+              ...current.receiptTypes.layaway,
+              ...(dtoAny.receiptTypes.layaway ?? {}),
+            },
           }
         : current.receiptTypes,
     };
