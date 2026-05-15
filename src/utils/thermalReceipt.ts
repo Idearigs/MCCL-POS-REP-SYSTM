@@ -516,7 +516,10 @@ export async function printPettyCashReceipt(
   }
 }
 
-// Main entry point — tries QZ Tray (silent, direct ESC/POS) then falls back to iframe
+// Main entry point — tries QZ Tray HTML path (one job, no double-print) then
+// falls back to the browser iframe print dialog.
+// Raw ESC/POS was removed: QZ would spool the raw bytes successfully but then
+// throw, causing both the raw receipt AND the iframe HTML to print.
 export async function printThermalReceipt(
   data: ThermalReceiptData,
   options: PrintOptions = {},
@@ -524,8 +527,9 @@ export async function printThermalReceipt(
 ): Promise<void> {
   if (printerName) {
     try {
-      const { printReceiptQZ } = await import('./qzBridge');
-      await printReceiptQZ(printerName, data, options);
+      const { printHtmlViaQZ } = await import('./qzBridge');
+      const html = buildReceiptHTML(data, options);
+      await printHtmlViaQZ(printerName, html);
       return; // success — done, no dialog shown
     } catch (err) {
       console.warn('[ThermalReceipt] QZ Tray failed, falling back to iframe:', err);
