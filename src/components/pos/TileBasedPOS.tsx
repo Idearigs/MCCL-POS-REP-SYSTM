@@ -1551,6 +1551,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         paymentMethod: sale.paymentMethod,
         cashReceived,
         change,
+        headerMessage: settings.printer.headerText || undefined,
         footerMessage: settings.printer.footerText || 'Thank you for shopping\nKEEP THIS RECEIPT AS PROOF OF PURCHASE',
       },
       {

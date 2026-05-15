@@ -30,6 +30,7 @@ export interface ThermalReceiptData {
   paymentMethod: string;
   cashReceived?: number;
   change?: number;
+  headerMessage?: string;
   footerMessage?: string;
 }
 
@@ -138,6 +139,7 @@ function buildCopyHTML(data: ThermalReceiptData, copyLabel?: string): string {
       data.vatNumber ? `VAT No: GB ${data.vatNumber}` : null,
     ].filter(Boolean).join('<br>')}</div>
 
+    ${data.headerMessage ? `<hr class="divider"/><div class="header-msg">${data.headerMessage.replace(/\n/g, '<br>')}</div>` : ''}
     <hr class="divider"/>
     <div class="center">Receipt - Copy - Sales</div>
     <hr class="divider"/>
@@ -276,6 +278,14 @@ export function buildReceiptHTML(data: ThermalReceiptData, options: PrintOptions
     }
     .vat-tbl th { font-weight: bold; text-align: left; padding-bottom: 0.5mm; }
     .vat-tbl td { text-align: left; padding: 0.2mm 0; }
+
+    .header-msg {
+      font-size: 10px;
+      text-align: center;
+      line-height: 1.6;
+      margin: 1mm 0;
+      word-wrap: break-word;
+    }
 
     .footer {
       font-size: 10px;

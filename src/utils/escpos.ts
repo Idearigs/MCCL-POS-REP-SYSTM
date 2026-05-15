@@ -82,6 +82,11 @@ function buildCopy(data: ThermalReceiptData, copyLabel?: string): string {
   if (data.storePhone)   p('Tel: ' + data.storePhone + CMD.LF);
   if (data.storeEmail)   p(data.storeEmail + CMD.LF);
 
+  if (data.headerMessage) {
+    p(divider());
+    for (const line of data.headerMessage.split('\n')) p(line + CMD.LF);
+  }
+
   p(CMD.ALIGN_LEFT, divider());
 
   // Receipt number
@@ -158,6 +163,11 @@ function buildStarCopy(data: ThermalReceiptData, copyLabel?: string): string {
   if (data.storeAddress) p(data.storeAddress + STAR.LF);
   if (data.storePhone)   p('Tel: ' + data.storePhone + STAR.LF);
   if (data.storeEmail)   p(data.storeEmail + STAR.LF);
+
+  if (data.headerMessage) {
+    p('-'.repeat(LINE_WIDTH) + STAR.LF);
+    for (const line of data.headerMessage.split('\n')) p(line + STAR.LF);
+  }
 
   p(STAR.ALIGN_LEFT, '-'.repeat(LINE_WIDTH) + STAR.LF);
 

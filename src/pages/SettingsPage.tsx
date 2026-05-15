@@ -225,6 +225,7 @@ const SettingsPage = () => {
   const [printerName, setPrinterName] = useState(settings.printer.printerName ?? '');
   const [autoPrint, setAutoPrint] = useState(settings.printer.autoPrint);
   const [copies, setCopies] = useState<1 | 2>(settings.printer.copies);
+  const [headerText, setHeaderText] = useState(settings.printer.headerText ?? '');
   const [footerText, setFooterText] = useState(settings.printer.footerText);
   const [vatNumber, setVatNumber] = useState(settings.printer.vatNumber ?? '');
   const [drawerPin, setDrawerPin] = useState(settings.printer.drawerPin ?? '');
@@ -247,7 +248,7 @@ const SettingsPage = () => {
   const printerDetection = usePrinterDetection();
 
   const onSubmitPrinter = async () => {
-    await updatePrinterSettings({ model: 'STAR_TSP100', printerName, autoPrint, copies, footerText, vatNumber: vatNumber || undefined, drawerPin: drawerPin || undefined });
+    await updatePrinterSettings({ model: 'STAR_TSP100', printerName, autoPrint, copies, headerText, footerText, vatNumber: vatNumber || undefined, drawerPin: drawerPin || undefined });
   };
 
   const handleFindPrinters = async () => {
@@ -290,6 +291,7 @@ const SettingsPage = () => {
           items: [{ name: 'Test Item', quantity: 1, unitPrice: 1.00, total: 1.00 }],
           subtotal: 1.00, discountAmount: 0, taxAmount: 0, totalAmount: 1.00,
           paymentMethod: 'CASH',
+          headerMessage: headerText || undefined,
           footerMessage: footerText,
         },
         { model: printerModel, copies: 1 },
@@ -926,11 +928,26 @@ const SettingsPage = () => {
                   </div>
                 )}
 
+                {/* Header text */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Receipt Header Message</label>
+                  <p className="text-sm text-muted-foreground">
+                    Printed below the store address on every receipt. Leave blank to omit. Use \n for a new line.
+                  </p>
+                  <textarea
+                    value={headerText}
+                    onChange={(e) => setHeaderText(e.target.value)}
+                    rows={2}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder="e.g. SALE ON NOW — 20% OFF ALL RINGS"
+                  />
+                </div>
+
                 {/* Footer text */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Receipt Footer Message</label>
                   <p className="text-sm text-muted-foreground">
-                    Printed at the bottom of every receipt. Use \\n for a new line.
+                    Printed at the bottom of every receipt. Use \n for a new line.
                   </p>
                   <textarea
                     value={footerText}
@@ -1184,6 +1201,7 @@ const SettingsPage = () => {
         storeAddress={settings.general.address}
         storePhone={settings.general.phone}
         vatNumber={vatNumber || settings.printer.vatNumber}
+        headerText={headerText || settings.printer.headerText || undefined}
         footerText={footerText || settings.printer.footerText}
         model={printerModel}
         copies={copies}

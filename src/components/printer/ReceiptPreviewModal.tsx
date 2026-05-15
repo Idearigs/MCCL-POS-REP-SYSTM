@@ -18,6 +18,7 @@ interface Props {
   storeAddress?: string;
   storePhone?: string;
   vatNumber?: string;
+  headerText?: string;
   footerText?: string;
   model: PrintOptions['model'];
   copies: 1 | 2;
@@ -47,6 +48,7 @@ const SAMPLE_DATA = (p: Omit<Props, 'open' | 'onClose' | 'model' | 'copies'>): T
   paymentMethod: 'CASH',
   cashReceived: 200.00,
   change: 20.00,
+  headerMessage: p.headerText || undefined,
   footerMessage: p.footerText,
 });
 
@@ -69,7 +71,7 @@ export function ReceiptPreviewModal({
     doc.close();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, rest.storeName, rest.tradingName, rest.storeAddress, rest.storePhone,
-      rest.vatNumber, rest.footerText, model, copies]);
+      rest.vatNumber, rest.headerText, rest.footerText, model, copies]);
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>

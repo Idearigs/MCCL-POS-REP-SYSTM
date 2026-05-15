@@ -55,6 +55,7 @@ export class PrinterSettingsDto {
   @ApiPropertyOptional() @IsOptional() @IsString() printerName?: string;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() autoPrint?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsIn([1, 2]) copies?: 1 | 2;
+  @ApiPropertyOptional() @IsOptional() @IsString() headerText?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() footerText?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() drawerPin?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() vatNumber?: string;

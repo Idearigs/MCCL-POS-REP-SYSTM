@@ -34,6 +34,7 @@ export interface PrinterSettings {
   printerName: string;
   autoPrint: boolean;
   copies: 1 | 2;
+  headerText: string;
   footerText: string;
   drawerPin?: string;
   vatNumber?: string;
@@ -100,6 +101,7 @@ const defaultSettings: AllSettings = {
     printerName: '',
     autoPrint: false,
     copies: 1,
+    headerText: '',
     footerText:
       'Thank you for shopping\nKEEP THIS RECEIPT AS PROOF OF PURCHASE\nRETURNS OR EXCHANGES WITHIN 14 DAYS WITH RECEIPT\nITEMS MUST BE UNWORN IN ORIGINAL CONDITION\nPEARLS RESTRINGING BESPOKE AND EARRINGS CARRIES NO GUARANTEE OR REFUND STATUTORY RIGHTS UNAFFECTED',
     vatNumber: '275322603',
