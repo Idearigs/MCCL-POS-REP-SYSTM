@@ -246,6 +246,20 @@ export async function printReceiptQZ(
   }
 }
 
+// ─── HTML print (for receipts that need the Windows GDI/browser layout engine) ─
+// Sends pre-built HTML directly to the printer via QZ Tray's html print type.
+// The Windows FuturePRNT driver renders the HTML using its own engine.
+export async function printHtmlViaQZ(
+  printerName: string,
+  html: string,
+): Promise<void> {
+  if (!(await connectQZ())) {
+    throw new Error('QZ Tray is not running on this PC.');
+  }
+  const config = _qz.configs.create(printerName);
+  await _qz.print(config, [{ type: 'html', format: 'plain', data: html }]);
+}
+
 // ─── Cash drawer ──────────────────────────────────────────────────────────────
 // EPSON/ONIX: raw ESC/POS kick — ESC p 0 25 250 (pin 2, ~50ms on / 500ms off).
 // STAR_TSP100: BEL (0x07) is the Star Line "Peripheral Device Drive" command —

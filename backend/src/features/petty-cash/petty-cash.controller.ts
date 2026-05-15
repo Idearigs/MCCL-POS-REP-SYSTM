@@ -271,12 +271,14 @@ export class PettyCashController {
   ): Promise<PettyCashTransactionResponseDto> {
     const tenantId = req.user.tenantId;
     const userId = req.user.id;
+    const userRole = req.user.role;
 
     return this.pettyCashService.approveTransaction(
       tenantId,
       userId,
       transactionId,
       dto,
+      userRole,
     );
   }
 

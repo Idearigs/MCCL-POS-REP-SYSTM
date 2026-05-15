@@ -558,6 +558,7 @@ export class PettyCashService {
     userId: string,
     transactionId: string,
     dto: ApprovePettyCashTransactionDto,
+    userRole?: string,
   ) {
     const transaction = await this.prisma.petty_cash_transactions.findFirst({
       where: {
@@ -579,8 +580,9 @@ export class PettyCashService {
       );
     }
 
-    // Cannot approve own transaction
-    if (transaction.requestedBy === userId) {
+    // Cannot approve own transaction unless owner/admin
+    const isPrivileged = userRole === 'OWNER' || userRole === 'ADMIN';
+    if (transaction.requestedBy === userId && !isPrivileged) {
       throw new ForbiddenException('You cannot approve your own transaction');
     }
 

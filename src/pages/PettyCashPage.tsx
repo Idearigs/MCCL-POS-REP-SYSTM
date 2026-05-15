@@ -28,6 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import MainLayout from '@/components/layout/MainLayout';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   pettyCashService,
   PettyCashAccount,
@@ -58,6 +59,8 @@ import {
 const PettyCashPage: React.FC = () => {
   const { toast } = useToast();
   const { settings } = useSettings();
+  const { auth } = useAuth();
+  const staffFirstName = auth.user?.name?.split(' ')[0] || 'Staff';
   const [accounts, setAccounts] = useState<PettyCashAccount[]>([]);
   const [pendingTransactions, setPendingTransactions] = useState<PettyCashTransaction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -272,7 +275,7 @@ const PettyCashPage: React.FC = () => {
           vatNumber: settings.printer.vatNumber,
           receiptNumber: transaction.transactionNumber || transaction.id.slice(0, 8).toUpperCase(),
           date: transaction.createdAt,
-          cashierName: 'Petty Cash',
+          cashierName: staffFirstName,
           accountName: account?.accountName,
           category: transaction.category.replace(/_/g, ' '),
           description: transaction.description,

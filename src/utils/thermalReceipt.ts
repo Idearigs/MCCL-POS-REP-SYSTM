@@ -477,60 +477,21 @@ export function buildPettyCashReceiptHTML(data: PettyCashReceiptData): string {
 export async function printPettyCashReceipt(
   data: PettyCashReceiptData,
   printerName?: string,
-  model?: PrintOptions['model'],
+  _model?: PrintOptions['model'],
 ): Promise<void> {
-  // Try QZ Tray first (ESC/POS), fall back to iframe
+  // Always use the HTML layout — raw ESC/POS would double-print the store header.
+  // Try QZ Tray HTML path first (no browser dialog), fall back to iframe.
+  const html = buildPettyCashReceiptHTML(data);
   if (printerName) {
     try {
-      const { printReceiptQZ } = await import('./qzBridge');
-      // Map to standard ThermalReceiptData for the thermal print path
-      const d = new Date(data.date);
-      const dateStr = d.toLocaleDateString('en-GB');
-      const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-      const categoryLabel = data.category.replace(/_/g, ' ');
-      const footer = data.footerMessage
-        || 'Authorised signature: ___________\nKEEP THIS VOUCHER FOR YOUR RECORDS';
-
-      const thermalData: ThermalReceiptData = {
-        storeName: data.storeName,
-        tradingName: data.tradingName,
-        storeAddress: data.storeAddress,
-        storePhone: data.storePhone,
-        vatNumber: data.vatNumber,
-        receiptNumber: data.receiptNumber,
-        date: data.date,
-        cashierName: data.cashierName,
-        customerName: data.accountName,
-        tillNumber: 'PC',
-        items: [{
-          name: `${categoryLabel}${data.vendor ? ' - ' + data.vendor : ''}`,
-          quantity: 1,
-          unitPrice: data.amount,
-          total: data.amount,
-        }],
-        subtotal: data.amount,
-        discountAmount: 0,
-        taxAmount: 0,
-        totalAmount: data.amount,
-        paymentMethod: 'CASH',
-        headerMessage: data.headerMessage || 'PETTY CASH RECEIPT',
-        footerMessage: [
-          `Date: ${dateStr}  Time: ${timeStr}`,
-          `Staff: ${data.cashierName}`,
-          data.description,
-          data.notes ? `Note: ${data.notes}` : null,
-          '',
-          footer,
-        ].filter(Boolean).join('\n'),
-      };
-      await printReceiptQZ(printerName, thermalData, { model, copies: 1 });
+      const { printHtmlViaQZ } = await import('./qzBridge');
+      await printHtmlViaQZ(printerName, html);
       return;
     } catch {
       // fall through to iframe
     }
   }
-  // iframe fallback — renders the full petty cash HTML layout
-  const html = buildPettyCashReceiptHTML(data);
+  // iframe fallback — browser print dialog
   const iframe = document.createElement('iframe');
   iframe.style.cssText =
     'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:none;visibility:hidden;';
