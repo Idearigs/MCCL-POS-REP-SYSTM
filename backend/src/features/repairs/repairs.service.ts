@@ -1039,7 +1039,10 @@ export class RepairsService {
     });
   }
 
-  async createTag(tenantId: string, data: { name: string; color: string; description?: string }) {
+  async createTag(
+    tenantId: string,
+    data: { name: string; color: string; description?: string },
+  ) {
     return this.prismaService.repair_tags.create({
       data: {
         id: generateId(),
@@ -1052,8 +1055,14 @@ export class RepairsService {
     });
   }
 
-  async updateTag(id: string, tenantId: string, data: { name?: string; color?: string; description?: string }) {
-    const tag = await this.prismaService.repair_tags.findFirst({ where: { id, tenantId } });
+  async updateTag(
+    id: string,
+    tenantId: string,
+    data: { name?: string; color?: string; description?: string },
+  ) {
+    const tag = await this.prismaService.repair_tags.findFirst({
+      where: { id, tenantId },
+    });
     if (!tag) throw new NotFoundException('Tag not found');
     return this.prismaService.repair_tags.update({
       where: { id },
@@ -1062,7 +1071,9 @@ export class RepairsService {
   }
 
   async deleteTag(id: string, tenantId: string) {
-    const tag = await this.prismaService.repair_tags.findFirst({ where: { id, tenantId } });
+    const tag = await this.prismaService.repair_tags.findFirst({
+      where: { id, tenantId },
+    });
     if (!tag) throw new NotFoundException('Tag not found');
     await this.prismaService.repair_tags.delete({ where: { id } });
     return { success: true };
