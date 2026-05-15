@@ -152,14 +152,33 @@ export class ShiftsService {
       throw new BadRequestException('Only active shifts can be closed');
     }
 
-    // Calculate expected float from cash sales
+    // Calculate expected float from cash sales minus approved petty cash expenses
     const cashSales = shift.sales.filter((s) => s.paymentMethod === 'CASH');
     const totalCashSales = cashSales.reduce(
       (sum, s) => sum + Number(s.totalAmount),
       0,
     );
 
-    const expectedFloat = Number(shift.openingFloat) + totalCashSales;
+    // Deduct approved petty cash expenses that occurred during this shift
+    const pettyCashExpenses = await this.prisma.petty_cash_transactions.findMany(
+      {
+        where: {
+          tenantId: shift.tenantId,
+          status: 'APPROVED',
+          createdAt: {
+            gte: shift.startTime,
+            lte: new Date(),
+          },
+        },
+      },
+    );
+    const totalPettyCash = pettyCashExpenses.reduce(
+      (sum, t) => sum + Number(t.amount),
+      0,
+    );
+
+    const expectedFloat =
+      Number(shift.openingFloat) + totalCashSales - totalPettyCash;
     const variance = data.closingFloat - expectedFloat;
 
     // Calculate shift duration in minutes

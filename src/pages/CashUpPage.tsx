@@ -31,6 +31,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { apiClient } from '@/services/apiClient';
+import { pettyCashService, PettyCashStatus } from '@/services/pettyCashService';
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface FilterState {
   dateFrom: string;
@@ -50,12 +52,15 @@ interface User {
 
 const CashUpPage = () => {
   const { toast } = useToast();
+  const { settings } = useSettings();
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState<EndOfDayReportData | null>(null);
   const [reportText, setReportText] = useState<string>('');
 
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const [filters, setFilters] = useState<FilterState>({
-    dateFrom: format(new Date(), 'yyyy-MM-dd'),
+    dateFrom: format(thirtyDaysAgo, 'yyyy-MM-dd'),
     dateTo: format(new Date(), 'yyyy-MM-dd'),
     tillNo: '',
     userId: '',
@@ -66,14 +71,25 @@ const CashUpPage = () => {
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [availableTills, setAvailableTills] = useState<string[]>([]);
 
-  // Load data when date range changes
+  // Load data when date range changes; on first mount auto-select most recent closed shift
+  const isMounted = React.useRef(false);
   useEffect(() => {
     if (filters.dateFrom && filters.dateTo) {
-      loadAvailableShifts();
+      const autoSelect = !isMounted.current;
+      isMounted.current = true;
+      loadAvailableShifts(autoSelect);
       loadUsersByDateRange();
       loadTillsByDateRange();
     }
   }, [filters.dateFrom, filters.dateTo]);
+
+  // Auto-generate report when a specific shift is selected
+  useEffect(() => {
+    if (filters.shiftId && filters.shiftId !== 'all') {
+      generateReport();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.shiftId]);
 
   const loadUsersByDateRange = async () => {
     try {
@@ -104,16 +120,25 @@ const CashUpPage = () => {
     }
   };
 
-  const loadAvailableShifts = async () => {
+  const loadAvailableShifts = async (autoSelect = false) => {
     try {
       const shifts = await shiftService.getShiftsByDateRange({
         startDate: filters.dateFrom,
         endDate: filters.dateTo
       });
 
-      const shiftsArray = shifts || [];
+      const shiftsArray = (shifts || []) as any[];
       setAvailableShifts(shiftsArray);
-      console.log('Loaded shifts:', shiftsArray);
+
+      if (autoSelect) {
+        // Auto-select the most recent CLOSED shift and generate its report
+        const lastClosed = shiftsArray
+          .filter((s: any) => s.status === 'CLOSED')
+          .sort((a: any, b: any) => new Date(b.endTime || b.startTime).getTime() - new Date(a.endTime || a.startTime).getTime())[0];
+        if (lastClosed) {
+          setFilters(prev => ({ ...prev, shiftId: lastClosed.id }));
+        }
+      }
     } catch (error) {
       console.error('Failed to load shifts:', error);
       setAvailableShifts([]);
@@ -164,6 +189,20 @@ const CashUpPage = () => {
         }
       }
 
+      // Fetch approved petty cash for this date range
+      let pettyCashExpenses: any[] = [];
+      try {
+        const pcResult = await pettyCashService.getTransactions({
+          status: PettyCashStatus.APPROVED,
+          startDate: filters.dateFrom,
+          endDate: filters.dateTo,
+          limit: 500,
+        });
+        pettyCashExpenses = pcResult.data || [];
+      } catch {
+        // non-fatal — report without petty cash
+      }
+
       const sales = allSales;
 
       // Filter by user if selected (ignore "all")
@@ -201,8 +240,13 @@ const CashUpPage = () => {
         return;
       }
 
+      // Find selected shift data for float reconciliation
+      const selectedShift = (filters.shiftId && filters.shiftId !== 'all')
+        ? availableShifts.find((s: any) => s.id === filters.shiftId)
+        : null;
+
       // Process sales data to build report
-      const reportData = await processSalesData(filteredSales);
+      const reportData = await processSalesData(filteredSales, pettyCashExpenses, selectedShift);
       setReportData(reportData);
 
       // Generate text version
@@ -225,7 +269,7 @@ const CashUpPage = () => {
     }
   };
 
-  const processSalesData = async (sales: any[]): Promise<EndOfDayReportData> => {
+  const processSalesData = async (sales: any[], pettyCashExpenses: any[] = [], selectedShift: any = null): Promise<EndOfDayReportData> => {
     // Initialize counters
     let creditCardCount = 0, creditCardAmount = 0;
     let debitCardCount = 0, debitCardAmount = 0;
@@ -382,16 +426,11 @@ const CashUpPage = () => {
     const operatorName = selectedUser ? `${selectedUser.firstName} ${selectedUser.lastName}` : 'All Users';
 
     // Build complete report data
+    const storeName = settings.general.storeName || 'Store';
     const report: EndOfDayReportData = {
-      shopName: 'Andrew McCulloch Jewellers',
-      shopAddress: [
-        'Andrew McCulloch Jewellers',
-        '7 The Square',
-        'Beeston',
-        'Nottingham',
-        'NG9 2JG'
-      ],
-      shopEmail: 'has@mccullochjewellers.co.uk',
+      shopName: storeName,
+      shopAddress: [storeName, ...(settings.general.address?.split('\n') || [])],
+      shopEmail: settings.general.email || '',
 
       tillNo: filters.tillNo && filters.tillNo !== 'all' ? filters.tillNo : '1',
       operator: operatorName,
@@ -408,16 +447,19 @@ const CashUpPage = () => {
       },
 
       cashDetails: {
-        floatAmount: 0,
+        floatAmount: selectedShift?.openingFloat ?? 0,
         totalCash: cashAmount,
         returns: totalRefunds,
         staffing: 0,
-        payout: { count: 0, amount: 0 },
+        payout: {
+          count: pettyCashExpenses.length,
+          amount: pettyCashExpenses.reduce((s: number, t: any) => s + Number(t.amount), 0),
+        },
         payIn: { count: 0, amount: 0 },
         cashLift: { count: 0, amount: 0 },
         cashback: { count: 0, amount: 0 },
         accountPay: { count: 0, amount: 0 },
-        tillDifference: 0
+        tillDifference: selectedShift?.variance ?? 0,
       },
 
       departments,
@@ -614,6 +656,61 @@ const CashUpPage = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Historical Shifts Table */}
+        {availableShifts.length > 0 && (
+          <Card className="mb-6">
+            <CardContent className="pt-4">
+              <h3 className="font-semibold text-sm text-gray-700 mb-3">Recent Shifts</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-gray-500 text-xs uppercase">
+                      <th className="pb-2 pr-4">Shift</th>
+                      <th className="pb-2 pr-4">Staff</th>
+                      <th className="pb-2 pr-4">Date</th>
+                      <th className="pb-2 pr-4">Status</th>
+                      <th className="pb-2 pr-4 text-right">Opening Float</th>
+                      <th className="pb-2 pr-4 text-right">Expected</th>
+                      <th className="pb-2 pr-4 text-right">Closing Float</th>
+                      <th className="pb-2 text-right">Variance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {availableShifts
+                      .slice()
+                      .sort((a: any, b: any) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
+                      .map((shift: any) => {
+                        const variance = shift.variance ?? null;
+                        return (
+                          <tr
+                            key={shift.id}
+                            className={`border-b cursor-pointer hover:bg-blue-50 transition-colors ${filters.shiftId === shift.id ? 'bg-blue-50' : ''}`}
+                            onClick={() => setFilters(prev => ({ ...prev, shiftId: shift.id }))}
+                          >
+                            <td className="py-2 pr-4 font-mono text-xs">{shift.shiftNumber}</td>
+                            <td className="py-2 pr-4">{shift.user ? `${shift.user.firstName} ${shift.user.lastName}` : '—'}</td>
+                            <td className="py-2 pr-4">{format(new Date(shift.startTime), 'dd MMM yy HH:mm')}</td>
+                            <td className="py-2 pr-4">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${shift.status === 'CLOSED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                {shift.status}
+                              </span>
+                            </td>
+                            <td className="py-2 pr-4 text-right">£{Number(shift.openingFloat ?? 0).toFixed(2)}</td>
+                            <td className="py-2 pr-4 text-right">{shift.expectedFloat != null ? `£${Number(shift.expectedFloat).toFixed(2)}` : '—'}</td>
+                            <td className="py-2 pr-4 text-right">{shift.closingFloat != null ? `£${Number(shift.closingFloat).toFixed(2)}` : '—'}</td>
+                            <td className={`py-2 text-right font-semibold ${variance === null ? 'text-gray-400' : variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {variance === null ? '—' : `${variance >= 0 ? '+' : ''}£${Number(variance).toFixed(2)}`}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Report Display and Actions */}
         {reportText && (
