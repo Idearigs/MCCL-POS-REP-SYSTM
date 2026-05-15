@@ -223,7 +223,9 @@ export class GiftCardsService {
     if (!card) throw new NotFoundException('Gift card not found');
 
     await this.prisma.$transaction([
-      this.prisma.gift_card_transactions.deleteMany({ where: { giftCardId: id } }),
+      this.prisma.gift_card_transactions.deleteMany({
+        where: { giftCardId: id },
+      }),
       this.prisma.gift_cards.delete({ where: { id } }),
     ]);
 
