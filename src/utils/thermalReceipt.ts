@@ -316,6 +316,245 @@ export function buildReceiptHTML(data: ThermalReceiptData, options: PrintOptions
 </html>`;
 }
 
+// ─── Petty Cash Receipt ───────────────────────────────────────────────────────
+
+export interface PettyCashReceiptData {
+  storeName: string;
+  tradingName?: string;
+  storeAddress?: string;
+  storePhone?: string;
+  vatNumber?: string;
+  receiptNumber: string;
+  date: string; // ISO
+  cashierName: string; // staff member who raised the expense
+  accountName?: string; // petty cash account name
+  category: string; // e.g. "OFFICE_SUPPLIES"
+  description: string;
+  vendor?: string;
+  amount: number;
+  notes?: string;
+  headerMessage?: string; // from receiptTypes.pettyCash.headerText
+  footerMessage?: string; // from receiptTypes.pettyCash.footerText
+}
+
+export function buildPettyCashReceiptHTML(data: PettyCashReceiptData): string {
+  const d = new Date(data.date);
+  const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const categoryLabel = data.category.replace(/_/g, ' ');
+  const footer = data.footerMessage
+    || 'Authorised signature: ___________\nKEEP THIS VOUCHER FOR YOUR RECORDS';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Petty Cash Receipt ${data.receiptNumber}</title>
+  <style>
+    @page { size: 80mm auto; margin: 0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px;
+      font-weight: 600;
+      width: 72mm;
+      margin: 0 auto;
+      color: #000;
+      background: #fff;
+      padding: 3mm 0;
+    }
+
+    .title {
+      font-size: 15px;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin-bottom: 3mm;
+    }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.5mm;
+    }
+
+    .section-value {
+      font-size: 11px;
+      margin-bottom: 1mm;
+      font-weight: 600;
+    }
+
+    .divider { border: none; border-top: 1px dashed #000; margin: 2.5mm 0; }
+
+    .section-heading {
+      font-size: 11px;
+      font-weight: bold;
+      margin: 2mm 0 1.5mm;
+      text-decoration: underline;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10.5px;
+      padding: 1.2mm 0;
+      border-bottom: 1px solid #ccc;
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label { color: #333; flex: 0 0 40%; }
+    .detail-value { text-align: right; flex: 0 0 58%; font-weight: bold; word-break: break-word; }
+
+    .amount-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: bold;
+      margin: 2mm 0;
+      padding: 1.5mm 0;
+    }
+
+    .footer {
+      font-size: 10px;
+      line-height: 1.6;
+      margin-top: 2mm;
+      text-align: center;
+    }
+
+    ${data.notes ? `.notes {
+      font-size: 10px;
+      margin: 1.5mm 0;
+      font-style: italic;
+    }` : ''}
+
+    @media print {
+      html, body { height: auto !important; overflow: visible !important; }
+      @page { size: 80mm auto; margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="title">Petty Cash Receipt</div>
+
+  <div class="section-label">Business Name:</div>
+  <div class="section-value">${data.storeName}</div>
+  ${data.tradingName ? `<div class="section-value">Trading as ${data.tradingName.replace(/^A trading name of\s*/i, '')}</div>` : ''}
+
+  ${data.storeAddress ? `<div class="section-label" style="margin-top:2mm">Address:</div>
+  <div class="section-value">${data.storeAddress.replace(/\n/g, ', ')}</div>` : ''}
+
+  ${data.storePhone ? `<div class="section-value">Tel: ${data.storePhone}</div>` : ''}
+  ${data.vatNumber ? `<div class="section-value">VAT No: ${data.vatNumber}</div>` : ''}
+
+  <hr class="divider"/>
+
+  <div class="section-heading">Receipt Details</div>
+  <div class="detail-row"><span class="detail-label">Receipt No.</span><span class="detail-value">${data.receiptNumber}</span></div>
+  <div class="detail-row"><span class="detail-label">Date</span><span class="detail-value">${dateStr}</span></div>
+  <div class="detail-row"><span class="detail-label">Time</span><span class="detail-value">${timeStr}</span></div>
+  <div class="detail-row"><span class="detail-label">Staff Member</span><span class="detail-value">${data.cashierName}</span></div>
+  ${data.accountName ? `<div class="detail-row"><span class="detail-label">Account</span><span class="detail-value">${data.accountName}</span></div>` : ''}
+
+  <hr class="divider"/>
+
+  <div class="section-heading">Expense Details</div>
+  <div class="detail-row"><span class="detail-label">Category</span><span class="detail-value">${categoryLabel}</span></div>
+  <div class="detail-row"><span class="detail-label">Description</span><span class="detail-value">${data.description}</span></div>
+  ${data.vendor ? `<div class="detail-row"><span class="detail-label">Vendor</span><span class="detail-value">${data.vendor}</span></div>` : ''}
+  ${data.notes ? `<div class="notes">Note: ${data.notes}</div>` : ''}
+
+  <hr class="divider"/>
+
+  <div class="amount-row"><span>AMOUNT PAID</span><span>£${data.amount.toFixed(2)}</span></div>
+
+  <hr class="divider"/>
+
+  <div class="footer">${footer.replace(/\n/g, '<br>')}</div>
+</body>
+</html>`;
+}
+
+export async function printPettyCashReceipt(
+  data: PettyCashReceiptData,
+  printerName?: string,
+  model?: PrintOptions['model'],
+): Promise<void> {
+  // Try QZ Tray first (ESC/POS), fall back to iframe
+  if (printerName) {
+    try {
+      const { printReceiptQZ } = await import('./qzBridge');
+      // Map to standard ThermalReceiptData for the thermal print path
+      const d = new Date(data.date);
+      const dateStr = d.toLocaleDateString('en-GB');
+      const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      const categoryLabel = data.category.replace(/_/g, ' ');
+      const footer = data.footerMessage
+        || 'Authorised signature: ___________\nKEEP THIS VOUCHER FOR YOUR RECORDS';
+
+      const thermalData: ThermalReceiptData = {
+        storeName: data.storeName,
+        tradingName: data.tradingName,
+        storeAddress: data.storeAddress,
+        storePhone: data.storePhone,
+        vatNumber: data.vatNumber,
+        receiptNumber: data.receiptNumber,
+        date: data.date,
+        cashierName: data.cashierName,
+        customerName: data.accountName,
+        tillNumber: 'PC',
+        items: [{
+          name: `${categoryLabel}${data.vendor ? ' - ' + data.vendor : ''}`,
+          quantity: 1,
+          unitPrice: data.amount,
+          total: data.amount,
+        }],
+        subtotal: data.amount,
+        discountAmount: 0,
+        taxAmount: 0,
+        totalAmount: data.amount,
+        paymentMethod: 'CASH',
+        headerMessage: data.headerMessage || 'PETTY CASH RECEIPT',
+        footerMessage: [
+          `Date: ${dateStr}  Time: ${timeStr}`,
+          `Staff: ${data.cashierName}`,
+          data.description,
+          data.notes ? `Note: ${data.notes}` : null,
+          '',
+          footer,
+        ].filter(Boolean).join('\n'),
+      };
+      await printReceiptQZ(printerName, thermalData, { model, copies: 1 });
+      return;
+    } catch {
+      // fall through to iframe
+    }
+  }
+  // iframe fallback — renders the full petty cash HTML layout
+  const html = buildPettyCashReceiptHTML(data);
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText =
+    'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:none;visibility:hidden;';
+  document.body.appendChild(iframe);
+  const cleanup = () => setTimeout(() => {
+    if (document.body.contains(iframe)) document.body.removeChild(iframe);
+  }, 2000);
+  try {
+    const doc = iframe.contentWindow?.document;
+    if (!doc) throw new Error('iframe unavailable');
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => {
+      try { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); }
+      finally { cleanup(); }
+    }, 280);
+  } catch {
+    cleanup();
+    const win = window.open('', '_blank', 'width=420,height=640,toolbar=0,menubar=0,location=0');
+    if (!win) { alert('Allow pop-ups to print receipts.'); return; }
+    win.document.write(html); win.document.close();
+    setTimeout(() => { win.focus(); win.print(); win.close(); }, 300);
+  }
+}
+
 // Main entry point — tries QZ Tray (silent, direct ESC/POS) then falls back to iframe
 export async function printThermalReceipt(
   data: ThermalReceiptData,

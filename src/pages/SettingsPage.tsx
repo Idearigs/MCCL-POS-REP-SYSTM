@@ -948,34 +948,8 @@ const SettingsPage = () => {
                   </div>
                 )}
 
-                {/* Header text */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Receipt Header Message</label>
-                  <p className="text-sm text-muted-foreground">
-                    Printed below the store address on every receipt. Leave blank to omit. Use \n for a new line.
-                  </p>
-                  <textarea
-                    value={headerText}
-                    onChange={(e) => setHeaderText(e.target.value)}
-                    rows={2}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    placeholder="e.g. SALE ON NOW — 20% OFF ALL RINGS"
-                  />
-                </div>
-
-                {/* Footer text */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Receipt Footer Message</label>
-                  <p className="text-sm text-muted-foreground">
-                    Printed at the bottom of every receipt. Use \n for a new line.
-                  </p>
-                  <textarea
-                    value={footerText}
-                    onChange={(e) => setFooterText(e.target.value)}
-                    rows={3}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    placeholder="Thank you for your purchase!"
-                  />
+                <div className="rounded-lg border border-blue-100 bg-blue-50 dark:bg-blue-900/10 dark:border-blue-800 p-3 text-sm text-blue-800 dark:text-blue-300">
+                  Receipt header and footer messages are managed in the <strong>Receipts</strong> tab.
                 </div>
 
                 <div className="pt-2 flex items-center flex-wrap gap-3">

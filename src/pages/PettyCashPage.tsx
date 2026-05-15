@@ -258,67 +258,37 @@ const PettyCashPage: React.FC = () => {
   };
 
   const handlePrintExpenseReceipt = async (transaction: PettyCashTransaction) => {
-    if (!settings.printer.printerName) {
-      toast({
-        title: 'No Printer Configured',
-        description: 'Go to Settings → Printer to configure your printer.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     const account = accounts.find(a => a.id === transaction.accountId);
-    const categoryLabel = transaction.category.replace(/_/g, ' ');
-    const itemName = transaction.vendor
-      ? `${categoryLabel} - ${transaction.vendor}`
-      : categoryLabel;
-
     const pcReceiptType = settings.receiptTypes?.pettyCash;
-    const footerLines = [
-      transaction.description,
-      transaction.notes ? `Notes: ${transaction.notes}` : null,
-      `Status: ${transaction.status}`,
-      '',
-      pcReceiptType?.footerText || 'Authorised signature: ___________\nKEEP THIS VOUCHER FOR YOUR RECORDS',
-    ].filter(Boolean).join('\n');
 
     try {
-      const { printReceiptQZ } = await import('@/utils/qzBridge');
-      await printReceiptQZ(
-        settings.printer.printerName,
+      const { printPettyCashReceipt } = await import('@/utils/thermalReceipt');
+      await printPettyCashReceipt(
         {
           storeName: settings.general.storeName || 'Store',
+          tradingName: settings.general.tradingName,
           storeAddress: settings.general.address,
           storePhone: settings.general.phone,
-          tradingName: settings.general.tradingName,
           vatNumber: settings.printer.vatNumber,
           receiptNumber: transaction.transactionNumber || transaction.id.slice(0, 8).toUpperCase(),
           date: transaction.createdAt,
           cashierName: 'Petty Cash',
-          customerName: account?.accountName || 'Petty Cash Account',
-          items: [{
-            name: itemName,
-            quantity: 1,
-            unitPrice: transaction.amount,
-            total: transaction.amount,
-          }],
-          subtotal: transaction.amount,
-          discountAmount: 0,
-          taxAmount: 0,
-          totalAmount: transaction.amount,
-          paymentMethod: 'CASH',
+          accountName: account?.accountName,
+          category: transaction.category.replace(/_/g, ' '),
+          description: transaction.description,
+          vendor: transaction.vendor || undefined,
+          amount: transaction.amount,
+          notes: transaction.notes || undefined,
           headerMessage: pcReceiptType?.headerText || undefined,
-          footerMessage: footerLines,
+          footerMessage: pcReceiptType?.footerText || 'Authorised signature: ___________\nKEEP THIS VOUCHER FOR YOUR RECORDS',
         },
-        {
-          model: settings.printer.model,
-          copies: 1,
-        },
+        settings.printer.printerName || undefined,
+        settings.printer.model,
       );
     } catch (err: any) {
       toast({
         title: 'Print Failed',
-        description: err?.message || 'QZ Tray is not running. Make sure QZ Tray is open on this PC.',
+        description: err?.message || 'Could not print receipt.',
         variant: 'destructive',
       });
     }
