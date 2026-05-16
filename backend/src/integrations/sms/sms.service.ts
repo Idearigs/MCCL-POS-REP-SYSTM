@@ -1,9 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  SmsProcessorService,
-  SMSProcessorResult,
-} from './sms-processor.service';
 import axios from 'axios';
 
 export interface SMSResult {
@@ -29,69 +25,12 @@ export interface RepairStatusSMSData {
 @Injectable()
 export class SmsService {
   private readonly logger = new Logger(SmsService.name);
-  private readonly baseUrl = 'https://api.voodoosms.com';
+  private readonly baseUrl = 'https://rest.textmagic.com/api/v2';
 
-  constructor(
-    private configService: ConfigService,
-    private smsProcessor: SmsProcessorService,
-  ) {}
+  constructor(private configService: ConfigService) {}
 
   /**
-   * Send repair status update SMS to customer using centralized processor
-   */
-  async sendRepairStatusSMS(data: RepairStatusSMSData): Promise<SMSResult> {
-    try {
-      this.logger.log(`🔧 === USING CENTRALIZED SMS PROCESSOR ===`);
-      this.logger.log(`👤 Customer: ${data.customerName}`);
-      this.logger.log(`📞 Phone: ${data.customerPhone}`);
-      this.logger.log(`🔖 Repair: ${data.repairNumber}`);
-      this.logger.log(
-        `🔄 Status Change: ${data.oldStatus} → ${data.newStatus}`,
-      );
-
-      // Use the centralized SMS processor with working format
-      const result = await this.smsProcessor.sendRepairStatusSMS({
-        customerName: data.customerName,
-        customerPhone: data.customerPhone,
-        repairNumber: data.repairNumber,
-        oldStatus: data.oldStatus,
-        newStatus: data.newStatus,
-        itemDescription: data.itemDescription,
-        estimatedCompletionDate: data.estimatedCompletionDate,
-        shopName: data.shopName,
-        shopPhone: data.shopPhone,
-      });
-
-      this.logger.log(
-        `🎯 Centralized SMS Result: ${result.success ? 'SUCCESS' : 'FAILED'}`,
-      );
-      if (result.success) {
-        this.logger.log(`   ✅ Message delivered to ${data.customerName}`);
-        this.logger.log(`   📊 Credits used: ${result.creditsUsed}`);
-        this.logger.log(`   💰 Credits remaining: ${result.creditsRemaining}`);
-      } else {
-        this.logger.warn(`   ❌ SMS failed: ${result.error}`);
-      }
-      this.logger.log(`=== END CENTRALIZED SMS PROCESSOR ===`);
-
-      return {
-        success: result.success,
-        messageId: result.messageId,
-        error: result.error,
-        creditsUsed: result.creditsUsed,
-        creditsRemaining: result.creditsRemaining,
-      };
-    } catch (error) {
-      this.logger.error(`Centralized SMS processor failed: ${error.message}`);
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
-  }
-
-  /**
-   * Send SMS using VoodooSMS RESTful API
+   * Send SMS via TextMagic REST API v2 (Basic Auth: username + API key)
    */
   async sendSMS(params: {
     to: string;
@@ -99,233 +38,159 @@ export class SmsService {
     reference?: string;
     from?: string;
   }): Promise<SMSResult> {
+    const username = this.configService.get<string>('TEXTMAGIC_USERNAME');
+    const apiKey = this.configService.get<string>('TEXTMAGIC_API_KEY');
+
+    if (!username || !apiKey) {
+      this.logger.error('TextMagic credentials not configured');
+      return { success: false, error: 'TextMagic credentials not configured' };
+    }
+
+    const cleanPhone = this.formatUKPhone(params.to);
+
     try {
-      const apiKey = this.configService.get('VOODOOSMS_API_KEY');
-
-      if (!apiKey) {
-        throw new Error('VoodooSMS API key not configured');
-      }
-
-      // Clean phone number (remove spaces, format without country code for REST API)
-      const cleanPhone = this.cleanPhoneNumberForRestAPI(params.to);
-
-      const requestData = {
-        to: cleanPhone,
-        from:
-          params.from ||
-          this.configService.get('VOODOOSMS_SENDER_ID', 'MPS Jewel'),
-        msg: params.message,
-        external_reference: params.reference || `mps_${Date.now()}`,
-        country_code: this.configService.get('VOODOOSMS_DEFAULT_COUNTRY', 'LK'),
-      };
-
-      this.logger.debug(`Sending SMS to ${cleanPhone} via VoodooSMS REST API`);
+      this.logger.log(`Sending SMS to ${cleanPhone} via TextMagic`);
 
       const response = await axios.post(
-        `${this.baseUrl}/sendsms`,
-        requestData,
+        `${this.baseUrl}/messages`,
         {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 10000,
+          text: params.message,
+          phones: cleanPhone,
+        },
+        {
+          auth: { username, password: apiKey },
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 15000,
         },
       );
 
-      // Parse VoodooSMS REST API response
-      const result = response.data;
-
-      this.logger.debug(
-        `📱 SMS response for ${cleanPhone}: status=${response.status} data=${JSON.stringify(result, null, 2)}`,
-      );
-
-      // VoodooSMS REST API returns different format
-      if (response.status === 200 && result) {
-        this.logger.log(`✅ SMS sent successfully to ${cleanPhone}`);
-
-        return {
-          success: true,
-          messageId: result.message_id || result.id || 'sent',
-          creditsUsed: result.credits_used || result.message_count || 1,
-          creditsRemaining: result.credits_remaining,
-        };
-      } else {
-        this.logger.warn(`❌ SMS failed: ${result.error || 'Unknown error'}`);
-
-        return {
-          success: false,
-          error: result.error || result.message || 'Unknown error',
-        };
-      }
-    } catch (error) {
-      this.logger.error(
-        `SMS sending failed: ${error.message}${error.response ? ` (HTTP ${error.response.status})` : ''}`,
+      // TextMagic returns 201 on success
+      const data = response.data;
+      this.logger.log(
+        `TextMagic response: ${JSON.stringify(data)}`,
       );
 
       return {
-        success: false,
-        error: error.message,
+        success: true,
+        messageId: String(data.id || data.messageId || 'sent'),
+        creditsUsed: data.partsCount || 1,
       };
+    } catch (error) {
+      const status = error.response?.status;
+      const detail =
+        error.response?.data?.message ||
+        error.response?.data?.errors?.join(', ') ||
+        error.message;
+
+      this.logger.error(`TextMagic SMS failed [HTTP ${status}]: ${detail}`);
+      return { success: false, error: detail };
     }
   }
 
   /**
-   * Generate repair status update message
+   * Send repair status update SMS
    */
-  private generateRepairStatusMessage(data: RepairStatusSMSData): string {
-    const statusMessages = {
-      RECEIVED: `📥 Your jewelry repair (${data.repairNumber}) for "${data.itemDescription}" has been RECEIVED and is being assessed.`,
-      QUOTED: `💷 Quote ready for ${data.repairNumber} - "${data.itemDescription}". Please contact us to approve.`,
-      APPROVED: `✅ Repair ${data.repairNumber} APPROVED and will begin shortly. "${data.itemDescription}".`,
-      IN_PROGRESS: `🔧 Your repair ${data.repairNumber} is IN PROGRESS. "${data.itemDescription}" is being worked on by our technicians.`,
-      WAITING_PARTS: `⏳ Repair ${data.repairNumber} is waiting for parts. "${data.itemDescription}" - we'll update you soon.`,
-      COMPLETED: `✨ Great news! Your repair ${data.repairNumber} is COMPLETED. "${data.itemDescription}" is ready for collection.`,
-      READY_FOR_COLLECTION: `🏪 Your jewelry repair ${data.repairNumber} - "${data.itemDescription}" is ready for pickup at our shop.`,
-      COLLECTED: `📦 Thank you! Repair ${data.repairNumber} has been collected. We hope you love your restored "${data.itemDescription}".`,
-      DELAYED: `⏱️ Update: Repair ${data.repairNumber} - "${data.itemDescription}" is experiencing delays. ${data.estimatedCompletionDate ? `New estimated completion: ${data.estimatedCompletionDate}` : "We'll update you with new timeline soon."}.`,
-      CANCELLED: `❌ Repair ${data.repairNumber} for "${data.itemDescription}" has been cancelled as requested.`,
-    };
+  async sendRepairStatusSMS(data: RepairStatusSMSData): Promise<SMSResult> {
+    const message = this.buildRepairMessage(data);
 
-    let message =
-      statusMessages[data.newStatus as keyof typeof statusMessages] ||
-      `Status update for repair ${data.repairNumber} - "${data.itemDescription}": ${data.newStatus}`;
-
-    // Add completion date if provided and relevant
-    if (
-      data.estimatedCompletionDate &&
-      ['IN_PROGRESS', 'APPROVED', 'WAITING_PARTS'].includes(data.newStatus)
-    ) {
-      message += ` Expected completion: ${data.estimatedCompletionDate}.`;
-    }
-
-    // Add shop contact info
-    message += ` Contact us: ${data.shopPhone} - ${data.shopName}`;
-
-    // Ensure message is within SMS limits (160 chars for single SMS, 459 for concatenated)
-    if (message.length > 459) {
-      message = message.substring(0, 456) + '...';
-    }
-
-    return message;
-  }
-
-  /**
-   * Clean phone number for REST API (try international format first)
-   */
-  private cleanPhoneNumberForRestAPI(phone: string): string {
-    // Remove all non-digit characters
-    const clean = phone.replace(/\D/g, '');
-
-    const defaultCountry = this.configService.get(
-      'VOODOOSMS_DEFAULT_COUNTRY',
-      'LK',
+    this.logger.log(
+      `Repair SMS: ${data.repairNumber} ${data.oldStatus} → ${data.newStatus} → ${data.customerPhone}`,
     );
 
-    this.logger.debug(
-      `🔧 Phone formatting: original=${phone} cleaned=${clean} country=${defaultCountry}`,
-    );
-
-    if (defaultCountry === 'LK') {
-      // Sri Lankan numbers - remove country code if present
-      if (clean.startsWith('94')) {
-        return clean.substring(2); // Remove '94' prefix
-      } else if (clean.startsWith('0')) {
-        return clean.substring(1); // Remove leading '0'
-      }
-      return clean; // Return as is if already in correct format
-    } else if (defaultCountry === 'UK') {
-      // UK numbers - try different formats for VoodooSMS
-      if (clean.startsWith('44')) {
-        return '+' + clean;
-      } else if (clean.startsWith('0')) {
-        return '+44' + clean.substring(1);
-      } else {
-        return '+44' + clean;
-      }
-    }
-    return clean;
+    return this.sendSMS({
+      to: data.customerPhone,
+      message,
+      reference: `repair_${data.repairNumber}`,
+    });
   }
 
   /**
-   * Clean and format phone number for Sri Lanka/UK (legacy method)
-   */
-  private cleanPhoneNumber(phone: string): string {
-    // Remove all non-digit characters
-    const clean = phone.replace(/\D/g, '');
-
-    const defaultCountry = this.configService.get(
-      'VOODOOSMS_DEFAULT_COUNTRY',
-      'LK',
-    );
-
-    if (defaultCountry === 'LK') {
-      // Sri Lankan numbers
-      if (clean.startsWith('94')) {
-        // Already has country code
-        return clean;
-      } else if (clean.startsWith('0')) {
-        // Sri Lankan number starting with 0, replace with 94
-        return '94' + clean.substring(1);
-      } else if (clean.length === 9) {
-        // 9 digit Sri Lankan number without leading 0
-        return '94' + clean;
-      }
-    } else if (defaultCountry === 'UK') {
-      // UK numbers
-      if (clean.startsWith('44')) {
-        // Already has country code
-        return clean;
-      } else if (clean.startsWith('0')) {
-        // UK number starting with 0, replace with 44
-        return '44' + clean.substring(1);
-      } else if (clean.length === 10) {
-        // 10 digit UK number without leading 0
-        return '44' + clean;
-      }
-    }
-
-    // Return as is if we can't determine format
-    return clean;
-  }
-
-  /**
-   * Test SMS sending capability
+   * Send a test SMS
    */
   async testSMS(phoneNumber: string): Promise<SMSResult> {
-    return await this.sendSMS({
+    return this.sendSMS({
       to: phoneNumber,
-      message: `Test message from MPS Jewelry System at ${new Date().toLocaleTimeString()}. Your SMS integration is working correctly!`,
+      message: `Test message from MPS Jewelry System at ${new Date().toLocaleTimeString('en-GB')}. SMS integration is working correctly!`,
       reference: 'test_message',
     });
   }
 
   /**
-   * Get account balance (if supported by VoodooSMS)
+   * Get TextMagic account balance
    */
   async getBalance(): Promise<{ balance?: number; error?: string }> {
-    try {
-      const apiKey = this.configService.get('VOODOOSMS_API_KEY');
+    const username = this.configService.get<string>('TEXTMAGIC_USERNAME');
+    const apiKey = this.configService.get<string>('TEXTMAGIC_API_KEY');
 
-      if (!apiKey) {
-        return { error: 'VoodooSMS API key not configured' };
-      }
-
-      // VoodooSMS REST API doesn't have a direct balance endpoint
-      // Balance is returned with each SMS send operation
-      // For now, return a placeholder message
-      this.logger.debug(
-        'Balance check requested - VoodooSMS REST API returns balance with each SMS send',
-      );
-
-      return {
-        balance: null,
-        error:
-          'Balance is returned with each SMS send operation. Check SMS send responses for current balance.',
-      };
-    } catch (error) {
-      this.logger.error(`Failed to get SMS balance: ${error.message}`);
-      return { error: error.message };
+    if (!username || !apiKey) {
+      return { error: 'TextMagic credentials not configured' };
     }
+
+    try {
+      const response = await axios.get(`${this.baseUrl}/user`, {
+        auth: { username, password: apiKey },
+        timeout: 10000,
+      });
+
+      const balance = parseFloat(response.data.balance ?? '0');
+      this.logger.log(`TextMagic balance: ${balance}`);
+      return { balance };
+    } catch (error) {
+      const detail =
+        error.response?.data?.message || error.message;
+      this.logger.error(`Balance check failed: ${detail}`);
+      return { error: detail };
+    }
+  }
+
+  /**
+   * Build repair status message text
+   */
+  private buildRepairMessage(data: RepairStatusSMSData): string {
+    const templates: Record<string, string> = {
+      RECEIVED: `Your jewelry repair (${data.repairNumber}) for "${data.itemDescription}" has been received and is being assessed.`,
+      QUOTED: `A quote is ready for repair ${data.repairNumber} - "${data.itemDescription}". Please contact us to approve.`,
+      APPROVED: `Repair ${data.repairNumber} approved and work will begin shortly. "${data.itemDescription}".`,
+      IN_PROGRESS: `Your repair ${data.repairNumber} is now in progress. "${data.itemDescription}" is being worked on.`,
+      WAITING_PARTS: `Repair ${data.repairNumber} is waiting for parts. "${data.itemDescription}" - we will update you soon.`,
+      DELAYED: `Update on repair ${data.repairNumber}: "${data.itemDescription}" is experiencing a delay.${data.estimatedCompletionDate ? ` New estimate: ${data.estimatedCompletionDate}.` : ''}`,
+      COMPLETED: `Great news! Your repair ${data.repairNumber} is complete. "${data.itemDescription}" is ready for collection.`,
+      READY_FOR_COLLECTION: `Your repair ${data.repairNumber} - "${data.itemDescription}" is ready for collection at our shop.`,
+      COLLECTED: `Thank you! Repair ${data.repairNumber} has been collected. We hope you love your restored "${data.itemDescription}".`,
+      CANCELLED: `Repair ${data.repairNumber} for "${data.itemDescription}" has been cancelled.`,
+    };
+
+    let msg =
+      templates[data.newStatus] ??
+      `Update for repair ${data.repairNumber} - "${data.itemDescription}": ${data.newStatus}`;
+
+    if (
+      data.estimatedCompletionDate &&
+      ['IN_PROGRESS', 'APPROVED', 'WAITING_PARTS'].includes(data.newStatus)
+    ) {
+      msg += ` Est. completion: ${data.estimatedCompletionDate}.`;
+    }
+
+    msg += ` ${data.shopName} - ${data.shopPhone}`;
+
+    // Keep within 3-part concatenated SMS limit (459 chars)
+    if (msg.length > 459) {
+      msg = msg.substring(0, 456) + '...';
+    }
+
+    return msg;
+  }
+
+  /**
+   * Format a UK phone number to E.164 without the + prefix (e.g. 447859888649)
+   */
+  private formatUKPhone(phone: string): string {
+    const digits = phone.replace(/\D/g, '');
+
+    if (digits.startsWith('44')) return digits;
+    if (digits.startsWith('0')) return '44' + digits.slice(1);
+    if (digits.length === 10) return '44' + digits;
+
+    return digits;
   }
 }

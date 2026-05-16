@@ -15,7 +15,6 @@ import {
 } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { SmsService } from './sms.service';
-import { SmsProcessorService } from './sms-processor.service';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
 
@@ -24,98 +23,50 @@ import { TenantGuard } from '../../shared/guards/tenant.guard';
 @UseGuards(ThrottlerGuard, JwtAuthGuard, TenantGuard)
 @ApiBearerAuth('access-token')
 export class SmsController {
-  constructor(
-    private readonly smsService: SmsService,
-    private readonly smsProcessor: SmsProcessorService,
-  ) {}
+  constructor(private readonly smsService: SmsService) {}
 
   @Post('test')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Test SMS sending',
-    description: 'Send a test SMS to verify VoodooSMS integration',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Test SMS sent successfully',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'SMS sending failed',
-  })
+  @ApiOperation({ summary: 'Send a test SMS via TextMagic' })
+  @ApiResponse({ status: 200, description: 'Test SMS sent' })
   async testSMS(@Body() body: { phoneNumber: string }) {
     const result = await this.smsService.testSMS(body.phoneNumber);
 
-    if (result.success) {
-      return {
-        success: true,
-        message: 'Test SMS sent successfully',
-        messageId: result.messageId,
-        creditsUsed: result.creditsUsed,
-        creditsRemaining: result.creditsRemaining,
-      };
-    } else {
-      return {
-        success: false,
-        message: 'Test SMS failed',
-        error: result.error,
-      };
-    }
+    return {
+      success: result.success,
+      message: result.success ? 'Test SMS sent successfully' : 'Test SMS failed',
+      messageId: result.messageId,
+      creditsUsed: result.creditsUsed,
+      error: result.error,
+    };
   }
 
   @Get('balance')
-  @ApiOperation({
-    summary: 'Get SMS account balance',
-    description: 'Retrieve remaining SMS credits from VoodooSMS account',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Balance retrieved successfully',
-  })
+  @ApiOperation({ summary: 'Get TextMagic account balance' })
+  @ApiResponse({ status: 200, description: 'Balance retrieved' })
   async getBalance() {
     const result = await this.smsService.getBalance();
 
-    if (result.error) {
-      return {
-        success: false,
-        error: result.error,
-      };
-    } else {
-      return {
-        success: true,
-        balance: result.balance,
-      };
-    }
+    return result.error
+      ? { success: false, error: result.error }
+      : { success: true, balance: result.balance };
   }
 
   @Post('send')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Send SMS',
-    description: 'Send a custom SMS message',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'SMS sent successfully',
-  })
+  @ApiOperation({ summary: 'Send a custom SMS' })
+  @ApiResponse({ status: 200, description: 'SMS sent' })
   async sendSMS(
-    @Body()
-    body: {
-      to: string;
-      message: string;
-      reference?: string;
-      from?: string;
-    },
+    @Body() body: { to: string; message: string; reference?: string },
   ) {
     const result = await this.smsService.sendSMS(body);
 
     return {
       success: result.success,
-      message: result.success ? 'SMS sent successfully' : 'SMS sending failed',
+      message: result.success ? 'SMS sent successfully' : 'SMS failed',
       messageId: result.messageId,
-      error: result.error,
       creditsUsed: result.creditsUsed,
-      creditsRemaining: result.creditsRemaining,
+      error: result.error,
     };
   }
 }
