@@ -51,11 +51,16 @@ export class SmsService {
     try {
       this.logger.log(`Sending SMS to ${cleanPhone} via TextMagic`);
 
+      const senderPhone = this.configService.get<string>(
+        'TEXTMAGIC_SENDER_PHONE',
+      );
+
       const response = await axios.post(
         `${this.baseUrl}/messages`,
         {
           text: params.message,
           phones: cleanPhone,
+          ...(senderPhone && { from: senderPhone }),
         },
         {
           auth: { username, password: apiKey },

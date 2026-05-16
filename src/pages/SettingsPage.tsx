@@ -4,7 +4,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Save, Lock, Eye, EyeOff, RotateCcw, Loader2, UserCircle, Printer, Archive, ScanLine, Eye as EyeIcon } from 'lucide-react';
+import { Save, Lock, Eye, EyeOff, RotateCcw, Loader2, UserCircle, Printer, Archive, ScanLine, Eye as EyeIcon, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -232,6 +232,8 @@ const SettingsPage = () => {
   const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
   const [loadingPrinters, setLoadingPrinters] = useState(false);
   const [testPrinting, setTestPrinting] = useState(false);
+  const [smsTestPhone, setSmsTestPhone] = useState('');
+  const [smsTestLoading, setSmsTestLoading] = useState(false);
   const [testingDrawer, setTestingDrawer] = useState(false);
   const [qzConfigured, setQzConfigured] = useState<boolean>(
     () => !!(localStorage.getItem('qz_certificate') && localStorage.getItem('qz_private_key')),
@@ -414,6 +416,39 @@ const SettingsPage = () => {
 
   const onSubmitNotifications = async (data: NotificationFormValues) => {
     await updateNotificationSettings(data);
+  };
+
+  const handleSmsTest = async () => {
+    const phone = smsTestPhone.trim();
+    if (!phone) {
+      toast.error('Enter a phone number to send the test SMS to');
+      return;
+    }
+    setSmsTestLoading(true);
+    try {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3007/api/v1';
+      const token = localStorage.getItem('accessToken') || '';
+      const tenantId = localStorage.getItem('tenantId') || '';
+      const resp = await fetch(`${API_BASE}/sms/test`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-tenant-id': tenantId,
+        },
+        body: JSON.stringify({ phoneNumber: phone }),
+      });
+      const result = await resp.json();
+      if (result.success) {
+        toast.success(`Test SMS sent to ${phone}`);
+      } else {
+        toast.error(`SMS failed: ${result.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      toast.error('Could not reach SMS service');
+    } finally {
+      setSmsTestLoading(false);
+    }
   };
 
   const onSubmitAppearance = async (data: AppearanceFormValues) => {
@@ -661,6 +696,36 @@ const SettingsPage = () => {
                         </FormItem>
                       )}
                     />
+
+                    {/* SMS Test */}
+                    <div className="rounded-lg border p-4 space-y-3">
+                      <div className="space-y-0.5">
+                        <p className="text-base font-medium">Test SMS</p>
+                        <p className="text-sm text-muted-foreground">
+                          Send a test message to verify your TextMagic integration is working.
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="e.g. 07859 888649"
+                          value={smsTestPhone}
+                          onChange={(e) => setSmsTestPhone(e.target.value)}
+                          className="max-w-xs"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleSmsTest}
+                          disabled={smsTestLoading}
+                          className="flex items-center gap-2"
+                        >
+                          {smsTestLoading
+                            ? <Loader2 size={16} className="animate-spin" />
+                            : <MessageSquare size={16} />}
+                          Send Test SMS
+                        </Button>
+                      </div>
+                    </div>
 
                     <FormField
                       control={notificationForm.control}
