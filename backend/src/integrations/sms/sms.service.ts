@@ -89,10 +89,15 @@ export class SmsService {
       };
     } catch (error) {
       const status = error.response?.status;
+      const responseData = error.response?.data;
       const detail =
-        error.response?.data?.error ||
-        error.response?.data?.message ||
-        error.message;
+        typeof responseData?.error === 'string'
+          ? responseData.error
+          : typeof responseData?.message === 'string'
+            ? responseData.message
+            : responseData
+              ? JSON.stringify(responseData)
+              : error.message;
       this.logger.error(`VoodooSMS failed [HTTP ${status}]: ${detail}`);
       return { success: false, error: detail };
     }
