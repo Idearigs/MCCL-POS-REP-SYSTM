@@ -27,7 +27,7 @@ export class SmsController {
 
   @Post('test')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Send a test SMS via TextMagic' })
+  @ApiOperation({ summary: 'Send a test SMS via VoodooSMS' })
   @ApiResponse({ status: 200, description: 'Test SMS sent' })
   async testSMS(@Body() body: { phoneNumber: string }) {
     const result = await this.smsService.testSMS(body.phoneNumber);
@@ -44,11 +44,9 @@ export class SmsController {
   }
 
   @Get('balance')
-  @ApiOperation({ summary: 'Get TextMagic account balance' })
-  @ApiResponse({ status: 200, description: 'Balance retrieved' })
+  @ApiOperation({ summary: 'Get SMS account balance' })
   async getBalance() {
     const result = await this.smsService.getBalance();
-
     return result.error
       ? { success: false, error: result.error }
       : { success: true, balance: result.balance };
@@ -57,12 +55,10 @@ export class SmsController {
   @Post('send')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send a custom SMS' })
-  @ApiResponse({ status: 200, description: 'SMS sent' })
   async sendSMS(
     @Body() body: { to: string; message: string; reference?: string },
   ) {
     const result = await this.smsService.sendSMS(body);
-
     return {
       success: result.success,
       message: result.success ? 'SMS sent successfully' : 'SMS failed',

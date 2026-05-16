@@ -29,9 +29,6 @@ export class SmsService {
 
   constructor(private configService: ConfigService) {}
 
-  /**
-   * Send SMS via VoodooSMS REST API
-   */
   async sendSMS(params: {
     to: string;
     message: string;
@@ -73,7 +70,6 @@ export class SmsService {
       const data = response.data;
       this.logger.log(`VoodooSMS response: ${JSON.stringify(data)}`);
 
-      // VoodooSMS returns count > 0 on success
       const succeeded = data?.count > 0 || data?.messages || data?.id;
 
       if (succeeded) {
@@ -102,16 +98,11 @@ export class SmsService {
     }
   }
 
-  /**
-   * Send repair status update SMS
-   */
   async sendRepairStatusSMS(data: RepairStatusSMSData): Promise<SMSResult> {
     const message = this.buildRepairMessage(data);
-
     this.logger.log(
       `Repair SMS: ${data.repairNumber} ${data.oldStatus} → ${data.newStatus} → ${data.customerPhone}`,
     );
-
     return this.sendSMS({
       to: data.customerPhone,
       message,
@@ -119,9 +110,6 @@ export class SmsService {
     });
   }
 
-  /**
-   * Send a test SMS
-   */
   async testSMS(phoneNumber: string): Promise<SMSResult> {
     return this.sendSMS({
       to: phoneNumber,
@@ -130,9 +118,6 @@ export class SmsService {
     });
   }
 
-  /**
-   * Get account balance — VoodooSMS returns balance per-send, no dedicated endpoint
-   */
   async getBalance(): Promise<{ balance?: number; error?: string }> {
     return {
       error:
@@ -140,9 +125,6 @@ export class SmsService {
     };
   }
 
-  /**
-   * Build repair status message text
-   */
   private buildRepairMessage(data: RepairStatusSMSData): string {
     const templates: Record<string, string> = {
       RECEIVED: `Your jewelry repair (${data.repairNumber}) for "${data.itemDescription}" has been received and is being assessed.`,
@@ -177,16 +159,11 @@ export class SmsService {
     return msg;
   }
 
-  /**
-   * Format UK phone number to VoodooSMS format: 447859888649 (no + prefix)
-   */
   private formatUKPhone(phone: string): string {
     const digits = phone.replace(/\D/g, '');
-
     if (digits.startsWith('44')) return digits;
     if (digits.startsWith('0')) return '44' + digits.slice(1);
     if (digits.length === 10) return '44' + digits;
-
     return digits;
   }
 }
