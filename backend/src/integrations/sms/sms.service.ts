@@ -66,9 +66,7 @@ export class SmsService {
 
       // TextMagic returns 201 on success
       const data = response.data;
-      this.logger.log(
-        `TextMagic response: ${JSON.stringify(data)}`,
-      );
+      this.logger.log(`TextMagic response: ${JSON.stringify(data)}`);
 
       return {
         success: true,
@@ -136,8 +134,7 @@ export class SmsService {
       this.logger.log(`TextMagic balance: ${balance}`);
       return { balance };
     } catch (error) {
-      const detail =
-        error.response?.data?.message || error.message;
+      const detail = error.response?.data?.message || error.message;
       this.logger.error(`Balance check failed: ${detail}`);
       return { error: detail };
     }

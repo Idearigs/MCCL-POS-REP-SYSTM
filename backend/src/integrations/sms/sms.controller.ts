@@ -34,7 +34,9 @@ export class SmsController {
 
     return {
       success: result.success,
-      message: result.success ? 'Test SMS sent successfully' : 'Test SMS failed',
+      message: result.success
+        ? 'Test SMS sent successfully'
+        : 'Test SMS failed',
       messageId: result.messageId,
       creditsUsed: result.creditsUsed,
       error: result.error,
