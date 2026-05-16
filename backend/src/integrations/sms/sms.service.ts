@@ -25,12 +25,12 @@ export interface RepairStatusSMSData {
 @Injectable()
 export class SmsService {
   private readonly logger = new Logger(SmsService.name);
-  private readonly baseUrl = 'https://rest.textmagic.com/api/v2';
+  private readonly baseUrl = 'https://api.voodoosms.com/sendsms';
 
   constructor(private configService: ConfigService) {}
 
   /**
-   * Send SMS via TextMagic REST API v2 (Basic Auth: username + API key)
+   * Send SMS via VoodooSMS REST API
    */
   async sendSMS(params: {
     to: string;
@@ -38,54 +38,66 @@ export class SmsService {
     reference?: string;
     from?: string;
   }): Promise<SMSResult> {
-    const username = this.configService.get<string>('TEXTMAGIC_USERNAME');
-    const apiKey = this.configService.get<string>('TEXTMAGIC_API_KEY');
+    const apiKey = this.configService.get<string>('VOODOOSMS_API_KEY');
+    const senderId =
+      params.from ||
+      this.configService.get<string>('VOODOOSMS_SENDER_ID', 'MPS Jewel');
 
-    if (!username || !apiKey) {
-      this.logger.error('TextMagic credentials not configured');
-      return { success: false, error: 'TextMagic credentials not configured' };
+    if (!apiKey) {
+      this.logger.error('VoodooSMS API key not configured');
+      return { success: false, error: 'VoodooSMS API key not configured' };
     }
 
     const cleanPhone = this.formatUKPhone(params.to);
 
     try {
-      this.logger.log(`Sending SMS to ${cleanPhone} via TextMagic`);
-
-      const senderPhone = this.configService.get<string>(
-        'TEXTMAGIC_SENDER_PHONE',
-      );
+      this.logger.log(`Sending SMS to ${cleanPhone} via VoodooSMS`);
 
       const response = await axios.post(
-        `${this.baseUrl}/messages`,
+        this.baseUrl,
         {
-          text: params.message,
-          phones: cleanPhone,
-          ...(senderPhone && { from: senderPhone }),
+          to: cleanPhone,
+          from: senderId,
+          msg: params.message,
+          external_reference: params.reference || `mps_${Date.now()}`,
         },
         {
-          auth: { username, password: apiKey },
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
           timeout: 15000,
         },
       );
 
-      // TextMagic returns 201 on success
       const data = response.data;
-      this.logger.log(`TextMagic response: ${JSON.stringify(data)}`);
+      this.logger.log(`VoodooSMS response: ${JSON.stringify(data)}`);
+
+      // VoodooSMS returns count > 0 on success
+      const succeeded = data?.count > 0 || data?.messages || data?.id;
+
+      if (succeeded) {
+        return {
+          success: true,
+          messageId: String(
+            data?.messages?.[0]?.id || data?.id || `sent_${Date.now()}`,
+          ),
+          creditsUsed: data?.credits || data?.count || 1,
+          creditsRemaining: data?.balance,
+        };
+      }
 
       return {
-        success: true,
-        messageId: String(data.id || data.messageId || 'sent'),
-        creditsUsed: data.partsCount || 1,
+        success: false,
+        error: data?.error || data?.message || 'SMS sending failed',
       };
     } catch (error) {
       const status = error.response?.status;
       const detail =
+        error.response?.data?.error ||
         error.response?.data?.message ||
-        error.response?.data?.errors?.join(', ') ||
         error.message;
-
-      this.logger.error(`TextMagic SMS failed [HTTP ${status}]: ${detail}`);
+      this.logger.error(`VoodooSMS failed [HTTP ${status}]: ${detail}`);
       return { success: false, error: detail };
     }
   }
@@ -119,30 +131,13 @@ export class SmsService {
   }
 
   /**
-   * Get TextMagic account balance
+   * Get account balance — VoodooSMS returns balance per-send, no dedicated endpoint
    */
   async getBalance(): Promise<{ balance?: number; error?: string }> {
-    const username = this.configService.get<string>('TEXTMAGIC_USERNAME');
-    const apiKey = this.configService.get<string>('TEXTMAGIC_API_KEY');
-
-    if (!username || !apiKey) {
-      return { error: 'TextMagic credentials not configured' };
-    }
-
-    try {
-      const response = await axios.get(`${this.baseUrl}/user`, {
-        auth: { username, password: apiKey },
-        timeout: 10000,
-      });
-
-      const balance = parseFloat(response.data.balance ?? '0');
-      this.logger.log(`TextMagic balance: ${balance}`);
-      return { balance };
-    } catch (error) {
-      const detail = error.response?.data?.message || error.message;
-      this.logger.error(`Balance check failed: ${detail}`);
-      return { error: detail };
-    }
+    return {
+      error:
+        'VoodooSMS returns balance with each SMS send. Check send responses for current balance.',
+    };
   }
 
   /**
@@ -175,7 +170,6 @@ export class SmsService {
 
     msg += ` ${data.shopName} - ${data.shopPhone}`;
 
-    // Keep within 3-part concatenated SMS limit (459 chars)
     if (msg.length > 459) {
       msg = msg.substring(0, 456) + '...';
     }
@@ -184,7 +178,7 @@ export class SmsService {
   }
 
   /**
-   * Format a UK phone number to E.164 without the + prefix (e.g. 447859888649)
+   * Format UK phone number to VoodooSMS format: 447859888649 (no + prefix)
    */
   private formatUKPhone(phone: string): string {
     const digits = phone.replace(/\D/g, '');
