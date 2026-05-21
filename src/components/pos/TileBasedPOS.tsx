@@ -330,7 +330,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
   // Quick Service Price Dialog (for Cleaning, Watch Battery, Watch Links, Spring Bar, Watch Straps)
   const [showServicePriceDialog, setShowServicePriceDialog] = useState(false);
-  const [serviceType, setServiceType] = useState<'cleaning' | 'battery' | 'watch-links' | 'spring-bar' | 'watch-straps'>('cleaning');
+  const [serviceType, setServiceType] = useState<'cleaning' | 'battery' | 'watch-links' | 'spring-bar' | 'watch-straps' | 'jewellery-repair-quick' | 'watch-repair-quick'>('cleaning');
   const [servicePrice, setServicePrice] = useState('');
 
   // Purity multipliers for different metals
@@ -3025,6 +3025,34 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                     <p className="text-blue-500 text-xs mt-0.5">Quick Add</p>
                   </div>
 
+                  {/* Jewellery Repair Quick */}
+                  <div
+                    onClick={() => {
+                      setServiceType('jewellery-repair-quick');
+                      setServicePrice('');
+                      setShowServicePriceDialog(true);
+                    }}
+                    className="bg-purple-50/60 border border-purple-100 rounded-xl p-5 cursor-pointer hover:border-purple-300 hover:bg-purple-50 hover:shadow-md hover:scale-[1.02] transition-all"
+                  >
+                    <Gem className="h-7 w-7 text-purple-600 mb-3" />
+                    <h3 className="text-purple-900 font-semibold text-base">Jewellery Repair</h3>
+                    <p className="text-purple-500 text-xs mt-0.5">Quick Checkout</p>
+                  </div>
+
+                  {/* Watch Repair Quick */}
+                  <div
+                    onClick={() => {
+                      setServiceType('watch-repair-quick');
+                      setServicePrice('');
+                      setShowServicePriceDialog(true);
+                    }}
+                    className="bg-orange-50/60 border border-orange-100 rounded-xl p-5 cursor-pointer hover:border-orange-300 hover:bg-orange-50 hover:shadow-md hover:scale-[1.02] transition-all"
+                  >
+                    <Clock className="h-7 w-7 text-orange-600 mb-3" />
+                    <h3 className="text-orange-900 font-semibold text-base">Watch Repair</h3>
+                    <p className="text-orange-500 text-xs mt-0.5">Quick Checkout</p>
+                  </div>
+
                   {/* Appraisal */}
                   <div
                     onClick={handleAppraisalOpen}
@@ -5236,11 +5264,13 @@ Deposit is non-refundable.
       {/* Quick Service Price Dialog */}
       {(() => {
         const SERVICE_META: Record<string, { label: string; icon: React.ReactNode; color: string; activeColor: string; sku: string; presets: string[] }> = {
-          'battery':      { label: 'Watch Battery',    icon: <Battery className="h-6 w-6 text-white" />,  color: 'from-blue-500 to-blue-600',   activeColor: 'bg-blue-500',   sku: 'SERVICE-BATTERY',      presets: ['10','15','20','25'] },
-          'cleaning':     { label: 'Cleaning Service', icon: <Sparkles className="h-6 w-6 text-white" />, color: 'from-amber-500 to-orange-500', activeColor: 'bg-amber-500',  sku: 'SERVICE-CLEANING',     presets: ['15','25','35','50'] },
-          'watch-links':  { label: 'Watch Links',      icon: <Watch className="h-6 w-6 text-white" />,    color: 'from-blue-500 to-blue-600',   activeColor: 'bg-blue-500',   sku: 'SERVICE-WATCH-LINKS',  presets: ['5','10','15','20']  },
-          'spring-bar':   { label: 'Spring Bar',       icon: <Ruler className="h-6 w-6 text-white" />,    color: 'from-blue-500 to-blue-600',   activeColor: 'bg-blue-500',   sku: 'SERVICE-SPRING-BAR',   presets: ['5','10','15','20']  },
-          'watch-straps': { label: 'Watch Straps',     icon: <Scissors className="h-6 w-6 text-white" />, color: 'from-blue-500 to-blue-600',   activeColor: 'bg-blue-500',   sku: 'SERVICE-WATCH-STRAPS', presets: ['10','15','20','25'] },
+          'battery':                { label: 'Watch Battery',       icon: <Battery className="h-6 w-6 text-white" />,  color: 'from-blue-500 to-blue-600',     activeColor: 'bg-blue-500',    sku: 'SERVICE-BATTERY',            presets: ['10','15','20','25'] },
+          'cleaning':               { label: 'Cleaning Service',    icon: <Sparkles className="h-6 w-6 text-white" />, color: 'from-amber-500 to-orange-500',  activeColor: 'bg-amber-500',   sku: 'SERVICE-CLEANING',           presets: ['15','25','35','50'] },
+          'watch-links':            { label: 'Watch Links',         icon: <Watch className="h-6 w-6 text-white" />,    color: 'from-blue-500 to-blue-600',     activeColor: 'bg-blue-500',    sku: 'SERVICE-WATCH-LINKS',        presets: ['5','10','15','20']  },
+          'spring-bar':             { label: 'Spring Bar',          icon: <Ruler className="h-6 w-6 text-white" />,    color: 'from-blue-500 to-blue-600',     activeColor: 'bg-blue-500',    sku: 'SERVICE-SPRING-BAR',         presets: ['5','10','15','20']  },
+          'watch-straps':           { label: 'Watch Straps',        icon: <Scissors className="h-6 w-6 text-white" />, color: 'from-blue-500 to-blue-600',     activeColor: 'bg-blue-500',    sku: 'SERVICE-WATCH-STRAPS',       presets: ['10','15','20','25'] },
+          'jewellery-repair-quick': { label: 'Jewellery Repair',    icon: <Gem className="h-6 w-6 text-white" />,      color: 'from-purple-500 to-violet-600', activeColor: 'bg-purple-500',  sku: 'SERVICE-JEWELLERY-REPAIR',   presets: ['25','35','50','75'] },
+          'watch-repair-quick':     { label: 'Watch Repair',        icon: <Clock className="h-6 w-6 text-white" />,    color: 'from-orange-500 to-amber-600',  activeColor: 'bg-orange-500',  sku: 'SERVICE-WATCH-REPAIR',       presets: ['25','35','50','75'] },
         };
         const meta = SERVICE_META[serviceType] ?? SERVICE_META['cleaning'];
         return (
@@ -5307,15 +5337,19 @@ Deposit is non-refundable.
                       toast({ title: 'Invalid Price', description: 'Please enter a valid price', variant: 'destructive' });
                       return;
                     }
+                    const isQuickRepair = serviceType === 'jewellery-repair-quick' || serviceType === 'watch-repair-quick';
+                    const customerSuffix = isQuickRepair && selectedCustomer
+                      ? ` — ${selectedCustomer.firstName} ${selectedCustomer.lastName}`
+                      : '';
                     const serviceItem: CartItem = {
                       id: `${serviceType}-${Date.now()}`,
-                      name: meta.label,
+                      name: meta.label + customerSuffix,
                       price,
                       quantity: 1,
                       sku: meta.sku,
                     };
                     setCart(prev => [...prev, serviceItem]);
-                    toast({ title: 'Added to Cart', description: `${meta.label} — £${price.toFixed(2)}` });
+                    toast({ title: 'Added to Cart', description: `${meta.label}${customerSuffix} — £${price.toFixed(2)}` });
                     setShowServicePriceDialog(false);
                   }}
                   className={`flex-1 h-12 rounded-xl text-white ${meta.activeColor} hover:opacity-90`}
