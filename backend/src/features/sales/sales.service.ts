@@ -49,6 +49,17 @@ export class SalesService {
     tenantId: string,
     userId: string,
   ): Promise<SaleResponseDto> {
+    // Idempotency: if this clientSaleId was already synced, return the existing sale
+    if (createSaleDto.clientSaleId) {
+      const existing = await (this.prismaService.sales as any).findFirst({
+        where: { tenantId, clientSaleId: createSaleDto.clientSaleId },
+      });
+      if (existing) {
+        this.logger.log(`Idempotent sale replay: clientSaleId=${createSaleDto.clientSaleId} → ${existing.id}`);
+        return this.mapToResponseDto(existing);
+      }
+    }
+
     try {
       return await this.prismaService.$transaction(
         async (prisma) => {
@@ -234,7 +245,7 @@ export class SalesService {
               refundedAmount: 0,
               balanceDue: Math.max(0, totalAmount - totalPayments),
               notes: saleNotes,
-              // expectedDeliveryDate: createSaleDto.expectedDeliveryDate ? new Date(createSaleDto.expectedDeliveryDate) : null,
+              clientSaleId: createSaleDto.clientSaleId ?? null,
               createdBy: userId,
               updatedAt: new Date(),
               ...(saleItems.length > 0 && {

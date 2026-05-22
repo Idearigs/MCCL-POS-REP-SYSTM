@@ -267,6 +267,14 @@ export class CreateSaleDto {
   @IsOptional()
   @IsEnum(SaleStatus)
   status?: SaleStatus;
+
+  @ApiPropertyOptional({
+    description: 'Client-generated UUID for idempotency (used by offline sync to prevent duplicate sales)',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @IsOptional()
+  @IsString()
+  clientSaleId?: string;
 }
 
 export class UpdateSaleDto {

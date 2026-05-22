@@ -1,4 +1,6 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { connectionMonitor } from '@/services/connectionMonitor';
+import { offlineSyncService } from '@/services/offlineSyncService';
 import { normalizeImageUrl } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -327,6 +329,20 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [isSearchingCustomers, setIsSearchingCustomers] = useState(false);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [layawaySelectedCustomer, setLayawaySelectedCustomer] = useState<Customer | null>(null);
+
+  // Offline state
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
+  useEffect(() => {
+    connectionMonitor.start();
+    offlineSyncService.start();
+    setIsOnline(connectionMonitor.isOnline);
+    const unsubConn = connectionMonitor.subscribe(setIsOnline);
+    const unsubSync = offlineSyncService.subscribe(setPendingSyncCount);
+    offlineSyncService.getPendingCount().then(setPendingSyncCount);
+    return () => { unsubConn(); unsubSync(); };
+  }, []);
 
   // Quick Service Price Dialog (for Cleaning, Watch Battery, Watch Links, Spring Bar, Watch Straps)
   const [showServicePriceDialog, setShowServicePriceDialog] = useState(false);
@@ -1871,8 +1887,17 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         notes: finalNote,
       };
 
-      // Create the sale
+      // Create the sale (falls back to local queue if server is unreachable)
       const createdSale = await salesService.createSale(saleData);
+      const wasQueued = (createdSale as unknown as { _offlineQueued?: boolean })._offlineQueued;
+      if (wasQueued) {
+        toast({
+          title: 'Sale saved locally',
+          description: 'Server is unreachable. Receipt printed. Sale will sync automatically when connection is restored.',
+          duration: 6000,
+        });
+        offlineSyncService.getPendingCount().then(setPendingSyncCount);
+      }
 
       // Update repair statuses to COLLECTED (collected/finished)
       if (repairItems.length > 0) {
@@ -1948,7 +1973,30 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="h-full flex bg-gray-50 gap-6 p-6">
+    <div className="h-full flex flex-col bg-gray-50">
+      {/* Offline / pending-sync banner */}
+      {(!isOnline || pendingSyncCount > 0) && (
+        <div className={`flex items-center justify-center gap-2 text-sm font-medium py-2 px-4 ${
+          !isOnline
+            ? 'bg-red-600 text-white'
+            : 'bg-amber-500 text-white'
+        }`}>
+          {!isOnline ? (
+            <>
+              <span className="inline-block h-2 w-2 rounded-full bg-white animate-pulse" />
+              Server unreachable — sales are being saved locally and will sync automatically when connection is restored
+              {pendingSyncCount > 0 && <span className="ml-2 bg-white/20 rounded px-2">{pendingSyncCount} pending</span>}
+            </>
+          ) : (
+            <>
+              <span className="inline-block h-2 w-2 rounded-full bg-white animate-pulse" />
+              Syncing {pendingSyncCount} offline sale{pendingSyncCount !== 1 ? 's' : ''} to server…
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="flex-1 flex bg-gray-50 gap-6 p-6 min-h-0">
       {/* Left Side - Categories/Products */}
       <div className="flex-1 flex flex-col bg-white rounded-2xl overflow-hidden shadow-lg p-6">
         <div className="flex items-center justify-between mb-6">
@@ -6158,6 +6206,7 @@ Deposit is non-refundable.
         </DialogContent>
       </Dialog>
 
+      </div>{/* end flex-1 inner wrapper */}
     </div>
   );
 };
