@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import LoadingSpinner from './loading-spinner';
+import { WifiOff, Wifi } from 'lucide-react';
 
 interface NetworkStatusProps {
   children?: React.ReactNode;
@@ -7,66 +7,45 @@ interface NetworkStatusProps {
 
 const NetworkStatus: React.FC<NetworkStatusProps> = ({ children }) => {
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
-  const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
-  const [reconnectingTime, setReconnectingTime] = useState<number>(0);
+  const [showReconnected, setShowReconnected] = useState<boolean>(false);
 
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      // Show reconnecting message for a moment before hiding
-      setIsReconnecting(true);
-      setTimeout(() => {
-        setIsReconnecting(false);
-      }, 2000);
+      setShowReconnected(true);
+      setTimeout(() => setShowReconnected(false), 3000);
     };
 
     const handleOffline = () => {
       setIsOnline(false);
-      setReconnectingTime(0);
+      setShowReconnected(false);
     };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Start timer when offline
-    let interval: NodeJS.Timeout | null = null;
-    if (!isOnline) {
-      interval = setInterval(() => {
-        setReconnectingTime(prev => prev + 1);
-      }, 1000);
-    }
-
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
-      if (interval) clearInterval(interval);
     };
-  }, [isOnline]);
-
-  if (isOnline && !isReconnecting) {
-    return <>{children}</>;
-  }
+  }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
-      <div className="bg-white shadow-lg rounded-xl p-6 flex flex-col items-center max-w-md mx-auto">
-        <LoadingSpinner size="lg" color="border-blue-500" />
-        
-        {!isOnline ? (
-          <>
-            <p className="mt-4 text-gray-800 font-medium text-center">Internet connection lost</p>
-            <p className="text-gray-600 mt-2 text-center">
-              Attempting to reconnect... ({reconnectingTime}s)
-            </p>
-            <p className="text-gray-500 text-sm mt-4 text-center">
-              Please check your internet connection
-            </p>
-          </>
-        ) : (
-          <p className="mt-4 text-gray-800 font-medium">Reconnected! Loading your data...</p>
-        )}
-      </div>
-    </div>
+    <>
+      {!isOnline && (
+        <div className="fixed top-0 left-0 right-0 z-[100] flex items-center justify-center gap-2 bg-red-600 text-white text-sm py-2 px-4 shadow-md">
+          <WifiOff size={15} />
+          <span>You are offline — sales are being saved locally and will sync when connection returns</span>
+        </div>
+      )}
+      {showReconnected && (
+        <div className="fixed top-0 left-0 right-0 z-[100] flex items-center justify-center gap-2 bg-green-600 text-white text-sm py-2 px-4 shadow-md">
+          <Wifi size={15} />
+          <span>Back online — syncing queued sales...</span>
+        </div>
+      )}
+      {children}
+    </>
   );
 };
 
