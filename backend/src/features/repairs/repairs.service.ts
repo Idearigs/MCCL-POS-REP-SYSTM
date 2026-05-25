@@ -568,6 +568,19 @@ export class RepairsService {
     // Send SMS notification to customer if enabled and customer has phone
     if (sendSMS && existingRepair.customers?.phone) {
       try {
+        // Load shop name and phone from tenant settings
+        const tenant = await this.prismaService.tenants.findUnique({
+          where: { id: tenantId },
+          select: { settings: true },
+        });
+        const appSettings = (
+          (tenant?.settings as Record<string, unknown>)?.appSettings ?? {}
+        ) as Record<string, Record<string, string>>;
+        const shopName =
+          appSettings?.general?.storeName || 'MPS Jewelry';
+        const shopPhone =
+          appSettings?.general?.phone || '';
+
         const smsData: RepairStatusSMSData = {
           customerName: `${existingRepair.customers.firstName} ${existingRepair.customers.lastName}`,
           customerPhone: existingRepair.customers.phone,
@@ -578,8 +591,8 @@ export class RepairsService {
           estimatedCompletionDate: existingRepair.estimatedDueDate
             ? existingRepair.estimatedDueDate.toLocaleDateString('en-GB')
             : undefined,
-          shopName: 'MPS Jewelry', // Could be made configurable
-          shopPhone: '+44 1234 567890', // Could be made configurable
+          shopName,
+          shopPhone,
         };
 
         const smsResult = await this.smsService.sendRepairStatusSMS(smsData);

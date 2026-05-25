@@ -52,6 +52,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { repairService, Repair } from '@/services/repairService';
 import { customerService } from '@/services/customerService';
+import { useRepairTags } from '@/contexts/RepairTagsContext';
 
 // Type mappings between UI and backend
 type UIRepairStatus = 'received' | 'in-progress' | 'completed' | 'collected';
@@ -142,7 +143,20 @@ const statusToBackend: Partial<Record<UIRepairStatus | 'all', BackendRepairStatu
   'collected': 'COLLECTED',
 };
 
+const tagColorClasses: Record<string, string> = {
+  blue: 'bg-blue-100 text-blue-700 border border-blue-200',
+  yellow: 'bg-yellow-100 text-yellow-700 border border-yellow-200',
+  orange: 'bg-orange-100 text-orange-700 border border-orange-200',
+  red: 'bg-red-100 text-red-700 border border-red-200',
+  green: 'bg-green-100 text-green-700 border border-green-200',
+  purple: 'bg-purple-100 text-purple-700 border border-purple-200',
+  pink: 'bg-pink-100 text-pink-700 border border-pink-200',
+  gray: 'bg-gray-100 text-gray-700 border border-gray-200',
+  cyan: 'bg-cyan-100 text-cyan-700 border border-cyan-200',
+};
+
 const RepairsPage: React.FC = () => {
+  const { tags, getTag } = useRepairTags();
   const [repairJobs, setRepairJobs] = useState<UIRepairJob[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<UIRepairStatus | 'all'>('all');
@@ -579,10 +593,12 @@ const RepairsPage: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-navy/5">
+                    <TableHead className="font-semibold text-navy w-12"></TableHead>
                     <TableHead className="font-semibold text-navy">Date Created</TableHead>
                     <TableHead className="font-semibold text-navy">Repair ID</TableHead>
                     <TableHead className="font-semibold text-navy">Customer</TableHead>
                     <TableHead className="font-semibold text-navy">Item Description</TableHead>
+                    <TableHead className="font-semibold text-navy">Tag</TableHead>
                     <TableHead className="font-semibold text-navy">Status</TableHead>
                     <TableHead className="font-semibold text-navy">Due Date</TableHead>
                     <TableHead className="font-semibold text-navy">Est. Price</TableHead>
@@ -590,12 +606,30 @@ const RepairsPage: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {repairJobs.map((job) => (
+                  {repairJobs.map((job) => {
+                    const tag = job.tagId ? getTag(job.tagId) : null;
+                    return (
                     <TableRow
                       key={job.id}
                       className="cursor-pointer hover:bg-navy/5 transition-colors"
                       onClick={() => handleJobClick(job.id)}
                     >
+                      <TableCell className="p-1 pl-3">
+                        {job.images?.[0] ? (
+                          <div className="w-10 h-10 rounded-md overflow-hidden bg-gray-100 flex-shrink-0 border border-gray-200">
+                            <img
+                              src={job.images[0]}
+                              alt="Repair"
+                              className="w-full h-full object-cover"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 rounded-md bg-gray-100 border border-gray-200 flex items-center justify-center">
+                            <span className="text-gray-300 text-xs">—</span>
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="text-sm text-gray-600">
                         {new Date(job.createdAt).toLocaleDateString('en-GB')}
                       </TableCell>
@@ -603,7 +637,16 @@ const RepairsPage: React.FC = () => {
                         {job.repairNumber || job.id.substring(0, 8) + '...'}
                       </TableCell>
                       <TableCell className="font-medium text-navy">{job.customerName}</TableCell>
-                      <TableCell className="text-sm text-gray-600">{job.itemDescription}</TableCell>
+                      <TableCell className="text-sm text-gray-600 max-w-[180px] truncate">{job.itemDescription}</TableCell>
+                      <TableCell>
+                        {tag ? (
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${tagColorClasses[tag.color] || tagColorClasses.gray}`}>
+                            {tag.name}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <RepairStatusBadge status={job.status} />
                       </TableCell>
@@ -654,7 +697,8 @@ const RepairsPage: React.FC = () => {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
