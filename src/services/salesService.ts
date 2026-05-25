@@ -238,50 +238,12 @@ class SalesService {
   }
 
   async createSale(saleData: CreateSaleData): Promise<Sale> {
-    // Normal path — try server first, unchanged behaviour when online
-    if (connectionMonitor.isOnline) {
-      try {
-        const clientSaleId = crypto.randomUUID();
-        return await apiClient.post<Sale>(API_CONFIG.ENDPOINTS.CREATE_SALE, {
-          ...saleData,
-          clientSaleId,
-        });
-      } catch (error) {
-        const isNetworkError = !(error as { status?: number })?.status;
-        if (!isNetworkError) {
-          // Server returned an error (4xx/5xx) — don't queue, surface the error
-          console.error('Failed to create sale:', error);
-          throw error;
-        }
-        // Network error — fall through to offline queue below
-      }
+    try {
+      return await apiClient.post<Sale>(API_CONFIG.ENDPOINTS.CREATE_SALE, saleData);
+    } catch (error) {
+      console.error('Failed to create sale:', error);
+      throw error;
     }
-
-    // Offline path — queue locally and return an optimistic Sale object
-    const clientSaleId = crypto.randomUUID();
-    const tenantId = localStorage.getItem('tenantId') || '';
-    await enqueue({ clientSaleId, tenantId, saleData, queuedAt: Date.now() });
-    // Start sync service if not already running (picks up when server returns)
-    offlineSyncService.start();
-    // Return an optimistic sale so the receipt can be printed immediately
-    return {
-      id: `offline_${clientSaleId}`,
-      saleNumber: `OFF-${Date.now()}`,
-      tenantId,
-      items: [],
-      subtotal: 0,
-      taxAmount: 0,
-      discountAmount: 0,
-      totalAmount: (saleData as { totalAmount?: number }).totalAmount ?? 0,
-      paymentMethod: (saleData as { payments?: { method: string }[] }).payments?.[0]?.method ?? 'CASH',
-      paymentStatus: 'COMPLETED',
-      paidAmount: 0,
-      changeAmount: 0,
-      status: 'COMPLETED',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      _offlineQueued: true,
-    } as unknown as Sale;
   }
 
   async refundSale(saleId: string, refundData: RefundData): Promise<Sale> {
