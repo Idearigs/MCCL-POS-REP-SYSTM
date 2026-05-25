@@ -573,10 +573,8 @@ export class RepairsService {
           where: { id: tenantId },
           select: { settings: true },
         });
-        const appSettings = (
-          (tenant?.settings as Record<string, unknown>)
-            ?.appSettings ?? {}
-        ) as Record<string, Record<string, string>>;
+        const appSettings = ((tenant?.settings as Record<string, unknown>)
+          ?.appSettings ?? {}) as Record<string, Record<string, string>>;
         const shopName = appSettings?.general?.storeName || 'MPS Jewelry';
         const shopPhone = appSettings?.general?.phone || '';
 
