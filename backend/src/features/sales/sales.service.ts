@@ -55,7 +55,9 @@ export class SalesService {
         where: { tenantId, clientSaleId: createSaleDto.clientSaleId },
       });
       if (existing) {
-        this.logger.log(`Idempotent sale replay: clientSaleId=${createSaleDto.clientSaleId} → ${existing.id}`);
+        this.logger.log(
+          `Idempotent sale replay: clientSaleId=${createSaleDto.clientSaleId} → ${existing.id}`,
+        );
         return this.mapToResponseDto(existing);
       }
     }

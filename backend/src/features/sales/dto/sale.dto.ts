@@ -275,6 +275,7 @@ export class CreateSaleDto {
   @IsOptional()
   @IsString()
   clientSaleId?: string;
+
 }
 
 export class UpdateSaleDto {

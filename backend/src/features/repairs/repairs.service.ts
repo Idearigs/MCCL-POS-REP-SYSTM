@@ -574,12 +574,11 @@ export class RepairsService {
           select: { settings: true },
         });
         const appSettings = (
-          (tenant?.settings as Record<string, unknown>)?.appSettings ?? {}
+          (tenant?.settings as Record<string, unknown>)
+            ?.appSettings ?? {}
         ) as Record<string, Record<string, string>>;
-        const shopName =
-          appSettings?.general?.storeName || 'MPS Jewelry';
-        const shopPhone =
-          appSettings?.general?.phone || '';
+        const shopName = appSettings?.general?.storeName || 'MPS Jewelry';
+        const shopPhone = appSettings?.general?.phone || '';
 
         const smsData: RepairStatusSMSData = {
           customerName: `${existingRepair.customers.firstName} ${existingRepair.customers.lastName}`,
