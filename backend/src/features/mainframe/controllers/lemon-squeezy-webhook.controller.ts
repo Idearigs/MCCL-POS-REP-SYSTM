@@ -122,53 +122,64 @@ export class LemonSqueezyWebhookController {
       attrs.status ?? 'active',
     );
 
-    const renewsAt  = attrs.renews_at  ? new Date(attrs.renews_at)  : new Date(Date.now() + 30 * 86400_000);
-    const createdAt = attrs.created_at ? new Date(attrs.created_at) : new Date();
+    const renewsAt = attrs.renews_at
+      ? new Date(attrs.renews_at)
+      : new Date(Date.now() + 30 * 86400_000);
+    const createdAt = attrs.created_at
+      ? new Date(attrs.created_at)
+      : new Date();
 
     await this.prisma.mf_subscriptions.updateMany({
       where: { customerProfileId: profileId },
       data: {
         lsSubscriptionId: lsId,
-        lsCustomerId:     String(attrs.customer_id ?? ''),
-        lsVariantId:      String(attrs.variant_id ?? ''),
-        lsStatus:         attrs.status ?? 'active',
-        isActive:         true,
+        lsCustomerId: String(attrs.customer_id ?? ''),
+        lsVariantId: String(attrs.variant_id ?? ''),
+        lsStatus: attrs.status ?? 'active',
+        isActive: true,
         currentPeriodStart: createdAt,
-        currentPeriodEnd:   renewsAt,
-        nextBillingDate:    renewsAt,
-        lastPaymentAt:      new Date(),
+        currentPeriodEnd: renewsAt,
+        nextBillingDate: renewsAt,
+        lastPaymentAt: new Date(),
       },
     });
 
-    // Activate the tenant
     await this.prisma.mf_customer_profiles.updateMany({
       where: { id: profileId },
       data: { status: status as any },
     });
 
-    this.logger.log(`[LS] Subscription ACTIVATED for profileId=${profileId}  lsId=${lsId}`);
+    this.logger.log(
+      `[LS] Subscription ACTIVATED for profileId=${profileId}  lsId=${lsId}`,
+    );
   }
 
   private async handleSubscriptionUpdated(payload: LsWebhookPayload) {
     const attrs = payload.data.attributes;
-    const lsId  = String(payload.data.id);
-    const status = LemonSqueezyService.mapLsStatusToTenantStatus(attrs.status ?? 'active');
+    const lsId = String(payload.data.id);
+    const status = LemonSqueezyService.mapLsStatusToTenantStatus(
+      attrs.status ?? 'active',
+    );
 
     const sub = await this.prisma.mf_subscriptions.findFirst({
       where: { lsSubscriptionId: lsId },
     });
     if (!sub) {
-      this.logger.warn(`[LS] subscription_updated — no subscription found for lsId=${lsId}`);
+      this.logger.warn(
+        `[LS] subscription_updated — no subscription found for lsId=${lsId}`,
+      );
       return;
     }
 
-    const renewsAt = attrs.renews_at ? new Date(attrs.renews_at) : sub.nextBillingDate;
+    const renewsAt = attrs.renews_at
+      ? new Date(attrs.renews_at)
+      : sub.nextBillingDate;
 
     await this.prisma.mf_subscriptions.update({
       where: { id: sub.id },
       data: {
-        lsStatus:        attrs.status ?? sub.lsStatus,
-        isActive:        status === 'ACTIVE',
+        lsStatus: attrs.status ?? sub.lsStatus,
+        isActive: status === 'ACTIVE',
         nextBillingDate: renewsAt,
         currentPeriodEnd: renewsAt,
       },
@@ -179,12 +190,14 @@ export class LemonSqueezyWebhookController {
       data: { status: status as any },
     });
 
-    this.logger.log(`[LS] Subscription updated  lsId=${lsId}  status=${attrs.status}`);
+    this.logger.log(
+      `[LS] Subscription updated  lsId=${lsId}  status=${attrs.status}`,
+    );
   }
 
   private async handleSubscriptionCancelled(payload: LsWebhookPayload) {
     const attrs = payload.data.attributes;
-    const lsId  = String(payload.data.id);
+    const lsId = String(payload.data.id);
 
     const sub = await this.prisma.mf_subscriptions.findFirst({
       where: { lsSubscriptionId: lsId },
@@ -194,9 +207,9 @@ export class LemonSqueezyWebhookController {
     await this.prisma.mf_subscriptions.update({
       where: { id: sub.id },
       data: {
-        lsStatus:          'cancelled',
-        isActive:          false,
-        cancelledAt:       new Date(),
+        lsStatus: 'cancelled',
+        isActive: false,
+        cancelledAt: new Date(),
         cancellationReason: 'Cancelled via LemonSqueezy',
       },
     });
@@ -211,7 +224,7 @@ export class LemonSqueezyWebhookController {
 
   private async handleSubscriptionExpired(payload: LsWebhookPayload) {
     const lsId = String(payload.data.id);
-    const sub  = await this.prisma.mf_subscriptions.findFirst({
+    const sub = await this.prisma.mf_subscriptions.findFirst({
       where: { lsSubscriptionId: lsId },
     });
     if (!sub) return;
@@ -231,23 +244,25 @@ export class LemonSqueezyWebhookController {
 
   private async handlePaymentSuccess(payload: LsWebhookPayload) {
     const attrs = payload.data.attributes;
-    const lsId  = String(payload.data.id);
+    const lsId = String(payload.data.id);
 
     const sub = await this.prisma.mf_subscriptions.findFirst({
       where: { lsSubscriptionId: lsId },
     });
     if (!sub) return;
 
-    const renewsAt = attrs.renews_at ? new Date(attrs.renews_at) : sub.nextBillingDate;
+    const renewsAt = attrs.renews_at
+      ? new Date(attrs.renews_at)
+      : sub.nextBillingDate;
 
     await this.prisma.mf_subscriptions.update({
       where: { id: sub.id },
       data: {
-        lsStatus:         'active',
-        isActive:         true,
-        lastPaymentAt:    new Date(),
+        lsStatus: 'active',
+        isActive: true,
+        lastPaymentAt: new Date(),
         currentPeriodEnd: renewsAt,
-        nextBillingDate:  renewsAt,
+        nextBillingDate: renewsAt,
       },
     });
 
@@ -261,7 +276,7 @@ export class LemonSqueezyWebhookController {
 
   private async handlePaymentFailed(payload: LsWebhookPayload) {
     const lsId = String(payload.data.id);
-    const sub  = await this.prisma.mf_subscriptions.findFirst({
+    const sub = await this.prisma.mf_subscriptions.findFirst({
       where: { lsSubscriptionId: lsId },
     });
     if (!sub) return;
