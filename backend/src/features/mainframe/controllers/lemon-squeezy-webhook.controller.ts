@@ -37,7 +37,7 @@ export class LemonSqueezyWebhookController {
       throw new BadRequestException('Invalid signature');
     }
 
-    const event   = req.headers['x-event-name'] as string;
+    const event = req.headers['x-event-name'] as string;
     const payload = req.body as LsWebhookPayload;
 
     this.logger.log(`[LS Webhook] ${event}`);
@@ -86,14 +86,16 @@ export class LemonSqueezyWebhookController {
 
   private async handleOrderCreated(payload: LsWebhookPayload) {
     // The initial order — we use this to link profileId from custom_data
-    const customData = payload.meta?.custom_data as Record<string, string> | undefined;
-    const profileId  = customData?.profileId;
+    const customData = payload.meta?.custom_data as
+      | Record<string, string>
+      | undefined;
+    const profileId = customData?.profileId;
     if (!profileId) {
       this.logger.warn('[LS] order_created missing profileId in custom_data');
       return;
     }
-    const attrs    = payload.data.attributes;
-    const orderId  = String(payload.data.id);
+    const attrs = payload.data.attributes;
+    const orderId = String(payload.data.id);
 
     // Store the orderId on the subscription record so we can match it later
     await this.prisma.mf_subscriptions.updateMany({
@@ -105,16 +107,20 @@ export class LemonSqueezyWebhookController {
   }
 
   private async handleSubscriptionCreated(payload: LsWebhookPayload) {
-    const customData  = payload.meta?.custom_data as Record<string, string> | undefined;
-    const profileId   = customData?.profileId;
+    const customData = payload.meta?.custom_data as
+      | Record<string, string>
+      | undefined;
+    const profileId = customData?.profileId;
     if (!profileId) {
       this.logger.warn('[LS] subscription_created missing profileId');
       return;
     }
 
-    const attrs  = payload.data.attributes;
-    const lsId   = String(payload.data.id);
-    const status = LemonSqueezyService.mapLsStatusToTenantStatus(attrs.status ?? 'active');
+    const attrs = payload.data.attributes;
+    const lsId = String(payload.data.id);
+    const status = LemonSqueezyService.mapLsStatusToTenantStatus(
+      attrs.status ?? 'active',
+    );
 
     const renewsAt  = attrs.renews_at  ? new Date(attrs.renews_at)  : new Date(Date.now() + 30 * 86400_000);
     const createdAt = attrs.created_at ? new Date(attrs.created_at) : new Date();
