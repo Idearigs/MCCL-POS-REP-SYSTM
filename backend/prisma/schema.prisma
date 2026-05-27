@@ -842,6 +842,12 @@ model mf_subscriptions {
   paymentMethod      String?
   lastPaymentAt      DateTime?
   lastPaymentAmount  Decimal?
+  // LemonSqueezy fields
+  lsSubscriptionId   String?              @unique
+  lsCustomerId       String?
+  lsVariantId        String?
+  lsOrderId          String?
+  lsStatus           String?
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   invoices           mf_invoices[]
@@ -849,6 +855,7 @@ model mf_subscriptions {
 
   @@index([plan])
   @@index([nextBillingDate])
+  @@index([lsSubscriptionId])
 }
 
 model mf_invoices {

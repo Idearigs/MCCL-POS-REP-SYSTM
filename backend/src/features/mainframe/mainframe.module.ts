@@ -18,6 +18,8 @@ import { MainframeAdminsService } from './services/mainframe-admins.service';
 import { BackupController } from './controllers/backup.controller';
 import { SubdomainService } from './services/subdomain.service';
 import { CredentialsExportService } from './services/credentials-export.service';
+import { LemonSqueezyService } from './services/lemon-squeezy.service';
+import { LemonSqueezyWebhookController } from './controllers/lemon-squeezy-webhook.controller';
 import { PrismaModule } from '../../core/prisma/prisma.module';
 
 @Module({
@@ -44,6 +46,7 @@ import { PrismaModule } from '../../core/prisma/prisma.module';
     FeatureRequestsController,
     MainframeAdminsController,
     BackupController,
+    LemonSqueezyWebhookController,
   ],
   providers: [
     CustomerProfilesService,
@@ -55,6 +58,7 @@ import { PrismaModule } from '../../core/prisma/prisma.module';
     MainframeAdminsService,
     SubdomainService,
     CredentialsExportService,
+    LemonSqueezyService,
   ],
   exports: [
     CustomerProfilesService,
