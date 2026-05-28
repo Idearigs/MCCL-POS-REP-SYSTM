@@ -58,10 +58,22 @@ export default function MobileAddRepair() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const fetchCustomers = () => {
     customerService.getCustomers()
       .then(r => setCustomers(Array.isArray(r) ? r : (r as any).data || []))
       .catch(() => {});
+  };
+
+  // Initial load
+  useEffect(() => { fetchCustomers(); }, []);
+
+  // Re-fetch whenever the user navigates back to this page (tab becomes visible)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchCustomers();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
   const set = (field: keyof typeof emptyForm) =>
@@ -262,7 +274,7 @@ export default function MobileAddRepair() {
                   type="text"
                   value={form.customerSearch}
                   onChange={set('customerSearch')}
-                  onFocus={() => form.customerSearch.trim() && setShowDropdown(true)}
+                  onFocus={() => { fetchCustomers(); if (form.customerSearch.trim()) setShowDropdown(true); }}
                   placeholder="Name, phone or email…"
                   className="flex-1 text-base text-gray-900 bg-transparent outline-none placeholder:text-gray-300"
                   autoComplete="off"
