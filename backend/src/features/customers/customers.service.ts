@@ -35,34 +35,18 @@ export class CustomersService {
     tenantId: string,
   ): Promise<CustomerResponseDto> {
     try {
-      // Check if customer already exists with same email in tenant
-      if (createCustomerDto.email) {
-        const existingCustomer = await this.customerRepo.findFirst({
-          where: {
-            email: createCustomerDto.email,
-            tenantId,
-          },
+      // If a customer with the same phone already exists in this tenant, return
+      // that customer rather than blocking — phone can be shared (e.g. family).
+      if (createCustomerDto.phone) {
+        const existingPhoneCustomer = await this.customerRepo.findFirst({
+          where: { phone: createCustomerDto.phone, tenantId },
         });
-
-        if (existingCustomer) {
-          throw new ConflictException(
-            'Customer already exists with this email',
+        if (existingPhoneCustomer) {
+          this.logger.log(
+            `Customer with phone ${createCustomerDto.phone} already exists — returning existing record`,
           );
+          return this.mapToResponseDto(existingPhoneCustomer);
         }
-      }
-
-      // Check if customer already exists with same phone in tenant
-      const existingPhoneCustomer = await this.customerRepo.findFirst({
-        where: {
-          phone: createCustomerDto.phone,
-          tenantId,
-        },
-      });
-
-      if (existingPhoneCustomer) {
-        throw new ConflictException(
-          'Customer already exists with this phone number',
-        );
       }
 
       // GDPR compliance check
