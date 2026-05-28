@@ -14,10 +14,11 @@ export class LemonSqueezyService {
   private readonly webhookSecret: string;
 
   constructor(private config: ConfigService) {
-    this.apiKey       = this.config.get<string>('LEMONSQUEEZY_API_KEY') ?? '';
-    this.storeId      = this.config.get<string>('LS_STORE_ID') ?? '333794';
-    this.variantId    = this.config.get<string>('LS_VARIANT_ID') ?? '1710752';
-    this.webhookSecret = this.config.get<string>('LEMONSQUEEZY_WEBHOOK_SECRET') ?? '';
+    this.apiKey = this.config.get<string>('LEMONSQUEEZY_API_KEY') ?? '';
+    this.storeId = this.config.get<string>('LS_STORE_ID') ?? '333794';
+    this.variantId = this.config.get<string>('LS_VARIANT_ID') ?? '1710752';
+    this.webhookSecret =
+      this.config.get<string>('LEMONSQUEEZY_WEBHOOK_SECRET') ?? '';
   }
 
   private get headers() {
@@ -73,7 +74,8 @@ export class LemonSqueezyService {
     });
 
     const checkoutUrl: string = response.data?.data?.attributes?.url;
-    if (!checkoutUrl) throw new Error('LemonSqueezy did not return a checkout URL');
+    if (!checkoutUrl)
+      throw new Error('LemonSqueezy did not return a checkout URL');
 
     this.logger.log(`Checkout created for ${opts.email} → ${checkoutUrl}`);
     return checkoutUrl;
@@ -90,7 +92,9 @@ export class LemonSqueezyService {
       );
       return response.data?.data?.attributes?.urls?.customer_portal ?? null;
     } catch (err) {
-      this.logger.warn(`Could not fetch portal URL for sub ${lsSubscriptionId}: ${err}`);
+      this.logger.warn(
+        `Could not fetch portal URL for sub ${lsSubscriptionId}: ${err}`,
+      );
       return null;
     }
   }
@@ -101,7 +105,9 @@ export class LemonSqueezyService {
    */
   verifySignature(rawBody: string, signature: string): boolean {
     if (!this.webhookSecret) {
-      this.logger.warn('LEMONSQUEEZY_WEBHOOK_SECRET not set — skipping signature check');
+      this.logger.warn(
+        'LEMONSQUEEZY_WEBHOOK_SECRET not set — skipping signature check',
+      );
       return true; // allow in dev if secret not configured yet
     }
     const digest = crypto
@@ -109,7 +115,10 @@ export class LemonSqueezyService {
       .update(rawBody)
       .digest('hex');
     try {
-      return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature));
+      return crypto.timingSafeEqual(
+        Buffer.from(digest),
+        Buffer.from(signature),
+      );
     } catch {
       return false;
     }

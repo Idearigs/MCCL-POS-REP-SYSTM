@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Put, Body, Param, Query, InternalServerErrorException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Body,
+  Param,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { SubscriptionsService } from '../services/subscriptions.service';
 import { LemonSqueezyService } from '../services/lemon-squeezy.service';
 import { PrismaService } from '../../../core/prisma/prisma.service';
@@ -58,25 +66,29 @@ export class SubscriptionsController {
   /** Create a LemonSqueezy hosted checkout URL — accepts subdomain (tenant-facing). */
   @Post('create-checkout')
   async createCheckout(@Body('subdomain') subdomain: string) {
-    if (!subdomain) throw new InternalServerErrorException('subdomain is required');
+    if (!subdomain)
+      throw new InternalServerErrorException('subdomain is required');
 
     const profile = await this.prisma.mf_customer_profiles.findUnique({
       where: { subdomain: subdomain.toLowerCase() },
       select: { id: true, businessEmail: true, businessName: true },
     });
 
-    if (!profile) throw new InternalServerErrorException('Tenant profile not found');
+    if (!profile)
+      throw new InternalServerErrorException('Tenant profile not found');
 
     try {
       const checkoutUrl = await this.lemonSqueezy.createCheckout({
-        email:     profile.businessEmail,
-        name:      profile.businessName,
+        email: profile.businessEmail,
+        name: profile.businessName,
         profileId: profile.id,
-        tenantId:  subdomain,
+        tenantId: subdomain,
       });
       return { checkoutUrl };
     } catch (err) {
-      throw new InternalServerErrorException(`Failed to create checkout: ${err}`);
+      throw new InternalServerErrorException(
+        `Failed to create checkout: ${err}`,
+      );
     }
   }
 
@@ -106,7 +118,9 @@ export class SubscriptionsController {
     });
     if (!sub?.lsSubscriptionId) return { portalUrl: null };
 
-    const portalUrl = await this.lemonSqueezy.getCustomerPortalUrl(sub.lsSubscriptionId);
+    const portalUrl = await this.lemonSqueezy.getCustomerPortalUrl(
+      sub.lsSubscriptionId,
+    );
     return { portalUrl };
   }
 }
