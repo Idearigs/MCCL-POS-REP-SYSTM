@@ -21,9 +21,9 @@ interface POSKeyboardConfig {
   setShowAltOverlay: (show: boolean) => void;
 }
 
-// Hardware barcode scanners fire chars < 50 ms apart then send Enter.
+// Hardware barcode scanners fire chars < 20 ms apart then send Enter.
 // Manual typing is typically > 100 ms per char.
-const SCANNER_THRESHOLD_MS = 50;
+const SCANNER_THRESHOLD_MS = 20;
 const MIN_BARCODE_LENGTH = 4;
 const ALT_HOLD_MS = 2000;
 
@@ -74,6 +74,19 @@ export function usePOSKeyboard(config: POSKeyboardConfig) {
       }
 
       // ── Named shortcuts ──────────────────────────────────────────────────
+
+      // Block F5 / Ctrl+R refresh when cart is not empty — prevent accidental data loss
+      if ((e.key === 'F5' || (e.key === 'r' && e.ctrlKey)) && cfg.cart.length > 0) {
+        e.preventDefault();
+        return;
+      }
+
+      // Space: checkout when cart has items and focus is not in a text input
+      if (e.key === ' ' && !inInput && !e.ctrlKey && !e.shiftKey && cfg.cart.length > 0) {
+        e.preventDefault();
+        cfg.onCheckout();
+        return;
+      }
 
       // F8 or /: focus search bar
       if (e.key === 'F8' || (e.key === '/' && !inInput)) {

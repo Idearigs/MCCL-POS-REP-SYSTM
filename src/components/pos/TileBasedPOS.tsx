@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { usePOSKeyboard } from '@/hooks/usePOSKeyboard';
-import { QRScanner } from '@/components/stock-taking/QRScanner';
+import QRCode from 'react-qr-code';
+import CartTabBar, { CartTabState } from './CartTabBar';
+import CartItemPopover, { LineDiscount } from './CartItemPopover';
 import { connectionMonitor } from '@/services/connectionMonitor';
 import { offlineSyncService } from '@/services/offlineSyncService';
 import { normalizeImageUrl } from '@/lib/utils';
@@ -91,6 +93,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useOutlet } from '@/contexts/OutletContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { printThermalReceipt } from '@/utils/thermalReceipt';
+import { userService } from '@/services/userService';
 import { PrinterStatusBadge } from './PrinterStatusBadge';
 import {
   Dialog,
@@ -111,12 +114,22 @@ interface CartItem {
   name: string;
   price: number;
   quantity: number;
-  stock?: number; // Available stock for out-of-stock validation
+  stock?: number;
   image?: string;
   sku?: string;
-  isRepair?: boolean; // Flag to identify repair items
-  repairId?: string;  // Original repair ID if it's a repair
-  condition?: string; // BRAND_NEW | USED — recorded in sale notes
+  isRepair?: boolean;
+  repairId?: string;
+  condition?: string;
+  // Line-level modifiers
+  lineDiscount?: LineDiscount;
+  staffId?: string;
+  staffName?: string;
+  // Spec sheet extras (from inventory)
+  material?: string;
+  weight?: string;
+  purity?: string;
+  category?: string;
+  serialNumber?: string;
 }
 
 interface TileBasedPOSProps {
@@ -161,7 +174,37 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [selectedCartItemId, setSelectedCartItemId] = useState<string | null>(null);
   const [showClearCartConfirm, setShowClearCartConfirm] = useState(false);
   const [showAltOverlay, setShowAltOverlay] = useState(false);
-  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showMobileQR, setShowMobileQR] = useState(false);
+
+  // Multi-cart tab state
+  const INIT_TAB_ID = 'tab-1';
+  const [activeTabId, setActiveTabId] = useState(INIT_TAB_ID);
+  const [cartTabs, setCartTabs] = useState<CartTabState[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('mps_cart_tabs') || '[]');
+    } catch { return []; }
+  });
+
+  // Cart item popover state
+  const [popoverItemId, setPopoverItemId] = useState<string | null>(null);
+  const popoverAnchorRefs = useRef<Record<string, React.RefObject<HTMLDivElement>>>({});
+  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>([]);
+
+  // CRM badge state (counts for selected customer)
+  const [customerCRM, setCustomerCRM] = useState<{ repairs: number; layaways: number } | null>(null);
+
+  // Void audit log state
+  const [showVoidLog, setShowVoidLog] = useState(false);
+  const [voidLog, setVoidLog] = useState<Array<{
+    timestamp: string; name: string; sku?: string; price: number; quantity: number; userName: string;
+  }>>(() => {
+    try { return JSON.parse(localStorage.getItem('mps_void_log') || '[]'); } catch { return []; }
+  });
+
+  // PIN swap / operator switch state
+  const [showPinSwap, setShowPinSwap] = useState(false);
+  const [activeOperatorName, setActiveOperatorName] = useState<string>('');
+  const [pinSwapUsers, setPinSwapUsers] = useState<{ id: string; name: string }[]>([]);
 
   // Load cart from localStorage on mount
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -1118,13 +1161,45 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     }).filter(item => item.quantity > 0));
   };
 
-  // Remove from cart
-  const removeFromCart = (id: string) => {
-    setCart(cart.filter(item => item.id !== id));
+  // Line-level total (accounts for per-item discount)
+  const getLineTotal = (item: CartItem): number => {
+    const raw = item.price * item.quantity;
+    if (!item.lineDiscount) return raw;
+    if (item.lineDiscount.type === 'percent') return raw * (1 - item.lineDiscount.value / 100);
+    return Math.max(0, raw - item.lineDiscount.value);
   };
 
-  // Calculate totals
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  // Remove from cart — with void audit logging
+  const removeFromCart = (id: string) => {
+    const item = cart.find(i => i.id === id);
+    if (item) {
+      const entry = {
+        timestamp: new Date().toISOString(),
+        name: item.name,
+        sku: item.sku,
+        price: item.price,
+        quantity: item.quantity,
+        userName: activeOperatorName || auth.user?.name || 'Staff',
+      };
+      const updated = [entry, ...voidLog].slice(0, 100);
+      setVoidLog(updated);
+      localStorage.setItem('mps_void_log', JSON.stringify(updated));
+    }
+    setCart(cart.filter(i => i.id !== id));
+  };
+
+  // Update line-item discount
+  const updateLineDiscount = (itemId: string, discount: LineDiscount | undefined) => {
+    setCart(cart.map(item => item.id === itemId ? { ...item, lineDiscount: discount } : item));
+  };
+
+  // Update line-item staff commission
+  const updateLineStaff = (itemId: string, staffId: string, staffName: string) => {
+    setCart(cart.map(item => item.id === itemId ? { ...item, staffId, staffName } : item));
+  };
+
+  // Calculate totals using per-line totals
+  const subtotal = cart.reduce((sum, item) => sum + getLineTotal(item), 0);
   const discount = subtotal * (discountPercentage / 100);
   const afterDiscount = subtotal - discount;
   const tax = 0; // No VAT - prices already include VAT
@@ -1632,6 +1707,155 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     setSelectedPaymentMethod('CASH');
   };
 
+  // ── Multi-cart tab management ────────────────────────────────────────────
+
+  // Build current snapshot of active tab
+  const buildTabSnapshot = useCallback(
+    (id: string, label?: string): CartTabState => ({
+      id,
+      label: label ?? cartTabs.find((t) => t.id === id)?.label ?? id,
+      cart,
+      selectedCustomer,
+      discountPercentage,
+    }),
+    [cart, selectedCustomer, discountPercentage, cartTabs],
+  );
+
+  const persistTabs = (tabs: CartTabState[]) => {
+    setCartTabs(tabs);
+    localStorage.setItem('mps_cart_tabs', JSON.stringify(tabs));
+  };
+
+  const switchTab = (nextId: string) => {
+    if (nextId === activeTabId) return;
+    // Save current state into tabs
+    const saved = buildTabSnapshot(activeTabId);
+    const updated = cartTabs.some((t) => t.id === activeTabId)
+      ? cartTabs.map((t) => (t.id === activeTabId ? saved : t))
+      : [...cartTabs, saved];
+    // Load next tab
+    const next = updated.find((t) => t.id === nextId);
+    setActiveTabId(nextId);
+    setCart(next?.cart ?? []);
+    setSelectedCustomer(next?.selectedCustomer ?? null);
+    setDiscountPercentage(next?.discountPercentage ?? 0);
+    persistTabs(updated);
+  };
+
+  const addNewTab = () => {
+    const newId = `tab-${Date.now()}`;
+    const num = cartTabs.length + 2; // +2 because first tab is "Cart 1"
+    const saved = buildTabSnapshot(activeTabId);
+    const tabs = cartTabs.some((t) => t.id === activeTabId)
+      ? cartTabs.map((t) => (t.id === activeTabId ? saved : t))
+      : [...cartTabs, saved];
+    const newTab: CartTabState = { id: newId, label: `Cart ${num}`, cart: [], selectedCustomer: null, discountPercentage: 0 };
+    const updated = [...tabs, newTab];
+    setActiveTabId(newId);
+    setCart([]);
+    setSelectedCustomer(null);
+    setDiscountPercentage(0);
+    persistTabs(updated);
+  };
+
+  const closeTab = (tabId: string) => {
+    if (cartTabs.length <= 1 || (cartTabs.length === 0)) return; // keep at least one
+    const remaining = cartTabs.filter((t) => t.id !== tabId);
+    if (tabId === activeTabId) {
+      const next = remaining[0];
+      setActiveTabId(next.id);
+      setCart(next.cart);
+      setSelectedCustomer(next.selectedCustomer);
+      setDiscountPercentage(next.discountPercentage);
+    }
+    persistTabs(remaining);
+  };
+
+  // Sync current cart into tabs array (passive, no switch)
+  useEffect(() => {
+    if (cartTabs.length === 0) {
+      // Bootstrap first tab
+      const first: CartTabState = { id: INIT_TAB_ID, label: 'Cart 1', cart, selectedCustomer, discountPercentage };
+      setCartTabs([first]);
+      localStorage.setItem('mps_cart_tabs', JSON.stringify([first]));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Computed tabs list for rendering (merge live state of active tab)
+  const renderedTabs: CartTabState[] = useMemo(() => {
+    const live: CartTabState = { id: activeTabId, label: cartTabs.find((t) => t.id === activeTabId)?.label ?? 'Cart 1', cart, selectedCustomer, discountPercentage };
+    if (cartTabs.length === 0) return [live];
+    return cartTabs.map((t) => (t.id === activeTabId ? live : t));
+  }, [cartTabs, activeTabId, cart, selectedCustomer, discountPercentage]);
+
+  // ── CRM badge: load repair + layaway counts when customer selected ────────
+  useEffect(() => {
+    if (!selectedCustomer?.id) { setCustomerCRM(null); return; }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [repairsResult, salesResult] = await Promise.all([
+          repairService.getRepairs({ customerId: selectedCustomer.id, page: 1, limit: 1 } as any),
+          salesService.getSales(1, 1, { customerId: selectedCustomer.id, status: 'INSTALLMENT' } as any),
+        ]);
+        if (!cancelled) {
+          setCustomerCRM({
+            repairs: (repairsResult as any).total ?? (repairsResult as any).meta?.total ?? 0,
+            layaways: (salesResult as any).total ?? (salesResult as any).meta?.total ?? 0,
+          });
+        }
+      } catch { if (!cancelled) setCustomerCRM(null); }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [selectedCustomer?.id]);
+
+  // ── Staff list for commission tagging + PIN swap ─────────────────────────
+  useEffect(() => {
+    userService.getUsers(undefined, true, 1, 50)
+      .then((res) => {
+        const users = (res as any).data ?? (res as any).users ?? res;
+        if (Array.isArray(users)) {
+          const mapped = users.map((u: any) => ({
+            id: u.id,
+            name: u.firstName ? `${u.firstName} ${u.lastName}`.trim() : u.name ?? u.email,
+          }));
+          setStaffList(mapped);
+          setPinSwapUsers(mapped);
+          // Default active operator to logged-in user if not already set
+          if (!activeOperatorName && auth.user?.name) {
+            setActiveOperatorName(auth.user.name);
+          }
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Exit guard: block browser navigation when any cart has items ──────────
+  useEffect(() => {
+    const totalItems = renderedTabs.reduce((sum, t) => sum + t.cart.length, 0);
+    const handler = (e: BeforeUnloadEvent) => {
+      if (totalItems > 0) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [renderedTabs]);
+
+  // In-app navigation guard via history.pushState interception
+  useEffect(() => {
+    const totalItems = renderedTabs.reduce((s, t) => s + t.cart.length, 0);
+    if (totalItems === 0) return;
+    const original = window.history.pushState.bind(window.history);
+    window.history.pushState = (...args) => {
+      if (!window.confirm(`You have ${totalItems} item(s) in your cart. Leave anyway?`)) return;
+      window.history.pushState = original;
+      original(...args);
+    };
+    return () => { window.history.pushState = original; };
+  }, [renderedTabs]);
+
   // Monthly Account — search customers (monthly payers first) by name/phone
   const handleMonthlySearch = async (query: string) => {
     setMonthlySearch(query);
@@ -2113,11 +2337,11 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                     className="pl-10 w-80 bg-white border-gray-300"
                   />
                 </div>
-                {/* QR / Camera scan button */}
+                {/* Mobile Pages QR button */}
                 <button
-                  onClick={() => setShowQRScanner(true)}
-                  className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100 transition-colors"
-                  title="Scan QR / Barcode"
+                  onClick={() => setShowMobileQR(true)}
+                  className="flex items-center justify-center w-9 h-9 rounded-lg bg-violet-50 border border-violet-200 text-violet-600 hover:bg-violet-100 transition-colors"
+                  title="Mobile pages QR codes"
                 >
                   <Camera className="h-4 w-4" />
                 </button>
@@ -2151,6 +2375,16 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 Back to Categories
               </Button>
             )}
+
+            {/* Operator switch button */}
+            <button
+              onClick={() => setShowPinSwap(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors text-xs font-medium"
+              title="Switch operator"
+            >
+              <Users className="h-3.5 w-3.5" />
+              <span className="max-w-[80px] truncate">{activeOperatorName || auth.user?.name || 'Staff'}</span>
+            </button>
 
             {/* Exit POS — always visible */}
             <button
@@ -3333,8 +3567,17 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
       {/* Cart Panel — LEFT in beta layout, RIGHT in default layout */}
       <div className={`flex flex-col bg-white/95 backdrop-blur-xl rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.12)] border border-white/50 transition-transform w-[420px] ${cartShake ? 'animate-shake' : ''}`}>
+        {/* Multi-Cart Tab Bar */}
+        <CartTabBar
+          tabs={renderedTabs}
+          activeTabId={activeTabId}
+          onSwitch={switchTab}
+          onAdd={addNewTab}
+          onClose={closeTab}
+        />
+
         {/* Premium Header */}
-        <div className="px-6 pt-6 pb-4">
+        <div className="px-6 pt-4 pb-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold tracking-tight text-slate-900" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif' }}>
@@ -3346,8 +3589,18 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             </div>
             {cart.length > 0 && (
               <div className="flex items-center gap-2">
+                {voidLog.length > 0 && (
+                  <button
+                    onClick={() => setShowVoidLog(true)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 text-[10px] font-semibold transition-colors border border-slate-200"
+                    title="View removed items log"
+                  >
+                    <FileText className="h-3 w-3" />
+                    Log ({voidLog.length})
+                  </button>
+                )}
                 <button
-                  onClick={() => setCart([])}
+                  onClick={() => setShowClearCartConfirm(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 text-red-500 hover:bg-red-100 text-xs font-semibold transition-colors border border-red-200"
                   title="Clear cart"
                 >
@@ -3365,10 +3618,20 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         {/* Cart Items - Scrollable */}
         <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-3 scrollbar-thin">
           {cart.length > 0 ? (
-            cart.map(item => (
+            cart.map(item => {
+              if (!popoverAnchorRefs.current[item.id]) {
+                popoverAnchorRefs.current[item.id] = React.createRef<HTMLDivElement>();
+              }
+              const lineTotal = getLineTotal(item);
+              const hasDiscount = !!item.lineDiscount;
+              return (
               <div
+                ref={popoverAnchorRefs.current[item.id]}
                 key={item.id}
-                onClick={() => setSelectedCartItemId(selectedCartItemId === item.id ? null : item.id)}
+                onClick={() => {
+                  setSelectedCartItemId(selectedCartItemId === item.id ? null : item.id);
+                  setPopoverItemId(popoverItemId === item.id ? null : item.id);
+                }}
                 className={`group bg-gradient-to-br from-slate-50 to-slate-100/50 border rounded-2xl p-4 flex gap-4 hover:shadow-md transition-all duration-200 cursor-pointer ${selectedCartItemId === item.id ? 'border-blue-400 ring-2 ring-blue-200 bg-blue-50/30' : 'border-slate-200/80 hover:border-slate-300'}`}
               >
                 {/* Product Image */}
@@ -3407,16 +3670,25 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 {/* Price & Remove */}
                 <div className="flex flex-col items-end justify-between">
                   <button
-                    onClick={() => removeFromCart(item.id)}
+                    onClick={(e) => { e.stopPropagation(); removeFromCart(item.id); }}
                     className="h-9 w-9 flex items-center justify-center text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all"
                     title="Remove item"
                   >
                     <Trash2 className="h-4.5 w-4.5" style={{ width: 18, height: 18 }} />
                   </button>
-                  <p className="text-slate-900 font-bold text-base">£{(item.price * item.quantity).toFixed(2)}</p>
+                  <div className="text-right">
+                    <p className="text-slate-900 font-bold text-base">£{lineTotal.toFixed(2)}</p>
+                    {hasDiscount && (
+                      <p className="text-slate-400 line-through text-xs">£{(item.price * item.quantity).toFixed(2)}</p>
+                    )}
+                    {item.staffName && (
+                      <p className="text-purple-500 text-[10px] mt-0.5 truncate max-w-[72px]">{item.staffName}</p>
+                    )}
+                  </div>
                 </div>
               </div>
-            ))
+              );
+            })
           ) : (
             /* Empty State - Premium Illustration */
             <div className="flex flex-col items-center justify-center py-16">
@@ -3495,6 +3767,22 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                   <div>
                     <p className="text-emerald-800 text-xs font-medium mb-0.5">Customer</p>
                     <p className="text-slate-900 font-semibold text-sm">{selectedCustomer.name}</p>
+                    {customerCRM && (customerCRM.repairs > 0 || customerCRM.layaways > 0) && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        {customerCRM.repairs > 0 && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-semibold rounded-full">
+                            <Wrench size={8} />
+                            {customerCRM.repairs} Repair{customerCRM.repairs !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {customerCRM.layaways > 0 && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-semibold rounded-full">
+                            <CalendarClock size={8} />
+                            {customerCRM.layaways} Layaway{customerCRM.layaways !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <ChevronRight className="h-5 w-5 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
@@ -3573,15 +3861,138 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       </div>
 
 
-      {/* QR / Barcode Scanner */}
-      <QRScanner
-        isOpen={showQRScanner}
-        onClose={() => setShowQRScanner(false)}
-        onScan={(code) => {
-          setShowQRScanner(false);
-          handleBarcodeScanned(code);
-        }}
-      />
+      {/* Mobile Pages QR Code Dialog */}
+      <Dialog open={showMobileQR} onOpenChange={setShowMobileQR}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="h-4 w-4 text-violet-500" />
+              Mobile Quick-Access QR Codes
+            </DialogTitle>
+            <DialogDescription>Scan on a phone to open the mobile entry pages instantly</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="flex flex-col items-center gap-2 p-4 bg-violet-50 rounded-xl border border-violet-100">
+              <p className="text-sm font-semibold text-violet-900">Add Inventory</p>
+              <div className="bg-white p-2 rounded-lg shadow-sm">
+                <QRCode value={`${window.location.origin}/mobile/add-product`} size={100} />
+              </div>
+              <p className="text-[10px] text-violet-600 text-center break-all">/mobile/add-product</p>
+            </div>
+            <div className="flex flex-col items-center gap-2 p-4 bg-orange-50 rounded-xl border border-orange-100">
+              <p className="text-sm font-semibold text-orange-900">Add Repair</p>
+              <div className="bg-white p-2 rounded-lg shadow-sm">
+                <QRCode value={`${window.location.origin}/mobile/add-repair`} size={100} />
+              </div>
+              <p className="text-[10px] text-orange-600 text-center break-all">/mobile/add-repair</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMobileQR(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cart Item Popover */}
+      {popoverItemId && (() => {
+        const item = cart.find(i => i.id === popoverItemId);
+        const anchorRef = popoverAnchorRefs.current[popoverItemId];
+        if (!item || !anchorRef?.current) return null;
+        // Enrich with inventory spec sheet data
+        const invItem = inventory.find(i => i.id === item.id || i.sku === item.sku);
+        const enriched = {
+          ...item,
+          material: (invItem as any)?.material ?? item.material,
+          weight: (invItem as any)?.weight?.toString() ?? item.weight,
+          purity: (invItem as any)?.purity ?? item.purity,
+          category: (invItem as any)?.categoryName ?? item.category,
+          serialNumber: (invItem as any)?.serialNumber ?? item.serialNumber,
+        };
+        return (
+          <CartItemPopover
+            key={popoverItemId}
+            item={enriched}
+            anchorRef={anchorRef}
+            staffList={staffList}
+            onUpdateDiscount={(d) => updateLineDiscount(item.id, d)}
+            onUpdateStaff={(sid, sname) => updateLineStaff(item.id, sid, sname)}
+            onClose={() => setPopoverItemId(null)}
+          />
+        );
+      })()}
+
+      {/* Void Audit Log Dialog */}
+      <Dialog open={showVoidLog} onOpenChange={setShowVoidLog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-slate-500" />
+              Removed Items Log
+            </DialogTitle>
+            <DialogDescription>Items removed from cart during this session</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-80 overflow-y-auto space-y-2">
+            {voidLog.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-8">No items removed yet</p>
+            ) : (
+              voidLog.map((entry, i) => (
+                <div key={i} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg text-sm">
+                  <div>
+                    <p className="font-medium text-slate-800">{entry.name}</p>
+                    <p className="text-xs text-slate-400">{entry.sku ?? '—'} · {entry.quantity}× · {entry.userName}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-slate-700">£{(entry.price * entry.quantity).toFixed(2)}</p>
+                    <p className="text-xs text-slate-400">{new Date(entry.timestamp).toLocaleTimeString()}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => { setVoidLog([]); localStorage.removeItem('mps_void_log'); }}>
+              Clear Log
+            </Button>
+            <Button size="sm" onClick={() => setShowVoidLog(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Operator PIN Swap Dialog */}
+      <Dialog open={showPinSwap} onOpenChange={setShowPinSwap}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-blue-500" />
+              Switch Operator
+            </DialogTitle>
+            <DialogDescription>Select a staff member to take over this terminal</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-64 overflow-y-auto py-2">
+            {pinSwapUsers.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-6">Loading staff…</p>
+            ) : (
+              pinSwapUsers.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => { setActiveOperatorName(u.name); setShowPinSwap(false); toast({ title: `Operator switched to ${u.name}`, duration: 2000 }); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left ${activeOperatorName === u.name ? 'border-blue-400 bg-blue-50 text-blue-800' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                    {u.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="font-medium text-sm">{u.name}</span>
+                  {activeOperatorName === u.name && <span className="ml-auto text-xs text-blue-500 font-semibold">Active</span>}
+                </button>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPinSwap(false)}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Clear Cart Confirmation */}
       <Dialog open={showClearCartConfirm} onOpenChange={setShowClearCartConfirm}>
@@ -3621,11 +4032,13 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 ['F4', 'Open customer picker'],
                 ['F9', 'Hold sale'],
                 ['F10', 'Suspend sale'],
+                ['Space', 'Checkout (outside input)'],
                 ['Ctrl + ↵', 'Checkout'],
                 ['Ctrl + Shift + Del', 'Clear cart'],
                 ['Del / ←', 'Remove selected cart item'],
                 ['+  /  −', 'Inc / Dec selected item qty'],
-                ['Click item', 'Select cart item for keyboard'],
+                ['Click item', 'Select & open item modifier'],
+                ['F5 / Ctrl+R', 'Blocked when cart not empty'],
               ].map(([key, label]) => (
                 <div key={key} className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0">
                   <span className="text-gray-600">{label}</span>
