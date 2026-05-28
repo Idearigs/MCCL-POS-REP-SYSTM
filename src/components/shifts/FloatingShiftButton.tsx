@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, X, ShoppingCart, LogOut, LayoutGrid } from 'lucide-react';
+import { Clock, X, ShoppingCart, LogOut, LayoutGrid, UserPlus, Package, Wrench } from 'lucide-react';
 import { shiftService, Shift } from '@/services/shiftService';
 import CloseShiftDialog from './CloseShiftDialog';
 import { toast } from '@/hooks/use-toast';
@@ -107,6 +107,11 @@ const FloatingShiftButton: React.FC = () => {
   const handleEndShift = () => {
     setIsExpanded(false);
     setIsCloseShiftDialogOpen(true);
+  };
+
+  const handleQuickNav = (path: string) => {
+    setIsExpanded(false);
+    navigate(path, { state: { openAdd: true } });
   };
 
   const toggleExpanded = () => {
@@ -292,6 +297,48 @@ const FloatingShiftButton: React.FC = () => {
               className="relative flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-200"
             >
               {isInQuickPOS ? <LayoutGrid size={20} /> : <ShoppingCart size={20} />}
+              <div className="absolute inset-0 rounded-full bg-white opacity-0 hover:opacity-20 transition-opacity duration-200" />
+            </button>
+          </div>
+
+          {/* Add Customer */}
+          <div className={`flex items-center gap-3 group ${isOnRight ? 'flex-row' : 'flex-row-reverse'}`}>
+            <div className="bg-white px-3 py-2 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+              <span className="text-sm font-medium text-gray-700">Add Customer</span>
+            </div>
+            <button
+              onClick={() => handleQuickNav('/customers')}
+              className="relative flex items-center justify-center w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-200"
+            >
+              <UserPlus size={20} />
+              <div className="absolute inset-0 rounded-full bg-white opacity-0 hover:opacity-20 transition-opacity duration-200" />
+            </button>
+          </div>
+
+          {/* Add Inventory */}
+          <div className={`flex items-center gap-3 group ${isOnRight ? 'flex-row' : 'flex-row-reverse'}`}>
+            <div className="bg-white px-3 py-2 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+              <span className="text-sm font-medium text-gray-700">Add Inventory</span>
+            </div>
+            <button
+              onClick={() => handleQuickNav('/inventory')}
+              className="relative flex items-center justify-center w-12 h-12 bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-200"
+            >
+              <Package size={20} />
+              <div className="absolute inset-0 rounded-full bg-white opacity-0 hover:opacity-20 transition-opacity duration-200" />
+            </button>
+          </div>
+
+          {/* Add Repair */}
+          <div className={`flex items-center gap-3 group ${isOnRight ? 'flex-row' : 'flex-row-reverse'}`}>
+            <div className="bg-white px-3 py-2 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+              <span className="text-sm font-medium text-gray-700">Add Repair</span>
+            </div>
+            <button
+              onClick={() => handleQuickNav('/repairs')}
+              className="relative flex items-center justify-center w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-200"
+            >
+              <Wrench size={20} />
               <div className="absolute inset-0 rounded-full bg-white opacity-0 hover:opacity-20 transition-opacity duration-200" />
             </button>
           </div>

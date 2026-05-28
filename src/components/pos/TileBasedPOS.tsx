@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { usePOSKeyboard } from '@/hooks/usePOSKeyboard';
+import { QRScanner } from '@/components/stock-taking/QRScanner';
 import { connectionMonitor } from '@/services/connectionMonitor';
 import { offlineSyncService } from '@/services/offlineSyncService';
 import { normalizeImageUrl } from '@/lib/utils';
@@ -72,6 +74,8 @@ import {
   UserPlus,
   Beaker,
   LogOut,
+  Camera,
+  Keyboard,
 } from 'lucide-react';
 import { useInventory, InventoryItem } from '@/contexts/InventoryContext';
 import { Customer, useCustomers } from '@/contexts/CustomerContext';
@@ -151,6 +155,13 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [drawerPinError, setDrawerPinError] = useState('');
   const [openingDrawer, setOpeningDrawer] = useState(false);
   const drawerPinRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcut state
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [selectedCartItemId, setSelectedCartItemId] = useState<string | null>(null);
+  const [showClearCartConfirm, setShowClearCartConfirm] = useState(false);
+  const [showAltOverlay, setShowAltOverlay] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
 
   // Load cart from localStorage on mount
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -1672,6 +1683,49 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     setCashAmount(total.toFixed(2));
   };
 
+  // Barcode / QR scan handler — looks up product by SKU or barcode then adds to cart
+  const handleBarcodeScanned = useCallback(async (code: string) => {
+    try {
+      let product = null;
+      try {
+        product = await productService.getProductByBarcode(code);
+      } catch {
+        product = await productService.getProductBySku(code);
+      }
+      if (product) {
+        const inventoryItem = inventory.find(i => i.id === product!.id) ?? {
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          stock: product.stock,
+          imageUrl: product.imageUrl,
+          sku: product.sku,
+        } as any;
+        addToCart(inventoryItem);
+        toast({ title: `Scanned: ${product.name}`, duration: 1500 });
+      }
+    } catch {
+      toast({ title: 'Product not found', description: `No product matched code: ${code}`, variant: 'destructive', duration: 2000 });
+    }
+  }, [inventory]);
+
+  // Wire up keyboard shortcuts
+  usePOSKeyboard({
+    searchRef,
+    cart,
+    selectedCartItemId,
+    setSelectedCartItemId,
+    onCheckout: handleCheckout,
+    onHold: () => parkTransaction('hold'),
+    onSuspend: () => parkTransaction('suspend'),
+    onOpenCustomer: () => setIsCustomerDialogOpen(true),
+    onClearCart: () => setShowClearCartConfirm(true),
+    onBarcodeScanned: handleBarcodeScanned,
+    updateQuantity,
+    removeFromCart,
+    setShowAltOverlay,
+  });
+
   const parkTransaction = (type: 'hold' | 'suspend') => {
     if (cart.length === 0) {
       toast({ title: 'Cart is empty', variant: 'destructive' });
@@ -2047,15 +2101,26 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
             {/* Search - hidden in category view and appraisal view */}
             {!showCategoryView && !showAppraisalView && (
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <Input
-                  type="text"
-                  placeholder={showRepairView ? "Search by RMA, name, phone, or repair item..." : "Search by name, SKU or barcode…"}
-                  value={showRepairView ? repairSearchQuery : searchQuery}
-                  onChange={(e) => showRepairView ? setRepairSearchQuery(e.target.value) : setSearchQuery(e.target.value)}
-                  className="pl-10 w-80 bg-white border-gray-300"
-                />
+              <div className="relative flex items-center gap-1.5">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Input
+                    ref={searchRef}
+                    type="text"
+                    placeholder={showRepairView ? "Search repairs… (F8)" : "Name, SKU or barcode… (F8)"}
+                    value={showRepairView ? repairSearchQuery : searchQuery}
+                    onChange={(e) => showRepairView ? setRepairSearchQuery(e.target.value) : setSearchQuery(e.target.value)}
+                    className="pl-10 w-80 bg-white border-gray-300"
+                  />
+                </div>
+                {/* QR / Camera scan button */}
+                <button
+                  onClick={() => setShowQRScanner(true)}
+                  className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100 transition-colors"
+                  title="Scan QR / Barcode"
+                >
+                  <Camera className="h-4 w-4" />
+                </button>
               </div>
             )}
             {/* Add New Button for Category View */}
@@ -3301,7 +3366,11 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-3 scrollbar-thin">
           {cart.length > 0 ? (
             cart.map(item => (
-              <div key={item.id} className="group bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200/80 rounded-2xl p-4 flex gap-4 hover:shadow-md hover:border-slate-300 transition-all duration-200">
+              <div
+                key={item.id}
+                onClick={() => setSelectedCartItemId(selectedCartItemId === item.id ? null : item.id)}
+                className={`group bg-gradient-to-br from-slate-50 to-slate-100/50 border rounded-2xl p-4 flex gap-4 hover:shadow-md transition-all duration-200 cursor-pointer ${selectedCartItemId === item.id ? 'border-blue-400 ring-2 ring-blue-200 bg-blue-50/30' : 'border-slate-200/80 hover:border-slate-300'}`}
+              >
                 {/* Product Image */}
                 <div className="w-16 h-16 bg-gradient-to-br from-slate-200 to-slate-300 rounded-xl overflow-hidden flex-shrink-0 shadow-inner">
                   {item.image ? (
@@ -3455,6 +3524,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             >
               <PauseCircle className="h-4 w-4" />
               Hold
+              <span className="ml-auto text-[10px] font-mono bg-amber-100 text-amber-600 px-1 rounded">F9</span>
             </button>
             <button
               onClick={() => parkTransaction('suspend')}
@@ -3463,6 +3533,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             >
               <Clock className="h-4 w-4" />
               Suspend
+              <span className="ml-auto text-[10px] font-mono bg-rose-100 text-rose-600 px-1 rounded">F10</span>
             </button>
             {heldTransactions.length > 0 && (
               <button
@@ -3494,10 +3565,78 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             <ShoppingBag className="h-5 w-5" />
             <span>Checkout Now</span>
             {cart.length > 0 && <Sparkles className="h-4 w-4 ml-1 animate-pulse" />}
+            {cart.length > 0 && (
+              <span className="absolute right-3 text-[10px] font-mono bg-white/20 text-white/80 px-1.5 py-0.5 rounded">Ctrl+↵</span>
+            )}
           </button>
         </div>
       </div>
 
+
+      {/* QR / Barcode Scanner */}
+      <QRScanner
+        isOpen={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+        onScan={(code) => {
+          setShowQRScanner(false);
+          handleBarcodeScanned(code);
+        }}
+      />
+
+      {/* Clear Cart Confirmation */}
+      <Dialog open={showClearCartConfirm} onOpenChange={setShowClearCartConfirm}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-500" />
+              Clear Cart?
+            </DialogTitle>
+            <DialogDescription>
+              This will remove all {cart.length} item{cart.length !== 1 ? 's' : ''} from the cart. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowClearCartConfirm(false)}>Cancel</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => { setCart([]); setShowClearCartConfirm(false); }}
+            >
+              Clear Cart
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Alt Keyboard Shortcut Overlay */}
+      {showAltOverlay && (
+        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center" onClick={() => setShowAltOverlay(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Keyboard className="h-5 w-5 text-blue-600" />
+              <h2 className="text-lg font-bold text-gray-900">POS Keyboard Shortcuts</h2>
+            </div>
+            <div className="space-y-2 text-sm">
+              {[
+                ['F8  or  /', 'Focus product search'],
+                ['F4', 'Open customer picker'],
+                ['F9', 'Hold sale'],
+                ['F10', 'Suspend sale'],
+                ['Ctrl + ↵', 'Checkout'],
+                ['Ctrl + Shift + Del', 'Clear cart'],
+                ['Del / ←', 'Remove selected cart item'],
+                ['+  /  −', 'Inc / Dec selected item qty'],
+                ['Click item', 'Select cart item for keyboard'],
+              ].map(([key, label]) => (
+                <div key={key} className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0">
+                  <span className="text-gray-600">{label}</span>
+                  <kbd className="px-2 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs font-mono text-gray-800">{key}</kbd>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-4 text-center">Release Alt to close</p>
+          </div>
+        </div>
+      )}
 
       {/* New Repair Job Dialog */}
       <Dialog open={showNewRepairDialog} onOpenChange={setShowNewRepairDialog}>

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -74,6 +75,7 @@ import InventoryFilter from '@/components/inventory/InventoryFilter';
 
 const InventoryPage = () => {
   const { inventory, updateItem, addItem, deleteItem, refreshInventory } = useInventory();
+  const location = useLocation();
   const availableCategories = Array.from(new Set(inventory.map(item => (item as any).categoryName || item.category).filter(Boolean)));
 
   const [filteredInventory, setFilteredInventory] = useState<InventoryItem[]>(inventory);
@@ -91,6 +93,18 @@ const InventoryPage = () => {
   const [isBulkRFIDDialogOpen, setIsBulkRFIDDialogOpen] = useState(false);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
   const [qrStep, setQrStep] = useState(0);
+
+  // Auto-open add form when navigated here with openAdd state
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if ((location.state as any)?.openAdd) {
+      setIsNewItem(true);
+      setSelectedItem(null);
+      setIsDetailOpen(true);
+      window.history.replaceState({}, '');
+    }
+  }, []);
+
   useEffect(() => {
     if (!isQRModalOpen) { setQrStep(0); return; }
     const t = setInterval(() => setQrStep(s => (s + 1) % 3), 2200);

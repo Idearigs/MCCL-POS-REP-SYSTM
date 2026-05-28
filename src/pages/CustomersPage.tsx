@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -34,10 +35,20 @@ import { useCustomers, Customer } from '@/contexts/CustomerContext';
 
 const CustomersPage = () => {
   const { customers, loading, error, updateCustomer, deleteCustomer, refreshCustomers } = useCustomers();
+  const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
+
+  // Auto-open add form when navigated here with openAdd state
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if ((location.state as any)?.openAdd) {
+      setIsAddingCustomer(true);
+      window.history.replaceState({}, '');
+    }
+  }, []);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);

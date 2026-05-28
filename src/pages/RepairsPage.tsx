@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -156,6 +157,7 @@ const tagColorClasses: Record<string, string> = {
 };
 
 const RepairsPage: React.FC = () => {
+  const location = useLocation();
   const { tags, getTag } = useRepairTags();
   const [repairJobs, setRepairJobs] = useState<UIRepairJob[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -167,6 +169,15 @@ const RepairsPage: React.FC = () => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isNewJobDialogOpen, setIsNewJobDialogOpen] = useState(false);
   const [isRepairQROpen, setIsRepairQROpen] = useState(false);
+
+  // Auto-open add form when navigated here with openAdd state
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if ((location.state as any)?.openAdd) {
+      setIsNewJobDialogOpen(true);
+      window.history.replaceState({}, '');
+    }
+  }, []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
