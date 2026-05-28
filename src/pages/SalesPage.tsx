@@ -641,7 +641,8 @@ const SalesPage = () => {
                   </TableHeader>
                   <TableBody>
                     {filteredSales.map((sale) => (
-                      <TableRow key={sale.id} className="hover:bg-gray-50 transition-colors">
+                      <React.Fragment key={sale.id}>
+                      <TableRow className="hover:bg-gray-50 transition-colors">
                         <TableCell className="font-medium">
                           {sale.receiptNumber || `#${sale.id.slice(0, 8)}`}
                         </TableCell>
@@ -787,6 +788,7 @@ const SalesPage = () => {
                           </TableCell>
                         </TableRow>
                       )}
+                      </React.Fragment>
                     ))}
                   </TableBody>
                 </Table>
