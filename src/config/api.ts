@@ -38,6 +38,7 @@ export const API_CONFIG = {
     SALES_TODAY: '/sales/today',
     CREATE_SALE: '/sales',
     DELETE_SALE: '/sales/{id}',
+    VOID_SALE: '/sales/{id}/void',
     REFUND_SALE: '/sales/{id}/refund',
     SALE_RECEIPT: '/sales/{id}/receipt',
     DAILY_REPORT: '/sales/reports/daily',

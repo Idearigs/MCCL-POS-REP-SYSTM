@@ -699,6 +699,50 @@ export class SalesService {
   }
 
   /**
+   * Void a sale — marks it as CANCELLED and appends the reason to notes.
+   * Preserves the record for audit trail (does NOT delete).
+   */
+  async voidSale(
+    id: string,
+    reason: string,
+    details: string,
+    tenantId: string,
+    _userId: string,
+  ): Promise<SaleResponseDto> {
+    const sale = await this.prismaService.sales.findFirst({
+      where: { id, tenantId },
+      include: {
+        sale_items: { include: { products: true } },
+        payments: true,
+        customers: true,
+        users: true,
+      },
+    });
+
+    if (!sale) throw new NotFoundException(`Sale with ID ${id} not found`);
+
+    const voidNote = `VOIDED: ${reason}${details && details !== reason ? ` — ${details}` : ''}`;
+    const updatedNotes = sale.notes ? `${sale.notes}\n\n${voidNote}` : voidNote;
+
+    const updated = await this.prismaService.sales.update({
+      where: { id },
+      data: {
+        status: SaleStatus.CANCELLED,
+        notes: updatedNotes,
+      },
+      include: {
+        sale_items: { include: { products: true } },
+        payments: true,
+        customers: true,
+        users: true,
+      },
+    });
+
+    this.logger.log(`Sale ${sale.saleNumber} voided. Reason: ${reason}`);
+    return this.mapToResponseDto(updated);
+  }
+
+  /**
    * Create refund for sale items
    */
   async createRefund(

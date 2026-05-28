@@ -10,6 +10,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Request,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -504,6 +505,25 @@ export class SalesController {
         {} as Record<string, number>,
       ),
     };
+  }
+
+  /** Mark a sale as CANCELLED (voided) — preserves the record for audit trail */
+  @Post(':id/void')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Void a sale',
+    description:
+      'Mark a sale as CANCELLED with a reason. The record is preserved for audit purposes.',
+  })
+  async voidSale(
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+    @Body('details') details: string,
+    @Request() req: any,
+  ) {
+    const tenantId = req.user?.tenantId;
+    const userId = req.user?.userId;
+    return this.salesService.voidSale(id, reason, details, tenantId, userId);
   }
 
   @Delete(':id')

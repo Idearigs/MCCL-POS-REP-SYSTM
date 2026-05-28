@@ -20,8 +20,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from '@/components/ui/checkbox';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Gift, Package, Percent } from 'lucide-react';
 import { Sale, SaleItem } from '@/services/salesService';
+
+type RefundDestination = 'original' | 'store_credit';
+type ItemCondition = 'back_to_shelf' | 'damaged' | 'defective';
 
 interface RefundSaleDialogProps {
   isOpen: boolean;
@@ -33,6 +36,9 @@ interface RefundSaleDialogProps {
     items: Array<{ saleItemId: string; quantity: number }>;
     reason: string;
     notes?: string;
+    destination: RefundDestination;
+    restockingFee: number;
+    itemCondition: ItemCondition;
   }) => void;
   isProcessing?: boolean;
 }
@@ -47,6 +53,9 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
   const [refundType, setRefundType] = useState<'full' | 'partial'>('full');
   const [refundReason, setRefundReason] = useState('');
   const [refundNotes, setRefundNotes] = useState('');
+  const [destination, setDestination] = useState<RefundDestination>('original');
+  const [restockingFee, setRestockingFee] = useState<string>('');
+  const [itemCondition, setItemCondition] = useState<ItemCondition>('back_to_shelf');
   // Map<saleItemId, quantity>
   const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map());
 
@@ -93,6 +102,14 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
     return calculatePartialRefundAmount();
   };
 
+  const feeAmount = () => {
+    const fee = parseFloat(restockingFee);
+    if (!restockingFee || isNaN(fee) || fee <= 0) return 0;
+    return getRefundAmount() * (fee / 100);
+  };
+
+  const netRefundAmount = () => Math.max(0, getRefundAmount() - feeAmount());
+
   const handleConfirm = () => {
     const items =
       refundType === 'full'
@@ -102,12 +119,21 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
             quantity,
           }));
 
+    const fee = parseFloat(restockingFee);
     onConfirmRefund({
       saleId: sale.id,
       refundType,
       items,
       reason: refundReason,
-      notes: refundNotes || undefined,
+      notes: [
+        refundNotes,
+        destination === 'store_credit' ? 'Destination: Store Credit' : '',
+        fee > 0 ? `Restocking fee: ${fee}%` : '',
+        `Item condition: ${itemCondition}`,
+      ].filter(Boolean).join(' | ') || undefined,
+      destination,
+      restockingFee: fee > 0 ? fee : 0,
+      itemCondition,
     });
   };
 
@@ -122,6 +148,9 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
     setRefundReason('');
     setRefundNotes('');
     setSelectedItems(new Map());
+    setDestination('original');
+    setRestockingFee('');
+    setItemCondition('back_to_shelf');
   };
 
   const handleClose = () => {
@@ -270,6 +299,82 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
             </Select>
           </div>
 
+          {/* Refund Destination */}
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold flex items-center gap-1.5">
+              <Gift size={13} className="text-blue-500" />
+              Refund Destination
+            </Label>
+            <RadioGroup
+              value={destination}
+              onValueChange={(v) => setDestination(v as RefundDestination)}
+              className="flex gap-4"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="original" id="dest-original" />
+                <Label htmlFor="dest-original" className="font-normal cursor-pointer text-sm">Original payment method</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="store_credit" id="dest-credit" />
+                <Label htmlFor="dest-credit" className="font-normal cursor-pointer text-sm text-blue-600">Store Credit / Gift Card</Label>
+              </div>
+            </RadioGroup>
+            {destination === 'store_credit' && (
+              <p className="text-xs text-blue-600 bg-blue-50 px-3 py-1.5 rounded">
+                A store credit voucher for <strong>{formatCurrency(netRefundAmount())}</strong> will be issued.
+              </p>
+            )}
+          </div>
+
+          {/* Item Condition */}
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold flex items-center gap-1.5">
+              <Package size={13} className="text-amber-500" />
+              Item Condition on Return
+            </Label>
+            <RadioGroup
+              value={itemCondition}
+              onValueChange={(v) => setItemCondition(v as ItemCondition)}
+              className="flex gap-4 flex-wrap"
+            >
+              {[
+                { v: 'back_to_shelf', l: 'Back to Shelf' },
+                { v: 'damaged', l: 'Damaged' },
+                { v: 'defective', l: 'Defective' },
+              ].map(({ v, l }) => (
+                <div key={v} className="flex items-center gap-2">
+                  <RadioGroupItem value={v} id={`cond-${v}`} />
+                  <Label htmlFor={`cond-${v}`} className="font-normal cursor-pointer text-sm">{l}</Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+
+          {/* Restocking Fee */}
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold flex items-center gap-1.5">
+              <Percent size={13} className="text-red-500" />
+              Restocking Fee (optional)
+            </Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min="0"
+                max="50"
+                placeholder="e.g. 10"
+                value={restockingFee}
+                onChange={(e) => setRestockingFee(e.target.value)}
+                className="w-24 text-sm"
+              />
+              <span className="text-sm text-gray-500">%</span>
+              {parseFloat(restockingFee) > 0 && (
+                <span className="text-xs text-red-600 ml-2">
+                  Fee: {formatCurrency(feeAmount())} → Net refund: <strong>{formatCurrency(netRefundAmount())}</strong>
+                </span>
+              )}
+            </div>
+          </div>
+
           {/* Notes */}
           <div className="space-y-2">
             <Label htmlFor="refundNotes" className="text-sm font-semibold">
@@ -280,7 +385,7 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
               placeholder="Enter any additional notes about this refund..."
               value={refundNotes}
               onChange={(e) => setRefundNotes(e.target.value)}
-              rows={3}
+              rows={2}
             />
           </div>
 
@@ -291,12 +396,13 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
               <div className="flex-1">
                 <p className="font-semibold text-sm text-orange-900 mb-2">Refund Summary</p>
                 <div className="space-y-1 text-sm text-orange-800">
-                  <p>
-                    • Refund amount:{' '}
-                    <span className="font-bold">{formatCurrency(getRefundAmount())}</span>
-                  </p>
+                  <p>• Gross refund: <span className="font-bold">{formatCurrency(getRefundAmount())}</span></p>
+                  {parseFloat(restockingFee) > 0 && (
+                    <p>• Restocking fee ({restockingFee}%): <span className="font-bold">-{formatCurrency(feeAmount())}</span></p>
+                  )}
+                  <p>• <span className="font-bold">Net {destination === 'store_credit' ? 'store credit' : 'refund'}: {formatCurrency(netRefundAmount())}</span></p>
+                  <p>• Condition: {itemCondition.replace(/_/g, ' ')}</p>
                   <p>• This action cannot be undone</p>
-                  <p>• Inventory will be adjusted automatically</p>
                 </div>
               </div>
             </div>
@@ -314,7 +420,7 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
           >
             {isProcessing
               ? 'Processing...'
-              : `Confirm Refund ${formatCurrency(getRefundAmount())}`}
+              : `Confirm ${destination === 'store_credit' ? 'Store Credit' : 'Refund'} ${formatCurrency(netRefundAmount())}`}
           </Button>
         </DialogFooter>
       </DialogContent>

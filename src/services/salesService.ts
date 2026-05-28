@@ -18,16 +18,30 @@ export interface SaleItem {
   totalPrice?: number;
 }
 
+export interface SalePayment {
+  id: string;
+  method: string;
+  amount: number;
+  status: string;
+  reference?: string;
+  cardLast4?: string;
+  processorResponse?: string;
+  notes?: string;
+  createdAt: string;
+}
+
 export interface Sale {
   id: string;
   saleNumber?: string;
   customerId?: string;
   customerName?: string;
   items: SaleItem[];
+  payments?: SalePayment[];
   subtotal: number;
   taxAmount: number;
   discountAmount: number;
   totalAmount: number;
+  refundedAmount: number;
   paidAmount?: number;
   balanceDue?: number;
   paymentMethod: string;
@@ -37,6 +51,8 @@ export interface Sale {
   receiptNumber: string;
   cashierId: string;
   cashierName: string;
+  salespersonId?: string;
+  salespersonName?: string;
   tenantId: string;
   createdAt: string;
   updatedAt: string;
@@ -261,12 +277,12 @@ class SalesService {
   }
 
 
-  async voidSale(saleId: string, _reason: string, _details: string): Promise<Sale> {
+  async voidSale(saleId: string, reason: string, details: string): Promise<Sale> {
     try {
-      const endpoint = apiClient.replaceUrlParams(API_CONFIG.ENDPOINTS.DELETE_SALE, {
+      const endpoint = apiClient.replaceUrlParams(API_CONFIG.ENDPOINTS.VOID_SALE, {
         id: saleId,
       });
-      return await apiClient.delete<Sale>(endpoint);
+      return await apiClient.post<Sale>(endpoint, { reason, details });
     } catch (error) {
       console.error(`Failed to void sale ${saleId}:`, error);
       throw error;

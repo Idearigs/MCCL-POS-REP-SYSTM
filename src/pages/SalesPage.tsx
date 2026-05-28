@@ -262,12 +262,18 @@ const SalesPage = () => {
       result = result.filter(sale => sale.cashierId === filters.cashierId);
     }
 
-    // Shift filter - now using actual shift IDs
+    // Shift filter
     if (filters.shift && filters.shift !== 'all') {
-      result = result.filter(sale => {
-        // Check if sale has a shiftId that matches the selected shift
-        return (sale as any).shiftId === filters.shift;
-      });
+      result = result.filter(sale => (sale as any).shiftId === filters.shift);
+    }
+
+    // Customer type filter
+    if (filters.customerType && filters.customerType !== 'all') {
+      if (filters.customerType === 'registered') {
+        result = result.filter(sale => !!sale.customerId);
+      } else if (filters.customerType === 'walkin') {
+        result = result.filter(sale => !sale.customerId);
+      }
     }
 
     setFilteredSales(result);
@@ -555,6 +561,35 @@ const SalesPage = () => {
     }
   };
 
+  const handleExportXLSX = async () => {
+    try {
+      const XLSX = await import('xlsx');
+      const rows = filteredSales.map(sale => ({
+        'Sale #': sale.receiptNumber || sale.id.slice(0, 8),
+        'Date': format(new Date(sale.createdAt), 'yyyy-MM-dd HH:mm'),
+        'Customer': sale.customerName || 'Walk-in',
+        'Items': sale.items?.length || 0,
+        'Subtotal': sale.subtotal,
+        'Discount': sale.discountAmount,
+        'Tax': sale.taxAmount,
+        'Total': sale.totalAmount,
+        'Refunded': sale.refundedAmount || 0,
+        'Payment Method': sale.paymentMethod,
+        'Payment Status': sale.paymentStatus,
+        'Sale Status': sale.status,
+        'Cashier': sale.cashierName || 'Unknown',
+        'Salesperson': sale.salespersonName || '',
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Sales');
+      XLSX.writeFile(wb, `sales-export-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+      toast({ title: 'XLSX Export Successful', description: `Exported ${rows.length} sales` });
+    } catch {
+      toast({ title: 'Export Failed', variant: 'destructive', description: 'Could not generate XLSX file' });
+    }
+  };
+
   const handleExportPDF = () => {
     toast({
       title: 'Coming Soon',
@@ -584,6 +619,7 @@ const SalesPage = () => {
           onFilterChange={setFilters}
           onExportCSV={handleExportCSV}
           onExportPDF={handleExportPDF}
+          onExportXLSX={handleExportXLSX}
           cashiers={cashiers}
           shifts={availableShifts}
         />
@@ -640,6 +676,7 @@ const SalesPage = () => {
                       <TableHead className="font-semibold">Payment</TableHead>
                       <TableHead className="font-semibold">Status</TableHead>
                       <TableHead className="font-semibold">Cashier</TableHead>
+                      <TableHead className="font-semibold">Salesperson</TableHead>
                       <TableHead className="font-semibold text-center">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -716,6 +753,15 @@ const SalesPage = () => {
                         <TableCell className="text-sm text-gray-600">
                           {sale.cashierName || 'Unknown'}
                         </TableCell>
+                        <TableCell className="text-sm">
+                          {sale.salespersonName ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 rounded-full text-xs font-medium">
+                              {sale.salespersonName}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300 text-xs">—</span>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center justify-center gap-1">
                             <Button
@@ -772,7 +818,7 @@ const SalesPage = () => {
                       {/* Refund details row */}
                       {expandedSaleId === sale.id && (
                         <TableRow className="bg-orange-50">
-                          <TableCell colSpan={10} className="py-3 px-6">
+                          <TableCell colSpan={11} className="py-3 px-6">
                             <div className="text-sm font-medium text-orange-800 mb-2">Refunded Items</div>
                             <div className="grid gap-1">
                               {(sale.items || []).map((item, i) => (

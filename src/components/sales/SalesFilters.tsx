@@ -15,7 +15,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Search, Filter, X, Calendar as CalendarIcon, Download } from 'lucide-react';
+import { Search, Filter, X, Calendar as CalendarIcon, Download, FileSpreadsheet } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +28,8 @@ export interface SalesFilterValues {
   cashierId?: string;
   shift?: string;
   dateTo?: Date;
+  customerType?: string;
+  outletId?: string;
 }
 
 interface Shift {
@@ -47,8 +49,10 @@ interface SalesFiltersProps {
   onFilterChange: (filters: SalesFilterValues) => void;
   onExportCSV: () => void;
   onExportPDF: () => void;
+  onExportXLSX?: () => void;
   cashiers?: {id: string; name: string}[];
   shifts?: Shift[];
+  outlets?: {id: string; name: string}[];
 }
 
 const SalesFilters: React.FC<SalesFiltersProps> = ({
@@ -56,8 +60,10 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
   onFilterChange,
   onExportCSV,
   onExportPDF,
+  onExportXLSX,
   cashiers = [],
-  shifts = []
+  shifts = [],
+  outlets = [],
 }) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
 
@@ -102,7 +108,9 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
       dateFrom: undefined,
       dateTo: undefined,
       cashierId: 'all',
-      shift: 'all'
+      shift: 'all',
+      customerType: 'all',
+      outletId: 'all',
     });
     setIsFilterOpen(false);
   };
@@ -116,6 +124,8 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
     if (filters.dateTo) count++;
     if (filters.cashierId && filters.cashierId !== 'all') count++;
     if (filters.shift && filters.shift !== 'all') count++;
+    if (filters.customerType && filters.customerType !== 'all') count++;
+    if (filters.outletId && filters.outletId !== 'all') count++;
     return count;
   };
 
@@ -361,6 +371,45 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
                   </Select>
                 )}
               </div>
+
+              {/* Customer Type */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Customer Type</Label>
+                <Select
+                  value={filters.customerType || 'all'}
+                  onValueChange={(v) => onFilterChange({ ...filters, customerType: v })}
+                >
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="All types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Customers</SelectItem>
+                    <SelectItem value="registered">Registered Customer</SelectItem>
+                    <SelectItem value="walkin">Walk-in / Anonymous</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Outlet Filter */}
+              {outlets.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Outlet / Location</Label>
+                  <Select
+                    value={filters.outletId || 'all'}
+                    onValueChange={(v) => onFilterChange({ ...filters, outletId: v })}
+                  >
+                    <SelectTrigger className="text-xs">
+                      <SelectValue placeholder="All outlets" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Outlets</SelectItem>
+                      {outlets.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </PopoverContent>
         </Popover>
@@ -378,21 +427,34 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-48" align="end">
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Button
                 variant="ghost"
                 size="sm"
                 className="w-full justify-start text-xs"
                 onClick={onExportCSV}
               >
+                <Download size={12} className="mr-2 text-green-600" />
                 Export as CSV
               </Button>
+              {onExportXLSX && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-xs"
+                  onClick={onExportXLSX}
+                >
+                  <FileSpreadsheet size={12} className="mr-2 text-emerald-600" />
+                  Export as XLSX
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
                 className="w-full justify-start text-xs"
                 onClick={onExportPDF}
               >
+                <Download size={12} className="mr-2 text-red-500" />
                 Export as PDF
               </Button>
             </div>
