@@ -666,18 +666,17 @@ const SalesPage = () => {
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-gray-50">
-                      <TableHead className="font-semibold">Sale #</TableHead>
-                      <TableHead className="font-semibold">Date & Time</TableHead>
-                      <TableHead className="font-semibold">Customer</TableHead>
-                      <TableHead className="font-semibold">Products / SKU</TableHead>
-                      <TableHead className="font-semibold">Condition</TableHead>
-                      <TableHead className="font-semibold text-right">Amount</TableHead>
-                      <TableHead className="font-semibold">Payment</TableHead>
-                      <TableHead className="font-semibold">Status</TableHead>
-                      <TableHead className="font-semibold">Cashier</TableHead>
-                      <TableHead className="font-semibold">Salesperson</TableHead>
-                      <TableHead className="font-semibold text-center">Actions</TableHead>
+                    <TableRow className="bg-gray-50 border-b border-gray-200">
+                      <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide whitespace-nowrap py-3">Sale #</TableHead>
+                      <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide whitespace-nowrap py-3">Date & Time</TableHead>
+                      <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide whitespace-nowrap py-3">Customer</TableHead>
+                      <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide whitespace-nowrap py-3">Products / SKU</TableHead>
+                      <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide whitespace-nowrap py-3">Condition</TableHead>
+                      <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide whitespace-nowrap py-3 text-right">Amount</TableHead>
+                      <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide whitespace-nowrap py-3">Payment</TableHead>
+                      <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide whitespace-nowrap py-3">Status</TableHead>
+                      <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide whitespace-nowrap py-3">Staff</TableHead>
+                      <TableHead className="font-semibold text-gray-700 text-xs uppercase tracking-wide whitespace-nowrap py-3 text-center">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -750,17 +749,15 @@ const SalesPage = () => {
                         <TableCell>
                           {getSaleStatusBadge(sale.status)}
                         </TableCell>
-                        <TableCell className="text-sm text-gray-600">
-                          {sale.cashierName || 'Unknown'}
-                        </TableCell>
                         <TableCell className="text-sm">
-                          {sale.salespersonName ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 rounded-full text-xs font-medium">
-                              {sale.salespersonName}
-                            </span>
-                          ) : (
-                            <span className="text-gray-300 text-xs">—</span>
-                          )}
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-gray-700 font-medium text-xs">{sale.cashierName || 'Unknown'}</span>
+                            {sale.salespersonName && sale.salespersonName !== sale.cashierName && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded text-[10px] font-medium w-fit">
+                                SP: {sale.salespersonName}
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center justify-center gap-1">
@@ -818,7 +815,7 @@ const SalesPage = () => {
                       {/* Refund details row */}
                       {expandedSaleId === sale.id && (
                         <TableRow className="bg-orange-50">
-                          <TableCell colSpan={11} className="py-3 px-6">
+                          <TableCell colSpan={10} className="py-3 px-6">
                             <div className="text-sm font-medium text-orange-800 mb-2">Refunded Items</div>
                             <div className="grid gap-1">
                               {(sale.items || []).map((item, i) => (
