@@ -6,13 +6,16 @@ import { enqueue } from './offlineQueue';
 import { offlineSyncService } from './offlineSyncService';
 
 export interface SaleItem {
+  id: string;
   productId: string;
   productName: string;
   sku: string;
+  productSku?: string;
   quantity: number;
   unitPrice: number;
   discount: number;
   total: number;
+  totalPrice?: number;
 }
 
 export interface Sale {
@@ -167,9 +170,8 @@ export interface MonthlyReport {
 
 export interface RefundData {
   reason: string;
-  amount?: number;
-  items?: Array<{
-    productId: string;
+  items: Array<{
+    saleItemId: string;
     quantity: number;
   }>;
   notes?: string;

@@ -30,8 +30,7 @@ interface RefundSaleDialogProps {
   onConfirmRefund: (refundData: {
     saleId: string;
     refundType: 'full' | 'partial';
-    amount?: number;
-    items?: Array<{ productId: string; quantity: number }>;
+    items: Array<{ saleItemId: string; quantity: number }>;
     reason: string;
     notes?: string;
   }) => void;
@@ -46,43 +45,42 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
   isProcessing = false
 }) => {
   const [refundType, setRefundType] = useState<'full' | 'partial'>('full');
-  const [refundAmount, setRefundAmount] = useState('');
   const [refundReason, setRefundReason] = useState('');
   const [refundNotes, setRefundNotes] = useState('');
+  // Map<saleItemId, quantity>
   const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map());
 
   if (!sale) return null;
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-GB', {
-      style: 'currency',
-      currency: 'GBP'
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(amount);
+
+  const getItemTotal = (item: SaleItem) =>
+    item.totalPrice ?? item.total ?? item.unitPrice * item.quantity;
 
   const handleItemToggle = (item: SaleItem, checked: boolean) => {
-    const newSelectedItems = new Map(selectedItems);
+    const updated = new Map(selectedItems);
     if (checked) {
-      newSelectedItems.set(item.productId, item.quantity);
+      updated.set(item.id, item.quantity);
     } else {
-      newSelectedItems.delete(item.productId);
+      updated.delete(item.id);
     }
-    setSelectedItems(newSelectedItems);
+    setSelectedItems(updated);
   };
 
-  const handleItemQuantityChange = (productId: string, quantity: number) => {
-    const newSelectedItems = new Map(selectedItems);
-    newSelectedItems.set(productId, quantity);
-    setSelectedItems(newSelectedItems);
+  const handleItemQuantityChange = (saleItemId: string, quantity: number) => {
+    const updated = new Map(selectedItems);
+    updated.set(saleItemId, quantity);
+    setSelectedItems(updated);
   };
 
   const calculatePartialRefundAmount = () => {
     let total = 0;
     sale.items.forEach(item => {
-      const selectedQty = selectedItems.get(item.productId);
+      const selectedQty = selectedItems.get(item.id);
       if (selectedQty) {
-        const itemUnitPrice = item.total / item.quantity;
-        total += itemUnitPrice * selectedQty;
+        const unitPrice = getItemTotal(item) / item.quantity;
+        total += unitPrice * selectedQty;
       }
     });
     return total;
@@ -91,50 +89,36 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
   const getRefundAmount = () => {
     if (refundType === 'full') {
       return sale.totalAmount - (sale.refundedAmount || 0);
-    } else if (refundType === 'partial' && refundAmount) {
-      return parseFloat(refundAmount);
-    } else {
-      return calculatePartialRefundAmount();
     }
+    return calculatePartialRefundAmount();
   };
 
   const handleConfirm = () => {
-    const refundData: any = {
+    const items =
+      refundType === 'full'
+        ? sale.items.map(item => ({ saleItemId: item.id, quantity: item.quantity }))
+        : Array.from(selectedItems.entries()).map(([saleItemId, quantity]) => ({
+            saleItemId,
+            quantity,
+          }));
+
+    onConfirmRefund({
       saleId: sale.id,
       refundType,
+      items,
       reason: refundReason,
-      notes: refundNotes || undefined
-    };
-
-    if (refundType === 'full') {
-      refundData.amount = sale.totalAmount - (sale.refundedAmount || 0);
-    } else {
-      if (selectedItems.size > 0) {
-        refundData.items = Array.from(selectedItems.entries()).map(([productId, quantity]) => ({
-          productId,
-          quantity
-        }));
-      } else if (refundAmount) {
-        refundData.amount = parseFloat(refundAmount);
-      }
-    }
-
-    onConfirmRefund(refundData);
+      notes: refundNotes || undefined,
+    });
   };
 
   const isValid = () => {
     if (!refundReason) return false;
-    if (refundType === 'partial') {
-      if (selectedItems.size === 0 && !refundAmount) return false;
-      if (refundAmount && parseFloat(refundAmount) <= 0) return false;
-      if (refundAmount && parseFloat(refundAmount) > (sale.totalAmount - (sale.refundedAmount || 0))) return false;
-    }
+    if (refundType === 'partial' && selectedItems.size === 0) return false;
     return true;
   };
 
   const resetForm = () => {
     setRefundType('full');
-    setRefundAmount('');
     setRefundReason('');
     setRefundNotes('');
     setSelectedItems(new Map());
@@ -165,7 +149,7 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
               <span className="text-gray-600">Original Amount:</span>
               <span className="font-semibold">{formatCurrency(sale.totalAmount)}</span>
             </div>
-            {sale.refundedAmount > 0 && (
+            {(sale.refundedAmount || 0) > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Already Refunded:</span>
                 <span className="font-semibold text-red-600">
@@ -184,89 +168,85 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
           {/* Refund Type */}
           <div className="space-y-3">
             <Label className="text-sm font-semibold">Refund Type</Label>
-            <RadioGroup value={refundType} onValueChange={(value: any) => setRefundType(value)}>
+            <RadioGroup
+              value={refundType}
+              onValueChange={(value: 'full' | 'partial') => {
+                setRefundType(value);
+                setSelectedItems(new Map());
+              }}
+            >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="full" id="full" />
                 <Label htmlFor="full" className="font-normal cursor-pointer">
-                  Full Refund - {formatCurrency(sale.totalAmount - (sale.refundedAmount || 0))}
+                  Full Refund — {formatCurrency(sale.totalAmount - (sale.refundedAmount || 0))}
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="partial" id="partial" />
                 <Label htmlFor="partial" className="font-normal cursor-pointer">
-                  Partial Refund - Select items or enter amount
+                  Partial Refund — select items below
                 </Label>
               </div>
             </RadioGroup>
           </div>
 
-          {/* Partial Refund Options */}
+          {/* Partial Refund — Item Selection */}
           {refundType === 'partial' && (
-            <div className="space-y-4 border border-gray-200 p-4 rounded-lg">
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold">Select Items to Refund</Label>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {sale.items.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                      <div className="flex items-center gap-3 flex-1">
-                        <Checkbox
-                          checked={selectedItems.has(item.productId)}
-                          onCheckedChange={(checked) => handleItemToggle(item, checked as boolean)}
-                        />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">{item.productName}</p>
-                          <p className="text-xs text-gray-500">
-                            {formatCurrency(item.total)} ({item.quantity} items)
-                          </p>
-                        </div>
+            <div className="space-y-3 border border-gray-200 p-4 rounded-lg">
+              <Label className="text-sm font-semibold">Select Items to Refund</Label>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {sale.items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded"
+                  >
+                    <div className="flex items-center gap-3 flex-1">
+                      <Checkbox
+                        checked={selectedItems.has(item.id)}
+                        onCheckedChange={(checked) =>
+                          handleItemToggle(item, checked as boolean)
+                        }
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{item.productName}</p>
+                        <p className="text-xs text-gray-500">
+                          {formatCurrency(getItemTotal(item))} ({item.quantity} item
+                          {item.quantity !== 1 ? 's' : ''})
+                        </p>
                       </div>
-                      {selectedItems.has(item.productId) && (
-                        <div className="flex items-center gap-2">
-                          <Label className="text-xs">Qty:</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            max={item.quantity}
-                            value={selectedItems.get(item.productId)}
-                            onChange={(e) => handleItemQuantityChange(item.productId, parseInt(e.target.value) || 1)}
-                            className="w-16 h-8 text-xs"
-                          />
-                        </div>
-                      )}
                     </div>
-                  ))}
-                </div>
-                {selectedItems.size > 0 && (
-                  <div className="flex justify-between text-sm font-semibold pt-2 border-t">
-                    <span>Calculated Refund:</span>
-                    <span className="text-navy">{formatCurrency(calculatePartialRefundAmount())}</span>
+                    {selectedItems.has(item.id) && (
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs">Qty:</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max={item.quantity}
+                          value={selectedItems.get(item.id)}
+                          onChange={(e) =>
+                            handleItemQuantityChange(
+                              item.id,
+                              Math.min(
+                                parseInt(e.target.value) || 1,
+                                item.quantity,
+                              ),
+                            )
+                          }
+                          className="w-16 h-8 text-xs"
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
+                ))}
               </div>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
+              {selectedItems.size > 0 && (
+                <div className="flex justify-between text-sm font-semibold pt-2 border-t">
+                  <span>Calculated Refund:</span>
+                  <span className="text-navy">
+                    {formatCurrency(calculatePartialRefundAmount())}
+                  </span>
                 </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-white px-2 text-gray-500">Or enter custom amount</span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="refundAmount" className="text-sm">Custom Refund Amount</Label>
-                <Input
-                  id="refundAmount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max={sale.totalAmount - (sale.refundedAmount || 0)}
-                  placeholder="Enter amount"
-                  value={refundAmount}
-                  onChange={(e) => setRefundAmount(e.target.value)}
-                  disabled={selectedItems.size > 0}
-                />
-              </div>
+              )}
             </div>
           )}
 
@@ -309,14 +289,14 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="font-semibold text-sm text-orange-900 mb-2">
-                  Refund Summary
-                </p>
+                <p className="font-semibold text-sm text-orange-900 mb-2">Refund Summary</p>
                 <div className="space-y-1 text-sm text-orange-800">
-                  <p>• Refund amount: <span className="font-bold">{formatCurrency(getRefundAmount())}</span></p>
+                  <p>
+                    • Refund amount:{' '}
+                    <span className="font-bold">{formatCurrency(getRefundAmount())}</span>
+                  </p>
                   <p>• This action cannot be undone</p>
                   <p>• Inventory will be adjusted automatically</p>
-                  <p>• Customer will be notified (if email available)</p>
                 </div>
               </div>
             </div>
@@ -332,7 +312,9 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
             disabled={!isValid() || isProcessing}
             className="bg-orange-600 hover:bg-orange-700"
           >
-            {isProcessing ? 'Processing...' : `Confirm Refund ${formatCurrency(getRefundAmount())}`}
+            {isProcessing
+              ? 'Processing...'
+              : `Confirm Refund ${formatCurrency(getRefundAmount())}`}
           </Button>
         </DialogFooter>
       </DialogContent>

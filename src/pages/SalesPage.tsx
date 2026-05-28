@@ -446,11 +446,15 @@ const SalesPage = () => {
   const handleConfirmRefund = async (refundData: any) => {
     try {
       setIsRefundProcessing(true);
-      await salesService.refundSale(refundData.saleId, refundData);
+      const updated = await salesService.refundSale(refundData.saleId, {
+        reason: refundData.reason,
+        items: refundData.items,
+        notes: refundData.notes,
+      });
 
       toast({
         title: 'Refund Processed',
-        description: `Refund of ${formatCurrency(refundData.amount || 0)} has been processed successfully`
+        description: `Refund of ${formatCurrency(updated.refundedAmount || 0)} has been processed successfully`
       });
 
       setIsRefundDialogOpen(false);

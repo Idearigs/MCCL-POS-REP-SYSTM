@@ -335,7 +335,6 @@ export class RefundItemDto {
     example: 'clv123abc456',
   })
   @IsString()
-  @IsUUID()
   saleItemId: string;
 
   @ApiProperty({
