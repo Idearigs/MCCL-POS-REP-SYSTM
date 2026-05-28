@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { shiftService, CloseShiftData, Shift } from '@/services/shiftService';
 import { format } from 'date-fns';
+import { printShiftSummaryThermal } from '@/utils/thermalReceipt';
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface CloseShiftDialogProps {
   open: boolean;
@@ -43,6 +45,7 @@ const CloseShiftDialog: React.FC<CloseShiftDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [variance, setVariance] = useState<number | null>(null);
+  const { settings } = useSettings();
 
   // Calculate variance when closing float changes
   useEffect(() => {
@@ -78,6 +81,45 @@ const CloseShiftDialog: React.FC<CloseShiftDialogProps> = ({
       };
 
       const closedShift = await shiftService.closeShift(activeShift.id, closeData);
+
+      // Auto open cash drawer
+      const printerName = settings?.printer?.printerName;
+      const printerModel = settings?.printer?.model;
+      if (printerName) {
+        try {
+          const { openCashDrawer } = await import('@/utils/qzBridge');
+          await openCashDrawer(printerName, printerModel as any, 'end-shift');
+        } catch {
+          // Non-fatal — drawer may not be connected
+        }
+      }
+
+      // Print thermal shift summary
+      try {
+        const report = await shiftService.getShiftReport(closedShift.id);
+        await printShiftSummaryThermal(
+          {
+            storeName: settings?.general?.storeName ?? 'Store',
+            shiftNumber: closedShift.shiftNumber,
+            cashierName: closedShift.user
+              ? `${(closedShift.user as any).firstName ?? ''} ${(closedShift.user as any).lastName ?? ''}`.trim()
+              : 'Staff',
+            startTime: closedShift.startTime as unknown as string,
+            endTime: closedShift.endTime as unknown as string ?? new Date().toISOString(),
+            openingFloat: Number(closedShift.openingFloat),
+            closingFloat: floatValue,
+            totalSales: report.metrics.totalSales,
+            totalRevenue: report.metrics.totalRevenue,
+            paymentBreakdown: report.metrics.paymentBreakdown,
+            totalDiscount: report.metrics.totalDiscount,
+            totalTax: report.metrics.totalTax,
+            variance: Number(closedShift.variance ?? 0),
+          },
+          printerName,
+        );
+      } catch {
+        // Non-fatal — print dialog may not be available
+      }
 
       // Reset form
       setClosingFloat('');

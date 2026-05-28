@@ -15,7 +15,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import VoidTransactionDialog from '@/components/sales/VoidTransactionDialog';
-import { XCircle } from 'lucide-react';
+import { XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Eye, Printer, RotateCcw, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { salesService, Sale, SaleFilters as SaleFiltersType } from '@/services/salesService';
@@ -44,6 +44,7 @@ const SalesPage = () => {
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
   const [voidingSale, setVoidingSale] = useState<Sale | null>(null);
   const [isVoidProcessing, setIsVoidProcessing] = useState(false);
+  const [expandedSaleId, setExpandedSaleId] = useState<string | null>(null);
 
   const [cashiers, setCashiers] = useState<{id: string; name: string}[]>([]);
 
@@ -308,15 +309,20 @@ const SalesPage = () => {
   };
 
   const getSaleStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { variant: any; label: string }> = {
+    const statusConfig: Record<string, { variant: any; label: string; className?: string }> = {
       DRAFT: { variant: 'secondary', label: 'Draft' },
       COMPLETED: { variant: 'default', label: 'Completed' },
       CANCELLED: { variant: 'destructive', label: 'Cancelled' },
-      REFUNDED: { variant: 'outline', label: 'Refunded' }
+      REFUNDED: { variant: 'outline', label: 'Refunded', className: 'border-orange-400 text-orange-700 bg-orange-50' },
+      PARTIALLY_REFUNDED: { variant: 'outline', label: 'Part-Refunded', className: 'border-amber-400 text-amber-700 bg-amber-50' },
     };
 
     const config = statusConfig[status] || statusConfig.COMPLETED;
-    return <Badge variant={config.variant} className="text-xs">{config.label}</Badge>;
+    return (
+      <Badge variant={config.variant} className={`text-xs ${config.className ?? ''}`}>
+        {config.label}
+      </Badge>
+    );
   };
 
   const getConditionSummary = (items: any[]): { brandNew: number; used: number } => {
@@ -624,7 +630,7 @@ const SalesPage = () => {
                       <TableHead className="font-semibold">Sale #</TableHead>
                       <TableHead className="font-semibold">Date & Time</TableHead>
                       <TableHead className="font-semibold">Customer</TableHead>
-                      <TableHead className="font-semibold text-center">Items</TableHead>
+                      <TableHead className="font-semibold">Products / SKU</TableHead>
                       <TableHead className="font-semibold">Condition</TableHead>
                       <TableHead className="font-semibold text-right">Amount</TableHead>
                       <TableHead className="font-semibold">Payment</TableHead>
@@ -649,10 +655,24 @@ const SalesPage = () => {
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="outline" className="text-xs">
-                            {sale.items?.length || 0}
-                          </Badge>
+                        <TableCell>
+                          <div className="space-y-0.5 max-w-[200px]">
+                            {(sale.items || []).slice(0, 2).map((item, i) => (
+                              <div key={i} className="text-xs text-gray-700 leading-tight">
+                                <span className="font-medium truncate block" title={item.productName}>
+                                  {item.productName || '—'}
+                                </span>
+                                {item.sku && (
+                                  <span className="text-gray-400 font-mono">SKU: {item.sku}</span>
+                                )}
+                              </div>
+                            ))}
+                            {(sale.items?.length ?? 0) > 2 && (
+                              <span className="text-xs text-gray-400">
+                                +{sale.items.length - 2} more
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           {(() => {
@@ -730,9 +750,43 @@ const SalesPage = () => {
                                 <XCircle className="h-4 w-4" />
                               </Button>
                             )}
+                            {(sale.status === 'REFUNDED' || sale.status === 'PARTIALLY_REFUNDED' || sale.paymentStatus === 'REFUNDED' || sale.paymentStatus === 'PARTIALLY_REFUNDED') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setExpandedSaleId(expandedSaleId === sale.id ? null : sale.id)}
+                                className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                title="Show refund details"
+                              >
+                                {expandedSaleId === sale.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
+                      {/* Refund details row */}
+                      {expandedSaleId === sale.id && (
+                        <TableRow className="bg-orange-50">
+                          <TableCell colSpan={10} className="py-3 px-6">
+                            <div className="text-sm font-medium text-orange-800 mb-2">Refunded Items</div>
+                            <div className="grid gap-1">
+                              {(sale.items || []).map((item, i) => (
+                                <div key={i} className="flex items-center gap-3 text-xs text-gray-700">
+                                  <span className="font-mono bg-white border border-orange-200 rounded px-1.5 py-0.5 text-orange-700">
+                                    {item.sku || 'N/A'}
+                                  </span>
+                                  <span className="flex-1">{item.productName}</span>
+                                  <span className="text-gray-500">Qty: {item.quantity}</span>
+                                  <span className="font-medium">£{Number(item.unitPrice).toFixed(2)}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="mt-2 text-xs text-orange-700">
+                              Receipt: <span className="font-mono font-medium">{sale.receiptNumber || sale.saleNumber || sale.id.slice(0, 8)}</span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
                     ))}
                   </TableBody>
                 </Table>

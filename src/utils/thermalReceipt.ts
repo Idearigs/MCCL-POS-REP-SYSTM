@@ -79,6 +79,9 @@ function buildCopyHTML(data: ThermalReceiptData, copyLabel?: string): string {
         <span class="item-mid">${qtyPrice}</span>
         <span class="item-amt">${fmt(item.total)}</span>
       </div>`];
+      if (item.sku) {
+        rows.push(`<div class="item-disc">SKU: ${item.sku}</div>`);
+      }
       if (item.discount && item.discount > 0) {
         rows.push(`<div class="item-disc">Discount: -${fmt(item.discount)}</div>`);
       }
@@ -121,6 +124,7 @@ function buildCopyHTML(data: ThermalReceiptData, copyLabel?: string): string {
       <div><div class="meta-lbl">Till</div><div>${till}</div></div>
       <div><div class="meta-lbl">Date &amp; Time</div><div>${date}</div></div>
       <div><div class="meta-lbl">Operator</div><div>${operator}</div></div>
+      <div style="grid-column:1/-1"><div class="meta-lbl">Receipt No.</div><div><strong>${data.receiptNumber}</strong></div></div>
     </div>`;
   })();
 
@@ -536,6 +540,105 @@ export async function printThermalReceipt(
     }
   }
   printIframeFallback(data, options);
+}
+
+// ─── Shift Summary (thermal) ──────────────────────────────────────────────────
+
+export interface ShiftSummaryData {
+  storeName: string;
+  shiftNumber: string;
+  cashierName: string;
+  startTime: string; // ISO
+  endTime: string;   // ISO
+  openingFloat: number;
+  closingFloat: number;
+  totalSales: number;
+  totalRevenue: number;
+  paymentBreakdown: Record<string, number>;
+  totalDiscount: number;
+  totalTax: number;
+  variance: number;
+}
+
+export async function printShiftSummaryThermal(
+  data: ShiftSummaryData,
+  printerName?: string,
+): Promise<void> {
+  function fmtMoney(v: number) { return `£${v.toFixed(2)}`; }
+  function fmtDate(iso: string) {
+    const d = new Date(iso);
+    return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  const payRows = Object.entries(data.paymentBreakdown)
+    .map(([method, amount]) =>
+      `<div class="row"><span>${method}</span><span>${fmtMoney(amount)}</span></div>`)
+    .join('');
+
+  const varianceClass = data.variance >= 0 ? 'color:#166534' : 'color:#991b1b';
+
+  const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/>
+<title>Shift Report ${data.shiftNumber}</title>
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Courier New',monospace; font-size:11px; font-weight:600; width:72mm; margin:0 auto; color:#000; background:#fff; padding:3mm 0; }
+  .center { text-align:center; }
+  .title { font-size:14px; font-weight:900; text-align:center; margin-bottom:2px; }
+  .sub { font-size:10px; text-align:center; color:#333; }
+  hr { border:none; border-top:1px dashed #333; margin:4px 0; }
+  .row { display:flex; justify-content:space-between; padding:1px 0; }
+  .total-row { display:flex; justify-content:space-between; font-size:13px; font-weight:900; padding:2px 0; }
+  .section { font-size:10px; font-weight:900; margin:3px 0 1px; text-transform:uppercase; letter-spacing:.5px; }
+</style></head><body>
+  <div class="title">${data.storeName.toUpperCase()}</div>
+  <div class="sub">SHIFT REPORT</div>
+  <hr/>
+  <div class="section">Shift Details</div>
+  <div class="row"><span>Shift No.</span><span>${data.shiftNumber}</span></div>
+  <div class="row"><span>Cashier</span><span>${data.cashierName}</span></div>
+  <div class="row"><span>Start</span><span>${fmtDate(data.startTime)}</span></div>
+  <div class="row"><span>End</span><span>${fmtDate(data.endTime)}</span></div>
+  <hr/>
+  <div class="section">Float</div>
+  <div class="row"><span>Opening Float</span><span>${fmtMoney(data.openingFloat)}</span></div>
+  <div class="row"><span>Closing Float</span><span>${fmtMoney(data.closingFloat)}</span></div>
+  <div class="row" style="${varianceClass}"><span>Variance</span><span>${data.variance >= 0 ? '+' : ''}${fmtMoney(data.variance)}</span></div>
+  <hr/>
+  <div class="section">Sales Summary</div>
+  <div class="row"><span>Total Transactions</span><span>${data.totalSales}</span></div>
+  <div class="row"><span>Total Discount</span><span>-${fmtMoney(data.totalDiscount)}</span></div>
+  <div class="row"><span>Total Tax</span><span>${fmtMoney(data.totalTax)}</span></div>
+  <div class="total-row"><span>TOTAL REVENUE</span><span>${fmtMoney(data.totalRevenue)}</span></div>
+  <hr/>
+  <div class="section">Payment Breakdown</div>
+  ${payRows}
+  <hr/>
+  <div class="center" style="font-size:10px;margin-top:4px;">End of Shift Report</div>
+</body></html>`;
+
+  if (printerName) {
+    try {
+      const { printHtmlViaQZ } = await import('./qzBridge');
+      await printHtmlViaQZ(printerName, html);
+      return;
+    } catch {
+      // fall through
+    }
+  }
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:none;visibility:hidden;';
+  document.body.appendChild(iframe);
+  const cleanup = () => setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 2000);
+  try {
+    const doc = iframe.contentWindow?.document;
+    if (!doc) throw new Error('no iframe');
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => { try { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); } finally { cleanup(); } }, 280);
+  } catch {
+    cleanup();
+  }
 }
 
 function printIframeFallback(data: ThermalReceiptData, options: PrintOptions): void {

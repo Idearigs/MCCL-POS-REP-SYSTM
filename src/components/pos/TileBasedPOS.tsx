@@ -1974,25 +1974,11 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
-      {/* Offline / pending-sync banner */}
-      {(!isOnline || pendingSyncCount > 0) && (
-        <div className={`flex items-center justify-center gap-2 text-sm font-medium py-2 px-4 ${
-          !isOnline
-            ? 'bg-red-600 text-white'
-            : 'bg-amber-500 text-white'
-        }`}>
-          {!isOnline ? (
-            <>
-              <span className="inline-block h-2 w-2 rounded-full bg-white animate-pulse" />
-              Server unreachable — sales are being saved locally and will sync automatically when connection is restored
-              {pendingSyncCount > 0 && <span className="ml-2 bg-white/20 rounded px-2">{pendingSyncCount} pending</span>}
-            </>
-          ) : (
-            <>
-              <span className="inline-block h-2 w-2 rounded-full bg-white animate-pulse" />
-              Syncing {pendingSyncCount} offline sale{pendingSyncCount !== 1 ? 's' : ''} to server…
-            </>
-          )}
+      {/* Pending-sync banner — only show when actively syncing, not for unreachable state */}
+      {isOnline && pendingSyncCount > 0 && (
+        <div className="flex items-center justify-center gap-2 text-sm font-medium py-2 px-4 bg-amber-500 text-white">
+          <span className="inline-block h-2 w-2 rounded-full bg-white animate-pulse" />
+          Syncing {pendingSyncCount} offline sale{pendingSyncCount !== 1 ? 's' : ''} to server…
         </div>
       )}
 
@@ -2065,7 +2051,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <Input
                   type="text"
-                  placeholder={showRepairView ? "Search by RMA, name, phone, or repair item..." : "Search products..."}
+                  placeholder={showRepairView ? "Search by RMA, name, phone, or repair item..." : "Search by name, SKU or barcode…"}
                   value={showRepairView ? repairSearchQuery : searchQuery}
                   onChange={(e) => showRepairView ? setRepairSearchQuery(e.target.value) : setSearchQuery(e.target.value)}
                   className="pl-10 w-80 bg-white border-gray-300"

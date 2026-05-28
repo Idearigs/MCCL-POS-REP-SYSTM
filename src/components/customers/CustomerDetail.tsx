@@ -11,12 +11,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, Mail, MapPin, Phone, ShoppingBag, User, ExternalLink, Eye, Wrench, Award, DollarSign, TrendingUp, CreditCard, Star } from 'lucide-react';
+import { Calendar, Mail, MapPin, Phone, ShoppingBag, User, ExternalLink, Eye, Wrench, Award, DollarSign, TrendingUp, CreditCard, Star, RotateCcw } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import ConsentForm from '@/components/gdpr/ConsentForm';
 import CustomerPurchaseHistory from './CustomerPurchaseHistory';
 import { Customer } from '@/contexts/CustomerContext';
 import { repairService } from '@/services/repairService';
+import { salesService, Sale } from '@/services/salesService';
 import { toast } from 'sonner';
 
 interface CustomerDetailProps {
@@ -36,11 +37,14 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
   const [customerRepairs, setCustomerRepairs] = useState<any[]>([]);
   const [loadingRepairs, setLoadingRepairs] = useState(false);
   const [repairError, setRepairError] = useState<string | null>(null);
+  const [refundedSales, setRefundedSales] = useState<Sale[]>([]);
+  const [loadingRefunds, setLoadingRefunds] = useState(false);
 
   // Load customer repairs when dialog opens
   useEffect(() => {
     if (isOpen && customer.id) {
       loadCustomerRepairs();
+      loadCustomerRefunds();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, customer.id]);
@@ -70,11 +74,26 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
     }
   };
 
+  const loadCustomerRefunds = async () => {
+    try {
+      setLoadingRefunds(true);
+      const res = await salesService.getSales(1, 50, {
+        customerId: customer.id,
+        status: 'REFUNDED',
+      });
+      setRefundedSales(res.data || []);
+    } catch {
+      // non-fatal
+    } finally {
+      setLoadingRefunds(false);
+    }
+  };
+
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Unknown date';
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return 'Invalid date';
-    return date.toLocaleDateString('en-GB', { 
+    return date.toLocaleDateString('en-GB', {
       day: 'numeric', 
       month: 'short', 
       year: 'numeric' 
@@ -180,9 +199,12 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-4">
-          <TabsList className="w-full grid grid-cols-3 mb-6 bg-gray-100 p-1 rounded-lg">
+          <TabsList className="w-full grid grid-cols-4 mb-6 bg-gray-100 p-1 rounded-lg">
             <TabsTrigger value="overview" className="rounded data-[state=active]:bg-white data-[state=active]:text-gray-800 data-[state=active]:shadow-sm">Overview</TabsTrigger>
             <TabsTrigger value="history" className="rounded data-[state=active]:bg-white data-[state=active]:text-gray-800 data-[state=active]:shadow-sm">Purchase & Repairs</TabsTrigger>
+            <TabsTrigger value="refunds" className="rounded data-[state=active]:bg-white data-[state=active]:text-gray-800 data-[state=active]:shadow-sm">
+              Refunds {refundedSales.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 text-xs px-1.5 rounded-full">{refundedSales.length}</span>}
+            </TabsTrigger>
             <TabsTrigger value="preferences" className="rounded data-[state=active]:bg-white data-[state=active]:text-gray-800 data-[state=active]:shadow-sm">Preferences</TabsTrigger>
           </TabsList>
 
@@ -423,6 +445,81 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
                 </div>
               ) : null}
             </div>
+          </TabsContent>
+
+          {/* ── Refunds Tab ─────────────────────────────────────────────── */}
+          <TabsContent value="refunds" className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <RotateCcw className="h-4 w-4 text-orange-600" />
+              <h3 className="font-semibold text-gray-800">Refund History</h3>
+            </div>
+
+            {loadingRefunds ? (
+              <div className="text-sm text-gray-400 py-6 text-center">Loading refunds…</div>
+            ) : refundedSales.length === 0 ? (
+              <div className="text-sm text-gray-400 py-6 text-center">No refunds found for this customer.</div>
+            ) : (
+              <div className="space-y-3">
+                {/* Summary card */}
+                <div className="grid grid-cols-2 gap-3">
+                  <Card className="border-orange-200 bg-orange-50">
+                    <CardContent className="pt-4">
+                      <p className="text-xs text-orange-600 font-medium">Total Refunds</p>
+                      <p className="text-2xl font-bold text-orange-800">{refundedSales.length}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-orange-200 bg-orange-50">
+                    <CardContent className="pt-4">
+                      <p className="text-xs text-orange-600 font-medium">Total Refunded Value</p>
+                      <p className="text-2xl font-bold text-orange-800">
+                        £{refundedSales.reduce((s, r) => s + Number(r.totalAmount), 0).toFixed(2)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Refund list */}
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50">
+                      <TableHead className="font-semibold">Receipt No.</TableHead>
+                      <TableHead className="font-semibold">Date</TableHead>
+                      <TableHead className="font-semibold">Products / SKU</TableHead>
+                      <TableHead className="font-semibold text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {refundedSales.map((sale) => (
+                      <TableRow key={sale.id}>
+                        <TableCell className="font-mono text-sm font-medium text-orange-700">
+                          {sale.receiptNumber || sale.saleNumber || `#${sale.id.slice(0, 8)}`}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          {formatDate(sale.createdAt)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-0.5">
+                            {(sale.items || []).map((item, i) => (
+                              <div key={i} className="text-xs">
+                                <span className="text-gray-700">{item.productName || '—'}</span>
+                                {item.sku && (
+                                  <span className="ml-1.5 font-mono bg-gray-100 text-gray-500 px-1 rounded text-[10px]">
+                                    {item.sku}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-orange-700">
+                          £{Number(sale.totalAmount).toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="preferences" className="space-y-6">
