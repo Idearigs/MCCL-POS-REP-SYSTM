@@ -300,6 +300,17 @@ const LiveGoldRate: React.FC<LiveGoldRateProps> = ({ onPriceUpdate, compact = fa
             </div>
           )}
 
+          {/* Graceful degradation badge — live feed offline, showing last synced rate */}
+          {!isLive && !isManualMode && pricePerGram > 0 && (
+            <span
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-[10px] font-semibold border border-yellow-300"
+              title="The live gold feed is unavailable. Showing the last synced rate. You can still complete sales."
+            >
+              <WifiOff className="w-3 h-3" />
+              Offline rate
+            </span>
+          )}
+
           {/* Loading spinner */}
           {isLoading && (
             <RefreshCw className="w-3 h-3 text-gray-400 animate-spin" />
@@ -362,6 +373,14 @@ const LiveGoldRate: React.FC<LiveGoldRateProps> = ({ onPriceUpdate, compact = fa
                 <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
               </button>
             </div>
+
+            {/* Graceful degradation banner */}
+            {!isLive && !isManualMode && pricePerGram > 0 && (
+              <div className="mx-1 mb-2 flex items-center gap-2 px-3 py-2 rounded-xl bg-yellow-400/20 border border-yellow-200/40 text-yellow-50 text-sm">
+                <WifiOff className="w-4 h-4 flex-shrink-0" />
+                <span>Live pricing offline: Using last synced rate. You can still complete sales.</span>
+              </div>
+            )}
 
             {/* Main price display */}
             <div className="text-center py-4">

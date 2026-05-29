@@ -11,7 +11,11 @@ import {
   HttpCode,
   HttpStatus,
   Request,
+  Headers,
+  Req,
+  Res,
 } from '@nestjs/common';
+import type { Request as ExpressRequest, Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -20,7 +24,6 @@ import {
   ApiQuery,
   ApiParam,
 } from '@nestjs/swagger';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import { SalesService } from './sales.service';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
@@ -39,7 +42,7 @@ import { PaginatedResponseDto } from '../../shared/dto/pagination.dto';
 
 @ApiTags('Sales')
 @Controller('sales')
-@UseGuards(ThrottlerGuard, JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 @ApiBearerAuth('access-token')
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
@@ -67,8 +70,14 @@ export class SalesController {
     @Body() createSaleDto: CreateSaleDto,
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
+    @Headers('Idempotency-Key') idempotencyKey?: string,
   ): Promise<SaleResponseDto> {
-    return this.salesService.create(createSaleDto, tenantId, userId);
+    return this.salesService.create(
+      createSaleDto,
+      tenantId,
+      userId,
+      idempotencyKey,
+    );
   }
 
   @Get()
@@ -192,6 +201,76 @@ export class SalesController {
     return this.salesService.findAll(todayQuery, tenantId);
   }
 
+  @Get('export/csv')
+  @ApiOperation({
+    summary: 'Stream sales as CSV',
+    description:
+      'Memory-flat CSV export. Rows are streamed from the DB in keyset batches ' +
+      'and piped to the response on-the-fly via res.write(); RAM stays flat for ' +
+      'any dataset size. Closes the DB walk immediately if the client aborts.',
+  })
+  async exportCsv(
+    @Query() query: SaleQueryDto,
+    @TenantId() tenantId: string,
+    @Req() req: ExpressRequest,
+    @Res() res: Response,
+  ): Promise<void> {
+    // If the client disconnects mid-download, flip this flag so the generator
+    // stops fetching further batches and we release the DB cursor.
+    let aborted = false;
+    req.on('close', () => {
+      aborted = true;
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="sales-export-${new Date().toISOString().slice(0, 10)}.csv"`,
+    );
+
+    const esc = (v: string | number | null | undefined): string => {
+      const s = v == null ? '' : String(v);
+      // RFC-4180 quote when the value contains a comma, quote, or newline.
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    // Header row
+    res.write(
+      'Receipt,Sale Number,Date,Customer,Total,Payment Method,Status,Cashier\n',
+    );
+
+    try {
+      for await (const row of this.salesService.streamSalesForExport(
+        tenantId,
+        {
+          status: (query as any).status,
+          startDate: (query as any).startDate,
+          endDate: (query as any).endDate,
+          customerId: (query as any).customerId,
+        },
+        () => aborted,
+      )) {
+        if (aborted) break;
+        const line =
+          [
+            esc(row.receiptNumber),
+            esc(row.saleNumber),
+            esc(row.date.toISOString()),
+            esc(row.customer),
+            esc(row.total.toFixed(2)),
+            esc(row.paymentMethod),
+            esc(row.status),
+            esc(row.cashier),
+          ].join(',') + '\n';
+        // Respect backpressure: stop if the socket buffer is full and client gone.
+        if (!res.write(line) && aborted) break;
+      }
+    } finally {
+      if (!aborted) res.end();
+      else res.destroy();
+    }
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get sale by ID',
@@ -275,12 +354,14 @@ export class SalesController {
     @Body() dto: RecordInstallmentPaymentDto,
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
+    @Headers('Idempotency-Key') idempotencyKey?: string,
   ): Promise<SaleResponseDto> {
     return this.salesService.recordInstallmentPayment(
       id,
       dto,
       tenantId,
       userId,
+      idempotencyKey,
     );
   }
 
@@ -313,12 +394,14 @@ export class SalesController {
     @Body() createRefundDto: CreateRefundDto,
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
+    @Headers('Idempotency-Key') idempotencyKey?: string,
   ): Promise<SaleResponseDto> {
     return this.salesService.createRefund(
       id,
       createRefundDto,
       tenantId,
       userId,
+      idempotencyKey,
     );
   }
 
@@ -520,10 +603,18 @@ export class SalesController {
     @Body('reason') reason: string,
     @Body('details') details: string,
     @Request() req: any,
+    @Headers('Idempotency-Key') idempotencyKey?: string,
   ) {
     const tenantId = req.user?.tenantId;
     const userId = req.user?.userId;
-    return this.salesService.voidSale(id, reason, details, tenantId, userId);
+    return this.salesService.voidSale(
+      id,
+      reason,
+      details,
+      tenantId,
+      userId,
+      idempotencyKey,
+    );
   }
 
   @Delete(':id')

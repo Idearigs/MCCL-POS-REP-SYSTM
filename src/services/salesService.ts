@@ -84,6 +84,7 @@ export interface CreateSaleData {
   expectedDeliveryDate?: string;
   walkInCustomerName?: string;
   walkInCustomerPhone?: string;
+  clientSaleId?: string; // Idempotency key — dedupes retries on server & offline sync
 }
 
 export interface SaleFilters {
@@ -255,9 +256,12 @@ class SalesService {
     }
   }
 
-  async createSale(saleData: CreateSaleData): Promise<Sale> {
+  async createSale(saleData: CreateSaleData, idempotencyKey?: string): Promise<Sale> {
     try {
-      return await apiClient.post<Sale>(API_CONFIG.ENDPOINTS.CREATE_SALE, saleData);
+      const config = idempotencyKey
+        ? { headers: { 'Idempotency-Key': idempotencyKey } }
+        : undefined;
+      return await apiClient.post<Sale>(API_CONFIG.ENDPOINTS.CREATE_SALE, saleData, config);
     } catch (error) {
       console.error('Failed to create sale:', error);
       throw error;

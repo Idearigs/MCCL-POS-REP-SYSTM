@@ -124,8 +124,13 @@ const SubscriptionPage: React.FC = () => {
         // Fallback: open in new tab if the overlay script didn't load
         window.open(data.checkoutUrl, '_blank');
       }
-    } catch {
-      toast.error('Could not open checkout. Please try again.');
+    } catch (err) {
+      // Surface the server's actual reason (e.g. billing not enabled) instead
+      // of a generic "try again" that invites pointless retries.
+      const message =
+        (err as { message?: string })?.message ||
+        'Could not open checkout. Please try again.';
+      toast.error(message);
     } finally {
       setCheckoutLoading(false);
     }

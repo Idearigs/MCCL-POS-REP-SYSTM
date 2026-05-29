@@ -169,6 +169,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [openingDrawer, setOpeningDrawer] = useState(false);
   const drawerPinRef = useRef<HTMLInputElement>(null);
 
+  // Idempotency key for the in-flight checkout (survives network retries)
+  const checkoutIdempotencyKey = useRef<string | null>(null);
+
   // Keyboard shortcut state
   const searchRef = useRef<HTMLInputElement>(null);
   const [selectedCartItemId, setSelectedCartItemId] = useState<string | null>(null);
@@ -2002,6 +2005,15 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const handleProcessPayment = async () => {
     setProcessingPayment(true);
 
+    // Idempotency: generate a stable key for THIS checkout attempt. Reused across
+    // network retries so the backend dedupes; regenerated only after success.
+    if (!checkoutIdempotencyKey.current) {
+      checkoutIdempotencyKey.current =
+        (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+
     try {
       // Validate payment amounts and calculate change
       let change = 0;
@@ -2163,10 +2175,17 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         discountAmount: discount > 0 ? discount : undefined,
         taxRate: 0, // No VAT - prices already include VAT
         notes: finalNote,
+        // Persist the idempotency key in the body too, so it survives if the
+        // request falls into the offline queue and syncs later.
+        clientSaleId: checkoutIdempotencyKey.current ?? undefined,
       };
 
-      // Create the sale (falls back to local queue if server is unreachable)
-      const createdSale = await salesService.createSale(saleData);
+      // Create the sale (falls back to local queue if server is unreachable).
+      // The same Idempotency-Key header is reused on retry → no double-charge.
+      const createdSale = await salesService.createSale(
+        saleData,
+        checkoutIdempotencyKey.current ?? undefined,
+      );
       const wasQueued = (createdSale as unknown as { _offlineQueued?: boolean })._offlineQueued;
       if (wasQueued) {
         toast({
@@ -2216,6 +2235,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       localStorage.removeItem('quickPosCart');
       localStorage.removeItem('quickPosCustomer');
       localStorage.removeItem('quickPosDiscount');
+
+      // Checkout succeeded — clear the idempotency key so the NEXT sale gets a fresh one
+      checkoutIdempotencyKey.current = null;
 
       // Show the post-sale receipt screen inside the payment dialog
       setCompletedSale(createdSale);

@@ -668,40 +668,72 @@ export class ProductsService {
     userId?: string,
   ): Promise<{ updated: number; errors: any[] }> {
     try {
-      const results = {
-        updated: 0,
-        errors: [],
-      };
+      const updates: Array<{
+        productId: string;
+        newStock: number;
+        reason?: string;
+      }> = bulkUpdateDto.updates ?? [];
 
-      for (const update of bulkUpdateDto.updates) {
-        try {
-          await this.prismaService.products.update({
-            where: { id: update.productId, tenantId },
-            data: { stockQuantity: update.newStock },
-          });
+      if (updates.length === 0) return { updated: 0, errors: [] };
 
-          // Create inventory log
-          await this.createInventoryLog(
+      // ── BATCHED: one UNNEST UPDATE for every row + one createMany for every
+      //    log, inside a single transaction. Collapses 2N sequential round
+      //    trips into 2 — independent of how many products are adjusted. ──
+      const ids = updates.map((u) => u.productId);
+      const stocks = updates.map((u) => Math.trunc(Number(u.newStock)));
+
+      const result = await this.prismaService.$transaction(async (tx) => {
+        // Single round trip: zip ids + stocks via UNNEST and update in bulk.
+        const updatedRows = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+          `UPDATE products AS p
+             SET "stockQuantity" = data.new_stock,
+                 "updatedAt" = NOW()
+           FROM (
+             SELECT UNNEST($1::text[]) AS id,
+                    UNNEST($2::int[])  AS new_stock
+           ) AS data
+           WHERE p.id = data.id
+             AND p."tenantId" = $3
+           RETURNING p.id`,
+          ids,
+          stocks,
+          tenantId,
+        );
+
+        const updatedIds = new Set(updatedRows.map((r) => r.id));
+
+        // Single round trip: one inventory log per successfully updated product.
+        const logRows = updates
+          .filter((u) => updatedIds.has(u.productId))
+          .map((u) => ({
+            id: generateId(),
             tenantId,
-            update.productId,
-            'ADJUSTMENT' as any,
-            update.newStock,
-            0, // We don't have the old quantity here
-            update.newStock,
-            update.reason,
-            'BULK_UPDATE',
-          );
-
-          results.updated++;
-        } catch (error) {
-          results.errors.push({
-            productId: update.productId,
-            error: error.message,
-          });
+            productId: u.productId,
+            type: InventoryLogType.ADJUSTMENT,
+            quantity: Math.trunc(Number(u.newStock)),
+            previousQty: 0,
+            newQty: Math.trunc(Number(u.newStock)),
+            reason: u.reason,
+            reference: 'BULK_UPDATE',
+          }));
+        if (logRows.length > 0) {
+          await tx.inventory_logs.createMany({ data: logRows as any });
         }
-      }
 
-      return results;
+        const errors = updates
+          .filter((u) => !updatedIds.has(u.productId))
+          .map((u) => ({
+            productId: u.productId,
+            error: 'Product not found for tenant',
+          }));
+
+        return { updated: updatedIds.size, errors };
+      });
+
+      // Invalidate product caches once after the batch commits.
+      await this.clearProductCaches(tenantId);
+
+      return result;
     } catch (error) {
       this.logger.error('Failed to bulk update stock:', error.message);
       throw error;

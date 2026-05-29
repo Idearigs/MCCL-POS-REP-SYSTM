@@ -709,16 +709,28 @@ export class InventoryStatsDto {
 
 export class ProductStatsDto extends InventoryStatsDto {}
 
+export class BulkStockUpdateItemDto {
+  @ApiProperty({ example: 'clv123abc456' })
+  @IsString()
+  productId: string;
+
+  @ApiProperty({ example: 42 })
+  @IsInt()
+  @Min(0)
+  newStock: number;
+
+  @ApiPropertyOptional({ example: 'Stock count correction' })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
 export class BulkUpdateStockDto {
-  @ApiProperty()
+  @ApiProperty({ type: [BulkStockUpdateItemDto] })
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => Object)
-  updates: Array<{
-    productId: string;
-    newStock: number;
-    reason: string;
-  }>;
+  @Type(() => BulkStockUpdateItemDto)
+  updates: BulkStockUpdateItemDto[];
 }
 
 export class LowStockReportDto {

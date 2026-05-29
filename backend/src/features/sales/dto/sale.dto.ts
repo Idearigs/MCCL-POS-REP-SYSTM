@@ -385,7 +385,16 @@ export class CreateRefundDto {
 
 export class SaleQueryDto {
   @ApiPropertyOptional({
-    description: 'Page number',
+    description:
+      'Cursor for cursor-based pagination (the id of the last row from the previous page). When provided, offset/page is ignored and rows after this cursor are returned with a nextCursor in the response meta.',
+    example: 'clv123abc456',
+  })
+  @IsOptional()
+  @IsString()
+  cursor?: string;
+
+  @ApiPropertyOptional({
+    description: 'Page number (offset pagination — ignored when cursor is set)',
     example: 1,
     minimum: 1,
   })

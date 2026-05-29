@@ -1,6 +1,10 @@
 import { Module, Logger } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { buildThrottlerOptions } from './core/throttler/throttler.factory';
+import { GlobalThrottlerGuard } from './core/throttler/global-throttler.guard';
+import { QueueModule } from './core/queue/queue.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-store';
 import { AppController } from './app.controller';
@@ -29,6 +33,7 @@ import { HrmsModule } from './features/hrms/hrms.module';
 import { OutletsModule } from './features/outlets/outlets.module';
 import { SettingsModule } from './features/settings/settings.module';
 import { GiftCardsModule } from './features/gift-cards/gift-cards.module';
+import { MetalsModule } from './features/metals/metals.module';
 
 // External integrations
 import {
@@ -46,13 +51,12 @@ import { OpenAIModule } from './integrations/openai/openai.module';
       envFilePath: '.env',
     }),
 
-    // Throttling/Rate limiting
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000, // 60 seconds
-        limit: 500, // 500 requests per minute per IP
-      },
-    ]),
+    // Throttling/Rate limiting — Redis-backed with graceful in-memory fallback.
+    // Global tier: 100 req/min/IP. Stricter 'auth' tier (5/15min) applied to
+    // credential routes via @Throttle({ auth: {} }).
+    ThrottlerModule.forRootAsync({
+      useFactory: buildThrottlerOptions,
+    }),
 
     // Redis Cache Module
     CacheModule.registerAsync({
@@ -99,6 +103,7 @@ import { OpenAIModule } from './integrations/openai/openai.module';
     }),
 
     // Core modules
+    QueueModule,
     PrismaModule,
     GoogleDriveModule,
     FileStorageModule,
@@ -123,8 +128,15 @@ import { OpenAIModule } from './integrations/openai/openai.module';
     OutletsModule,
     SettingsModule,
     GiftCardsModule,
+    MetalsModule,
   ],
   controllers: [AppController],
-  providers: [AppService, CacheService],
+  providers: [
+    AppService,
+    CacheService,
+    // Global rate limiter — applies the 100/min tier to every route and returns
+    // a clean JSON 429 on breach. Replaces the per-controller ThrottlerGuard.
+    { provide: APP_GUARD, useClass: GlobalThrottlerGuard },
+  ],
 })
 export class AppModule {}
