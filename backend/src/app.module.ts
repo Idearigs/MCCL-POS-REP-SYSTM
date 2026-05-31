@@ -10,7 +10,7 @@ import { redisStore } from 'cache-manager-redis-store';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 // Core infrastructure
-import { PrismaModule, CacheService } from './core';
+import { PrismaModule, CacheService, HealthService } from './core';
 
 // Business features
 import {
@@ -134,6 +134,7 @@ import { OpenAIModule } from './integrations/openai/openai.module';
   providers: [
     AppService,
     CacheService,
+    HealthService,
     // Global rate limiter — applies the 100/min tier to every route and returns
     // a clean JSON 429 on breach. Replaces the per-controller ThrottlerGuard.
     { provide: APP_GUARD, useClass: GlobalThrottlerGuard },

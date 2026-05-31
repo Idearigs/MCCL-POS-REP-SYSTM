@@ -1,5 +1,8 @@
+// Must be the first import so Sentry initialises before anything else runs.
+import './instrument';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, BadRequestException, Logger } from '@nestjs/common';
+import { AllExceptionsFilter } from './core';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -149,8 +152,15 @@ async function bootstrap() {
   // ===================================
 
   app.setGlobalPrefix('api/v1', {
-    exclude: ['health', 'metrics'],
+    exclude: ['health', 'health/live', 'metrics'],
   });
+
+  // ===================================
+  // GLOBAL EXCEPTION HANDLING
+  // ===================================
+
+  // Consistent error responses + ERROR-level logging + Sentry reporting for 5xx.
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   // ===================================
   // SWAGGER DOCUMENTATION
