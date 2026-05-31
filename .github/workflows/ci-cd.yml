@@ -37,10 +37,13 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          # NOTE: the workflow file itself is deliberately NOT listed in any
+          # filter. Editing CI config must not force-rebuild every service —
+          # that coupling let a broken internal app (mainframe) block the
+          # customer-facing POS pipeline. Each filter watches only its own code.
           filters: |
             pos-backend:
               - 'backend/**'
-              - '.github/workflows/ci-cd.yml'
             pos-frontend:
               - 'src/**'
               - 'public/**'
@@ -49,13 +52,10 @@ jobs:
               - 'tailwind.config.js'
               - 'package.json'
               - 'package-lock.json'
-              - '.github/workflows/ci-cd.yml'
             mainframe-backend:
               - 'mainframe-backend/**'
-              - '.github/workflows/ci-cd.yml'
             mainframe-admin:
               - 'mainframe-admin/**'
-              - '.github/workflows/ci-cd.yml'
 
   # -------------------------------------------------------------------
   # JOB 1 — POS Backend lint & unit tests
