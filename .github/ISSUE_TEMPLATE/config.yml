@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: "📖 Development process"
+    url: https://github.com/Idearigs/MCCL-POS-REP-SYSTM/blob/main/docs/DEVELOPMENT.md
+    about: "How work flows from idea to production — read before opening a PR."
