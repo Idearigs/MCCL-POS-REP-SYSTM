@@ -25,7 +25,6 @@ import {
   ApiBody,
   ApiConsumes,
 } from '@nestjs/swagger';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { RepairsService } from './repairs.service';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
@@ -44,7 +43,7 @@ import { PaginatedResponseDto } from '../../shared/dto/pagination.dto';
 
 @ApiTags('Repairs')
 @Controller('repairs')
-@UseGuards(ThrottlerGuard, JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 @ApiBearerAuth('access-token')
 export class RepairsController {
   constructor(private readonly repairsService: RepairsService) {}

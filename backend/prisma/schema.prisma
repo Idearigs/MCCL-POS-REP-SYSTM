@@ -95,6 +95,10 @@ model customers {
   documents             documents[]
   repairs               repairs[]
   sales                 sales[]
+
+  // Customer search/listing indexes
+  @@index([tenantId, createdAt])
+  @@index([phone])
 }
 
 model documents {
@@ -262,6 +266,10 @@ model repairs {
   tenants               tenants                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, repairNumber])
+  // Repair log filter/sort indexes
+  @@index([tenantId, createdAt])
+  @@index([customerId])
+  @@index([status])
 }
 
 model repair_tags {
@@ -321,6 +329,11 @@ model sales {
   @@unique([tenantId, saleNumber])
   @@unique([tenantId, receiptNumber])
   @@unique([tenantId, clientSaleId])
+  // High-frequency filter/sort indexes (B-tree). Apply on prod via the
+  // CONCURRENTLY migration in prisma/migrations/manual/ to avoid table locks.
+  @@index([tenantId, createdAt])
+  @@index([customerId])
+  @@index([status])
 }
 
 model shifts {

@@ -20,7 +20,6 @@ import {
   ApiQuery,
   ApiParam,
 } from '@nestjs/swagger';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import { CustomersService } from './customers.service';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
@@ -39,7 +38,7 @@ import { PaginatedResponseDto } from '../../shared/dto/pagination.dto';
 
 @ApiTags('Customers')
 @Controller('customers')
-@UseGuards(ThrottlerGuard, JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 @ApiBearerAuth('access-token')
 export class CustomersController {
   private readonly logger = new Logger(CustomersController.name);

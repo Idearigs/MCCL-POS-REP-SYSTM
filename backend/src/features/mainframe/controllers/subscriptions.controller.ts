@@ -5,6 +5,8 @@ import {
   Put,
   Body,
   Param,
+  BadRequestException,
+  NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { SubscriptionsService } from '../services/subscriptions.service';
@@ -66,16 +68,19 @@ export class SubscriptionsController {
   /** Create a LemonSqueezy hosted checkout URL — accepts subdomain (tenant-facing). */
   @Post('create-checkout')
   async createCheckout(@Body('subdomain') subdomain: string) {
-    if (!subdomain)
-      throw new InternalServerErrorException('subdomain is required');
+    if (!subdomain) throw new BadRequestException('subdomain is required');
 
     const profile = await this.prisma.mf_customer_profiles.findUnique({
       where: { subdomain: subdomain.toLowerCase() },
       select: { id: true, businessEmail: true, businessName: true },
     });
 
+    // Expected condition (tenant not provisioned for billing) → clean 404 with
+    // an actionable message, not a 500. The client surfaces this to the user.
     if (!profile)
-      throw new InternalServerErrorException('Tenant profile not found');
+      throw new NotFoundException(
+        'Billing is not enabled for this account yet. Please contact support to set up your subscription.',
+      );
 
     try {
       const checkoutUrl = await this.lemonSqueezy.createCheckout({
@@ -99,8 +104,16 @@ export class SubscriptionsController {
       where: { subdomain: subdomain.toLowerCase() },
       select: { id: true },
     });
-    if (!profile) throw new InternalServerErrorException('Profile not found');
-    return this.subscriptionsService.findByProfile(profile.id);
+    // A tenant with no mainframe billing profile simply has no subscription yet
+    // — that's an expected state, not an error. Return null so the client shows
+    // its "No subscription / Subscribe now" view instead of an error banner.
+    if (!profile) return null;
+    try {
+      return await this.subscriptionsService.findByProfile(profile.id);
+    } catch {
+      // Profile exists but no subscription row yet — also "no subscription".
+      return null;
+    }
   }
 
   /** Get the LemonSqueezy customer portal URL by subdomain. */

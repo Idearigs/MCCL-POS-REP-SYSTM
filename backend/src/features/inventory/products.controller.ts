@@ -22,7 +22,6 @@ import {
   ApiParam,
   ApiConsumes,
 } from '@nestjs/swagger';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ProductsService } from './products.service';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
@@ -43,7 +42,7 @@ import { PaginatedResponseDto } from '../../shared/dto/pagination.dto';
 
 @ApiTags('Products')
 @Controller('products')
-@UseGuards(ThrottlerGuard, JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 @ApiBearerAuth('access-token')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}

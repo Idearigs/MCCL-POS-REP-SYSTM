@@ -16,7 +16,6 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
 import { RolesGuard } from '../../shared/guards/roles.guard';
@@ -32,7 +31,7 @@ import {
 
 @ApiTags('Gift Cards')
 @Controller('gift-cards')
-@UseGuards(ThrottlerGuard, JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 @ApiBearerAuth('access-token')
 export class GiftCardsController {
   constructor(private readonly giftCardsService: GiftCardsService) {}

@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import RepairTagsSettings from '@/components/repair/RepairTagsSettings';
+import FeaturesHelp from '@/components/settings/FeaturesHelp';
 import { OutletManagement } from '@/components/outlets/OutletManagement';
 import { ReceiptPreviewModal } from '@/components/printer/ReceiptPreviewModal';
 import { usePrinterDetection } from '@/hooks/usePrinterDetection';
@@ -525,7 +526,7 @@ const SettingsPage = () => {
         <Separator className="my-6" />
 
         <Tabs defaultValue="general" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-8">
+          <TabsList className="grid w-full grid-cols-9">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
@@ -534,6 +535,10 @@ const SettingsPage = () => {
             <TabsTrigger value="receipt-types">Receipts</TabsTrigger>
             <TabsTrigger value="repair-tags">Repair Tags</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
+            <TabsTrigger value="features" className="relative">
+              Features
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full" />
+            </TabsTrigger>
           </TabsList>
 
           {/* General Settings Tab */}
@@ -1391,6 +1396,15 @@ const SettingsPage = () => {
                     </Button>
                   </form>
                 </Form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Features & Help Tab */}
+          <TabsContent value="features">
+            <Card>
+              <CardContent className="pt-6">
+                <FeaturesHelp />
               </CardContent>
             </Card>
           </TabsContent>

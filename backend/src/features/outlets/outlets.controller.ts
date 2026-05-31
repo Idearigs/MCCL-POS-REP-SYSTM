@@ -16,7 +16,6 @@ import {
   ApiBearerAuth,
   ApiResponse,
 } from '@nestjs/swagger';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import { OutletsService } from './outlets.service';
 import {
   CreateOutletDto,
@@ -35,7 +34,7 @@ import {
 
 @ApiTags('Outlets')
 @Controller('outlets')
-@UseGuards(ThrottlerGuard, TenantGuard, JwtAuthGuard)
+@UseGuards(TenantGuard, JwtAuthGuard)
 @ApiBearerAuth('access-token')
 export class OutletsController {
   constructor(private readonly outletsService: OutletsService) {}
