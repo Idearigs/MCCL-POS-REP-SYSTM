@@ -65,6 +65,13 @@ const mockSale = {
 // Transaction mock — wraps callback execution
 const mockPrismaTransaction = jest.fn().mockImplementation(async (fn) => {
   const prismaMock = {
+    // Row-lock query (SELECT … FOR UPDATE) used by create() to lock product
+    // rows. Returns the locked stock snapshot the service validates against.
+    $queryRaw: jest
+      .fn()
+      .mockResolvedValue([
+        { id: 'prod-001', name: 'Diamond Ring', stockQuantity: 10 },
+      ]),
     sales: {
       create: jest.fn().mockResolvedValue(mockSale),
       findFirst: jest.fn().mockResolvedValue(mockSale),
@@ -287,6 +294,8 @@ describe('SalesService', () => {
       // Override the $transaction mock so products.findFirst returns null
       mockPrismaService.$transaction.mockImplementationOnce(async (fn) => {
         const prismaMock = {
+          // No rows locked → product treated as not found.
+          $queryRaw: jest.fn().mockResolvedValue([]),
           sales: { create: jest.fn(), count: jest.fn().mockResolvedValue(0) },
           products: {
             findFirst: jest.fn().mockResolvedValue(null), // product not found
@@ -310,6 +319,12 @@ describe('SalesService', () => {
 
       mockPrismaService.$transaction.mockImplementationOnce(async (fn) => {
         const prismaMock = {
+          // Locked row reports zero stock → insufficient-stock guard fires.
+          $queryRaw: jest
+            .fn()
+            .mockResolvedValue([
+              { id: 'prod-001', name: 'Diamond Ring', stockQuantity: 0 },
+            ]),
           sales: { create: jest.fn(), count: jest.fn().mockResolvedValue(0) },
           products: {
             findFirst: jest.fn().mockResolvedValue(lowStockProduct),
@@ -363,6 +378,8 @@ describe('SalesService', () => {
     it('should throw NotFoundException when sale does not exist', async () => {
       mockPrismaService.$transaction.mockImplementationOnce(async (fn) => {
         const prismaMock = {
+          // Sale row lock (SELECT … FOR UPDATE) — result discarded, lock only.
+          $queryRaw: jest.fn().mockResolvedValue([]),
           sales: {
             findFirst: jest.fn().mockResolvedValue(null), // sale not found
             update: jest.fn(),
@@ -390,6 +407,8 @@ describe('SalesService', () => {
 
       mockPrismaService.$transaction.mockImplementationOnce(async (fn) => {
         const prismaMock = {
+          // Sale row lock (SELECT … FOR UPDATE) — result discarded, lock only.
+          $queryRaw: jest.fn().mockResolvedValue([]),
           sales: {
             findFirst: jest.fn().mockResolvedValue(cancelledSale),
             update: jest.fn(),
@@ -425,6 +444,8 @@ describe('SalesService', () => {
 
       mockPrismaService.$transaction.mockImplementationOnce(async (fn) => {
         const prismaMock = {
+          // Sale row lock (SELECT … FOR UPDATE) — result discarded, lock only.
+          $queryRaw: jest.fn().mockResolvedValue([]),
           sales: {
             findFirst: jest.fn().mockResolvedValue(saleWithItem),
             update: jest.fn(),
