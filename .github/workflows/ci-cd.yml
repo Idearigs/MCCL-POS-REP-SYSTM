@@ -4,12 +4,16 @@ on:
   push:
     branches:
       - main
+      - develop
       - "feature/**"
       - "fix/**"
+      - "bugfix/**"
       - "hotfix/**"
+      - "release/**"
   pull_request:
     branches:
       - main
+      - develop
 
 env:
   NODE_VERSION: "24"
@@ -33,10 +37,13 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          # NOTE: the workflow file itself is deliberately NOT listed in any
+          # filter. Editing CI config must not force-rebuild every service —
+          # that coupling let a broken internal app (mainframe) block the
+          # customer-facing POS pipeline. Each filter watches only its own code.
           filters: |
             pos-backend:
               - 'backend/**'
-              - '.github/workflows/ci-cd.yml'
             pos-frontend:
               - 'src/**'
               - 'public/**'
@@ -45,13 +52,10 @@ jobs:
               - 'tailwind.config.js'
               - 'package.json'
               - 'package-lock.json'
-              - '.github/workflows/ci-cd.yml'
             mainframe-backend:
               - 'mainframe-backend/**'
-              - '.github/workflows/ci-cd.yml'
             mainframe-admin:
               - 'mainframe-admin/**'
-              - '.github/workflows/ci-cd.yml'
 
   # -------------------------------------------------------------------
   # JOB 1 — POS Backend lint & unit tests
@@ -427,3 +431,42 @@ jobs:
             exit 1
           fi
           echo "Mainframe admin deployment triggered"
+
+  # -------------------------------------------------------------------
+  # CI GATE — single always-running status check for branch protection
+  # The per-service test jobs above are conditional (change detection),
+  # so they can't be required directly without dead-locking PRs that
+  # don't touch that service. This gate always runs, waits on all test
+  # jobs, and fails only if one of them actually FAILED (skipped is OK).
+  # Mark *this* check ("CI Gate") as the required status check on the
+  # protected branches.
+  # -------------------------------------------------------------------
+  ci-gate:
+    name: "CI Gate"
+    runs-on: ubuntu-latest
+    needs:
+      - test-backend
+      - test-frontend
+      - test-mainframe-backend
+      - test-mainframe-admin
+    if: always()
+    steps:
+      - name: Verify no required CI job failed
+        run: |
+          backend='${{ needs.test-backend.result }}'
+          frontend='${{ needs.test-frontend.result }}'
+          mf_backend='${{ needs.test-mainframe-backend.result }}'
+          mf_admin='${{ needs.test-mainframe-admin.result }}'
+          echo "test-backend:           $backend"
+          echo "test-frontend:          $frontend"
+          echo "test-mainframe-backend: $mf_backend"
+          echo "test-mainframe-admin:   $mf_admin"
+          for r in "$backend" "$frontend" "$mf_backend" "$mf_admin"; do
+            # A job that ran and failed/was cancelled blocks the merge.
+            # 'success' and 'skipped' (not relevant to this PR) are fine.
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "::error::A required CI job did not pass ($r). Blocking merge."
+              exit 1
+            fi
+          done
+          echo "All applicable CI jobs passed. Gate is green."

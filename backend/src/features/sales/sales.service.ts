@@ -48,15 +48,20 @@ export class SalesService {
     createSaleDto: CreateSaleDto,
     tenantId: string,
     userId: string,
+    idempotencyKey?: string,
   ): Promise<SaleResponseDto> {
-    // Idempotency: if this clientSaleId was already synced, return the existing sale
-    if (createSaleDto.clientSaleId) {
-      const existing = await (this.prismaService.sales as any).findFirst({
-        where: { tenantId, clientSaleId: createSaleDto.clientSaleId },
-      });
+    // Idempotency key resolution: prefer the Idempotency-Key header, fall back to
+    // the body's clientSaleId (offline-sync path). Either uniquely identifies a
+    // checkout attempt so a network-retry of the same payload is deduplicated.
+    const idemKey = idempotencyKey || createSaleDto.clientSaleId;
+    if (idemKey) {
+      createSaleDto.clientSaleId = idemKey;
+
+      // Fast path: already persisted → return the cached success response.
+      const existing = await this.findExistingByIdemKey(tenantId, idemKey);
       if (existing) {
         this.logger.log(
-          `Idempotent sale replay: clientSaleId=${createSaleDto.clientSaleId} → ${existing.id}`,
+          `Idempotent sale replay (pre-check): key=${idemKey} → ${existing.id}`,
         );
         return this.mapToResponseDto(existing);
       }
@@ -78,47 +83,99 @@ export class SalesService {
             }
           }
 
-          // Validate products and check stock
-          const productValidations = await Promise.all(
-            createSaleDto.items.map(async (item) => {
-              // Check if this is a repair service item (special handling)
-              const isRepairService = item.notes?.includes('REPAIR SERVICE');
+          // ── CONCURRENCY: acquire row-level locks on all real products ──────
+          // Lock every product row being sold with SELECT ... FOR UPDATE so two
+          // terminals selling the same item serialize — the 2nd waits, then sees
+          // the decremented stock and is cleanly rejected ("out of stock").
+          const realProductIds = createSaleDto.items
+            .filter((item) => !item.notes?.includes('REPAIR SERVICE'))
+            .map((item) => item.productId);
 
-              if (isRepairService) {
-                // For repair services, skip product validation
-                // Create a virtual product entry for the sale
-                return {
-                  product: {
-                    id: item.productId,
-                    name: item.notes || 'Repair Service',
-                    stockQuantity: 999999, // Virtual unlimited stock
-                    price: item.unitPrice,
-                  },
-                  item,
-                  isRepairService: true,
-                };
-              }
+          const lockedStock = new Map<
+            string,
+            { id: string; name: string; stockQuantity: number }
+          >();
 
-              // Regular product validation
-              const product = await prisma.products.findFirst({
-                where: { id: item.productId, tenantId, isActive: true },
+          if (realProductIds.length > 0) {
+            // Deduplicate ids; lock in a stable order to avoid deadlocks
+            const uniqueIds = [...new Set(realProductIds)].sort();
+            const lockedRows = await prisma.$queryRaw<
+              Array<{ id: string; name: string; stockQuantity: number }>
+            >(
+              Prisma.sql`
+                SELECT id, name, "stockQuantity"
+                FROM products
+                WHERE id IN (${Prisma.join(uniqueIds)})
+                  AND "tenantId" = ${tenantId}
+                  AND "isActive" = true
+                FOR UPDATE
+              `,
+            );
+            for (const row of lockedRows) {
+              lockedStock.set(row.id, {
+                id: row.id,
+                name: row.name,
+                stockQuantity: Number(row.stockQuantity),
               });
+            }
+          }
 
-              if (!product) {
-                throw new NotFoundException(
-                  `Product ${item.productId} not found`,
-                );
-              }
+          // Validate products and check stock against the LOCKED rows
+          const productValidations = createSaleDto.items.map((item) => {
+            // Check if this is a repair service item (special handling)
+            const isRepairService = item.notes?.includes('REPAIR SERVICE');
 
-              if (product.stockQuantity < item.quantity) {
-                throw new BadRequestException(
-                  `Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`,
-                );
-              }
+            if (isRepairService) {
+              // For repair services, skip product validation
+              // Create a virtual product entry for the sale
+              return {
+                product: {
+                  id: item.productId,
+                  name: item.notes || 'Repair Service',
+                  stockQuantity: 999999, // Virtual unlimited stock
+                  price: item.unitPrice,
+                },
+                item,
+                isRepairService: true,
+              };
+            }
 
-              return { product, item, isRepairService: false };
-            }),
-          );
+            // Regular product validation — uses the row we locked above
+            const product = lockedStock.get(item.productId);
+
+            if (!product) {
+              throw new NotFoundException(
+                `Product ${item.productId} not found`,
+              );
+            }
+
+            if (product.stockQuantity < item.quantity) {
+              throw new BadRequestException(
+                `Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`,
+              );
+            }
+
+            return { product, item, isRepairService: false };
+          });
+
+          // Guard against the same product appearing on multiple lines exceeding
+          // the locked stock in aggregate (e.g. two lines of the same SKU).
+          const aggregateByProduct = new Map<string, number>();
+          for (const { item, isRepairService } of productValidations) {
+            if (isRepairService) continue;
+            aggregateByProduct.set(
+              item.productId,
+              (aggregateByProduct.get(item.productId) ?? 0) + item.quantity,
+            );
+          }
+          for (const [productId, qty] of aggregateByProduct) {
+            const locked = lockedStock.get(productId);
+            if (locked && locked.stockQuantity < qty) {
+              throw new BadRequestException(
+                `Insufficient stock for product ${locked.name}. Available: ${locked.stockQuantity}, Requested: ${qty}`,
+              );
+            }
+          }
 
           // Calculate totals and prepare sale items
           let subtotal = 0;
@@ -322,8 +379,10 @@ export class SalesService {
               : []),
           ]);
 
-          // Clear caches
-          await Promise.all([
+          // Clear caches — fire-and-forget (post-sale side effect). We do NOT
+          // await this so the HTTP response is freed the instant the DB commits;
+          // cache invalidation completes in the background.
+          void Promise.all([
             this.cacheService.delTenantData(tenantId, 'sales:list'),
             this.cacheService.delTenantData(tenantId, 'sales:stats'),
             this.cacheService.delTenantData(tenantId, 'products:list'),
@@ -337,7 +396,9 @@ export class SalesService {
                   this.cacheService.delTenantData(tenantId, 'customers:stats'),
                 ]
               : []),
-          ]);
+          ]).catch((err) =>
+            this.logger.warn(`Post-sale cache clear failed: ${err?.message}`),
+          );
 
           this.logger.log(
             `Sale created: ${saleNumber} (${sale.id}) in tenant ${tenantId}`,
@@ -348,9 +409,82 @@ export class SalesService {
         { timeout: 30000 },
       );
     } catch (error) {
+      // ── IDEMPOTENCY RACE ───────────────────────────────────────────────
+      // Two simultaneous retries can both pass the pre-check and reach the
+      // INSERT. The unique constraint [tenantId, clientSaleId] makes Postgres
+      // reject the 2nd with P2002. Instead of 500-ing, return the sale the
+      // winning transaction committed — the caller gets the same success.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        idemKey
+      ) {
+        const existing = await this.findExistingByIdemKey(tenantId, idemKey);
+        if (existing) {
+          this.logger.log(
+            `Idempotent sale replay (race resolved): key=${idemKey} → ${existing.id}`,
+          );
+          return this.mapToResponseDto(existing);
+        }
+      }
       this.logger.error('Failed to create sale:', error.message);
       throw error;
     }
+  }
+
+  /**
+   * Idempotency wrapper for mutating operations that have no durable dedupe
+   * column (refunds, installment payments). Replays the cached prior result
+   * when the same Idempotency-Key is seen again within 24h, so a network retry
+   * or double-click does not double-process. Concurrent same-key requests are
+   * additionally serialized by the SELECT … FOR UPDATE row lock inside each
+   * operation, so the second caller sees the first's committed result.
+   */
+  private async replayOrRun<T>(
+    scope: string,
+    key: string | undefined,
+    run: () => Promise<T>,
+  ): Promise<T> {
+    if (!key) return run();
+    const cacheKey = `idem:${scope}:${key}`;
+    const cached = await this.cacheService.get<T>(cacheKey);
+    if (cached) {
+      this.logger.log(`Idempotent replay [${scope}] key=${key}`);
+      return cached;
+    }
+    try {
+      const result = await run();
+      // 24h retention — best-effort (Redis when available, else in-memory).
+      await this.cacheService.set(cacheKey, result, 86400);
+      return result;
+    } catch (err) {
+      // A concurrent request with the same key may have won the row lock and
+      // committed while this one waited (and possibly timed out). If its result
+      // is now cached, return that instead of surfacing the lost race as an
+      // error — the operation succeeded exactly once.
+      const afterRace = await this.cacheService.get<T>(cacheKey);
+      if (afterRace) {
+        this.logger.log(`Idempotent replay after race [${scope}] key=${key}`);
+        return afterRace;
+      }
+      throw err;
+    }
+  }
+
+  /** Look up an already-committed sale by its idempotency key (clientSaleId). */
+  private async findExistingByIdemKey(
+    tenantId: string,
+    idemKey: string,
+  ): Promise<Record<string, any> | null> {
+    return (this.prismaService.sales as any).findFirst({
+      where: { tenantId, clientSaleId: idemKey },
+      include: {
+        sale_items: { include: { products: true } },
+        payments: true,
+        customers: true,
+        users: true,
+      },
+    });
   }
 
   /**
@@ -388,6 +522,7 @@ export class SalesService {
   ): Promise<PaginatedResponseDto<SaleResponseDto>> {
     try {
       const {
+        cursor,
         page = 1,
         limit = 10,
         search,
@@ -403,6 +538,7 @@ export class SalesService {
         sortOrder = 'desc',
       } = query;
 
+      const useCursor = !!cursor;
       const skip = (page - 1) * limit;
 
       // Build where clause
@@ -452,32 +588,53 @@ export class SalesService {
         return cachedResult;
       }
 
+      // Cursor mode uses a stable, unique ordering (createdAt + id tiebreaker)
+      // and seeks past the cursor row — O(1) regardless of page depth, unlike
+      // OFFSET which scans+discards skipped rows. Offset mode is kept for
+      // backwards compatibility with existing callers.
+      const include = {
+        sale_items: { include: { products: true } },
+        payments: true,
+        customers: true,
+        users: true,
+      };
+
+      const findArgs: any = useCursor
+        ? {
+            where,
+            take: limit,
+            cursor: { id: cursor },
+            skip: 1, // skip the cursor row itself
+            orderBy: [{ createdAt: sortOrder }, { id: sortOrder }],
+            include,
+          }
+        : {
+            where,
+            skip,
+            take: limit,
+            orderBy: { [sortBy]: sortOrder },
+            include,
+          };
+
       // Get sales and total count
       const [sales, total] = await Promise.all([
-        this.salesRepo.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy: { [sortBy]: sortOrder },
-          include: {
-            sale_items: {
-              include: {
-                products: true,
-              },
-            },
-            payments: true,
-            customers: true,
-            users: true,
-          },
-        }),
+        this.salesRepo.findMany(findArgs),
         this.salesRepo.count({ where }),
       ]);
+
+      // nextCursor: the id of the last row when a full page was returned (more
+      // rows likely exist); null when the page wasn't full (end of data).
+      // Emitted in BOTH modes so a client can start with an offset/first call
+      // and then continue via ?cursor=… without overlap.
+      const nextCursor =
+        sales.length === limit ? sales[sales.length - 1].id : null;
 
       const result = new PaginatedResponseDto(
         sales.map((sale) => this.mapToResponseDto(sale)),
         page,
         limit,
         total,
+        nextCursor,
       );
 
       // Cache result for 5 minutes
@@ -489,6 +646,94 @@ export class SalesService {
       this.logger.error('Error stack:', error.stack);
       this.logger.error('Full error:', JSON.stringify(error, null, 2));
       throw error;
+    }
+  }
+
+  /**
+   * Memory-flat streaming source for CSV export. Yields sales one row at a time
+   * by walking the table in keyset (cursor) batches — never loads the whole
+   * result set into memory, so RAM stays flat regardless of dataset size.
+   *
+   * `isAborted` lets the caller (controller) stop fetching further batches the
+   * moment the HTTP client disconnects.
+   */
+  async *streamSalesForExport(
+    tenantId: string,
+    filters: {
+      status?: string;
+      startDate?: string;
+      endDate?: string;
+      customerId?: string;
+    },
+    isAborted: () => boolean,
+    batchSize = 500,
+  ): AsyncGenerator<{
+    receiptNumber: string;
+    saleNumber: string;
+    date: Date;
+    customer: string;
+    total: number;
+    paymentMethod: string;
+    status: string;
+    cashier: string;
+  }> {
+    const where: any = {
+      tenantId,
+      ...(filters.status && { status: filters.status as PrismaSaleStatus }),
+      ...(filters.customerId && { customerId: filters.customerId }),
+      ...(filters.startDate &&
+        filters.endDate && {
+          createdAt: {
+            gte: new Date(filters.startDate),
+            lte: new Date(filters.endDate + 'T23:59:59.999Z'),
+          },
+        }),
+    };
+
+    let cursor: string | undefined;
+
+    while (true) {
+      if (isAborted()) return; // client hung up — stop hitting the DB
+
+      const batch = (await this.salesRepo.findMany({
+        where,
+        take: batchSize,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        select: {
+          id: true,
+          saleNumber: true,
+          receiptNumber: true,
+          totalAmount: true,
+          paymentMethod: true,
+          status: true,
+          createdAt: true,
+          customers: { select: { firstName: true, lastName: true } },
+          users: { select: { firstName: true, lastName: true } },
+        },
+      } as any)) as any[];
+
+      if (batch.length === 0) return;
+
+      for (const s of batch) {
+        yield {
+          receiptNumber: s.receiptNumber ?? '',
+          saleNumber: s.saleNumber ?? '',
+          date: s.createdAt,
+          customer: s.customers
+            ? `${s.customers.firstName ?? ''} ${s.customers.lastName ?? ''}`.trim()
+            : 'Walk-in',
+          total: Number(s.totalAmount),
+          paymentMethod: s.paymentMethod,
+          status: s.status,
+          cashier: s.users
+            ? `${s.users.firstName ?? ''} ${s.users.lastName ?? ''}`.trim()
+            : '',
+        };
+      }
+
+      if (batch.length < batchSize) return; // last page
+      cursor = batch[batch.length - 1].id;
     }
   }
 
@@ -634,68 +879,80 @@ export class SalesService {
     dto: RecordInstallmentPaymentDto,
     tenantId: string,
     userId: string,
+    idempotencyKey?: string,
   ): Promise<SaleResponseDto> {
-    return this.prismaService.$transaction(async (prisma) => {
-      const sale = await prisma.sales.findFirst({
-        where: { id, tenantId },
-        include: {
-          sale_items: { include: { products: true } },
-          payments: true,
-          customers: true,
-          users: true,
-        },
-      });
-      if (!sale) throw new NotFoundException(`Sale ${id} not found`);
-      if (sale.paymentMethod !== 'INSTALLMENT')
-        throw new BadRequestException('Sale is not an installment sale');
-      if (Number(sale.balanceDue) <= 0)
-        throw new BadRequestException('Sale is already fully paid');
+    return this.replayOrRun('installment', idempotencyKey, () =>
+      this.prismaService.$transaction(async (prisma) => {
+        // CONCURRENCY: lock the sale row so two simultaneous payments serialize.
+        // The 2nd reads the already-updated balanceDue, preventing a double
+        // payment / incorrect balance.
+        await prisma.$queryRaw`
+          SELECT id FROM sales
+          WHERE id = ${id} AND "tenantId" = ${tenantId}
+          FOR UPDATE
+        `;
 
-      const payAmount = Math.min(dto.amount, Number(sale.balanceDue));
-      const newPaid = Number(sale.paidAmount) + payAmount;
-      const newBalance = Number(sale.totalAmount) - newPaid;
+        const sale = await prisma.sales.findFirst({
+          where: { id, tenantId },
+          include: {
+            sale_items: { include: { products: true } },
+            payments: true,
+            customers: true,
+            users: true,
+          },
+        });
+        if (!sale) throw new NotFoundException(`Sale ${id} not found`);
+        if (sale.paymentMethod !== 'INSTALLMENT')
+          throw new BadRequestException('Sale is not an installment sale');
+        if (Number(sale.balanceDue) <= 0)
+          throw new BadRequestException('Sale is already fully paid');
 
-      await prisma.payments.create({
-        data: {
-          id: generateId(),
-          saleId: sale.id,
-          amount: payAmount,
-          method: dto.method as any,
-          status: 'COMPLETED',
-          processorData: dto.notes ? { notes: dto.notes } : undefined,
-        },
-      });
+        const payAmount = Math.min(dto.amount, Number(sale.balanceDue));
+        const newPaid = Number(sale.paidAmount) + payAmount;
+        const newBalance = Number(sale.totalAmount) - newPaid;
 
-      const updated = await prisma.sales.update({
-        where: { id },
-        data: {
-          paidAmount: newPaid,
-          balanceDue: Math.max(0, newBalance),
-          paymentStatus: newBalance <= 0 ? 'COMPLETED' : 'PENDING',
-          notes: dto.notes
-            ? `${sale.notes ? sale.notes + '\n' : ''}Payment of £${payAmount.toFixed(2)} recorded.`
-            : sale.notes,
-          updatedAt: new Date(),
-        },
-        include: {
-          sale_items: { include: { products: true } },
-          payments: true,
-          customers: true,
-          users: true,
-        },
-      });
+        await prisma.payments.create({
+          data: {
+            id: generateId(),
+            saleId: sale.id,
+            amount: payAmount,
+            method: dto.method as any,
+            status: 'COMPLETED',
+            processorData: dto.notes ? { notes: dto.notes } : undefined,
+          },
+        });
 
-      await Promise.all([
-        this.cacheService.delTenantData(tenantId, `sale:${id}`),
-        this.cacheService.delTenantData(tenantId, 'sales:list'),
-        this.cacheService.delTenantData(tenantId, 'sales:stats'),
-      ]);
+        const updated = await prisma.sales.update({
+          where: { id },
+          data: {
+            paidAmount: newPaid,
+            balanceDue: Math.max(0, newBalance),
+            paymentStatus: newBalance <= 0 ? 'COMPLETED' : 'PENDING',
+            notes: dto.notes
+              ? `${sale.notes ? sale.notes + '\n' : ''}Payment of £${payAmount.toFixed(2)} recorded.`
+              : sale.notes,
+            updatedAt: new Date(),
+          },
+          include: {
+            sale_items: { include: { products: true } },
+            payments: true,
+            customers: true,
+            users: true,
+          },
+        });
 
-      this.logger.log(
-        `Installment payment £${payAmount} recorded for sale ${id}`,
-      );
-      return this.mapToResponseDto(updated);
-    });
+        await Promise.all([
+          this.cacheService.delTenantData(tenantId, `sale:${id}`),
+          this.cacheService.delTenantData(tenantId, 'sales:list'),
+          this.cacheService.delTenantData(tenantId, 'sales:stats'),
+        ]);
+
+        this.logger.log(
+          `Installment payment £${payAmount} recorded for sale ${id}`,
+        );
+        return this.mapToResponseDto(updated);
+      }),
+    );
   }
 
   /**
@@ -708,38 +965,53 @@ export class SalesService {
     details: string,
     tenantId: string,
     _userId: string,
+    idempotencyKey?: string,
   ): Promise<SaleResponseDto> {
-    const sale = await this.prismaService.sales.findFirst({
-      where: { id, tenantId },
-      include: {
-        sale_items: { include: { products: true } },
-        payments: true,
-        customers: true,
-        users: true,
-      },
-    });
+    return this.replayOrRun('void', idempotencyKey, () =>
+      this.prismaService.$transaction(async (prisma) => {
+        // CONCURRENCY: lock the sale row so a void can't race with a concurrent
+        // refund/update on the same sale.
+        await prisma.$queryRaw`
+          SELECT id FROM sales
+          WHERE id = ${id} AND "tenantId" = ${tenantId}
+          FOR UPDATE
+        `;
 
-    if (!sale) throw new NotFoundException(`Sale with ID ${id} not found`);
+        const sale = await prisma.sales.findFirst({
+          where: { id, tenantId },
+          include: {
+            sale_items: { include: { products: true } },
+            payments: true,
+            customers: true,
+            users: true,
+          },
+        });
 
-    const voidNote = `VOIDED: ${reason}${details && details !== reason ? ` — ${details}` : ''}`;
-    const updatedNotes = sale.notes ? `${sale.notes}\n\n${voidNote}` : voidNote;
+        if (!sale) throw new NotFoundException(`Sale with ID ${id} not found`);
 
-    const updated = await this.prismaService.sales.update({
-      where: { id },
-      data: {
-        status: SaleStatus.CANCELLED,
-        notes: updatedNotes,
-      },
-      include: {
-        sale_items: { include: { products: true } },
-        payments: true,
-        customers: true,
-        users: true,
-      },
-    });
+        const voidNote = `VOIDED: ${reason}${details && details !== reason ? ` — ${details}` : ''}`;
+        const updatedNotes = sale.notes
+          ? `${sale.notes}\n\n${voidNote}`
+          : voidNote;
 
-    this.logger.log(`Sale ${sale.saleNumber} voided. Reason: ${reason}`);
-    return this.mapToResponseDto(updated);
+        const updated = await prisma.sales.update({
+          where: { id },
+          data: {
+            status: SaleStatus.CANCELLED,
+            notes: updatedNotes,
+          },
+          include: {
+            sale_items: { include: { products: true } },
+            payments: true,
+            customers: true,
+            users: true,
+          },
+        });
+
+        this.logger.log(`Sale ${sale.saleNumber} voided. Reason: ${reason}`);
+        return this.mapToResponseDto(updated);
+      }),
+    );
   }
 
   /**
@@ -750,150 +1022,162 @@ export class SalesService {
     createRefundDto: CreateRefundDto,
     tenantId: string,
     userId: string,
+    idempotencyKey?: string,
   ): Promise<SaleResponseDto> {
-    try {
-      return await this.prismaService.$transaction(async (prisma) => {
-        const sale = await prisma.sales.findFirst({
-          where: { id, tenantId },
-          include: {
-            sale_items: {
-              include: {
-                products: true,
+    return this.replayOrRun('refund', idempotencyKey, async () => {
+      try {
+        return await this.prismaService.$transaction(async (prisma) => {
+          // CONCURRENCY: lock the sale row so two simultaneous refunds of the
+          // same sale serialize — the 2nd waits, then sees the already-refunded
+          // state (item deleted/reduced) and cannot double-restore stock.
+          await prisma.$queryRaw`
+            SELECT id FROM sales
+            WHERE id = ${id} AND "tenantId" = ${tenantId}
+            FOR UPDATE
+          `;
+
+          const sale = await prisma.sales.findFirst({
+            where: { id, tenantId },
+            include: {
+              sale_items: {
+                include: {
+                  products: true,
+                },
               },
+              payments: true,
             },
-            payments: true,
-          },
-        });
+          });
 
-        if (!sale) {
-          throw new NotFoundException(`Sale with ID ${id} not found`);
-        }
-
-        if (sale.status !== SaleStatus.COMPLETED) {
-          throw new BadRequestException('Can only refund completed sales');
-        }
-
-        let totalRefundAmount = 0;
-        const refundOperations = [];
-
-        // Process each refund item
-        for (const refundItem of createRefundDto.items) {
-          const saleItem = sale.sale_items.find(
-            (item) => item.id === refundItem.saleItemId,
-          );
-          if (!saleItem) {
-            throw new NotFoundException(
-              `Sale item ${refundItem.saleItemId} not found`,
-            );
+          if (!sale) {
+            throw new NotFoundException(`Sale with ID ${id} not found`);
           }
 
-          if (refundItem.quantity > saleItem.quantity) {
-            throw new BadRequestException(
-              `Cannot refund more than sold quantity. Item quantity: ${saleItem.quantity}, Refund quantity: ${refundItem.quantity}`,
-            );
+          if (sale.status !== SaleStatus.COMPLETED) {
+            throw new BadRequestException('Can only refund completed sales');
           }
 
-          // Calculate refund amount proportionally
-          const refundAmount =
-            (Number(saleItem.totalPrice) / saleItem.quantity) *
-            refundItem.quantity;
-          totalRefundAmount += refundAmount;
+          let totalRefundAmount = 0;
+          const refundOperations = [];
 
-          // Add stock back to product
-          refundOperations.push(
-            prisma.products.update({
-              where: { id: saleItem.productId },
-              data: {
-                stockQuantity: { increment: refundItem.quantity },
-              },
-            }),
-          );
-
-          // Update or remove sale item
-          if (refundItem.quantity === saleItem.quantity) {
-            refundOperations.push(
-              prisma.sale_items.delete({
-                where: { id: saleItem.id },
-              }),
+          // Process each refund item
+          for (const refundItem of createRefundDto.items) {
+            const saleItem = sale.sale_items.find(
+              (item) => item.id === refundItem.saleItemId,
             );
-          } else {
-            const newQuantity = saleItem.quantity - refundItem.quantity;
-            const newTotalPrice =
-              (Number(saleItem.totalPrice) / saleItem.quantity) * newQuantity;
+            if (!saleItem) {
+              throw new NotFoundException(
+                `Sale item ${refundItem.saleItemId} not found`,
+              );
+            }
 
+            if (refundItem.quantity > saleItem.quantity) {
+              throw new BadRequestException(
+                `Cannot refund more than sold quantity. Item quantity: ${saleItem.quantity}, Refund quantity: ${refundItem.quantity}`,
+              );
+            }
+
+            // Calculate refund amount proportionally
+            const refundAmount =
+              (Number(saleItem.totalPrice) / saleItem.quantity) *
+              refundItem.quantity;
+            totalRefundAmount += refundAmount;
+
+            // Add stock back to product
             refundOperations.push(
-              prisma.sale_items.update({
-                where: { id: saleItem.id },
+              prisma.products.update({
+                where: { id: saleItem.productId },
                 data: {
-                  quantity: newQuantity,
-                  totalPrice: newTotalPrice,
+                  stockQuantity: { increment: refundItem.quantity },
                 },
               }),
             );
+
+            // Update or remove sale item
+            if (refundItem.quantity === saleItem.quantity) {
+              refundOperations.push(
+                prisma.sale_items.delete({
+                  where: { id: saleItem.id },
+                }),
+              );
+            } else {
+              const newQuantity = saleItem.quantity - refundItem.quantity;
+              const newTotalPrice =
+                (Number(saleItem.totalPrice) / saleItem.quantity) * newQuantity;
+
+              refundOperations.push(
+                prisma.sale_items.update({
+                  where: { id: saleItem.id },
+                  data: {
+                    quantity: newQuantity,
+                    totalPrice: newTotalPrice,
+                  },
+                }),
+              );
+            }
           }
-        }
 
-        // Execute all refund operations
-        await Promise.all(refundOperations);
+          // Execute all refund operations
+          await Promise.all(refundOperations);
 
-        // Update sale totals
-        const newTotalAmount = Number(sale.totalAmount) - totalRefundAmount;
-        const newRefundedAmount =
-          Number(sale.refundedAmount) + totalRefundAmount;
-        const newStatus =
-          newTotalAmount === newRefundedAmount
-            ? ('REFUNDED' as const)
-            : ('PARTIAL_REFUND' as const);
+          // Update sale totals
+          const newTotalAmount = Number(sale.totalAmount) - totalRefundAmount;
+          const newRefundedAmount =
+            Number(sale.refundedAmount) + totalRefundAmount;
+          const newStatus =
+            newTotalAmount === newRefundedAmount
+              ? ('REFUNDED' as const)
+              : ('PARTIAL_REFUND' as const);
 
-        // TODO: Create refund payment record
-        // Payment model needs additional fields (reference, refundReason, etc) to properly track refunds
-        // For now, refund is tracked via refundedAmount field in Sale model
+          // TODO: Create refund payment record
+          // Payment model needs additional fields (reference, refundReason, etc) to properly track refunds
+          // For now, refund is tracked via refundedAmount field in Sale model
 
-        const updatedSale = await prisma.sales.update({
-          where: { id },
-          data: {
-            status: PrismaSaleStatus.REFUNDED, // Use REFUNDED instead of PARTIAL_REFUND
-            totalAmount: newTotalAmount,
-            refundedAmount: newRefundedAmount,
-            notes: sale.notes
-              ? `${sale.notes}\n\nREFUND: ${createRefundDto.reason || 'Customer refund'}`
-              : `REFUND: ${createRefundDto.reason || 'Customer refund'}`,
-          },
-          include: {
-            sale_items: {
-              include: {
-                products: true,
-              },
-            },
-            payments: true,
-            customers: true,
-            users: true,
-          },
-        });
-
-        // Update customer stats if applicable
-        if (sale.customerId) {
-          await prisma.customers.update({
-            where: { id: sale.customerId },
+          const updatedSale = await prisma.sales.update({
+            where: { id },
             data: {
-              totalSpent: { decrement: totalRefundAmount },
+              status: PrismaSaleStatus.REFUNDED, // Use REFUNDED instead of PARTIAL_REFUND
+              totalAmount: newTotalAmount,
+              refundedAmount: newRefundedAmount,
+              notes: sale.notes
+                ? `${sale.notes}\n\nREFUND: ${createRefundDto.reason || 'Customer refund'}`
+                : `REFUND: ${createRefundDto.reason || 'Customer refund'}`,
+            },
+            include: {
+              sale_items: {
+                include: {
+                  products: true,
+                },
+              },
+              payments: true,
+              customers: true,
+              users: true,
             },
           });
-        }
 
-        this.logger.log(
-          `Refund processed for sale ${sale.saleNumber}: $${totalRefundAmount}`,
+          // Update customer stats if applicable
+          if (sale.customerId) {
+            await prisma.customers.update({
+              where: { id: sale.customerId },
+              data: {
+                totalSpent: { decrement: totalRefundAmount },
+              },
+            });
+          }
+
+          this.logger.log(
+            `Refund processed for sale ${sale.saleNumber}: $${totalRefundAmount}`,
+          );
+
+          return this.mapToResponseDto(updatedSale);
+        });
+      } catch (error) {
+        this.logger.error(
+          `Failed to create refund for sale ${id}:`,
+          error.message,
         );
-
-        return this.mapToResponseDto(updatedSale);
-      });
-    } catch (error) {
-      this.logger.error(
-        `Failed to create refund for sale ${id}:`,
-        error.message,
-      );
-      throw error;
-    }
+        throw error;
+      }
+    });
   }
 
   /**

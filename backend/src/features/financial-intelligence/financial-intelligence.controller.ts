@@ -17,7 +17,6 @@ import {
   ApiBearerAuth,
   ApiQuery,
 } from '@nestjs/swagger';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import { FinancialIntelligenceService } from './financial-intelligence.service';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
@@ -33,7 +32,7 @@ import {
 
 @ApiTags('Financial Intelligence')
 @Controller('financial-intelligence')
-@UseGuards(ThrottlerGuard, JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 @ApiBearerAuth('access-token')
 export class FinancialIntelligenceController {
   constructor(

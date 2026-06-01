@@ -6,29 +6,47 @@ import {
   HttpCode,
   Logger,
   BadRequestException,
+  OnModuleInit,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { Public } from '../../auth/decorators/public.decorator';
 import { LemonSqueezyService } from '../services/lemon-squeezy.service';
 import { PrismaService } from '../../../core/prisma/prisma.service';
+import { AsyncQueueService } from '../../../core/queue/async-queue.service';
+
+const LS_WEBHOOK_QUEUE = 'ls-webhook';
+
+interface LsWebhookJob {
+  event: string;
+  payload: LsWebhookPayload;
+}
 
 @Controller('webhooks')
-export class LemonSqueezyWebhookController {
+export class LemonSqueezyWebhookController implements OnModuleInit {
   private readonly logger = new Logger(LemonSqueezyWebhookController.name);
 
   constructor(
     private readonly ls: LemonSqueezyService,
     private readonly prisma: PrismaService,
+    private readonly queue: AsyncQueueService,
   ) {}
+
+  onModuleInit() {
+    // The queue worker runs the actual DB business logic off the request path.
+    this.queue.process<LsWebhookJob>(LS_WEBHOOK_QUEUE, (job) =>
+      this.dispatch(job.event, job.payload),
+    );
+  }
 
   @Public()
   @Post('lemon-squeezy')
   @HttpCode(200)
-  async handleWebhook(
+  handleWebhook(
     @Req() req: Request,
     @Headers('x-signature') signature: string,
   ) {
-    // Verify the request is genuinely from LemonSqueezy
+    // ── 1. Verify the request is genuinely from LemonSqueezy (stays sync &
+    //       secure — no offloading until the signature is proven valid). ──
     const rawBody = (req as any).rawBody as string | undefined;
     const bodyStr = rawBody ?? JSON.stringify(req.body);
 
@@ -40,46 +58,51 @@ export class LemonSqueezyWebhookController {
     const event = req.headers['x-event-name'] as string;
     const payload = req.body as LsWebhookPayload;
 
-    this.logger.log(`[LS Webhook] ${event}`);
+    // ── 2. Offload to the async queue and return immediately. No DB writes or
+    //       third-party calls are awaited inside the webhook lifecycle. ──
+    this.queue.enqueue<LsWebhookJob>(LS_WEBHOOK_QUEUE, { event, payload });
+    this.logger.log(`[LS Webhook] ${event} — queued`);
 
-    try {
-      switch (event) {
-        case 'order_created':
-          await this.handleOrderCreated(payload);
-          break;
-        case 'subscription_created':
-          await this.handleSubscriptionCreated(payload);
-          break;
-        case 'subscription_updated':
-          await this.handleSubscriptionUpdated(payload);
-          break;
-        case 'subscription_cancelled':
-          await this.handleSubscriptionCancelled(payload);
-          break;
-        case 'subscription_resumed':
-          await this.handleSubscriptionUpdated(payload); // same logic
-          break;
-        case 'subscription_expired':
-          await this.handleSubscriptionExpired(payload);
-          break;
-        case 'subscription_payment_success':
-          await this.handlePaymentSuccess(payload);
-          break;
-        case 'subscription_payment_failed':
-          await this.handlePaymentFailed(payload);
-          break;
-        case 'subscription_payment_recovered':
-          await this.handlePaymentSuccess(payload); // treat same as success
-          break;
-        default:
-          this.logger.log(`[LS Webhook] Unhandled event: ${event}`);
-      }
-    } catch (err) {
-      this.logger.error(`[LS Webhook] Error handling ${event}: ${err}`);
-      // Return 200 anyway — LS will retry on non-200 which would flood us
-    }
-
+    // ── 3. ACK in milliseconds so LemonSqueezy never times out / retries. ──
     return { received: true };
+  }
+
+  /** Background worker — runs the matching handler for a queued webhook event. */
+  private async dispatch(
+    event: string,
+    payload: LsWebhookPayload,
+  ): Promise<void> {
+    switch (event) {
+      case 'order_created':
+        await this.handleOrderCreated(payload);
+        break;
+      case 'subscription_created':
+        await this.handleSubscriptionCreated(payload);
+        break;
+      case 'subscription_updated':
+        await this.handleSubscriptionUpdated(payload);
+        break;
+      case 'subscription_cancelled':
+        await this.handleSubscriptionCancelled(payload);
+        break;
+      case 'subscription_resumed':
+        await this.handleSubscriptionUpdated(payload); // same logic
+        break;
+      case 'subscription_expired':
+        await this.handleSubscriptionExpired(payload);
+        break;
+      case 'subscription_payment_success':
+        await this.handlePaymentSuccess(payload);
+        break;
+      case 'subscription_payment_failed':
+        await this.handlePaymentFailed(payload);
+        break;
+      case 'subscription_payment_recovered':
+        await this.handlePaymentSuccess(payload); // treat same as success
+        break;
+      default:
+        this.logger.log(`[LS Webhook] Unhandled event: ${event}`);
+    }
   }
 
   // ── Event handlers ───────────────────────────────────────────────────────────

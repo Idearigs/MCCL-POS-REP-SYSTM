@@ -61,6 +61,14 @@ export class PaginationMetaDto {
   @ApiPropertyOptional({ example: false })
   hasPreviousPage: boolean;
 
+  @ApiPropertyOptional({
+    description:
+      'Opaque cursor for the next page (cursor-based pagination). Null when no more rows.',
+    example: 'clv123abc456',
+    nullable: true,
+  })
+  nextCursor?: string | null;
+
   constructor(page: number, limit: number, total: number) {
     this.page = page;
     this.limit = limit;
@@ -104,8 +112,15 @@ export class PaginatedResponseDto<T> {
   data: T[];
   meta: PaginationMetaDto;
 
-  constructor(data: T[], page: number, limit: number, total: number) {
+  constructor(
+    data: T[],
+    page: number,
+    limit: number,
+    total: number,
+    nextCursor?: string | null,
+  ) {
     this.data = data;
     this.meta = new PaginationMetaDto(page, limit, total);
+    if (nextCursor !== undefined) this.meta.nextCursor = nextCursor;
   }
 }

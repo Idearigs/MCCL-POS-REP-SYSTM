@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
+import { CacheService } from '../../core/cache/cache.service';
 import { UpdateSettingsDto } from './dto/settings.dto';
 
 // Keys in tenants.settings that are NOT app-level settings (reserved for QZ certs etc.)
 const RESERVED_KEYS = new Set(['qzCertificate', 'qzPrivateKey']);
 const APP_SETTINGS_KEY = 'appSettings';
+// Config cache: semi-static workspace settings read on every sales lookup.
+const SETTINGS_CACHE_KEY = 'settings:app';
+const SETTINGS_CACHE_TTL = 600; // 10 minutes
 
 interface ReceiptTypeConfig {
   headerText: string;
@@ -114,9 +118,26 @@ const DEFAULTS: AppSettings = {
 
 @Injectable()
 export class SettingsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cache: CacheService,
+  ) {}
 
+  /**
+   * Returns merged app settings for a tenant. Served from the config cache
+   * buffer when warm; only falls through to the DB on a cache miss. The cached
+   * value is invalidated immediately after any updateSettings() mutation.
+   */
   async getSettings(tenantId: string): Promise<AppSettings> {
+    return this.cache.getOrSet<AppSettings>(
+      this.cache.generateTenantKey(tenantId, SETTINGS_CACHE_KEY),
+      () => this.loadSettingsFromDb(tenantId),
+      SETTINGS_CACHE_TTL,
+    );
+  }
+
+  /** Raw DB read + default-merge (the original getSettings body). */
+  private async loadSettingsFromDb(tenantId: string): Promise<AppSettings> {
     const tenant = await this.prisma.tenants.findUnique({
       where: { id: tenantId },
       select: { settings: true },
@@ -158,8 +179,9 @@ export class SettingsService {
     tenantId: string,
     dto: UpdateSettingsDto,
   ): Promise<AppSettings> {
-    // Load current state
-    const current = await this.getSettings(tenantId);
+    // Load current state from the DB directly (not cache) so the merge base
+    // is always the freshest persisted value.
+    const current = await this.loadSettingsFromDb(tenantId);
 
     // Merge only the sections that were sent
     const dtoAny = dto as any;
@@ -218,6 +240,9 @@ export class SettingsService {
         updatedAt: new Date(),
       },
     });
+
+    // Cache invalidation — immediately post-commit. Next getSettings() repopulates.
+    await this.cache.delTenantData(tenantId, SETTINGS_CACHE_KEY);
 
     return next;
   }

@@ -23,7 +23,7 @@ import {
   ApiBearerAuth,
   ApiBody,
 } from '@nestjs/swagger';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { verifyInternalHmac } from '../../shared/utils/hmac-verify';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -46,12 +46,15 @@ import {
 
 @ApiTags('Authentication')
 @Controller('auth')
-@UseGuards(ThrottlerGuard, TenantGuard)
+@UseGuards(TenantGuard)
 export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Public()
   @Post('login')
+  // Stricter rate limit on credentials: 5 attempts / 15 min per IP (overrides
+  // the global 100/min tier for this handler only).
+  @Throttle({ global: { limit: 5, ttl: 15 * 60_000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'User login',

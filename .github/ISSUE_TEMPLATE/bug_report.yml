@@ -1,0 +1,50 @@
+name: "🐞 Bug report"
+description: "Something is broken or behaving incorrectly"
+title: "fix: "
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What went wrong, and what did you expect instead?
+      placeholder: "When a cashier issues a partial refund, the balance shows…"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to …
+        2. Click …
+        3. See error
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Customer impact
+      description: Helps set priority.
+      options:
+        - "Blocks taking payments / data loss (priority:high)"
+        - "Feature broken but workaround exists (priority:medium)"
+        - "Cosmetic / minor (priority:low)"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - "area:pos-backend"
+        - "area:pos-frontend"
+        - "area:mainframe"
+        - "area:ops"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Tenant / logs / context
+      description: Affected tenant, timestamp, any error text or Sentry link. Do NOT paste secrets.
