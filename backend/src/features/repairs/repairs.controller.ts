@@ -14,6 +14,7 @@ import {
   UseInterceptors,
   NotFoundException,
   Put,
+  Headers,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -71,8 +72,14 @@ export class RepairsController {
     @Body() createRepairDto: CreateRepairDto,
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
+    @Headers('Idempotency-Key') idempotencyKey?: string,
   ): Promise<RepairResponseDto> {
-    return this.repairsService.create(createRepairDto, tenantId, userId);
+    return this.repairsService.create(
+      createRepairDto,
+      tenantId,
+      userId,
+      idempotencyKey,
+    );
   }
 
   @Get()
@@ -420,8 +427,15 @@ export class RepairsController {
     @Body() createNoteDto: CreateRepairNoteDto,
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
+    @Headers('Idempotency-Key') idempotencyKey?: string,
   ): Promise<RepairResponseDto> {
-    return this.repairsService.addNote(id, createNoteDto, tenantId, userId);
+    return this.repairsService.addNote(
+      id,
+      createNoteDto,
+      tenantId,
+      userId,
+      idempotencyKey,
+    );
   }
 
   @Post(':id/cancel')
@@ -464,8 +478,15 @@ export class RepairsController {
     @Body('reason') reason: string,
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
+    @Headers('Idempotency-Key') idempotencyKey?: string,
   ): Promise<RepairResponseDto> {
-    return this.repairsService.cancel(id, reason, tenantId, userId);
+    return this.repairsService.cancel(
+      id,
+      reason,
+      tenantId,
+      userId,
+      idempotencyKey,
+    );
   }
 
   @Post(':id/status')
@@ -531,6 +552,7 @@ export class RepairsController {
     },
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
+    @Headers('Idempotency-Key') idempotencyKey?: string,
   ): Promise<RepairResponseDto> {
     return this.repairsService.changeStatus(
       id,
@@ -539,6 +561,7 @@ export class RepairsController {
       tenantId,
       userId,
       body.sendSMS !== false,
+      idempotencyKey,
     );
   }
 
