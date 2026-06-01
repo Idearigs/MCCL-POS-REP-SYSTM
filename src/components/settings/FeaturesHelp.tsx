@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Sparkles, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { Search, Sparkles, ChevronDown, ChevronUp, ExternalLink, Wrench, CheckCircle2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
-import FEATURES, { getFeaturesWithNewFlag, FEATURE_CATEGORIES, FeatureCategory } from '@/data/featuresRegistry';
+import FEATURES, { getFeaturesWithNewFlag, getBugFixesWithNewFlag, FEATURE_CATEGORIES, FeatureCategory } from '@/data/featuresRegistry';
 
 const CATEGORY_COLORS: Record<FeatureCategory, string> = {
   'Point of Sale': 'bg-blue-100 text-blue-700 border-blue-200',
@@ -22,8 +22,11 @@ const FeaturesHelp: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<FeatureCategory | 'All'>('All');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showFullGuide, setShowFullGuide] = useState<string | null>(null);
+  const [view, setView] = useState<'features' | 'fixes'>('features');
 
   const features = useMemo(() => getFeaturesWithNewFlag(), []);
+  const bugFixes = useMemo(() => getBugFixesWithNewFlag(), []);
+  const newFixCount = bugFixes.filter((b) => b.isNew).length;
 
   const suggestions = useMemo(() => {
     if (!query.trim()) return [];
@@ -64,13 +67,58 @@ const FeaturesHelp: React.FC = () => {
             {FEATURES.length} features available · {newCount} new in the last 30 days
           </p>
         </div>
-        {newCount > 0 && (
+        {((view === 'features' && newCount > 0) || (view === 'fixes' && newFixCount > 0)) && (
           <Badge className="bg-blue-600 text-white text-xs px-3 py-1">
-            {newCount} New
+            {view === 'features' ? newCount : newFixCount} New
           </Badge>
         )}
       </div>
 
+      {/* Features / Bug Fixes toggle */}
+      <div className="flex gap-2 bg-gray-100 p-1 rounded-xl w-full sm:w-auto sm:inline-flex">
+        <button
+          onClick={() => setView('features')}
+          className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${view === 'features' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <Sparkles className="h-4 w-4" />
+          Features ({features.length})
+        </button>
+        <button
+          onClick={() => setView('fixes')}
+          className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${view === 'fixes' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <Wrench className="h-4 w-4" />
+          Bug Fixes ({bugFixes.length})
+        </button>
+      </div>
+
+      {view === 'fixes' ? (
+        /* ── Bug Fixes list ── */
+        <div className="space-y-3">
+          {bugFixes.map((fix) => (
+            <div key={fix.id} className="border border-gray-200 rounded-xl px-4 py-4">
+              <div className="flex items-start gap-3">
+                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-green-50 flex items-center justify-center mt-0.5">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                    <span className="text-sm font-semibold text-gray-900">{fix.title}</span>
+                    {fix.isNew && (
+                      <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">FIXED</span>
+                    )}
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${CATEGORY_COLORS[fix.area]}`}>
+                      {fix.area}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 leading-relaxed">{fix.description}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+      <>
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -224,6 +272,8 @@ const FeaturesHelp: React.FC = () => {
           })
         )}
       </div>
+      </>
+      )}
     </div>
   );
 };
