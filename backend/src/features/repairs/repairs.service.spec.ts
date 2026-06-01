@@ -452,9 +452,17 @@ describe('RepairsService', () => {
   // ────────────────────────────────────────────────────────────────────────────
 
   describe('update()', () => {
+    // update() now runs the read + update + status-history write inside a
+    // $transaction with a FOR UPDATE lock, so it goes through prismaService.
+    beforeEach(() => {
+      mockPrismaService.$transaction.mockImplementation(
+        (cb: (tx: unknown) => unknown) => cb(mockPrismaService),
+      );
+    });
+
     it('should update a repair successfully', async () => {
-      mockRepairsRepository.findFirst.mockResolvedValue(mockRepair);
-      mockRepairsRepository.update.mockResolvedValue({
+      mockPrismaService.repairs.findFirst.mockResolvedValue(mockRepair);
+      mockPrismaService.repairs.update.mockResolvedValue({
         ...mockRepair,
         priority: 'HIGH',
       });
@@ -466,25 +474,27 @@ describe('RepairsService', () => {
         'user-001',
       );
 
-      expect(mockRepairsRepository.update).toHaveBeenCalled();
+      expect(mockPrismaService.$transaction).toHaveBeenCalled();
+      expect(mockPrismaService.$queryRaw).toHaveBeenCalled(); // row lock
+      expect(mockPrismaService.repairs.update).toHaveBeenCalled();
       expect(result).toBeDefined();
     });
 
     it('should throw NotFoundException when updating a non-existent repair', async () => {
-      mockRepairsRepository.findFirst.mockResolvedValue(null);
+      mockPrismaService.repairs.findFirst.mockResolvedValue(null);
 
       await expect(
         service.update('nonexistent', {} as any, 'tenant-001', 'user-001'),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should record status history when status changes', async () => {
-      mockRepairsRepository.findFirst.mockResolvedValue(mockRepair);
-      mockRepairsRepository.update.mockResolvedValue({
+    it('should record status history (atomically) when status changes', async () => {
+      mockPrismaService.repairs.findFirst.mockResolvedValue(mockRepair);
+      mockPrismaService.repairs.update.mockResolvedValue({
         ...mockRepair,
         status: 'IN_PROGRESS',
       });
-      mockRepairsRepository.createStatusHistory.mockResolvedValue({});
+      mockPrismaService.repair_status_history.create.mockResolvedValue({});
 
       await service.update(
         'repair-001',
@@ -493,7 +503,9 @@ describe('RepairsService', () => {
         'user-001',
       );
 
-      expect(mockRepairsRepository.createStatusHistory).toHaveBeenCalledWith(
+      expect(
+        mockPrismaService.repair_status_history.create,
+      ).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             repairId: 'repair-001',
@@ -505,8 +517,8 @@ describe('RepairsService', () => {
     });
 
     it('should NOT create status history when status is unchanged', async () => {
-      mockRepairsRepository.findFirst.mockResolvedValue(mockRepair);
-      mockRepairsRepository.update.mockResolvedValue(mockRepair);
+      mockPrismaService.repairs.findFirst.mockResolvedValue(mockRepair);
+      mockPrismaService.repairs.update.mockResolvedValue(mockRepair);
 
       await service.update(
         'repair-001',
@@ -515,7 +527,9 @@ describe('RepairsService', () => {
         'user-001',
       );
 
-      expect(mockRepairsRepository.createStatusHistory).not.toHaveBeenCalled();
+      expect(
+        mockPrismaService.repair_status_history.create,
+      ).not.toHaveBeenCalled();
     });
   });
 

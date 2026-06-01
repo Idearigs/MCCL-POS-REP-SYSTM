@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar, Tag, MoreHorizontal, Trash2, Hash, ImageOff } from 'lucide-react';
 import {
@@ -11,13 +10,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useRepairTags } from '@/contexts/RepairTagsContext';
+import RepairStatusBadge from '@/components/repair/RepairStatusBadge';
 
 interface RepairJobCardProps {
   id: string;
   repairNumber?: string;
   customerName: string;
   itemDescription: string;
-  status: 'received' | 'in-progress' | 'completed' | 'collected';
+  // Raw backend status (RECEIVED/QUOTED/APPROVED/…); rendered via RepairStatusBadge.
+  status: string;
   tagId?: string | null;
   dueDate: string;
   estimatedPrice?: string;
@@ -25,20 +26,6 @@ interface RepairJobCardProps {
   onClick: (id: string) => void;
   onDelete?: (id: string) => void;
 }
-
-const statusColors = {
-  'received': 'bg-blue-50 text-blue-500 border border-blue-200',
-  'in-progress': 'bg-orange-50 text-orange-500 border border-orange-200',
-  'completed': 'bg-green-50 text-green-500 border border-green-200',
-  'collected': 'bg-gray-50 text-gray-500 border border-gray-200',
-};
-
-const statusLabels = {
-  'received': 'Received',
-  'in-progress': 'In Progress',
-  'completed': 'Completed',
-  'collected': 'Collected',
-};
 
 const tagColorClasses: Record<string, string> = {
   blue: 'bg-blue-100 text-blue-700 border border-blue-200',
@@ -96,9 +83,7 @@ const RepairJobCard: React.FC<RepairJobCardProps> = ({
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
           <div className="absolute bottom-2 left-2">
-            <Badge className={`${statusColors[status]} rounded-full px-2 py-0.5 text-xs font-medium shadow-sm`}>
-              {statusLabels[status]}
-            </Badge>
+            <RepairStatusBadge status={status} size="sm" />
           </div>
         </div>
       ) : null}
@@ -116,9 +101,7 @@ const RepairJobCard: React.FC<RepairJobCardProps> = ({
           </div>
           <div className="flex items-center gap-2 ml-2">
             {!firstImage && (
-              <Badge className={`${statusColors[status]} rounded-full px-3 py-1 text-xs font-medium shadow-sm flex-shrink-0`}>
-                {statusLabels[status]}
-              </Badge>
+              <RepairStatusBadge status={status} size="sm" />
             )}
             {onDelete && (
               <DropdownMenu>
