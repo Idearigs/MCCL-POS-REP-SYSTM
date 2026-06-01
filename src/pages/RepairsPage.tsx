@@ -447,7 +447,7 @@ const RepairsPage: React.FC = () => {
             />
           </div>
           
-          <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:flex-nowrap">
             <div className="flex items-center bg-white/90 rounded-full border border-navy/10 shadow-sm">
               <Button
                 variant={viewMode === 'grid' ? 'default' : 'ghost'}
