@@ -357,11 +357,13 @@ export class RefundItemDto {
 
 export class CreateRefundDto {
   @ApiProperty({
-    description: 'Items to refund',
+    description:
+      'Items to refund. May be empty for service-only sales (e.g. repairs, ' +
+      'battery changes) which have no stocked line items — an empty array ' +
+      'requests a full refund of the remaining balance.',
     type: [RefundItemDto],
   })
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => RefundItemDto)
   items: RefundItemDto[];
