@@ -86,7 +86,9 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
   const [sendingMessage, setSendingMessage] = useState(false);
 
   // Status update states
-  const [selectedStatus, setSelectedStatus] = useState(repair?.status || '');
+  const [selectedStatus, setSelectedStatus] = useState(
+    repair?.backendStatus || repair?.status || '',
+  );
   const [statusUpdateNotes, setStatusUpdateNotes] = useState('');
   const [updatingRepairStatus, setUpdatingRepairStatus] = useState(false);
 
@@ -287,7 +289,9 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
 
   // Update repair status
   const updateRepairStatus = async () => {
-    if (!selectedStatus || selectedStatus === currentRepair.status) {
+    const currentRawStatus =
+      currentRepair.backendStatus || currentRepair.status;
+    if (!selectedStatus || selectedStatus === currentRawStatus) {
       toast.error('Please select a different status');
       return;
     }
@@ -310,10 +314,12 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
 
       console.log('✅ Status update response:', updatedRepair);
 
-      // Update local repair state
+      // Update local repair state (keep both the raw backendStatus and the
+      // legacy status field in sync so the badge renders the correct label).
       setCurrentRepair({
         ...currentRepair,
         status: selectedStatus,
+        backendStatus: selectedStatus,
         updatedAt: new Date().toISOString()
       });
 
@@ -613,8 +619,8 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
           <DialogDescription asChild>
             <div className="flex items-center gap-4">
               <span>Created {formatDate(currentRepair.createdAt)}</span>
-              <Badge className={`${getStatusColor(currentRepair.status)} rounded-full px-3 py-1`}>
-                {getStatusText(currentRepair.status)}
+              <Badge className={`${getStatusColor(currentRepair.backendStatus || currentRepair.status)} rounded-full px-3 py-1`}>
+                {getStatusText(currentRepair.backendStatus || currentRepair.status)}
               </Badge>
             </div>
           </DialogDescription>
@@ -914,8 +920,8 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                     <div>
                       <Label className="text-xs text-gray-500">Current Status</Label>
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge className={`${getStatusColor(currentRepair.status)} rounded-full px-3 py-1`}>
-                          {getStatusText(currentRepair.status)}
+                        <Badge className={`${getStatusColor(currentRepair.backendStatus || currentRepair.status)} rounded-full px-3 py-1`}>
+                          {getStatusText(currentRepair.backendStatus || currentRepair.status)}
                         </Badge>
                       </div>
                     </div>

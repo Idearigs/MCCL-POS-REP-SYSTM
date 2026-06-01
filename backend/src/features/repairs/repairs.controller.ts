@@ -361,8 +361,15 @@ export class RepairsController {
     @Body() updateRepairDto: UpdateRepairDto,
     @TenantId() tenantId: string,
     @CurrentUser('id') userId: string,
+    @Headers('Idempotency-Key') idempotencyKey?: string,
   ): Promise<RepairResponseDto> {
-    return this.repairsService.update(id, updateRepairDto, tenantId, userId);
+    return this.repairsService.update(
+      id,
+      updateRepairDto,
+      tenantId,
+      userId,
+      idempotencyKey,
+    );
   }
 
   @Delete(':id')

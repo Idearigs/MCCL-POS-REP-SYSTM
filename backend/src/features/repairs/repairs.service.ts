@@ -243,78 +243,97 @@ export class RepairsService {
     updateRepairDto: UpdateRepairDto,
     tenantId: string,
     userId: string,
+    idempotencyKey?: string,
   ): Promise<RepairResponseDto> {
-    const existingRepair = await this.repairsRepo.findFirst({
-      where: { id, tenantId },
-    });
+    // This is the path the web UI uses to change status (PATCH /repairs/:id),
+    // so it gets the same atomicity + locking as changeStatus: read + update +
+    // status-history write happen in one transaction with the repair row locked
+    // FOR UPDATE, and the whole thing is idempotent on the Idempotency-Key.
+    return this.replayOrRun('repair-update', idempotencyKey, async () => {
+      const repair = await this.prismaService.$transaction(async (prisma) => {
+        await prisma.$queryRaw`
+          SELECT id FROM repairs
+          WHERE id = ${id} AND "tenantId" = ${tenantId}
+          FOR UPDATE
+        `;
 
-    if (!existingRepair) {
-      throw new NotFoundException('Repair not found');
-    }
+        const existingRepair = await prisma.repairs.findFirst({
+          where: { id, tenantId },
+        });
 
-    const repair = await this.repairsRepo.update({
-      where: { id },
-      data: {
-        status: updateRepairDto.status || existingRepair.status,
-        priority: updateRepairDto.priority || existingRepair.priority,
-        itemDescription:
-          updateRepairDto.itemDescription || existingRepair.itemDescription,
-        issueDescription:
-          updateRepairDto.problemDescription || existingRepair.issueDescription,
-        estimatedCost:
-          updateRepairDto.estimatedCost ?? existingRepair.estimatedCost,
-        finalCost: updateRepairDto.totalCost ?? existingRepair.finalCost,
-        estimatedDueDate: updateRepairDto.expectedCompletionDate
-          ? new Date(updateRepairDto.expectedCompletionDate)
-          : existingRepair.estimatedDueDate,
-        completedDate:
-          updateRepairDto.status === 'COMPLETED'
-            ? new Date()
-            : existingRepair.completedDate,
-        collectedDate:
-          updateRepairDto.status === 'COLLECTED'
-            ? new Date()
-            : existingRepair.collectedDate,
-        customerNotes:
-          updateRepairDto.customerInstructions || existingRepair.customerNotes,
-        internalNotes:
-          updateRepairDto.internalNotes || existingRepair.internalNotes,
-        tagId:
-          updateRepairDto.tagId !== undefined
-            ? updateRepairDto.tagId
-            : existingRepair.tagId,
-        rmaId:
-          updateRepairDto.rmaId !== undefined
-            ? updateRepairDto.rmaId
-            : existingRepair.rmaId,
-        updatedAt: new Date(),
-      },
-      include: {
-        customers: true,
-        users: true,
-      },
-    });
+        if (!existingRepair) {
+          throw new NotFoundException('Repair not found');
+        }
 
-    // Add status history entry
-    if (
-      updateRepairDto.status &&
-      updateRepairDto.status !== existingRepair.status
-    ) {
-      await this.repairsRepo.createStatusHistory({
-        data: {
-          id: generateId(),
-          repairId: id,
-          oldStatus: existingRepair.status,
-          newStatus: updateRepairDto.status as any,
-          changedBy: userId,
-          notes:
-            updateRepairDto.statusNotes ||
-            `Status changed to ${updateRepairDto.status}`,
-        } as any,
+        const updated = await prisma.repairs.update({
+          where: { id },
+          data: {
+            status: updateRepairDto.status || existingRepair.status,
+            priority: updateRepairDto.priority || existingRepair.priority,
+            itemDescription:
+              updateRepairDto.itemDescription || existingRepair.itemDescription,
+            issueDescription:
+              updateRepairDto.problemDescription ||
+              existingRepair.issueDescription,
+            estimatedCost:
+              updateRepairDto.estimatedCost ?? existingRepair.estimatedCost,
+            finalCost: updateRepairDto.totalCost ?? existingRepair.finalCost,
+            estimatedDueDate: updateRepairDto.expectedCompletionDate
+              ? new Date(updateRepairDto.expectedCompletionDate)
+              : existingRepair.estimatedDueDate,
+            completedDate:
+              updateRepairDto.status === 'COMPLETED'
+                ? new Date()
+                : existingRepair.completedDate,
+            collectedDate:
+              updateRepairDto.status === 'COLLECTED'
+                ? new Date()
+                : existingRepair.collectedDate,
+            customerNotes:
+              updateRepairDto.customerInstructions ||
+              existingRepair.customerNotes,
+            internalNotes:
+              updateRepairDto.internalNotes || existingRepair.internalNotes,
+            tagId:
+              updateRepairDto.tagId !== undefined
+                ? updateRepairDto.tagId
+                : existingRepair.tagId,
+            rmaId:
+              updateRepairDto.rmaId !== undefined
+                ? updateRepairDto.rmaId
+                : existingRepair.rmaId,
+            updatedAt: new Date(),
+          },
+          include: {
+            customers: true,
+            users: true,
+          },
+        });
+
+        // Add status history entry (atomic with the status change)
+        if (
+          updateRepairDto.status &&
+          updateRepairDto.status !== existingRepair.status
+        ) {
+          await prisma.repair_status_history.create({
+            data: {
+              id: generateId(),
+              repairId: id,
+              oldStatus: existingRepair.status,
+              newStatus: updateRepairDto.status as any,
+              changedBy: userId,
+              notes:
+                updateRepairDto.statusNotes ||
+                `Status changed to ${updateRepairDto.status}`,
+            } as any,
+          });
+        }
+
+        return updated;
       });
-    }
 
-    return this.mapToResponseDto(repair);
+      return this.mapToResponseDto(repair);
+    });
   }
 
   async getStats(tenantId: string): Promise<RepairStatsDto> {
