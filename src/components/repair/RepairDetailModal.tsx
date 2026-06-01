@@ -600,10 +600,18 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-bold flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center">
+      <DialogContent
+        className="
+          overflow-y-auto
+          left-0 top-0 translate-x-0 translate-y-0
+          w-screen max-w-none h-[100dvh] max-h-[100dvh] rounded-none border-0 p-4
+          sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%]
+          sm:w-full sm:max-w-5xl sm:h-auto sm:max-h-[90vh] sm:rounded-lg sm:border sm:p-6
+        "
+      >
+        <DialogHeader className="text-left">
+          <DialogTitle className="text-lg sm:text-2xl font-bold flex items-center gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-purple-50 flex items-center justify-center flex-shrink-0">
               <Wrench size={20} className="text-purple-500" />
             </div>
             <div>
@@ -627,7 +635,7 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-5 [&>button]:text-[11px] [&>button]:px-1 sm:[&>button]:text-sm sm:[&>button]:px-3">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="images">Images</TabsTrigger>
             <TabsTrigger value="progress">Progress</TabsTrigger>
