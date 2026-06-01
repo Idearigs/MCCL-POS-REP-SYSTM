@@ -1059,6 +1059,27 @@ export class SalesService {
           let totalRefundAmount = 0;
           const refundOperations = [];
 
+          // Service-only sales (repairs, battery changes, etc.) are not stored
+          // as sale_items, so the client sends an empty items array. Treat that
+          // as a full refund of the remaining balance — there is no stock to
+          // restore. Product sales must still itemise so we restock correctly.
+          if (createRefundDto.items.length === 0) {
+            if (sale.sale_items.length > 0) {
+              throw new BadRequestException(
+                'Select at least one item to refund for this sale',
+              );
+            }
+
+            totalRefundAmount =
+              Number(sale.totalAmount) - Number(sale.refundedAmount);
+
+            if (totalRefundAmount <= 0) {
+              throw new BadRequestException(
+                'This sale has already been fully refunded',
+              );
+            }
+          }
+
           // Process each refund item
           for (const refundItem of createRefundDto.items) {
             const saleItem = sale.sale_items.find(
