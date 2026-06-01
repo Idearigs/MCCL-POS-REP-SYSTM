@@ -643,6 +643,35 @@ const FEATURES: Feature[] = [
       },
     ],
   },
+
+  // ─── INVENTORY ──────────────────────────────────────────────────────────────
+  {
+    id: 'inventory-valuation',
+    name: 'Inventory Valuation Breakdown',
+    description:
+      'The Inventory page now shows a proper valuation: stock at cost, retail/net realisable value, potential profit and gross margin, plus a per-category breakdown — instead of a single unexplained "Total Value".',
+    category: 'Inventory',
+    keywords: ['inventory', 'valuation', 'cost', 'retail', 'NRV', 'net realisable', 'profit', 'margin', 'stock value', 'category', 'breakdown'],
+    dateAdded: '2026-06-01',
+    path: '/inventory',
+    icon: 'Package',
+    shortGuide: [
+      'Open the Inventory page — the Valuation panel sits below the stat cards',
+      'Cost Value = what your current stock cost; Retail Value (NRV) = ticket value',
+      'Potential Profit = Retail − Cost, with the gross margin %',
+      'Scroll the "By Category" table for the same figures per category',
+    ],
+    fullGuide: [
+      {
+        title: 'What the figures mean',
+        content: 'Cost Value sums (cost price × quantity) across all active stock — the carrying value. Retail Value (NRV) sums (selling price × quantity) — the gross realisable value at current ticket prices. Potential Profit is Retail − Cost, and Gross Margin is Profit ÷ Retail.',
+      },
+      {
+        title: 'Per-category breakdown & depth',
+        content: 'The panel header shows total products and units in stock (depth). The "By Category" table lists units, cost, retail, profit and margin for each category, sorted by retail value, so you can see where your stock value and profit are concentrated.',
+      },
+    ],
+  },
 ];
 
 export default FEATURES;

@@ -631,8 +631,47 @@ const InventoryPage = () => {
   const totalItems = inventory.length;
   const lowStockItems = inventory.filter(item => item.quantity > 0 && item.quantity <= item.threshold).length;
   const outOfStockItems = inventory.filter(item => item.quantity <= 0).length;
-  const totalValue = inventory.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  
+
+  // ── Inventory valuation breakdown ───────────────────────────────────────────
+  // Cost  = what the current stock cost us (carrying value, i.e. lower of cost & NRV)
+  // Retail/NRV = gross realisable value at current ticket prices
+  // Profit = Retail − Cost; Margin = Profit / Retail. Plus a per-category breakdown.
+  const inventoryValuation = (() => {
+    let costValue = 0;
+    let retailValue = 0;
+    let totalUnits = 0;
+    const byCategory: Record<string, { units: number; cost: number; retail: number }> = {};
+    for (const item of inventory) {
+      const qty = item.quantity || 0;
+      const lineCost = (item.cost || 0) * qty;
+      const lineRetail = (item.price || 0) * qty;
+      costValue += lineCost;
+      retailValue += lineRetail;
+      totalUnits += qty;
+      const cat = (item as any).categoryName || item.category || 'Uncategorised';
+      if (!byCategory[cat]) byCategory[cat] = { units: 0, cost: 0, retail: 0 };
+      byCategory[cat].units += qty;
+      byCategory[cat].cost += lineCost;
+      byCategory[cat].retail += lineRetail;
+    }
+    const potentialProfit = retailValue - costValue;
+    const marginPct = retailValue > 0 ? (potentialProfit / retailValue) * 100 : 0;
+    const categories = Object.entries(byCategory)
+      .map(([name, v]) => ({
+        name,
+        units: v.units,
+        cost: v.cost,
+        retail: v.retail,
+        profit: v.retail - v.cost,
+        margin: v.retail > 0 ? ((v.retail - v.cost) / v.retail) * 100 : 0,
+      }))
+      .sort((a, b) => b.retail - a.retail);
+    return { costValue, retailValue, potentialProfit, marginPct, totalUnits, productCount: inventory.length, categories };
+  })();
+
+  const gbp = (n: number) =>
+    `£${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
   // Update filtered inventory when inventory changes
   useEffect(() => {
     applyFilters(searchQuery, undefined, quickFilter);
@@ -719,12 +758,80 @@ const InventoryPage = () => {
           <div className="bg-card p-4 rounded-lg shadow-sm border">
             <div className="flex justify-between items-center">
               <div>
-                <p className="text-sm text-muted-foreground">Total Value</p>
-                <h3 className="text-2xl font-bold">£{totalValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                <p className="text-sm text-muted-foreground">Retail Value (NRV)</p>
+                <h3 className="text-2xl font-bold">{gbp(inventoryValuation.retailValue)}</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Cost {gbp(inventoryValuation.costValue)} · Profit {gbp(inventoryValuation.potentialProfit)}
+                </p>
               </div>
               <Package className="h-8 w-8 text-muted-foreground/70" />
             </div>
           </div>
+        </div>
+
+        {/* ── Inventory valuation breakdown ── */}
+        <div className="bg-card rounded-lg shadow-sm border mb-6 overflow-hidden">
+          <div className="px-4 py-3 border-b bg-muted/30">
+            <h3 className="text-sm font-semibold text-navy">Inventory Valuation</h3>
+            <p className="text-xs text-muted-foreground">
+              {inventoryValuation.productCount} products · {inventoryValuation.totalUnits} units in stock
+            </p>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0">
+            <div className="p-4">
+              <p className="text-xs text-muted-foreground">Cost Value</p>
+              <p className="text-xl font-bold text-navy">{gbp(inventoryValuation.costValue)}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">What the stock cost (carrying value)</p>
+            </div>
+            <div className="p-4">
+              <p className="text-xs text-muted-foreground">Retail Value (NRV)</p>
+              <p className="text-xl font-bold text-navy">{gbp(inventoryValuation.retailValue)}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Realisable at ticket prices</p>
+            </div>
+            <div className="p-4">
+              <p className="text-xs text-muted-foreground">Potential Profit</p>
+              <p className="text-xl font-bold text-emerald-600">{gbp(inventoryValuation.potentialProfit)}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Retail − Cost</p>
+            </div>
+            <div className="p-4">
+              <p className="text-xs text-muted-foreground">Gross Margin</p>
+              <p className="text-xl font-bold text-emerald-600">{inventoryValuation.marginPct.toFixed(1)}%</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Profit ÷ Retail</p>
+            </div>
+          </div>
+          {inventoryValuation.categories.length > 0 && (
+            <div className="border-t">
+              <div className="px-4 py-2 bg-muted/20">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">By Category</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-muted-foreground border-b">
+                      <th className="text-left font-medium px-4 py-2">Category</th>
+                      <th className="text-right font-medium px-4 py-2">Units</th>
+                      <th className="text-right font-medium px-4 py-2">Cost</th>
+                      <th className="text-right font-medium px-4 py-2">Retail</th>
+                      <th className="text-right font-medium px-4 py-2">Profit</th>
+                      <th className="text-right font-medium px-4 py-2">Margin</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inventoryValuation.categories.map((c) => (
+                      <tr key={c.name} className="border-b last:border-0 hover:bg-muted/20">
+                        <td className="px-4 py-2 text-navy font-medium">{c.name}</td>
+                        <td className="px-4 py-2 text-right text-muted-foreground">{c.units}</td>
+                        <td className="px-4 py-2 text-right">{gbp(c.cost)}</td>
+                        <td className="px-4 py-2 text-right">{gbp(c.retail)}</td>
+                        <td className="px-4 py-2 text-right text-emerald-600">{gbp(c.profit)}</td>
+                        <td className="px-4 py-2 text-right text-muted-foreground">{c.margin.toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Duplicate products banner */}
