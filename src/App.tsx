@@ -49,6 +49,7 @@ import ShiftsPage from "./pages/ShiftsPage";
 import FinancialIntelligencePage from "./pages/FinancialIntelligencePage";
 import MobileAddProduct from "./pages/MobileAddProduct";
 import MobileAddRepair from "./pages/MobileAddRepair";
+import MobileRepairs from "./pages/MobileRepairs";
 import SaleConditionEditPage from "./pages/SaleConditionEditPage";
 import EmployeesPage from "./pages/hrms/EmployeesPage";
 import EmployeePage from "./pages/hrms/EmployeePage";
@@ -397,6 +398,7 @@ const App = () => (
                   {/* Mobile routes (standalone, no MainLayout) */}
                   <Route path="/mobile/add-product" element={<PrivateRoute><MobileAddProduct /></PrivateRoute>} />
                   <Route path="/mobile/add-repair" element={<PrivateRoute><MobileAddRepair /></PrivateRoute>} />
+                  <Route path="/mobile/repairs" element={<PrivateRoute><MobileRepairs /></PrivateRoute>} />
 
                   {/* Catch-all route */}
                   <Route path="*" element={<NotFound />} />
