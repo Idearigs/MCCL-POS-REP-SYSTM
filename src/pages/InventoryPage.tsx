@@ -640,11 +640,13 @@ const InventoryPage = () => {
     let costValue = 0;
     let retailValue = 0;
     let totalUnits = 0;
+    let productsWithoutCost = 0;
     const byCategory: Record<string, { units: number; cost: number; retail: number }> = {};
     for (const item of inventory) {
       const qty = item.quantity || 0;
       const lineCost = (item.cost || 0) * qty;
       const lineRetail = (item.price || 0) * qty;
+      if ((!item.cost || item.cost <= 0) && qty > 0) productsWithoutCost += 1;
       costValue += lineCost;
       retailValue += lineRetail;
       totalUnits += qty;
@@ -666,7 +668,7 @@ const InventoryPage = () => {
         margin: v.retail > 0 ? ((v.retail - v.cost) / v.retail) * 100 : 0,
       }))
       .sort((a, b) => b.retail - a.retail);
-    return { costValue, retailValue, potentialProfit, marginPct, totalUnits, productCount: inventory.length, categories };
+    return { costValue, retailValue, potentialProfit, marginPct, totalUnits, productsWithoutCost, productCount: inventory.length, categories };
   })();
 
   const gbp = (n: number) =>
@@ -760,9 +762,6 @@ const InventoryPage = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Retail Value (NRV)</p>
                 <h3 className="text-2xl font-bold">{gbp(inventoryValuation.retailValue)}</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Cost {gbp(inventoryValuation.costValue)} · Profit {gbp(inventoryValuation.potentialProfit)}
-                </p>
               </div>
               <Package className="h-8 w-8 text-muted-foreground/70" />
             </div>
@@ -790,15 +789,23 @@ const InventoryPage = () => {
             </div>
             <div className="p-4">
               <p className="text-xs text-muted-foreground">Potential Profit</p>
-              <p className="text-xl font-bold text-emerald-600">{gbp(inventoryValuation.potentialProfit)}</p>
+              <p className={`text-xl font-bold ${inventoryValuation.potentialProfit < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{gbp(inventoryValuation.potentialProfit)}</p>
               <p className="text-[11px] text-muted-foreground mt-0.5">Retail − Cost</p>
             </div>
             <div className="p-4">
               <p className="text-xs text-muted-foreground">Gross Margin</p>
-              <p className="text-xl font-bold text-emerald-600">{inventoryValuation.marginPct.toFixed(1)}%</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Profit ÷ Retail</p>
+              <p className={`text-xl font-bold ${inventoryValuation.marginPct < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{inventoryValuation.marginPct.toFixed(1)}%</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Profit / Retail</p>
             </div>
           </div>
+          {inventoryValuation.productsWithoutCost > 0 && (
+            <div className="flex items-start gap-2 px-4 py-2.5 bg-amber-50 border-t border-amber-200 text-amber-800">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <p className="text-xs">
+                <strong>{inventoryValuation.productsWithoutCost}</strong> of {inventoryValuation.productCount} product{inventoryValuation.productCount === 1 ? '' : 's'} have no cost price set — profit and margin are overstated until cost prices are added.
+              </p>
+            </div>
+          )}
           {inventoryValuation.categories.length > 0 && (
             <div className="border-t">
               <div className="px-4 py-2 bg-muted/20">
@@ -823,7 +830,7 @@ const InventoryPage = () => {
                         <td className="px-4 py-2 text-right text-muted-foreground">{c.units}</td>
                         <td className="px-4 py-2 text-right">{gbp(c.cost)}</td>
                         <td className="px-4 py-2 text-right">{gbp(c.retail)}</td>
-                        <td className="px-4 py-2 text-right text-emerald-600">{gbp(c.profit)}</td>
+                        <td className={`px-4 py-2 text-right ${c.profit < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{gbp(c.profit)}</td>
                         <td className="px-4 py-2 text-right text-muted-foreground">{c.margin.toFixed(1)}%</td>
                       </tr>
                     ))}
