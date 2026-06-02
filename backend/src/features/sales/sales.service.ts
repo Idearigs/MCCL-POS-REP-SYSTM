@@ -30,6 +30,14 @@ import {
 import { PaginatedResponseDto } from '../../shared/dto/pagination.dto';
 import { generateId } from '../../shared/utils/id-generator';
 
+// Non-stock sale lines (repair services, gift-card sales) carry one of these
+// markers in their notes so the create path skips the products table lookup
+// and does not write a sale_items row (which would violate the productId FK).
+const NON_STOCK_MARKERS = ['REPAIR SERVICE', 'GIFT CARD'];
+function isNonStockLine(notes?: string): boolean {
+  return !!notes && NON_STOCK_MARKERS.some((m) => notes.includes(m));
+}
+
 @Injectable()
 export class SalesService {
   private readonly logger = new Logger(SalesService.name);
@@ -88,7 +96,7 @@ export class SalesService {
           // terminals selling the same item serialize — the 2nd waits, then sees
           // the decremented stock and is cleanly rejected ("out of stock").
           const realProductIds = createSaleDto.items
-            .filter((item) => !item.notes?.includes('REPAIR SERVICE'))
+            .filter((item) => !isNonStockLine(item.notes))
             .map((item) => item.productId);
 
           const lockedStock = new Map<
@@ -122,16 +130,17 @@ export class SalesService {
 
           // Validate products and check stock against the LOCKED rows
           const productValidations = createSaleDto.items.map((item) => {
-            // Check if this is a repair service item (special handling)
-            const isRepairService = item.notes?.includes('REPAIR SERVICE');
+            // Non-stock line (repair service or gift-card sale): skip the
+            // product lookup and treat it as a virtual line.
+            const isRepairService = isNonStockLine(item.notes);
 
             if (isRepairService) {
-              // For repair services, skip product validation
+              // For non-stock lines, skip product validation
               // Create a virtual product entry for the sale
               return {
                 product: {
                   id: item.productId,
-                  name: item.notes || 'Repair Service',
+                  name: item.notes || 'Service',
                   stockQuantity: 999999, // Virtual unlimited stock
                   price: item.unitPrice,
                 },
