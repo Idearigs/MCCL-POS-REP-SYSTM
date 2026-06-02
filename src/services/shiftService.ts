@@ -79,9 +79,12 @@ export interface ShiftReport {
     };
     sale_items: Array<{
       quantity: number;
+      totalPrice?: number;
+      unitPrice?: number;
       products: {
         name: string;
         sku: string;
+        categories?: { name: string } | null;
       };
     }>;
   }>;

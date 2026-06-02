@@ -34,6 +34,7 @@ import { shiftService, ShiftSummary } from '@/services/shiftService';
 import {
   printShiftSummaryThermal,
   printDetailedJournal,
+  buildDepartmentsFromShiftReport,
   DetailedJournalEntry,
 } from '@/utils/thermalReceipt';
 import { format } from 'date-fns';
@@ -201,6 +202,7 @@ const CashUpPage = () => {
           layawayDeposits: Number(selectedShift.layawayDeposits ?? 0),
           payIns: Number(selectedShift.cashPayIns ?? 0),
           payOuts: Number(selectedShift.cashPayOuts ?? 0),
+          departments: buildDepartmentsFromShiftReport(report.sales),
           totalDiscount: report.metrics.totalDiscount,
           totalTax: report.metrics.totalTax,
           variance: Number(selectedShift.variance ?? 0),
