@@ -176,6 +176,11 @@ const CloseShiftDialog: React.FC<CloseShiftDialogProps> = ({
         await printShiftSummaryThermal(
           {
             storeName: settings?.general?.storeName ?? 'Store',
+            storeAddress: settings?.general?.address,
+            storePhone: settings?.general?.phone,
+            vatNumber: settings?.printer?.vatNumber,
+            companyRegNumber: settings?.cashUp?.companyRegistrationNumber,
+            registerId: settings?.cashUp?.registerId,
             shiftNumber: closedShift.shiftNumber,
             cashierName: closedShift.user
               ? `${(closedShift.user as any).firstName ?? ''} ${(closedShift.user as any).lastName ?? ''}`.trim()
@@ -186,9 +191,17 @@ const CloseShiftDialog: React.FC<CloseShiftDialogProps> = ({
               new Date().toISOString(),
             openingFloat: Number(closedShift.openingFloat),
             closingFloat: declaredCash,
+            expectedCash: Number(closedShift.expectedFloat ?? declaredCash),
+            declaredCash,
             totalSales: report.metrics.totalSales,
             totalRevenue: report.metrics.totalRevenue,
             paymentBreakdown: report.metrics.paymentBreakdown,
+            cashSales: report.metrics.cashSales,
+            cardSales: report.metrics.cardSales,
+            giftCardSales: Number(closedShift.giftCardSales ?? 0),
+            layawayDeposits: Number(closedShift.layawayDeposits ?? 0),
+            payIns: Number(closedShift.cashPayIns ?? 0),
+            payOuts: Number(closedShift.cashPayOuts ?? 0),
             totalDiscount: report.metrics.totalDiscount,
             totalTax: report.metrics.totalTax,
             variance: Number(closedShift.variance ?? 0),

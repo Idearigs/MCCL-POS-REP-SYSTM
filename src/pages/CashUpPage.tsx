@@ -31,6 +31,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { salesService } from '@/services/salesService';
 import { shiftService, ShiftSummary } from '@/services/shiftService';
+import {
+  printShiftSummaryThermal,
+  printDetailedJournal,
+  DetailedJournalEntry,
+} from '@/utils/thermalReceipt';
 import { format } from 'date-fns';
 import {
   EndOfDayReportData,
@@ -153,6 +158,117 @@ const CashUpPage = () => {
 
   const gbp = (n: number) =>
     `£${Number(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  // The shift currently selected for per-shift print actions
+  const selectedShift =
+    filters.shiftId && filters.shiftId !== 'all'
+      ? availableShifts.find((s: any) => s.id === filters.shiftId)
+      : null;
+
+  const handleReprintZReport = async () => {
+    if (!selectedShift) return;
+    try {
+      const report = await shiftService.getShiftReport(selectedShift.id);
+      const printerName = settings?.printer?.printerName;
+      await printShiftSummaryThermal(
+        {
+          storeName: settings.general.storeName || 'Store',
+          storeAddress: settings.general.address,
+          storePhone: settings.general.phone,
+          vatNumber: settings.printer?.vatNumber,
+          companyRegNumber: settings.cashUp?.companyRegistrationNumber,
+          registerId: settings.cashUp?.registerId,
+          shiftNumber: selectedShift.shiftNumber,
+          cashierName: selectedShift.user
+            ? `${selectedShift.user.firstName} ${selectedShift.user.lastName}`
+            : 'Staff',
+          startTime: selectedShift.startTime,
+          endTime: selectedShift.endTime || new Date().toISOString(),
+          openingFloat: Number(selectedShift.openingFloat ?? 0),
+          closingFloat: Number(
+            selectedShift.declaredCash ?? selectedShift.closingFloat ?? 0,
+          ),
+          expectedCash: Number(selectedShift.expectedFloat ?? 0),
+          declaredCash: Number(
+            selectedShift.declaredCash ?? selectedShift.closingFloat ?? 0,
+          ),
+          totalSales: report.metrics.totalSales,
+          totalRevenue: report.metrics.totalRevenue,
+          paymentBreakdown: report.metrics.paymentBreakdown,
+          cashSales: report.metrics.cashSales,
+          cardSales: report.metrics.cardSales,
+          giftCardSales: Number(selectedShift.giftCardSales ?? 0),
+          layawayDeposits: Number(selectedShift.layawayDeposits ?? 0),
+          payIns: Number(selectedShift.cashPayIns ?? 0),
+          payOuts: Number(selectedShift.cashPayOuts ?? 0),
+          totalDiscount: report.metrics.totalDiscount,
+          totalTax: report.metrics.totalTax,
+          variance: Number(selectedShift.variance ?? 0),
+        },
+        printerName,
+      );
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to print Z-report',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handlePrintJournal = async () => {
+    if (!selectedShift) {
+      toast({
+        title: 'Select a shift',
+        description: 'Choose a specific shift to print its detailed journal',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      const report = await shiftService.getShiftReport(selectedShift.id);
+      const entries: DetailedJournalEntry[] = [];
+      report.sales.forEach((sale) => {
+        const customerName = sale.customers
+          ? `${sale.customers.firstName} ${sale.customers.lastName}`.trim()
+          : undefined;
+        sale.sale_items.forEach((item) => {
+          entries.push({
+            time: sale.createdAt,
+            saleNumber: sale.saleNumber,
+            productName: item.products?.name || 'Item',
+            sku: item.products?.sku,
+            quantity: item.quantity,
+            amount: Number((item as any).totalPrice ?? sale.totalAmount),
+            paymentMethod: sale.paymentMethod,
+            customerName,
+          });
+        });
+      });
+      entries.sort(
+        (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
+      );
+      await printDetailedJournal(
+        {
+          storeName: settings.general.storeName || 'Store',
+          shiftNumber: selectedShift.shiftNumber,
+          cashierName: selectedShift.user
+            ? `${selectedShift.user.firstName} ${selectedShift.user.lastName}`
+            : 'Staff',
+          registerId: settings.cashUp?.registerId,
+          rangeLabel: `${format(new Date(selectedShift.startTime), 'dd MMM yy HH:mm')}`,
+          entries,
+        },
+        settings?.printer?.printerName,
+      );
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to print journal',
+        variant: 'destructive',
+      });
+    }
+  };
 
   // Auto-generate report when a specific shift is selected
   useEffect(() => {
@@ -903,6 +1019,18 @@ const CashUpPage = () => {
                 <Mail className="h-4 w-4 mr-2" />
                 Email
               </Button>
+              {selectedShift && (
+                <>
+                  <Button onClick={handleReprintZReport} variant="outline">
+                    <Receipt className="h-4 w-4 mr-2" />
+                    Z-Report
+                  </Button>
+                  <Button onClick={handlePrintJournal} variant="outline">
+                    <Printer className="h-4 w-4 mr-2" />
+                    Detailed Journal
+                  </Button>
+                </>
+              )}
             </div>
 
             {/* Report Display - Modern Receipt UI */}

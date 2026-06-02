@@ -57,6 +57,13 @@ export interface ReceiptTypesSettings {
   layaway: ReceiptTypeConfig;
 }
 
+export interface CashUpSettings {
+  // Absolute variance (£) above which a manager PIN is required to close.
+  varianceThreshold: number;
+  companyRegistrationNumber: string;
+  registerId: string;
+}
+
 export interface AllSettings {
   general: GeneralSettings;
   notifications: NotificationSettings;
@@ -64,6 +71,7 @@ export interface AllSettings {
   printer: PrinterSettings;
   metals: MetalSettings;
   receiptTypes: ReceiptTypesSettings;
+  cashUp: CashUpSettings;
 }
 
 interface SettingsContextType {
@@ -75,6 +83,7 @@ interface SettingsContextType {
   updatePrinterSettings: (settings: PrinterSettings) => Promise<boolean>;
   updateMetalSettings: (settings: MetalSettings) => Promise<boolean>;
   updateReceiptTypes: (settings: ReceiptTypesSettings) => Promise<boolean>;
+  updateCashUpSettings: (settings: CashUpSettings) => Promise<boolean>;
   toggleDarkMode: () => void;
   toggleCompactView: () => void;
   resetToDefaults: () => void;
@@ -110,6 +119,11 @@ const defaultSettings: AllSettings = {
     address: '7 The Square\nBeeston\nNottingham NG9 2JG',
     currency: 'GBP',
     taxRate: 20,
+  },
+  cashUp: {
+    varianceThreshold: 5,
+    companyRegistrationNumber: '',
+    registerId: '1',
   },
   notifications: {
     emailNotifications: true,
@@ -166,6 +180,7 @@ function mergeWithDefaults(raw: Partial<AllSettings>): AllSettings {
       pettyCash: { ...defaultSettings.receiptTypes.pettyCash, ...(rawRT.pettyCash ?? {}) },
       layaway: { ...defaultSettings.receiptTypes.layaway, ...(rawRT.layaway ?? {}) },
     },
+    cashUp: { ...defaultSettings.cashUp, ...(raw.cashUp ?? {}) },
   };
 }
 
@@ -338,6 +353,22 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const updateCashUpSettings = async (newSettings: CashUpSettings): Promise<boolean> => {
+    setLoading(true);
+    try {
+      const updated = await patchSettings({ cashUp: newSettings } as any);
+      setSettings(updated);
+      writeCache(updated);
+      toast.success('Cash-up settings saved');
+      return true;
+    } catch {
+      toast.error('Failed to save cash-up settings');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Dark mode / compact view toggle immediately (also persists via appearance update)
   const toggleDarkMode = () => {
     const newValue = !settings.appearance.darkMode;
@@ -375,6 +406,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updatePrinterSettings,
         updateMetalSettings,
         updateReceiptTypes,
+        updateCashUpSettings,
         toggleDarkMode,
         toggleCompactView,
         resetToDefaults,

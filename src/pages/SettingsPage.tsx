@@ -179,7 +179,21 @@ const SettingsPage = () => {
   const navigate = useNavigate();
   const { changePassword, auth } = useAuth();
   const isBuyme = auth.tenantInfo?.tenantSlug === 'buymejewellery';
-  const { settings, loading, updateGeneralSettings, updateNotificationSettings, updateAppearanceSettings, updatePrinterSettings, updateReceiptTypes, resetToDefaults, toggleDarkMode, toggleCompactView } = useSettings();
+  const { settings, loading, updateGeneralSettings, updateNotificationSettings, updateAppearanceSettings, updatePrinterSettings, updateReceiptTypes, updateCashUpSettings, resetToDefaults, toggleDarkMode, toggleCompactView } = useSettings();
+
+  // Cash-up settings (plain local form, synced from context)
+  const [cashUpForm, setCashUpForm] = useState({
+    varianceThreshold: settings.cashUp.varianceThreshold,
+    companyRegistrationNumber: settings.cashUp.companyRegistrationNumber,
+    registerId: settings.cashUp.registerId,
+  });
+  useEffect(() => {
+    setCashUpForm({
+      varianceThreshold: settings.cashUp.varianceThreshold,
+      companyRegistrationNumber: settings.cashUp.companyRegistrationNumber,
+      registerId: settings.cashUp.registerId,
+    });
+  }, [settings.cashUp]);
 
   // Password visibility states
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -533,6 +547,7 @@ const SettingsPage = () => {
             <TabsTrigger value="outlets">Outlets</TabsTrigger>
             <TabsTrigger value="printer">Printer</TabsTrigger>
             <TabsTrigger value="receipt-types">Receipts</TabsTrigger>
+            <TabsTrigger value="cashup">Cash-Up</TabsTrigger>
             <TabsTrigger value="repair-tags">Repair Tags</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
             <TabsTrigger value="features" className="relative">
@@ -874,6 +889,71 @@ const SettingsPage = () => {
                     </Button>
                   </form>
                 </Form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Cash-Up Tab */}
+          <TabsContent value="cashup">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Lock className="h-5 w-5" />
+                  Cash-Up & Z-Report
+                </CardTitle>
+                <CardDescription>
+                  Controls for end-of-day shift reconciliation and the Z-report receipt.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="varianceThreshold">Manager-PIN variance threshold (£)</Label>
+                    <Input
+                      id="varianceThreshold"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={cashUpForm.varianceThreshold}
+                      onChange={(e) =>
+                        setCashUpForm((p) => ({ ...p, varianceThreshold: parseFloat(e.target.value) || 0 }))
+                      }
+                    />
+                    <p className="text-xs text-gray-500">
+                      A cash variance above this amount requires a manager PIN to close the shift.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="registerId">Register / Till ID</Label>
+                    <Input
+                      id="registerId"
+                      value={cashUpForm.registerId}
+                      onChange={(e) =>
+                        setCashUpForm((p) => ({ ...p, registerId: e.target.value }))
+                      }
+                      placeholder="1"
+                    />
+                    <p className="text-xs text-gray-500">Printed on the Z-report header.</p>
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label htmlFor="companyRegistrationNumber">Company registration number</Label>
+                    <Input
+                      id="companyRegistrationNumber"
+                      value={cashUpForm.companyRegistrationNumber}
+                      onChange={(e) =>
+                        setCashUpForm((p) => ({ ...p, companyRegistrationNumber: e.target.value }))
+                      }
+                      placeholder="e.g. 01234567"
+                    />
+                    <p className="text-xs text-gray-500">
+                      Printed on the Z-report alongside the store address and VAT number (set in the Printer tab).
+                    </p>
+                  </div>
+                </div>
+                <Button onClick={() => updateCashUpSettings(cashUpForm)} disabled={loading} className="gap-2">
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  Save Cash-Up Settings
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
