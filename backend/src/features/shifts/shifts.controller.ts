@@ -13,12 +13,15 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
+import { RolesGuard } from '../../shared/guards/roles.guard';
+import { Roles } from '../../shared/decorators/roles.decorator';
 import { ShiftsService } from './shifts.service';
 import {
   StartShiftDto,
   CloseShiftDto,
   GetShiftsDto,
   CashMovementDto,
+  AuditResolutionDto,
 } from './dto/shift.dto';
 import { ShiftStatus } from '@prisma/client';
 
@@ -79,6 +82,23 @@ export class ShiftsController {
     return this.shiftsService.getCashMovements(shiftId, req.user.tenantId);
   }
 
+  // Manager saves an audit resolution note against a shift's variance
+  @Roles('OWNER', 'MANAGER')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Patch(':id/audit')
+  async saveAuditResolution(
+    @Req() req,
+    @Param('id') shiftId: string,
+    @Body() body: AuditResolutionDto,
+  ) {
+    return this.shiftsService.saveAuditResolution(
+      shiftId,
+      req.user.tenantId,
+      req.user.id,
+      body.auditResolutionNote,
+    );
+  }
+
   // Get shifts by date range
   @Get()
   async getShifts(
@@ -121,6 +141,35 @@ export class ShiftsController {
   @Get(':id/report')
   async getShiftReport(@Param('id') shiftId: string) {
     return this.shiftsService.getShiftReport(shiftId);
+  }
+
+  // Consolidated master summary across all shifts in the date filter
+  @Get('summary')
+  async getShiftSummary(
+    @Req() req,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('userId') userId?: string,
+  ) {
+    if (!startDate || !endDate) {
+      throw new BadRequestException('Start date and end date are required');
+    }
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new BadRequestException('Invalid date format provided');
+    }
+    if (start > end) {
+      throw new BadRequestException(
+        'Start date must be before or equal to end date',
+      );
+    }
+    return this.shiftsService.getShiftSummary(
+      req.user.tenantId,
+      start,
+      end,
+      userId,
+    );
   }
 
   // Get shift statistics
