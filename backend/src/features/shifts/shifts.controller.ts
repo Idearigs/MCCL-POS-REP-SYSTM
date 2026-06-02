@@ -14,7 +14,12 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { ShiftsService } from './shifts.service';
-import { StartShiftDto, CloseShiftDto, GetShiftsDto } from './dto/shift.dto';
+import {
+  StartShiftDto,
+  CloseShiftDto,
+  GetShiftsDto,
+  CashMovementDto,
+} from './dto/shift.dto';
 import { ShiftStatus } from '@prisma/client';
 
 @Controller('shifts')
@@ -50,6 +55,28 @@ export class ShiftsController {
     @Body() body: CloseShiftDto,
   ) {
     return this.shiftsService.closeShift(shiftId, req.user.id, body);
+  }
+
+  // Record a cash movement (pay-in / pay-out) on an active shift
+  @Post(':id/cash-movement')
+  @HttpCode(HttpStatus.CREATED)
+  async createCashMovement(
+    @Req() req,
+    @Param('id') shiftId: string,
+    @Body() body: CashMovementDto,
+  ) {
+    return this.shiftsService.createCashMovement(
+      shiftId,
+      req.user.id,
+      req.user.tenantId,
+      body,
+    );
+  }
+
+  // List cash movements for a shift
+  @Get(':id/cash-movements')
+  async getCashMovements(@Req() req, @Param('id') shiftId: string) {
+    return this.shiftsService.getCashMovements(shiftId, req.user.tenantId);
   }
 
   // Get shifts by date range

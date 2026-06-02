@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, X, ShoppingCart, LogOut, LayoutGrid, UserPlus, Package, Wrench } from 'lucide-react';
+import { Clock, X, ShoppingCart, LogOut, LayoutGrid, UserPlus, Package, Wrench, ArrowDownUp } from 'lucide-react';
 import { shiftService, Shift } from '@/services/shiftService';
 import CloseShiftDialog from './CloseShiftDialog';
+import CashMovementDialog from './CashMovementDialog';
 import { toast } from '@/hooks/use-toast';
 
 const STORAGE_KEY = 'floatingShiftButtonPosition';
@@ -12,6 +13,7 @@ const FloatingShiftButton: React.FC = () => {
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCloseShiftDialogOpen, setIsCloseShiftDialogOpen] = useState(false);
+  const [isCashMovementDialogOpen, setIsCashMovementDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isInQuickPOS, setIsInQuickPOS] = useState(false);
 
@@ -107,6 +109,11 @@ const FloatingShiftButton: React.FC = () => {
   const handleEndShift = () => {
     setIsExpanded(false);
     setIsCloseShiftDialogOpen(true);
+  };
+
+  const handleCashMovement = () => {
+    setIsExpanded(false);
+    setIsCashMovementDialogOpen(true);
   };
 
   const handleQuickNav = (path: string) => {
@@ -343,6 +350,22 @@ const FloatingShiftButton: React.FC = () => {
             </button>
           </div>
 
+          {/* Cash In/Out Button — only when shift is active */}
+          {activeShift && (
+            <div className={`flex items-center gap-3 group ${isOnRight ? 'flex-row' : 'flex-row-reverse'}`}>
+              <div className="bg-white px-3 py-2 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+                <span className="text-sm font-medium text-gray-700">Cash In/Out</span>
+              </div>
+              <button
+                onClick={handleCashMovement}
+                className="relative flex items-center justify-center w-12 h-12 bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-200"
+              >
+                <ArrowDownUp size={20} />
+                <div className="absolute inset-0 rounded-full bg-white opacity-0 hover:opacity-20 transition-opacity duration-200" />
+              </button>
+            </div>
+          )}
+
           {/* End Shift Button — only when shift is active */}
           {activeShift && (
             <div className={`flex items-center gap-3 group ${isOnRight ? 'flex-row' : 'flex-row-reverse'}`}>
@@ -368,6 +391,15 @@ const FloatingShiftButton: React.FC = () => {
           onClose={() => setIsCloseShiftDialogOpen(false)}
           activeShift={activeShift}
           onShiftClosed={handleShiftClosed}
+        />
+      )}
+
+      {/* Cash Movement Dialog — only mount when shift exists */}
+      {activeShift && (
+        <CashMovementDialog
+          open={isCashMovementDialogOpen}
+          onClose={() => setIsCashMovementDialogOpen(false)}
+          activeShift={activeShift}
         />
       )}
     </>

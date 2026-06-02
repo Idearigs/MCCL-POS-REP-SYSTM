@@ -41,6 +41,7 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import { useToast } from '../components/ui/use-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { userService } from '../services/userService';
+import { shiftService } from '../services/shiftService';
 import { User, UserRole, CreateUserDto, UpdateUserDto, UserPermissions } from '../types/user';
 import PermissionManagementDialog from '../components/users/PermissionManagementDialog';
 
@@ -49,6 +50,7 @@ interface UserCardProps {
   user: User;
   onEdit: (user: User) => void;
   onResetPassword: (user: User) => void;
+  onSetPin: (user: User) => void;
   onToggleStatus: (user: User) => void;
   onChangeRole: (user: User) => void;
   onManagePermissions: (user: User) => void;
@@ -59,7 +61,7 @@ interface UserCardProps {
   onDeleteCancel: () => void;
 }
 
-const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onToggleStatus, onChangeRole, onManagePermissions, onDelete, currentUserId, deletingUserId, onDeleteConfirm, onDeleteCancel }) => {
+const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onSetPin, onToggleStatus, onChangeRole, onManagePermissions, onDelete, currentUserId, deletingUserId, onDeleteConfirm, onDeleteCancel }) => {
   const getRoleBadgeColor = useCallback((role: UserRole) => {
     switch (role) {
       case UserRole.OWNER:
@@ -157,6 +159,18 @@ const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onToggleS
           <Key className="h-4 w-4 mr-1" />
           Reset
         </Button>
+        {/* Cash-up PIN — only managers/owners can hold one */}
+        {(user.role === UserRole.OWNER || user.role === UserRole.MANAGER) && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onSetPin(user)}
+            className="border-amber-200 text-amber-700 hover:bg-amber-50"
+          >
+            <Lock className="h-4 w-4 mr-1" />
+            PIN
+          </Button>
+        )}
         <Button
           variant={user.isActive ? 'destructive' : 'default'}
           size="sm"
@@ -258,6 +272,8 @@ export const UsersPage: React.FC = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [isPinDialogOpen, setIsPinDialogOpen] = useState(false);
+  const [pinValue, setPinValue] = useState('');
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -515,6 +531,52 @@ export const UsersPage: React.FC = () => {
     setNewPassword('');
     setIsPasswordDialogOpen(true);
   }, []);
+
+  const openPinDialog = useCallback((user: User) => {
+    setSelectedUser(user);
+    setPinValue('');
+    setIsPinDialogOpen(true);
+  }, []);
+
+  const handleSetPin = useCallback(
+    async (clear = false) => {
+      if (!selectedUser) return;
+      const pin = clear ? '' : pinValue.trim();
+      if (!clear && !/^\d{4,6}$/.test(pin)) {
+        toast({
+          title: 'Error',
+          description: 'PIN must be 4 to 6 digits',
+          variant: 'destructive',
+        });
+        return;
+      }
+      try {
+        setLoading(true);
+        const result = await shiftService.setCashUpPin(
+          selectedUser.id,
+          clear ? undefined : pin,
+        );
+        toast({
+          title: 'Success',
+          description: result.hasPin
+            ? 'Cash-up PIN set successfully'
+            : 'Cash-up PIN cleared',
+        });
+        setIsPinDialogOpen(false);
+        setPinValue('');
+        setSelectedUser(null);
+      } catch (error: any) {
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to set PIN',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [selectedUser, pinValue, toast],
+  );
 
   const openRoleDialog = useCallback((user: User) => {
     setSelectedUser(user);
@@ -788,6 +850,7 @@ export const UsersPage: React.FC = () => {
                   user={user}
                   onEdit={openEditDialog}
                   onResetPassword={openPasswordDialog}
+                  onSetPin={openPinDialog}
                   onToggleStatus={handleToggleUserStatus}
                   onChangeRole={openRoleDialog}
                   onManagePermissions={openPermissionDialog}
@@ -976,6 +1039,65 @@ export const UsersPage: React.FC = () => {
             <Button onClick={handleResetPassword} disabled={loading}>
               Reset Password
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cash-Up PIN Dialog */}
+      <Dialog open={isPinDialogOpen} onOpenChange={setIsPinDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5 text-amber-600" />
+              Cash-Up Override PIN
+            </DialogTitle>
+            <DialogDescription>
+              Set a 4–6 digit PIN for {selectedUser?.firstName}{' '}
+              {selectedUser?.lastName}. This PIN authorises cashiers to close
+              shifts with a cash variance above the allowed threshold.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="cashUpPin">PIN</Label>
+              <Input
+                id="cashUpPin"
+                type="password"
+                inputMode="numeric"
+                value={pinValue}
+                onChange={(e) =>
+                  setPinValue(e.target.value.replace(/[^0-9]/g, ''))
+                }
+                placeholder="4–6 digits"
+                maxLength={6}
+                className="tracking-widest"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Only managers and owners can hold a cash-up PIN. Leave this with
+                a known value and share it securely.
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="sm:justify-between">
+            <Button
+              variant="outline"
+              onClick={() => handleSetPin(true)}
+              disabled={loading}
+              className="text-red-600 border-red-200 hover:bg-red-50"
+            >
+              Clear PIN
+            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsPinDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={() => handleSetPin(false)} disabled={loading}>
+                Save PIN
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

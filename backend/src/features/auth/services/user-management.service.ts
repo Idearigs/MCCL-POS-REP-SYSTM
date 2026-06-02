@@ -3,6 +3,8 @@ import {
   UnauthorizedException,
   Logger,
   ConflictException,
+  NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -163,6 +165,54 @@ export class UserManagementService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Set or clear a manager's cash-up override PIN. Only OWNER/MANAGER users
+   * may hold a PIN (it authorizes high-variance shift closes). Passing an
+   * empty/undefined pin clears it.
+   */
+  async setCashUpPin(
+    tenantId: string,
+    userId: string,
+    pin?: string,
+  ): Promise<{ success: boolean; hasPin: boolean }> {
+    const user = await this.prismaService.users.findFirst({
+      where: { id: userId, tenantId },
+      select: { id: true, role: true },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (user.role !== 'OWNER' && user.role !== 'MANAGER') {
+      throw new BadRequestException(
+        'Only OWNER or MANAGER users can hold a cash-up PIN',
+      );
+    }
+
+    const trimmed = pin?.trim();
+    if (!trimmed) {
+      await this.prismaService.users.update({
+        where: { id: userId, tenantId },
+        data: { cashUpPin: null },
+      });
+      return { success: true, hasPin: false };
+    }
+
+    if (!/^\d{4,6}$/.test(trimmed)) {
+      throw new BadRequestException('PIN must be 4 to 6 digits');
+    }
+
+    const saltRounds = parseInt(
+      this.configService.get<string>('HASH_SALT_ROUNDS', '12'),
+      10,
+    );
+    const hashed = await bcrypt.hash(trimmed, saltRounds);
+    await this.prismaService.users.update({
+      where: { id: userId, tenantId },
+      data: { cashUpPin: hashed },
+    });
+    return { success: true, hasPin: true };
   }
 
   async deleteUser(tenantId: string, userId: string): Promise<void> {
