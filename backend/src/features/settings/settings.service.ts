@@ -58,6 +58,12 @@ export interface AppSettings {
     pettyCash: ReceiptTypeConfig;
     layaway: ReceiptTypeConfig;
   };
+  cashUp: {
+    // Absolute variance (£) above which a manager PIN is required to close.
+    varianceThreshold: number;
+    companyRegistrationNumber: string;
+    registerId: string;
+  };
 }
 
 const DEFAULTS: AppSettings = {
@@ -113,6 +119,11 @@ const DEFAULTS: AppSettings = {
     footerText:
       'Thank you for shopping\nKEEP THIS RECEIPT AS PROOF OF PURCHASE\nRETURNS OR EXCHANGES WITHIN 14 DAYS WITH RECEIPT\nITEMS MUST BE UNWORN IN ORIGINAL CONDITION\nPEARLS RESTRINGING BESPOKE AND EARRINGS CARRIES NO GUARANTEE OR REFUND STATUTORY RIGHTS UNAFFECTED',
     vatNumber: '275322603',
+  },
+  cashUp: {
+    varianceThreshold: 5,
+    companyRegistrationNumber: '',
+    registerId: '1',
   },
 };
 
@@ -172,6 +183,7 @@ export class SettingsService {
           ...(storedReceiptTypes.layaway ?? {}),
         },
       },
+      cashUp: { ...DEFAULTS.cashUp, ...(stored.cashUp ?? {}) },
     };
   }
 
@@ -217,6 +229,9 @@ export class SettingsService {
             },
           }
         : current.receiptTypes,
+      cashUp: dtoAny.cashUp
+        ? { ...current.cashUp, ...dtoAny.cashUp }
+        : current.cashUp,
     };
 
     // Preserve reserved keys (QZ certs) while writing appSettings
