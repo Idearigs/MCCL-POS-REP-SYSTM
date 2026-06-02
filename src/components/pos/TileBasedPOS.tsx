@@ -2097,6 +2097,10 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
       // Add regular products (and in-session service items that have no DB product ID)
       for (const item of productItems) {
+        // Gift-card sales are non-stock lines: tag them with the "GIFT CARD"
+        // marker so the backend skips the products lookup (the cart id is a
+        // synthetic "giftcard-…", not a real product) instead of 404ing.
+        const isGiftCard = item.sku === 'GIFT-CARD-SALE' || item.id?.startsWith('giftcard-');
         const isServiceItem = item.sku?.startsWith('SERVICE-') || item.id?.startsWith('battery-') || item.id?.startsWith('cleaning-');
         saleItems.push({
           productId: item.id,
@@ -2104,8 +2108,12 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
           unitPrice: item.price,
           discountAmount: 0,
           taxRate: 0,
-          // Service items use the same "REPAIR SERVICE" marker so backend skips product DB lookup
-          notes: isServiceItem ? `REPAIR SERVICE: ${item.name}` : undefined,
+          // Non-stock lines carry a marker so backend skips product DB lookup
+          notes: isGiftCard
+            ? `GIFT CARD: ${item.name}`
+            : isServiceItem
+            ? `REPAIR SERVICE: ${item.name}`
+            : undefined,
         });
       }
 

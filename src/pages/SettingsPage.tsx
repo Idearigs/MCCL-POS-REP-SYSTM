@@ -541,7 +541,7 @@ const SettingsPage = () => {
         <Separator className="my-6" />
 
         <Tabs defaultValue="general" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-9">
+          <TabsList className="flex w-full justify-start overflow-x-auto [&>*]:flex-shrink-0">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
