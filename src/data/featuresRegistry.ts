@@ -672,6 +672,42 @@ const FEATURES: Feature[] = [
       },
     ],
   },
+  {
+    id: 'cashup-blind-close',
+    name: 'End-of-Day Cash-Up & Z-Report',
+    description:
+      'A disciplined shift close: count cash by denomination (blind close), reconcile the card terminal Z-Read, segregate gift-card/layaway cash, and record till pay-ins/pay-outs. Large variances need a manager PIN. Managers get a Day-End dashboard with consolidated totals, variance auditing and a compliant Z-report + detailed journal.',
+    category: 'Shifts',
+    keywords: ['cash up', 'cashup', 'shift', 'close', 'z-report', 'z read', 'denomination', 'variance', 'manager pin', 'pay-in', 'pay-out', 'reconciliation', 'till', 'day end', 'journal', 'audit'],
+    dateAdded: '2026-06-02',
+    path: '/cash-up',
+    icon: 'Calculator',
+    shortGuide: [
+      'Close a shift from the floating shift button → count notes & coins in the denomination grid',
+      'Enter the card terminal Z-Read total and any gift-card / layaway cash',
+      'If the count differs you must give a reason; a large variance needs a manager PIN',
+      'Use Cash In/Out on the shift button to log till pay-ins and pay-outs during the shift',
+      'Managers: open Day End Report for consolidated totals, variance audit and the Z-report',
+    ],
+    fullGuide: [
+      {
+        title: 'Blind close & denomination matrix',
+        content: 'At close the cashier counts the physical cash by denomination (£50…1p); the system sums it as the declared cash and checks it against the expected total without showing the expected figure first. Expected Cash = Opening Float + Cash Sales + Pay-Ins − Pay-Outs − Cash Refunds.',
+      },
+      {
+        title: 'Variance reason & manager PIN',
+        content: 'Any non-zero variance requires a written reason. If the absolute variance exceeds the threshold set in Settings → Cash-Up, a manager PIN (set per manager in User Management) is required to authorise the close, and the override is recorded.',
+      },
+      {
+        title: 'Manager Day-End dashboard',
+        content: 'The Day End Report aggregates revenue, tax, discounts, variance and non-cash tenders across all shifts in the filter. Cashiers (STAFF/READONLY) have Expected and Variance hidden. Managers can click a variance badge to read the cashier’s reason and save an audit resolution note, and expand any shift to see card/gift-card/layaway and pay-in/out detail.',
+      },
+      {
+        title: 'Z-report & detailed journal',
+        content: 'The Z-report prints legal headers (address, phone, VAT, company reg, till ID), a float-audit block, department subtotals, the full payment matrix (printed even at £0), cash movements and signature lines — aggregates only. "Detailed Journal" prints a separate line-by-line chronological log of every transaction for deep auditing.',
+      },
+    ],
+  },
 ];
 
 export default FEATURES;

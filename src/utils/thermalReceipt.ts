@@ -558,28 +558,83 @@ export interface ShiftSummaryData {
   totalDiscount: number;
   totalTax: number;
   variance: number;
+  // ── Z-report extras (all optional; legacy callers still work) ──
+  storeAddress?: string;     // newline-separated
+  storePhone?: string;
+  vatNumber?: string;
+  companyRegNumber?: string;
+  registerId?: string;
+  expectedCash?: number;
+  declaredCash?: number;
+  // Aggregate tender matrix — printed even when £0
+  cashSales?: number;
+  cardSales?: number;
+  giftCardSales?: number;
+  layawayDeposits?: number;
+  // Cash movements
+  payIns?: number;
+  payOuts?: number;
+  // Department subtotals (e.g. Retail / Repair Services / Scrap Trade-Ins)
+  departments?: { name: string; itemCount: number; salesAmount: number }[];
+  managerName?: string;
 }
 
 export async function printShiftSummaryThermal(
   data: ShiftSummaryData,
   printerName?: string,
 ): Promise<void> {
-  function fmtMoney(v: number) { return `£${v.toFixed(2)}`; }
+  function fmtMoney(v: number) { return `£${(v ?? 0).toFixed(2)}`; }
   function fmtDate(iso: string) {
     const d = new Date(iso);
     return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
-
-  const payRows = Object.entries(data.paymentBreakdown)
-    .map(([method, amount]) =>
-      `<div class="row"><span>${method}</span><span>${fmtMoney(amount)}</span></div>`)
-    .join('');
+  const esc = (s: string) =>
+    String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   const varianceClass = data.variance >= 0 ? 'color:#166534' : 'color:#991b1b';
 
+  // Legal header block
+  const addressLines = (data.storeAddress || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => `<div class="sub">${esc(l)}</div>`)
+    .join('');
+  const legalRows = [
+    data.storePhone ? `<div class="sub">Tel: ${esc(data.storePhone)}</div>` : '',
+    data.vatNumber ? `<div class="sub">VAT No: ${esc(data.vatNumber)}</div>` : '',
+    data.companyRegNumber ? `<div class="sub">Company Reg: ${esc(data.companyRegNumber)}</div>` : '',
+  ].join('');
+
+  // Comprehensive payment matrix — always print all four tender types
+  const cash = data.cashSales ?? data.paymentBreakdown?.CASH ?? 0;
+  const card = data.cardSales ?? data.paymentBreakdown?.CARD ?? 0;
+  const giftCard = data.giftCardSales ?? 0;
+  const layaway = data.layawayDeposits ?? 0;
+  const paymentMatrix = [
+    ['Cash', cash],
+    ['Card', card],
+    ['Gift Card', giftCard],
+    ['Layaway', layaway],
+  ]
+    .map(([label, amount]) =>
+      `<div class="row"><span>${label}</span><span>${fmtMoney(amount as number)}</span></div>`)
+    .join('');
+
+  // Department subtotals
+  const deptRows = (data.departments && data.departments.length > 0)
+    ? data.departments
+        .map((d) =>
+          `<div class="row"><span>${esc(d.name)} (${d.itemCount})</span><span>${fmtMoney(d.salesAmount)}</span></div>`)
+        .join('')
+    : '';
+
+  const expected = data.expectedCash ?? data.closingFloat;
+  const declared = data.declaredCash ?? data.closingFloat;
+
   const html = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/>
-<title>Shift Report ${data.shiftNumber}</title>
+<title>Z-Report ${data.shiftNumber}</title>
 <style>
   @page { size: 80mm auto; margin: 0; }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -591,19 +646,24 @@ export async function printShiftSummaryThermal(
   .row { display:flex; justify-content:space-between; padding:1px 0; }
   .total-row { display:flex; justify-content:space-between; font-size:13px; font-weight:900; padding:2px 0; }
   .section { font-size:10px; font-weight:900; margin:3px 0 1px; text-transform:uppercase; letter-spacing:.5px; }
+  .sign { margin-top:14px; }
+  .sign-line { border-top:1px dotted #000; margin-top:18px; font-size:9px; padding-top:2px; }
 </style></head><body>
-  <div class="title">${data.storeName.toUpperCase()}</div>
-  <div class="sub">SHIFT REPORT</div>
+  <div class="title">${esc(data.storeName.toUpperCase())}</div>
+  ${addressLines}
+  ${legalRows}
   <hr/>
-  <div class="section">Shift Details</div>
-  <div class="row"><span>Shift No.</span><span>${data.shiftNumber}</span></div>
-  <div class="row"><span>Cashier</span><span>${data.cashierName}</span></div>
+  <div class="sub" style="font-weight:900;">Z-READ — END OF SHIFT REPORT</div>
+  <div class="row"><span>Register/Till</span><span>${esc(data.registerId || '1')}</span></div>
+  <div class="row"><span>Shift No.</span><span>${esc(data.shiftNumber)}</span></div>
+  <div class="row"><span>Cashier</span><span>${esc(data.cashierName)}</span></div>
   <div class="row"><span>Start</span><span>${fmtDate(data.startTime)}</span></div>
   <div class="row"><span>End</span><span>${fmtDate(data.endTime)}</span></div>
   <hr/>
-  <div class="section">Float</div>
+  <div class="section">Float Audit</div>
   <div class="row"><span>Opening Float</span><span>${fmtMoney(data.openingFloat)}</span></div>
-  <div class="row"><span>Closing Float</span><span>${fmtMoney(data.closingFloat)}</span></div>
+  <div class="row"><span>Expected Cash</span><span>${fmtMoney(expected)}</span></div>
+  <div class="row"><span>Declared Cash</span><span>${fmtMoney(declared)}</span></div>
   <div class="row" style="${varianceClass}"><span>Variance</span><span>${data.variance >= 0 ? '+' : ''}${fmtMoney(data.variance)}</span></div>
   <hr/>
   <div class="section">Sales Summary</div>
@@ -611,11 +671,20 @@ export async function printShiftSummaryThermal(
   <div class="row"><span>Total Discount</span><span>-${fmtMoney(data.totalDiscount)}</span></div>
   <div class="row"><span>Total Tax</span><span>${fmtMoney(data.totalTax)}</span></div>
   <div class="total-row"><span>TOTAL REVENUE</span><span>${fmtMoney(data.totalRevenue)}</span></div>
+  ${deptRows ? `<hr/><div class="section">Departments</div>${deptRows}` : ''}
   <hr/>
-  <div class="section">Payment Breakdown</div>
-  ${payRows}
+  <div class="section">Payment Matrix</div>
+  ${paymentMatrix}
   <hr/>
-  <div class="center" style="font-size:10px;margin-top:4px;">End of Shift Report</div>
+  <div class="section">Cash Movements</div>
+  <div class="row"><span>Pay-Ins</span><span>${fmtMoney(data.payIns ?? 0)}</span></div>
+  <div class="row"><span>Pay-Outs</span><span>-${fmtMoney(data.payOuts ?? 0)}</span></div>
+  <hr/>
+  <div class="sign">
+    <div class="sign-line">Cashier Signature</div>
+    <div class="sign-line">Manager Signature</div>
+  </div>
+  <div class="center" style="font-size:10px;margin-top:8px;">End of Z-Report</div>
 </body></html>`;
 
   if (printerName) {
@@ -625,6 +694,112 @@ export async function printShiftSummaryThermal(
       return;
     } catch {
       // fall through
+    }
+  }
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:none;visibility:hidden;';
+  document.body.appendChild(iframe);
+  const cleanup = () => setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 2000);
+  try {
+    const doc = iframe.contentWindow?.document;
+    if (!doc) throw new Error('no iframe');
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => { try { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); } finally { cleanup(); } }, 280);
+  } catch {
+    cleanup();
+  }
+}
+
+export interface DetailedJournalEntry {
+  time: string;        // ISO
+  saleNumber: string;
+  productName: string;
+  sku?: string;
+  quantity: number;
+  amount: number;
+  paymentMethod: string;
+  customerName?: string;
+}
+
+export interface DetailedJournalData {
+  storeName: string;
+  shiftNumber: string;
+  cashierName: string;
+  registerId?: string;
+  rangeLabel: string;  // e.g. "01 Jun 25 – 02 Jun 25"
+  entries: DetailedJournalEntry[];
+}
+
+/**
+ * Print a line-by-line chronological journal of every transaction for a shift
+ * (deep audit). Unlike the Z-report this lists individual line items.
+ */
+export async function printDetailedJournal(
+  data: DetailedJournalData,
+  printerName?: string,
+): Promise<void> {
+  const fmtMoney = (v: number) => `£${(v ?? 0).toFixed(2)}`;
+  const fmtTime = (iso: string) =>
+    new Date(iso).toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+    });
+  const esc = (s: string) =>
+    String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const total = data.entries.reduce((s, e) => s + (e.amount || 0), 0);
+
+  const rows = data.entries.length
+    ? data.entries
+        .map(
+          (e) => `
+  <div class="je">
+    <div class="row"><span>${fmtTime(e.time)}</span><span>${esc(e.saleNumber)}</span></div>
+    <div class="row"><span class="prod">${esc(e.productName)}${e.sku ? ` <span class="sku">[${esc(e.sku)}]</span>` : ''} ×${e.quantity}</span><span>${fmtMoney(e.amount)}</span></div>
+    <div class="meta">${esc(e.paymentMethod)}${e.customerName ? ` · ${esc(e.customerName)}` : ''}</div>
+  </div>`,
+        )
+        .join('')
+    : '<div class="center">No transactions in this period</div>';
+
+  const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/>
+<title>Journal ${esc(data.shiftNumber)}</title>
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Courier New',monospace; font-size:10px; font-weight:600; width:72mm; margin:0 auto; color:#000; background:#fff; padding:3mm 0; }
+  .center { text-align:center; }
+  .title { font-size:13px; font-weight:900; text-align:center; }
+  .sub { font-size:9px; text-align:center; color:#333; }
+  hr { border:none; border-top:1px dashed #333; margin:4px 0; }
+  .row { display:flex; justify-content:space-between; }
+  .je { padding:2px 0; border-bottom:1px dotted #ccc; }
+  .prod { max-width:48mm; }
+  .sku { color:#555; font-size:9px; }
+  .meta { font-size:9px; color:#555; }
+  .total-row { display:flex; justify-content:space-between; font-size:12px; font-weight:900; padding-top:3px; }
+</style></head><body>
+  <div class="title">${esc(data.storeName.toUpperCase())}</div>
+  <div class="sub">DETAILED TRANSACTION JOURNAL</div>
+  <hr/>
+  <div class="row"><span>Register/Till</span><span>${esc(data.registerId || '1')}</span></div>
+  <div class="row"><span>Shift No.</span><span>${esc(data.shiftNumber)}</span></div>
+  <div class="row"><span>Cashier</span><span>${esc(data.cashierName)}</span></div>
+  <div class="row"><span>Period</span><span>${esc(data.rangeLabel)}</span></div>
+  <hr/>
+  ${rows}
+  <div class="total-row"><span>TOTAL (${data.entries.length})</span><span>${fmtMoney(total)}</span></div>
+  <hr/>
+  <div class="center" style="font-size:9px;">End of Journal</div>
+</body></html>`;
+
+  if (printerName) {
+    try {
+      const { printHtmlViaQZ } = await import('./qzBridge');
+      await printHtmlViaQZ(printerName, html);
+      return;
+    } catch {
+      // fall through to iframe
     }
   }
   const iframe = document.createElement('iframe');
