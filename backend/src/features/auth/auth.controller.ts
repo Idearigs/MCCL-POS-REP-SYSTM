@@ -299,6 +299,25 @@ export class AuthController {
     return this.authService.resetUserPassword(tenant.id, id, body.password);
   }
 
+  @Roles('OWNER', 'MANAGER')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Patch('users/:id/cashup-pin')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Set or clear cash-up PIN',
+    description:
+      'Set/clear a manager cash-up override PIN — OWNER and MANAGER only',
+  })
+  @ApiResponse({ status: 200, description: 'PIN updated' })
+  @ApiResponse({ status: 403, description: 'Insufficient role' })
+  async setCashUpPin(
+    @CurrentTenant() tenant: TenantInfo,
+    @Param('id') id: string,
+    @Body() body: { pin?: string },
+  ) {
+    return this.authService.setCashUpPin(tenant.id, id, body?.pin);
+  }
+
   @Roles('OWNER')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Delete('users/:id')

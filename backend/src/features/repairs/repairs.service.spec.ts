@@ -74,11 +74,24 @@ const mockRepairsRepository = {
   $transaction: jest.fn(),
 };
 
-// PrismaService is still needed for the cross-domain customers.findFirst call in create()
+// PrismaService is needed for the cross-domain customers.findFirst call in
+// create(), and for the $transaction + FOR UPDATE path in changeStatus/cancel.
 const mockPrismaService = {
   customers: {
     findFirst: jest.fn(),
   },
+  repairs: {
+    findFirst: jest.fn(),
+    update: jest.fn(),
+  },
+  repair_status_history: {
+    create: jest.fn(),
+  },
+  $queryRaw: jest.fn(),
+  // Run the callback with this same mock as the transaction client.
+  $transaction: jest.fn((cb: (tx: unknown) => unknown) =>
+    cb(mockPrismaService),
+  ),
 };
 
 const mockCacheService = {
@@ -196,6 +209,118 @@ describe('RepairsService', () => {
 
       const createCall = mockRepairsRepository.create.mock.calls[0][0];
       expect(createCall.data.estimatedCost).toBe(80); // 50 + 30
+    });
+
+    it('should replay the cached result for a repeated Idempotency-Key', async () => {
+      const cachedResult = { id: 'repair-001', status: 'RECEIVED' };
+      mockCacheService.get.mockResolvedValue(cachedResult);
+
+      const result = await service.create(
+        createDto as any,
+        'tenant-001',
+        'user-001',
+        'idem-key-1',
+      );
+
+      expect(result).toBe(cachedResult);
+      // No DB work on a replay.
+      expect(mockRepairsRepository.create).not.toHaveBeenCalled();
+      expect(mockPrismaService.customers.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('should retry repair-number generation on a unique-constraint collision', async () => {
+      mockCacheService.get.mockResolvedValue(undefined);
+      mockPrismaService.customers.findFirst.mockResolvedValue(mockCustomer);
+      mockRepairsRepository.findFirst.mockResolvedValue(null);
+
+      const p2002 = Object.assign(new Error('Unique constraint failed'), {
+        code: 'P2002',
+      });
+      mockRepairsRepository.create
+        .mockRejectedValueOnce(p2002)
+        .mockResolvedValueOnce(mockRepair);
+
+      const result = await service.create(
+        createDto as any,
+        'tenant-001',
+        'user-001',
+        'idem-key-2',
+      );
+
+      expect(mockRepairsRepository.create).toHaveBeenCalledTimes(2);
+      expect(result).toHaveProperty('id', 'repair-001');
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // changeStatus()
+  // ────────────────────────────────────────────────────────────────────────────
+
+  describe('changeStatus()', () => {
+    beforeEach(() => {
+      mockPrismaService.$transaction.mockImplementation(
+        (cb: (tx: unknown) => unknown) => cb(mockPrismaService),
+      );
+    });
+
+    it('should update status + history atomically with a FOR UPDATE lock', async () => {
+      mockPrismaService.repairs.findFirst.mockResolvedValue({
+        ...mockRepair,
+        status: 'RECEIVED',
+      });
+      mockPrismaService.repairs.update.mockResolvedValue({
+        ...mockRepair,
+        status: 'IN_PROGRESS',
+      });
+      mockPrismaService.repair_status_history.create.mockResolvedValue({});
+
+      const result = await service.changeStatus(
+        'repair-001',
+        'IN_PROGRESS' as any,
+        'Started work',
+        'tenant-001',
+        'user-001',
+        false, // no SMS
+      );
+
+      expect(mockPrismaService.$transaction).toHaveBeenCalledTimes(1);
+      expect(mockPrismaService.$queryRaw).toHaveBeenCalled(); // row lock
+      expect(mockPrismaService.repairs.update).toHaveBeenCalled();
+      expect(mockPrismaService.repair_status_history.create).toHaveBeenCalled();
+      expect(result).toHaveProperty('status', 'IN_PROGRESS');
+    });
+
+    it('should throw NotFoundException for an unknown repair', async () => {
+      mockPrismaService.repairs.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.changeStatus(
+          'missing',
+          'IN_PROGRESS' as any,
+          '',
+          'tenant-001',
+          'user-001',
+          false,
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should replay a cached result for a repeated Idempotency-Key', async () => {
+      const cached = { id: 'repair-001', status: 'IN_PROGRESS' };
+      mockCacheService.get.mockResolvedValue(cached);
+
+      const result = await service.changeStatus(
+        'repair-001',
+        'IN_PROGRESS' as any,
+        '',
+        'tenant-001',
+        'user-001',
+        false,
+        'idem-status-1',
+      );
+
+      expect(result).toBe(cached);
+      expect(mockPrismaService.$transaction).not.toHaveBeenCalled();
     });
   });
 
@@ -327,9 +452,17 @@ describe('RepairsService', () => {
   // ────────────────────────────────────────────────────────────────────────────
 
   describe('update()', () => {
+    // update() now runs the read + update + status-history write inside a
+    // $transaction with a FOR UPDATE lock, so it goes through prismaService.
+    beforeEach(() => {
+      mockPrismaService.$transaction.mockImplementation(
+        (cb: (tx: unknown) => unknown) => cb(mockPrismaService),
+      );
+    });
+
     it('should update a repair successfully', async () => {
-      mockRepairsRepository.findFirst.mockResolvedValue(mockRepair);
-      mockRepairsRepository.update.mockResolvedValue({
+      mockPrismaService.repairs.findFirst.mockResolvedValue(mockRepair);
+      mockPrismaService.repairs.update.mockResolvedValue({
         ...mockRepair,
         priority: 'HIGH',
       });
@@ -341,25 +474,27 @@ describe('RepairsService', () => {
         'user-001',
       );
 
-      expect(mockRepairsRepository.update).toHaveBeenCalled();
+      expect(mockPrismaService.$transaction).toHaveBeenCalled();
+      expect(mockPrismaService.$queryRaw).toHaveBeenCalled(); // row lock
+      expect(mockPrismaService.repairs.update).toHaveBeenCalled();
       expect(result).toBeDefined();
     });
 
     it('should throw NotFoundException when updating a non-existent repair', async () => {
-      mockRepairsRepository.findFirst.mockResolvedValue(null);
+      mockPrismaService.repairs.findFirst.mockResolvedValue(null);
 
       await expect(
         service.update('nonexistent', {} as any, 'tenant-001', 'user-001'),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should record status history when status changes', async () => {
-      mockRepairsRepository.findFirst.mockResolvedValue(mockRepair);
-      mockRepairsRepository.update.mockResolvedValue({
+    it('should record status history (atomically) when status changes', async () => {
+      mockPrismaService.repairs.findFirst.mockResolvedValue(mockRepair);
+      mockPrismaService.repairs.update.mockResolvedValue({
         ...mockRepair,
         status: 'IN_PROGRESS',
       });
-      mockRepairsRepository.createStatusHistory.mockResolvedValue({});
+      mockPrismaService.repair_status_history.create.mockResolvedValue({});
 
       await service.update(
         'repair-001',
@@ -368,7 +503,9 @@ describe('RepairsService', () => {
         'user-001',
       );
 
-      expect(mockRepairsRepository.createStatusHistory).toHaveBeenCalledWith(
+      expect(
+        mockPrismaService.repair_status_history.create,
+      ).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             repairId: 'repair-001',
@@ -380,8 +517,8 @@ describe('RepairsService', () => {
     });
 
     it('should NOT create status history when status is unchanged', async () => {
-      mockRepairsRepository.findFirst.mockResolvedValue(mockRepair);
-      mockRepairsRepository.update.mockResolvedValue(mockRepair);
+      mockPrismaService.repairs.findFirst.mockResolvedValue(mockRepair);
+      mockPrismaService.repairs.update.mockResolvedValue(mockRepair);
 
       await service.update(
         'repair-001',
@@ -390,7 +527,9 @@ describe('RepairsService', () => {
         'user-001',
       );
 
-      expect(mockRepairsRepository.createStatusHistory).not.toHaveBeenCalled();
+      expect(
+        mockPrismaService.repair_status_history.create,
+      ).not.toHaveBeenCalled();
     });
   });
 

@@ -85,6 +85,10 @@ interface UIRepairJob {
   itemDescription: string;
   problemDescription?: string;
   status: UIRepairStatus;
+  // Raw backend status (RECEIVED/QUOTED/APPROVED/…). `status` above is a lossy
+  // 4-bucket value kept only for the broad filter; use this for display so all
+  // statuses render with their correct label.
+  backendStatus: string;
   tagId?: string | null;
   rmaId?: string | null;
   dueDate: string;
@@ -112,6 +116,7 @@ const convertRepairToUI = (repair: Repair): UIRepairJob => ({
   itemDescription: repair.itemDescription || (repair.items && repair.items[0]?.itemDescription) || 'No description',
   problemDescription: repair.problemDescription || '',
   status: statusMapping[repair.status] || 'received',
+  backendStatus: repair.status,
   tagId: repair.tagId || null,
   rmaId: repair.rmaId || null,
   dueDate: repair.estimatedCompletion || repair.expectedCompletionDate || repair.createdAt,
@@ -442,7 +447,7 @@ const RepairsPage: React.FC = () => {
             />
           </div>
           
-          <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:flex-nowrap">
             <div className="flex items-center bg-white/90 rounded-full border border-navy/10 shadow-sm">
               <Button
                 variant={viewMode === 'grid' ? 'default' : 'ghost'}
@@ -589,7 +594,7 @@ const RepairsPage: React.FC = () => {
                   repairNumber={job.repairNumber}
                   customerName={job.customerName}
                   itemDescription={job.itemDescription}
-                  status={job.status}
+                  status={job.backendStatus}
                   tagId={job.tagId}
                   dueDate={job.dueDate}
                   estimatedPrice={job.estimatedPrice}
@@ -659,7 +664,7 @@ const RepairsPage: React.FC = () => {
                         )}
                       </TableCell>
                       <TableCell>
-                        <RepairStatusBadge status={job.status} />
+                        <RepairStatusBadge status={job.backendStatus} />
                       </TableCell>
                       <TableCell className="text-sm text-gray-600">
                         {new Date(job.dueDate).toLocaleDateString('en-GB')}

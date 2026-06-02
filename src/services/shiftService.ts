@@ -14,8 +14,24 @@ export interface Shift {
   duration?: number; // in minutes
   openingFloat: number;
   closingFloat?: number;
+  declaredCash?: number;
+  denominations?: Record<string, number>;
   expectedFloat?: number;
   variance?: number;
+  cardExpected?: number;
+  cardActual?: number;
+  cardVariance?: number;
+  cashPayIns?: number;
+  cashPayOuts?: number;
+  cashRefunds?: number;
+  giftCardSales?: number;
+  layawayDeposits?: number;
+  varianceReason?: string;
+  managerOverrideById?: string;
+  managerOverrideAt?: string;
+  auditResolutionNote?: string;
+  auditResolvedById?: string;
+  auditResolvedAt?: string;
   status: ShiftStatus;
   deviceInfo?: string;
   ipAddress?: string;
@@ -63,9 +79,12 @@ export interface ShiftReport {
     };
     sale_items: Array<{
       quantity: number;
+      totalPrice?: number;
+      unitPrice?: number;
       products: {
         name: string;
         sku: string;
+        categories?: { name: string } | null;
       };
     }>;
   }>;
@@ -80,14 +99,57 @@ export interface ShiftStatistics {
   negativeVariances: number;
 }
 
+export interface ShiftSummary {
+  shiftCount: number;
+  closedShifts: number;
+  totalSales: number;
+  totalRevenue: number;
+  totalTax: number;
+  totalDiscounts: number;
+  totalVariance: number;
+  totalNonCashTenders: number;
+  totalCardTender: number;
+  totalGiftCard: number;
+  totalLayaway: number;
+}
+
 export interface StartShiftData {
   openingFloat: number;
   openingNotes?: string;
 }
 
 export interface CloseShiftData {
-  closingFloat: number;
+  closingFloat: number; // declared cash counted via the denomination matrix
+  denominations?: Record<string, number>;
+  cardActual?: number; // PDQ "Z-Read" card total
+  giftCardSales?: number;
+  layawayDeposits?: number;
+  cashRefunds?: number;
+  varianceReason?: string;
+  managerPin?: string;
   closingNotes?: string;
+}
+
+export type ShiftCashMovementType = 'PAY_IN' | 'PAY_OUT';
+
+export interface ShiftCashMovement {
+  id: string;
+  shiftId: string;
+  type: ShiftCashMovementType;
+  amount: number;
+  reason: string;
+  createdAt: string;
+}
+
+// Error thrown by closeShift carrying the backend reconciliation code so the
+// UI can stage the close (reveal a reason field or a manager-PIN field).
+export class CloseShiftError extends Error {
+  code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = 'CloseShiftError';
+    this.code = code;
+  }
 }
 
 export interface ShiftFilters {
@@ -140,7 +202,100 @@ class ShiftService {
       return response;
     } catch (error: any) {
       console.error('Error closing shift:', error);
-      throw new Error(error.response?.data?.message || 'Failed to close shift');
+      // apiClient rejects with { message, statusCode, error, data } where
+      // `data` is the raw response body carrying our reconciliation `code`.
+      const body = error.data ?? error.response?.data;
+      const code = body?.code;
+      const message = body?.message || error.message || 'Failed to close shift';
+      throw new CloseShiftError(message, code);
+    }
+  }
+
+  /**
+   * Record a cash movement (pay-in / pay-out) against an active shift
+   */
+  async createCashMovement(
+    shiftId: string,
+    data: { type: ShiftCashMovementType; amount: number; reason: string }
+  ): Promise<ShiftCashMovement> {
+    try {
+      return await apiClient.post(
+        `${API_CONFIG.ENDPOINTS.SHIFTS}/${shiftId}/cash-movement`,
+        data
+      );
+    } catch (error: any) {
+      console.error('Error recording cash movement:', error);
+      throw new Error(
+        error.data?.message || error.message || 'Failed to record cash movement'
+      );
+    }
+  }
+
+  /**
+   * List cash movements for a shift
+   */
+  async getCashMovements(shiftId: string): Promise<ShiftCashMovement[]> {
+    try {
+      return await apiClient.get(
+        `${API_CONFIG.ENDPOINTS.SHIFTS}/${shiftId}/cash-movements`
+      );
+    } catch (error: any) {
+      console.error('Error getting cash movements:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Consolidated master summary across all shifts in the date filter
+   */
+  async getShiftSummary(
+    startDate: string,
+    endDate: string,
+    userId?: string
+  ): Promise<ShiftSummary> {
+    const params = new URLSearchParams();
+    params.append('startDate', startDate);
+    params.append('endDate', endDate);
+    if (userId && userId !== 'all') params.append('userId', userId);
+    return apiClient.get(
+      `${API_CONFIG.ENDPOINTS.SHIFTS}/summary?${params.toString()}`
+    );
+  }
+
+  /**
+   * Manager saves an audit resolution note against a shift's variance
+   */
+  async saveAuditResolution(
+    shiftId: string,
+    auditResolutionNote: string
+  ): Promise<Shift> {
+    try {
+      return await apiClient.patch(
+        `${API_CONFIG.ENDPOINTS.SHIFTS}/${shiftId}/audit`,
+        { auditResolutionNote }
+      );
+    } catch (error: any) {
+      console.error('Error saving audit resolution:', error);
+      throw new Error(
+        error.data?.message || error.message || 'Failed to save audit note'
+      );
+    }
+  }
+
+  /**
+   * Set or clear a manager's cash-up override PIN (OWNER/MANAGER only)
+   */
+  async setCashUpPin(
+    userId: string,
+    pin?: string
+  ): Promise<{ success: boolean; hasPin: boolean }> {
+    try {
+      return await apiClient.patch(`/auth/users/${userId}/cashup-pin`, { pin });
+    } catch (error: any) {
+      console.error('Error setting cash-up PIN:', error);
+      throw new Error(
+        error.data?.message || error.message || 'Failed to set PIN'
+      );
     }
   }
 

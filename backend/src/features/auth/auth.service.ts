@@ -95,6 +95,14 @@ export class AuthService {
     return this.userManagement.deleteUser(tenantId, userId);
   }
 
+  setCashUpPin(
+    tenantId: string,
+    userId: string,
+    pin?: string,
+  ): Promise<{ success: boolean; hasPin: boolean }> {
+    return this.userManagement.setCashUpPin(tenantId, userId, pin);
+  }
+
   // ── Tenant provisioning ────────────────────────────────────────────────────
 
   provisionTenant(data: {

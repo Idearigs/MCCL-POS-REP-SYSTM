@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -18,13 +18,20 @@ import {
   Loader2,
   DollarSign,
   AlertTriangle,
-  TrendingUp,
-  TrendingDown,
-  CheckCircle,
+  Lock,
+  Coins,
 } from 'lucide-react';
-import { shiftService, CloseShiftData, Shift } from '@/services/shiftService';
+import {
+  shiftService,
+  CloseShiftData,
+  Shift,
+  CloseShiftError,
+} from '@/services/shiftService';
 import { format } from 'date-fns';
-import { printShiftSummaryThermal } from '@/utils/thermalReceipt';
+import {
+  printShiftSummaryThermal,
+  buildDepartmentsFromShiftReport,
+} from '@/utils/thermalReceipt';
 import { useSettings } from '@/contexts/SettingsContext';
 
 interface CloseShiftDialogProps {
@@ -34,40 +41,101 @@ interface CloseShiftDialogProps {
   activeShift: Shift | null;
 }
 
+// GBP denomination matrix — value in pence keyed so it round-trips to the
+// backend `denominations` JSON snapshot. Notes first, then coins.
+const DENOMINATIONS: { pence: number; label: string; kind: 'note' | 'coin' }[] =
+  [
+    { pence: 5000, label: '£50', kind: 'note' },
+    { pence: 2000, label: '£20', kind: 'note' },
+    { pence: 1000, label: '£10', kind: 'note' },
+    { pence: 500, label: '£5', kind: 'note' },
+    { pence: 200, label: '£2', kind: 'coin' },
+    { pence: 100, label: '£1', kind: 'coin' },
+    { pence: 50, label: '50p', kind: 'coin' },
+    { pence: 20, label: '20p', kind: 'coin' },
+    { pence: 10, label: '10p', kind: 'coin' },
+    { pence: 5, label: '5p', kind: 'coin' },
+    { pence: 2, label: '2p', kind: 'coin' },
+    { pence: 1, label: '1p', kind: 'coin' },
+  ];
+
+const gbp = (n: number) =>
+  `£${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 const CloseShiftDialog: React.FC<CloseShiftDialogProps> = ({
   open,
   onClose,
   onShiftClosed,
   activeShift,
 }) => {
-  const [closingFloat, setClosingFloat] = useState('');
+  const { settings } = useSettings();
+  const [counts, setCounts] = useState<Record<number, string>>({});
+  const [cardActual, setCardActual] = useState('');
+  const [giftCardSales, setGiftCardSales] = useState('');
+  const [layawayDeposits, setLayawayDeposits] = useState('');
   const [closingNotes, setClosingNotes] = useState('');
+
+  // Staged-close state (revealed only when the backend asks for them)
+  const [varianceReason, setVarianceReason] = useState('');
+  const [needsReason, setNeedsReason] = useState(false);
+  const [managerPin, setManagerPin] = useState('');
+  const [needsPin, setNeedsPin] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [variance, setVariance] = useState<number | null>(null);
-  const { settings } = useSettings();
 
-  // Calculate variance when closing float changes
+  // Reset everything whenever the dialog is (re)opened for a shift
   useEffect(() => {
-    const floatValue = parseFloat(closingFloat);
-    if (!isNaN(floatValue) && activeShift) {
-      const calculatedVariance = floatValue - Number(activeShift.openingFloat);
-      setVariance(calculatedVariance);
-    } else {
-      setVariance(null);
+    if (open) {
+      setCounts({});
+      setCardActual('');
+      setGiftCardSales('');
+      setLayawayDeposits('');
+      setClosingNotes('');
+      setVarianceReason('');
+      setNeedsReason(false);
+      setManagerPin('');
+      setNeedsPin(false);
+      setError(null);
     }
-  }, [closingFloat, activeShift]);
+  }, [open]);
+
+  // Declared cash = sum of (denomination value × quantity counted)
+  const declaredCash = useMemo(() => {
+    return (
+      DENOMINATIONS.reduce((sum, d) => {
+        const qty = parseInt(counts[d.pence] || '0', 10);
+        return sum + (isNaN(qty) ? 0 : qty) * d.pence;
+      }, 0) / 100
+    );
+  }, [counts]);
+
+  const denominationsPayload = useMemo(() => {
+    const out: Record<string, number> = {};
+    DENOMINATIONS.forEach((d) => {
+      const qty = parseInt(counts[d.pence] || '0', 10);
+      if (!isNaN(qty) && qty > 0) out[String(d.pence)] = qty;
+    });
+    return out;
+  }, [counts]);
+
+  const setCount = (pence: number, value: string) => {
+    // Digits only
+    const clean = value.replace(/[^0-9]/g, '');
+    setCounts((prev) => ({ ...prev, [pence]: clean }));
+  };
 
   const handleCloseShift = async () => {
     if (!activeShift) {
       setError('No active shift found');
       return;
     }
-
-    // Validate closing float
-    const floatValue = parseFloat(closingFloat);
-    if (isNaN(floatValue) || floatValue < 0) {
-      setError('Please enter a valid closing float amount');
+    if (needsReason && !varianceReason.trim()) {
+      setError('Please enter a reason for the cash discrepancy.');
+      return;
+    }
+    if (needsPin && !managerPin.trim()) {
+      setError('A manager PIN is required to close this shift.');
       return;
     }
 
@@ -76,11 +144,22 @@ const CloseShiftDialog: React.FC<CloseShiftDialogProps> = ({
 
     try {
       const closeData: CloseShiftData = {
-        closingFloat: floatValue,
+        closingFloat: declaredCash,
+        denominations: denominationsPayload,
+        cardActual: cardActual ? parseFloat(cardActual) : undefined,
+        giftCardSales: giftCardSales ? parseFloat(giftCardSales) : undefined,
+        layawayDeposits: layawayDeposits
+          ? parseFloat(layawayDeposits)
+          : undefined,
+        varianceReason: varianceReason.trim() || undefined,
+        managerPin: managerPin.trim() || undefined,
         closingNotes: closingNotes.trim() || undefined,
       };
 
-      const closedShift = await shiftService.closeShift(activeShift.id, closeData);
+      const closedShift = await shiftService.closeShift(
+        activeShift.id,
+        closeData,
+      );
 
       // Auto open cash drawer
       const printerName = settings?.printer?.printerName;
@@ -94,23 +173,39 @@ const CloseShiftDialog: React.FC<CloseShiftDialogProps> = ({
         }
       }
 
-      // Print thermal shift summary
+      // Print thermal shift summary (Z-report)
       try {
         const report = await shiftService.getShiftReport(closedShift.id);
         await printShiftSummaryThermal(
           {
             storeName: settings?.general?.storeName ?? 'Store',
+            storeAddress: settings?.general?.address,
+            storePhone: settings?.general?.phone,
+            vatNumber: settings?.printer?.vatNumber,
+            companyRegNumber: settings?.cashUp?.companyRegistrationNumber,
+            registerId: settings?.cashUp?.registerId,
             shiftNumber: closedShift.shiftNumber,
             cashierName: closedShift.user
               ? `${(closedShift.user as any).firstName ?? ''} ${(closedShift.user as any).lastName ?? ''}`.trim()
               : 'Staff',
             startTime: closedShift.startTime as unknown as string,
-            endTime: closedShift.endTime as unknown as string ?? new Date().toISOString(),
+            endTime:
+              (closedShift.endTime as unknown as string) ??
+              new Date().toISOString(),
             openingFloat: Number(closedShift.openingFloat),
-            closingFloat: floatValue,
+            closingFloat: declaredCash,
+            expectedCash: Number(closedShift.expectedFloat ?? declaredCash),
+            declaredCash,
             totalSales: report.metrics.totalSales,
             totalRevenue: report.metrics.totalRevenue,
             paymentBreakdown: report.metrics.paymentBreakdown,
+            cashSales: report.metrics.cashSales,
+            cardSales: report.metrics.cardSales,
+            giftCardSales: Number(closedShift.giftCardSales ?? 0),
+            layawayDeposits: Number(closedShift.layawayDeposits ?? 0),
+            payIns: Number(closedShift.cashPayIns ?? 0),
+            payOuts: Number(closedShift.cashPayOuts ?? 0),
+            departments: buildDepartmentsFromShiftReport(report.sales),
             totalDiscount: report.metrics.totalDiscount,
             totalTax: report.metrics.totalTax,
             variance: Number(closedShift.variance ?? 0),
@@ -121,66 +216,83 @@ const CloseShiftDialog: React.FC<CloseShiftDialogProps> = ({
         // Non-fatal — print dialog may not be available
       }
 
-      // Reset form
-      setClosingFloat('');
-      setClosingNotes('');
-      setVariance(null);
-
-      // Notify parent and close
       onShiftClosed(closedShift);
       onClose();
-    } catch (err: any) {
-      console.error('Error closing shift:', err);
-      setError(err.message || 'Failed to close shift. Please try again.');
+    } catch (err: unknown) {
+      const code = err instanceof CloseShiftError ? err.code : undefined;
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Failed to close shift. Please try again.';
+
+      if (code === 'VARIANCE_REASON_REQUIRED') {
+        // Blind close: we still don't reveal the expected figure — only that
+        // the count differs and a reason is required.
+        setNeedsReason(true);
+        setError(message);
+      } else if (code === 'MANAGER_PIN_REQUIRED') {
+        setNeedsReason(true); // a reason is also required for any variance
+        setNeedsPin(true);
+        setError(message);
+      } else if (code === 'MANAGER_PIN_INVALID') {
+        setNeedsPin(true);
+        setError(message);
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleClose = () => {
-    if (!loading) {
-      setClosingFloat('');
-      setClosingNotes('');
-      setVariance(null);
-      setError(null);
-      onClose();
-    }
+    if (!loading) onClose();
   };
 
-  const getVarianceColor = (variance: number) => {
-    if (variance > 0) return 'text-green-600 bg-green-50 border-green-200';
-    if (variance < 0) return 'text-red-600 bg-red-50 border-red-200';
-    return 'text-gray-600 bg-gray-50 border-gray-200';
-  };
+  const notes = DENOMINATIONS.filter((d) => d.kind === 'note');
+  const coins = DENOMINATIONS.filter((d) => d.kind === 'coin');
 
-  const getVarianceIcon = (variance: number) => {
-    if (variance > 0) return <TrendingUp className="h-5 w-5" />;
-    if (variance < 0) return <TrendingDown className="h-5 w-5" />;
-    return <CheckCircle className="h-5 w-5" />;
-  };
-
-  const getVarianceMessage = (variance: number) => {
-    if (variance > 0) return 'Cash surplus detected';
-    if (variance < 0) return 'Cash shortage detected';
-    return 'Float balanced perfectly';
+  const renderRow = (d: { pence: number; label: string }) => {
+    const qty = parseInt(counts[d.pence] || '0', 10);
+    const subtotal = (isNaN(qty) ? 0 : qty) * (d.pence / 100);
+    return (
+      <div key={d.pence} className="flex items-center gap-2">
+        <span className="w-12 text-sm font-medium text-gray-700">
+          {d.label}
+        </span>
+        <span className="text-gray-400">×</span>
+        <Input
+          type="text"
+          inputMode="numeric"
+          placeholder="0"
+          value={counts[d.pence] ?? ''}
+          onChange={(e) => setCount(d.pence, e.target.value)}
+          disabled={loading}
+          className="h-8 w-16 text-center"
+        />
+        <span className="ml-auto text-sm tabular-nums text-gray-600">
+          {gbp(subtotal)}
+        </span>
+      </div>
+    );
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[550px]">
+      <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
             Close Shift
           </DialogTitle>
           <DialogDescription>
-            Count your cash register and enter the closing float amount to close your
-            shift.
+            Count the physical cash in your drawer by denomination. The system
+            checks your count against the expected total when you close.
           </DialogDescription>
         </DialogHeader>
 
         {activeShift && (
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-2">
             {error && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
@@ -188,121 +300,186 @@ const CloseShiftDialog: React.FC<CloseShiftDialogProps> = ({
               </Alert>
             )}
 
-            {/* Shift Information */}
+            {/* Shift info */}
             <Card className="bg-gray-50 border-gray-200">
               <CardContent className="pt-4">
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Shift Number:</span>
-                    <span className="font-medium">{activeShift.shiftNumber}</span>
+                    <span className="font-medium">
+                      {activeShift.shiftNumber}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Started:</span>
                     <span className="font-medium">
-                      {format(new Date(activeShift.startTime), 'MMM dd, yyyy HH:mm')}
+                      {format(
+                        new Date(activeShift.startTime),
+                        'MMM dd, yyyy HH:mm',
+                      )}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Opening Float:</span>
                     <span className="font-medium">
-                      £{Number(activeShift.openingFloat).toFixed(2)}
+                      {gbp(Number(activeShift.openingFloat))}
                     </span>
                   </div>
-                  {activeShift._count && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Total Sales:</span>
-                      <span className="font-medium">{activeShift._count.sales}</span>
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>
 
+            {/* Denomination matrix */}
+            <div>
+              <Label className="flex items-center gap-1.5 text-sm font-semibold mb-2">
+                <Coins className="h-4 w-4" />
+                Cash Count
+              </Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 rounded-lg border border-gray-200 p-3">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Notes
+                  </p>
+                  {notes.map(renderRow)}
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Coins
+                  </p>
+                  {coins.map(renderRow)}
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-between rounded-lg bg-blue-50 border border-blue-200 px-4 py-2">
+                <span className="text-sm font-medium text-blue-900">
+                  Total Counted (Declared Cash)
+                </span>
+                <span className="text-lg font-bold text-blue-700 tabular-nums">
+                  {gbp(declaredCash)}
+                </span>
+              </div>
+            </div>
+
             <Separator />
 
-            {/* Closing Float Input */}
-            <div className="space-y-2">
-              <Label htmlFor="closingFloat" className="text-sm font-medium">
-                Closing Float Amount <span className="text-red-500">*</span>
-              </Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                  £
-                </span>
+            {/* Card / PDQ Z-Read + non-revenue */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="cardActual" className="text-xs font-medium">
+                  Card Terminal (Z-Read)
+                </Label>
                 <Input
-                  id="closingFloat"
+                  id="cardActual"
                   type="number"
                   step="0.01"
                   min="0"
                   placeholder="0.00"
-                  value={closingFloat}
-                  onChange={(e) => setClosingFloat(e.target.value)}
-                  className="pl-7"
+                  value={cardActual}
+                  onChange={(e) => setCardActual(e.target.value)}
                   disabled={loading}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="giftCardSales" className="text-xs font-medium">
+                  Gift Card Sales
+                </Label>
+                <Input
+                  id="giftCardSales"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={giftCardSales}
+                  onChange={(e) => setGiftCardSales(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="layawayDeposits"
+                  className="text-xs font-medium"
+                >
+                  Layaway Deposits
+                </Label>
+                <Input
+                  id="layawayDeposits"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={layawayDeposits}
+                  onChange={(e) => setLayawayDeposits(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            {/* Variance reason — revealed when the count does not balance */}
+            {needsReason && (
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="varianceReason"
+                  className="flex items-center gap-1.5 text-sm font-medium text-amber-700"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  Variance Reason <span className="text-red-500">*</span>
+                </Label>
+                <Textarea
+                  id="varianceReason"
+                  placeholder="Explain why the counted cash differs from the expected amount…"
+                  value={varianceReason}
+                  onChange={(e) => setVarianceReason(e.target.value)}
+                  rows={2}
+                  disabled={loading}
+                  className="resize-none border-amber-300"
                   autoFocus
                 />
               </div>
-              <p className="text-xs text-gray-500">
-                Enter the total cash amount in your register now
-              </p>
-            </div>
-
-            {/* Variance Display */}
-            {variance !== null && (
-              <Card className={`border-2 ${getVarianceColor(variance)}`}>
-                <CardContent className="pt-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {getVarianceIcon(variance)}
-                      <div>
-                        <p className="font-semibold">
-                          {variance >= 0 ? '+' : ''}£{Math.abs(variance).toFixed(2)}
-                        </p>
-                        <p className="text-sm">{getVarianceMessage(variance)}</p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             )}
 
-            {/* Closing Notes */}
-            <div className="space-y-2">
+            {/* Manager PIN — revealed when the variance exceeds the threshold */}
+            {needsPin && (
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="managerPin"
+                  className="flex items-center gap-1.5 text-sm font-medium text-red-700"
+                >
+                  <Lock className="h-4 w-4" />
+                  Manager PIN <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="managerPin"
+                  type="password"
+                  inputMode="numeric"
+                  placeholder="••••"
+                  value={managerPin}
+                  onChange={(e) =>
+                    setManagerPin(e.target.value.replace(/[^0-9]/g, ''))
+                  }
+                  disabled={loading}
+                  className="w-32 border-red-300 tracking-widest"
+                />
+                <p className="text-xs text-gray-500">
+                  This variance exceeds the allowed threshold and must be
+                  authorised by a manager.
+                </p>
+              </div>
+            )}
+
+            {/* Closing notes */}
+            <div className="space-y-1.5">
               <Label htmlFor="closingNotes" className="text-sm font-medium">
                 Closing Notes (Optional)
               </Label>
               <Textarea
                 id="closingNotes"
-                placeholder="Add any notes about your shift closing..."
+                placeholder="Add any notes about your shift closing…"
                 value={closingNotes}
                 onChange={(e) => setClosingNotes(e.target.value)}
-                rows={3}
+                rows={2}
                 disabled={loading}
                 className="resize-none"
               />
-              <p className="text-xs text-gray-500">
-                Note any discrepancies, issues, or important information
-              </p>
             </div>
-
-            {/* Warning for large variance */}
-            {variance !== null && Math.abs(variance) > 50 && (
-              <Alert className="bg-yellow-50 border-yellow-300">
-                <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                <AlertDescription className="text-sm text-yellow-900">
-                  <strong>Large variance detected!</strong> Please double-check your
-                  cash count and review all transactions before closing.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Information Box */}
-            <Alert className="bg-blue-50 border-blue-200">
-              <AlertDescription className="text-sm text-blue-900">
-                <strong>Important:</strong> Make sure all transactions are completed
-                and recorded before closing your shift.
-              </AlertDescription>
-            </Alert>
           </div>
         )}
 
@@ -318,12 +495,12 @@ const CloseShiftDialog: React.FC<CloseShiftDialogProps> = ({
           <Button
             type="button"
             onClick={handleCloseShift}
-            disabled={loading || !closingFloat}
+            disabled={loading || declaredCash <= 0}
           >
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Closing Shift...
+                Closing Shift…
               </>
             ) : (
               'Close Shift'

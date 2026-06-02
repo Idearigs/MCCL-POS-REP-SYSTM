@@ -43,83 +43,99 @@ export class RepairsService {
     createRepairDto: CreateRepairDto,
     tenantId: string,
     userId: string,
+    idempotencyKey?: string,
   ): Promise<RepairResponseDto> {
-    try {
-      // Generate repair number
-      const repairNumber = await this.generateRepairNumber(tenantId);
+    return this.replayOrRun('repair-create', idempotencyKey, async () => {
+      try {
+        // Validate customer exists (cross-domain lookup via PrismaService)
+        const customer = await this.prismaService.customers.findFirst({
+          where: { id: createRepairDto.customerId, tenantId },
+        });
 
-      // Validate customer exists (cross-domain lookup via PrismaService)
-      const customer = await this.prismaService.customers.findFirst({
-        where: { id: createRepairDto.customerId, tenantId },
-      });
+        if (!customer) {
+          throw new NotFoundException('Customer not found');
+        }
 
-      if (!customer) {
-        throw new NotFoundException('Customer not found');
+        // Process the items array to get combined description and estimated cost
+        let itemDescription = 'Jewelry repair';
+        let totalEstimatedCost = 0;
+        let combinedNotes = createRepairDto.internalNotes || '';
+
+        if (createRepairDto.items && createRepairDto.items.length > 0) {
+          const descriptions = createRepairDto.items.map(
+            (item) => item.itemDescription,
+          );
+          itemDescription = descriptions.join(', ');
+
+          totalEstimatedCost = createRepairDto.items.reduce(
+            (sum, item) => sum + (item.estimatedCost || 0),
+            0,
+          );
+
+          const repairTypes = createRepairDto.items.map(
+            (item) =>
+              `${item.itemDescription}: ${item.repairType} - ${item.repairDescription}`,
+          );
+          combinedNotes = combinedNotes
+            ? `${combinedNotes}\n\nItems:\n${repairTypes.join('\n')}`
+            : `Items:\n${repairTypes.join('\n')}`;
+        }
+
+        // Generate the repair number and insert together; on a unique-number
+        // collision (two concurrent creates reading the same max) retry with
+        // the next number instead of surfacing the race as a 500.
+        for (let attempt = 0; ; attempt++) {
+          const repairNumber = await this.generateRepairNumber(tenantId);
+          try {
+            const repair = await this.repairsRepo.create({
+              data: {
+                id: generateId(),
+                repairNumber,
+                tenantId,
+                customerId: createRepairDto.customerId,
+                createdBy: userId,
+                status: RepairStatus.RECEIVED,
+                priority: createRepairDto.priority || 'NORMAL',
+                itemDescription: itemDescription,
+                issueDescription: createRepairDto.problemDescription,
+                estimatedCost:
+                  totalEstimatedCost || createRepairDto.estimatedCost || 0,
+                estimatedDueDate: createRepairDto.expectedCompletionDate
+                  ? new Date(createRepairDto.expectedCompletionDate)
+                  : null,
+                customerNotes: createRepairDto.customerInstructions,
+                internalNotes: combinedNotes,
+                isInsuranceClaim: Boolean(createRepairDto.insuranceValue),
+                insuranceNumber: createRepairDto.insuranceNumber,
+                tagId: createRepairDto.tagId || null,
+                rmaId: createRepairDto.rmaId || null,
+                updatedAt: new Date(),
+              } as any,
+              include: {
+                customers: true,
+                users: true,
+              },
+            });
+
+            this.logger.log(
+              `Repair created: ${repairNumber} (id=${repair.id}) in tenant ${tenantId}`,
+            );
+            return this.mapToResponseDto(repair, createRepairDto.items);
+          } catch (error) {
+            if (this.isUniqueViolation(error) && attempt < 4) {
+              this.logger.warn(
+                `Repair number ${repairNumber} collided, retrying (attempt ${attempt + 1})`,
+              );
+              continue;
+            }
+            throw error;
+          }
+        }
+      } catch (error) {
+        this.logger.error('Failed to create repair:', error.message);
+        throw error;
       }
-
-      // Process the items array to get combined description and estimated cost
-      let itemDescription = 'Jewelry repair';
-      let totalEstimatedCost = 0;
-      let combinedNotes = createRepairDto.internalNotes || '';
-
-      if (createRepairDto.items && createRepairDto.items.length > 0) {
-        const descriptions = createRepairDto.items.map(
-          (item) => item.itemDescription,
-        );
-        itemDescription = descriptions.join(', ');
-
-        totalEstimatedCost = createRepairDto.items.reduce(
-          (sum, item) => sum + (item.estimatedCost || 0),
-          0,
-        );
-
-        const repairTypes = createRepairDto.items.map(
-          (item) =>
-            `${item.itemDescription}: ${item.repairType} - ${item.repairDescription}`,
-        );
-        combinedNotes = combinedNotes
-          ? `${combinedNotes}\n\nItems:\n${repairTypes.join('\n')}`
-          : `Items:\n${repairTypes.join('\n')}`;
-      }
-
-      const repair = await this.repairsRepo.create({
-        data: {
-          id: generateId(),
-          repairNumber,
-          tenantId,
-          customerId: createRepairDto.customerId,
-          createdBy: userId,
-          status: RepairStatus.RECEIVED,
-          priority: createRepairDto.priority || 'NORMAL',
-          itemDescription: itemDescription,
-          issueDescription: createRepairDto.problemDescription,
-          estimatedCost:
-            totalEstimatedCost || createRepairDto.estimatedCost || 0,
-          estimatedDueDate: createRepairDto.expectedCompletionDate
-            ? new Date(createRepairDto.expectedCompletionDate)
-            : null,
-          customerNotes: createRepairDto.customerInstructions,
-          internalNotes: combinedNotes,
-          isInsuranceClaim: Boolean(createRepairDto.insuranceValue),
-          insuranceNumber: createRepairDto.insuranceNumber,
-          tagId: createRepairDto.tagId || null,
-          rmaId: createRepairDto.rmaId || null,
-          updatedAt: new Date(),
-        } as any,
-        include: {
-          customers: true,
-          users: true,
-        },
-      });
-
-      this.logger.log(
-        `Repair created: ${repairNumber} (id=${repair.id}) in tenant ${tenantId}`,
-      );
-      return this.mapToResponseDto(repair, createRepairDto.items);
-    } catch (error) {
-      this.logger.error('Failed to create repair:', error.message);
-      throw error;
-    }
+    });
   }
 
   async findAll(
@@ -227,78 +243,97 @@ export class RepairsService {
     updateRepairDto: UpdateRepairDto,
     tenantId: string,
     userId: string,
+    idempotencyKey?: string,
   ): Promise<RepairResponseDto> {
-    const existingRepair = await this.repairsRepo.findFirst({
-      where: { id, tenantId },
-    });
+    // This is the path the web UI uses to change status (PATCH /repairs/:id),
+    // so it gets the same atomicity + locking as changeStatus: read + update +
+    // status-history write happen in one transaction with the repair row locked
+    // FOR UPDATE, and the whole thing is idempotent on the Idempotency-Key.
+    return this.replayOrRun('repair-update', idempotencyKey, async () => {
+      const repair = await this.prismaService.$transaction(async (prisma) => {
+        await prisma.$queryRaw`
+          SELECT id FROM repairs
+          WHERE id = ${id} AND "tenantId" = ${tenantId}
+          FOR UPDATE
+        `;
 
-    if (!existingRepair) {
-      throw new NotFoundException('Repair not found');
-    }
+        const existingRepair = await prisma.repairs.findFirst({
+          where: { id, tenantId },
+        });
 
-    const repair = await this.repairsRepo.update({
-      where: { id },
-      data: {
-        status: updateRepairDto.status || existingRepair.status,
-        priority: updateRepairDto.priority || existingRepair.priority,
-        itemDescription:
-          updateRepairDto.itemDescription || existingRepair.itemDescription,
-        issueDescription:
-          updateRepairDto.problemDescription || existingRepair.issueDescription,
-        estimatedCost:
-          updateRepairDto.estimatedCost ?? existingRepair.estimatedCost,
-        finalCost: updateRepairDto.totalCost ?? existingRepair.finalCost,
-        estimatedDueDate: updateRepairDto.expectedCompletionDate
-          ? new Date(updateRepairDto.expectedCompletionDate)
-          : existingRepair.estimatedDueDate,
-        completedDate:
-          updateRepairDto.status === 'COMPLETED'
-            ? new Date()
-            : existingRepair.completedDate,
-        collectedDate:
-          updateRepairDto.status === 'COLLECTED'
-            ? new Date()
-            : existingRepair.collectedDate,
-        customerNotes:
-          updateRepairDto.customerInstructions || existingRepair.customerNotes,
-        internalNotes:
-          updateRepairDto.internalNotes || existingRepair.internalNotes,
-        tagId:
-          updateRepairDto.tagId !== undefined
-            ? updateRepairDto.tagId
-            : existingRepair.tagId,
-        rmaId:
-          updateRepairDto.rmaId !== undefined
-            ? updateRepairDto.rmaId
-            : existingRepair.rmaId,
-        updatedAt: new Date(),
-      },
-      include: {
-        customers: true,
-        users: true,
-      },
-    });
+        if (!existingRepair) {
+          throw new NotFoundException('Repair not found');
+        }
 
-    // Add status history entry
-    if (
-      updateRepairDto.status &&
-      updateRepairDto.status !== existingRepair.status
-    ) {
-      await this.repairsRepo.createStatusHistory({
-        data: {
-          id: generateId(),
-          repairId: id,
-          oldStatus: existingRepair.status,
-          newStatus: updateRepairDto.status as any,
-          changedBy: userId,
-          notes:
-            updateRepairDto.statusNotes ||
-            `Status changed to ${updateRepairDto.status}`,
-        } as any,
+        const updated = await prisma.repairs.update({
+          where: { id },
+          data: {
+            status: updateRepairDto.status || existingRepair.status,
+            priority: updateRepairDto.priority || existingRepair.priority,
+            itemDescription:
+              updateRepairDto.itemDescription || existingRepair.itemDescription,
+            issueDescription:
+              updateRepairDto.problemDescription ||
+              existingRepair.issueDescription,
+            estimatedCost:
+              updateRepairDto.estimatedCost ?? existingRepair.estimatedCost,
+            finalCost: updateRepairDto.totalCost ?? existingRepair.finalCost,
+            estimatedDueDate: updateRepairDto.expectedCompletionDate
+              ? new Date(updateRepairDto.expectedCompletionDate)
+              : existingRepair.estimatedDueDate,
+            completedDate:
+              updateRepairDto.status === 'COMPLETED'
+                ? new Date()
+                : existingRepair.completedDate,
+            collectedDate:
+              updateRepairDto.status === 'COLLECTED'
+                ? new Date()
+                : existingRepair.collectedDate,
+            customerNotes:
+              updateRepairDto.customerInstructions ||
+              existingRepair.customerNotes,
+            internalNotes:
+              updateRepairDto.internalNotes || existingRepair.internalNotes,
+            tagId:
+              updateRepairDto.tagId !== undefined
+                ? updateRepairDto.tagId
+                : existingRepair.tagId,
+            rmaId:
+              updateRepairDto.rmaId !== undefined
+                ? updateRepairDto.rmaId
+                : existingRepair.rmaId,
+            updatedAt: new Date(),
+          },
+          include: {
+            customers: true,
+            users: true,
+          },
+        });
+
+        // Add status history entry (atomic with the status change)
+        if (
+          updateRepairDto.status &&
+          updateRepairDto.status !== existingRepair.status
+        ) {
+          await prisma.repair_status_history.create({
+            data: {
+              id: generateId(),
+              repairId: id,
+              oldStatus: existingRepair.status,
+              newStatus: updateRepairDto.status as any,
+              changedBy: userId,
+              notes:
+                updateRepairDto.statusNotes ||
+                `Status changed to ${updateRepairDto.status}`,
+            } as any,
+          });
+        }
+
+        return updated;
       });
-    }
 
-    return this.mapToResponseDto(repair);
+      return this.mapToResponseDto(repair);
+    });
   }
 
   async getStats(tenantId: string): Promise<RepairStatsDto> {
@@ -417,6 +452,50 @@ export class RepairsService {
     };
   }
 
+  /**
+   * Idempotency wrapper — replays the cached prior result when the same
+   * Idempotency-Key is seen again within 24h, so a network retry or a
+   * double-tap does not double-process (duplicate repair, duplicate status
+   * change + duplicate customer SMS). Mirrors SalesService.replayOrRun and
+   * finally puts the already-injected CacheService to use.
+   */
+  private async replayOrRun<T>(
+    scope: string,
+    key: string | undefined,
+    run: () => Promise<T>,
+  ): Promise<T> {
+    if (!key) return run();
+    const cacheKey = `idem:${scope}:${key}`;
+    const cached = await this.cacheService.get<T>(cacheKey);
+    if (cached) {
+      this.logger.log(`Idempotent replay [${scope}] key=${key}`);
+      return cached;
+    }
+    try {
+      const result = await run();
+      await this.cacheService.set(cacheKey, result, 86400); // 24h
+      return result;
+    } catch (err) {
+      // A concurrent same-key request may have won the row lock and committed
+      // while this one waited; prefer its cached result over the lost race.
+      const afterRace = await this.cacheService.get<T>(cacheKey);
+      if (afterRace) {
+        this.logger.log(`Idempotent replay after race [${scope}] key=${key}`);
+        return afterRace;
+      }
+      throw err;
+    }
+  }
+
+  /** True for a Postgres unique-constraint violation (Prisma P2002). */
+  private isUniqueViolation(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      (error as { code?: string }).code === 'P2002'
+    );
+  }
+
   private async generateRepairNumber(tenantId: string): Promise<string> {
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
@@ -469,18 +548,21 @@ export class RepairsService {
     createNoteDto: any,
     tenantId: string,
     userId: string,
+    idempotencyKey?: string,
   ): Promise<any> {
-    // Add to status history instead of notes
-    return await this.repairsRepo.createStatusHistory({
-      data: {
-        id: generateId(),
-        repairId: id,
-        oldStatus: null,
-        newStatus: 'RECEIVED', // Default status
-        changedBy: userId,
-        notes: createNoteDto.note,
-      } as any,
-    });
+    return this.replayOrRun('repair-note', idempotencyKey, () =>
+      // Add to status history instead of notes
+      this.repairsRepo.createStatusHistory({
+        data: {
+          id: generateId(),
+          repairId: id,
+          oldStatus: null,
+          newStatus: 'RECEIVED', // Default status
+          changedBy: userId,
+          notes: createNoteDto.note,
+        } as any,
+      }),
+    );
   }
 
   async cancel(
@@ -488,31 +570,47 @@ export class RepairsService {
     reason: string,
     tenantId: string,
     userId: string,
+    idempotencyKey?: string,
   ): Promise<RepairResponseDto> {
-    const repair = await this.repairsRepo.update({
-      where: { id },
-      data: {
-        status: 'CANCELLED',
-      },
-      include: {
-        customers: true,
-        users: true,
-      },
-    });
+    return this.replayOrRun('repair-cancel', idempotencyKey, async () => {
+      const repair = await this.prismaService.$transaction(async (prisma) => {
+        await prisma.$queryRaw`
+          SELECT id FROM repairs
+          WHERE id = ${id} AND "tenantId" = ${tenantId}
+          FOR UPDATE
+        `;
 
-    // Add status history entry
-    await this.repairsRepo.createStatusHistory({
-      data: {
-        id: generateId(),
-        repairId: id,
-        oldStatus: repair.status,
-        newStatus: 'CANCELLED',
-        changedBy: userId,
-        notes: reason,
-      } as any,
-    });
+        const existing = await prisma.repairs.findFirst({
+          where: { id, tenantId },
+        });
+        if (!existing) {
+          throw new NotFoundException('Repair not found');
+        }
 
-    return this.mapToResponseDto(repair);
+        const updated = await prisma.repairs.update({
+          where: { id },
+          data: { status: 'CANCELLED' },
+          include: { customers: true, users: true },
+        });
+
+        // Capture the prior status BEFORE the update (the old code read it
+        // back from the already-cancelled row).
+        await prisma.repair_status_history.create({
+          data: {
+            id: generateId(),
+            repairId: id,
+            oldStatus: existing.status,
+            newStatus: 'CANCELLED',
+            changedBy: userId,
+            notes: reason,
+          } as any,
+        });
+
+        return updated;
+      });
+
+      return this.mapToResponseDto(repair);
+    });
   }
 
   async changeStatus(
@@ -522,111 +620,126 @@ export class RepairsService {
     tenantId: string,
     userId: string,
     sendSMS: boolean = true,
+    idempotencyKey?: string,
   ): Promise<RepairResponseDto> {
-    const existingRepair = (await this.repairsRepo.findFirst({
-      where: { id, tenantId },
-      include: {
-        customers: true,
-        users: true,
-      },
-    })) as any;
+    return this.replayOrRun('repair-status', idempotencyKey, async () => {
+      // Status update + history are written atomically; the repair row is
+      // locked FOR UPDATE so concurrent status changes serialize instead of
+      // racing (last-write-win with inconsistent history). SMS is sent only
+      // after the transaction commits.
+      const { existingRepair, oldStatus, updatedRepair } =
+        await this.prismaService.$transaction(async (prisma) => {
+          await prisma.$queryRaw`
+            SELECT id FROM repairs
+            WHERE id = ${id} AND "tenantId" = ${tenantId}
+            FOR UPDATE
+          `;
 
-    if (!existingRepair) {
-      throw new NotFoundException('Repair not found');
-    }
+          const existingRepair = (await prisma.repairs.findFirst({
+            where: { id, tenantId },
+            include: { customers: true, users: true },
+          })) as any;
 
-    const oldStatus = existingRepair.status;
+          if (!existingRepair) {
+            throw new NotFoundException('Repair not found');
+          }
 
-    // Update repair status
-    const updatedRepair = await this.repairsRepo.update({
-      where: { id },
-      data: {
-        status: newStatus,
-        completedDate:
-          newStatus === 'COMPLETED' ? new Date() : existingRepair.completedDate,
-        collectedDate:
-          newStatus === 'COLLECTED' ? new Date() : existingRepair.collectedDate,
-      },
-      include: {
-        customers: true,
-        users: true,
-      },
-    });
+          const oldStatus = existingRepair.status;
 
-    // Add status history entry
-    await this.repairsRepo.createStatusHistory({
-      data: {
-        id: generateId(),
-        repairId: id,
-        oldStatus: oldStatus,
-        newStatus: newStatus,
-        changedBy: userId,
-        notes: notes || `Status changed from ${oldStatus} to ${newStatus}`,
-      } as any,
-    });
+          const updatedRepair = await prisma.repairs.update({
+            where: { id },
+            data: {
+              status: newStatus,
+              completedDate:
+                newStatus === 'COMPLETED'
+                  ? new Date()
+                  : existingRepair.completedDate,
+              collectedDate:
+                newStatus === 'COLLECTED'
+                  ? new Date()
+                  : existingRepair.collectedDate,
+            },
+            include: { customers: true, users: true },
+          });
 
-    // Send SMS notification to customer if enabled and customer has phone
-    if (sendSMS && existingRepair.customers?.phone) {
-      try {
-        // Load shop name and phone from tenant settings
-        const tenant = await this.prismaService.tenants.findUnique({
-          where: { id: tenantId },
-          select: { settings: true },
-        });
-        const appSettings = ((tenant?.settings as Record<string, unknown>)
-          ?.appSettings ?? {}) as Record<string, Record<string, string>>;
-        const shopName = appSettings?.general?.storeName || 'MPS Jewelry';
-        const shopPhone = appSettings?.general?.phone || '';
-
-        const smsData: RepairStatusSMSData = {
-          customerName: `${existingRepair.customers.firstName} ${existingRepair.customers.lastName}`,
-          customerPhone: existingRepair.customers.phone,
-          repairNumber: existingRepair.repairNumber,
-          oldStatus: oldStatus,
-          newStatus: newStatus,
-          itemDescription: existingRepair.itemDescription || 'Jewelry repair',
-          estimatedCompletionDate: existingRepair.estimatedDueDate
-            ? existingRepair.estimatedDueDate.toLocaleDateString('en-GB')
-            : undefined,
-          shopName,
-          shopPhone,
-        };
-
-        const smsResult = await this.smsService.sendRepairStatusSMS(smsData);
-
-        if (smsResult.success) {
-          this.logger.log(
-            `✅ SMS notification sent to customer for repair ${existingRepair.repairNumber}`,
-          );
-
-          // Log SMS in status history
-          await this.repairsRepo.createStatusHistory({
+          await prisma.repair_status_history.create({
             data: {
               id: generateId(),
               repairId: id,
-              oldStatus: null,
+              oldStatus: oldStatus,
               newStatus: newStatus,
               changedBy: userId,
-              notes: `SMS notification sent to ${existingRepair.customers.phone} - Message ID: ${smsResult.messageId}`,
+              notes:
+                notes || `Status changed from ${oldStatus} to ${newStatus}`,
             } as any,
           });
-        } else {
-          this.logger.warn(
-            `⚠️ Failed to send SMS for repair ${existingRepair.repairNumber}: ${smsResult.error}`,
+
+          return { existingRepair, oldStatus, updatedRepair };
+        });
+
+      // Send SMS notification to customer if enabled and customer has phone
+      if (sendSMS && existingRepair.customers?.phone) {
+        try {
+          // Load shop name and phone from tenant settings
+          const tenant = await this.prismaService.tenants.findUnique({
+            where: { id: tenantId },
+            select: { settings: true },
+          });
+          const appSettings = ((tenant?.settings as Record<string, unknown>)
+            ?.appSettings ?? {}) as Record<string, Record<string, string>>;
+          const shopName = appSettings?.general?.storeName || 'MPS Jewelry';
+          const shopPhone = appSettings?.general?.phone || '';
+
+          const smsData: RepairStatusSMSData = {
+            customerName: `${existingRepair.customers.firstName} ${existingRepair.customers.lastName}`,
+            customerPhone: existingRepair.customers.phone,
+            repairNumber: existingRepair.repairNumber,
+            oldStatus: oldStatus,
+            newStatus: newStatus,
+            itemDescription: existingRepair.itemDescription || 'Jewelry repair',
+            estimatedCompletionDate: existingRepair.estimatedDueDate
+              ? existingRepair.estimatedDueDate.toLocaleDateString('en-GB')
+              : undefined,
+            shopName,
+            shopPhone,
+          };
+
+          const smsResult = await this.smsService.sendRepairStatusSMS(smsData);
+
+          if (smsResult.success) {
+            this.logger.log(
+              `✅ SMS notification sent to customer for repair ${existingRepair.repairNumber}`,
+            );
+
+            // Log SMS in status history
+            await this.repairsRepo.createStatusHistory({
+              data: {
+                id: generateId(),
+                repairId: id,
+                oldStatus: null,
+                newStatus: newStatus,
+                changedBy: userId,
+                notes: `SMS notification sent to ${existingRepair.customers.phone} - Message ID: ${smsResult.messageId}`,
+              } as any,
+            });
+          } else {
+            this.logger.warn(
+              `⚠️ Failed to send SMS for repair ${existingRepair.repairNumber}: ${smsResult.error}`,
+            );
+          }
+        } catch (smsError) {
+          this.logger.error(
+            `SMS sending error for repair ${existingRepair.repairNumber}:`,
+            smsError.message,
           );
         }
-      } catch (smsError) {
-        this.logger.error(
-          `SMS sending error for repair ${existingRepair.repairNumber}:`,
-          smsError.message,
-        );
       }
-    }
 
-    this.logger.log(
-      `Repair ${existingRepair.repairNumber} status changed: ${oldStatus} → ${newStatus}`,
-    );
-    return this.mapToResponseDto(updatedRepair);
+      this.logger.log(
+        `Repair ${existingRepair.repairNumber} status changed: ${oldStatus} → ${newStatus}`,
+      );
+      return this.mapToResponseDto(updatedRepair);
+    });
   }
 
   async uploadImages(

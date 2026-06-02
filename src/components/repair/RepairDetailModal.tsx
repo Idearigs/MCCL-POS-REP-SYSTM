@@ -86,7 +86,9 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
   const [sendingMessage, setSendingMessage] = useState(false);
 
   // Status update states
-  const [selectedStatus, setSelectedStatus] = useState(repair?.status || '');
+  const [selectedStatus, setSelectedStatus] = useState(
+    repair?.backendStatus || repair?.status || '',
+  );
   const [statusUpdateNotes, setStatusUpdateNotes] = useState('');
   const [updatingRepairStatus, setUpdatingRepairStatus] = useState(false);
 
@@ -287,7 +289,9 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
 
   // Update repair status
   const updateRepairStatus = async () => {
-    if (!selectedStatus || selectedStatus === currentRepair.status) {
+    const currentRawStatus =
+      currentRepair.backendStatus || currentRepair.status;
+    if (!selectedStatus || selectedStatus === currentRawStatus) {
       toast.error('Please select a different status');
       return;
     }
@@ -310,10 +314,12 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
 
       console.log('✅ Status update response:', updatedRepair);
 
-      // Update local repair state
+      // Update local repair state (keep both the raw backendStatus and the
+      // legacy status field in sync so the badge renders the correct label).
       setCurrentRepair({
         ...currentRepair,
         status: selectedStatus,
+        backendStatus: selectedStatus,
         updatedAt: new Date().toISOString()
       });
 
@@ -594,10 +600,18 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-bold flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center">
+      <DialogContent
+        className="
+          overflow-y-auto
+          left-0 top-0 translate-x-0 translate-y-0
+          w-screen max-w-none h-[100dvh] max-h-[100dvh] rounded-none border-0 p-4
+          sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%]
+          sm:w-full sm:max-w-5xl sm:h-auto sm:max-h-[90vh] sm:rounded-lg sm:border sm:p-6
+        "
+      >
+        <DialogHeader className="text-left">
+          <DialogTitle className="text-lg sm:text-2xl font-bold flex items-center gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-purple-50 flex items-center justify-center flex-shrink-0">
               <Wrench size={20} className="text-purple-500" />
             </div>
             <div>
@@ -613,15 +627,15 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
           <DialogDescription asChild>
             <div className="flex items-center gap-4">
               <span>Created {formatDate(currentRepair.createdAt)}</span>
-              <Badge className={`${getStatusColor(currentRepair.status)} rounded-full px-3 py-1`}>
-                {getStatusText(currentRepair.status)}
+              <Badge className={`${getStatusColor(currentRepair.backendStatus || currentRepair.status)} rounded-full px-3 py-1`}>
+                {getStatusText(currentRepair.backendStatus || currentRepair.status)}
               </Badge>
             </div>
           </DialogDescription>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-5 [&>button]:text-[11px] [&>button]:px-1 sm:[&>button]:text-sm sm:[&>button]:px-3">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="images">Images</TabsTrigger>
             <TabsTrigger value="progress">Progress</TabsTrigger>
@@ -914,8 +928,8 @@ const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                     <div>
                       <Label className="text-xs text-gray-500">Current Status</Label>
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge className={`${getStatusColor(currentRepair.status)} rounded-full px-3 py-1`}>
-                          {getStatusText(currentRepair.status)}
+                        <Badge className={`${getStatusColor(currentRepair.backendStatus || currentRepair.status)} rounded-full px-3 py-1`}>
+                          {getStatusText(currentRepair.backendStatus || currentRepair.status)}
                         </Badge>
                       </div>
                     </div>

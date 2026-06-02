@@ -121,6 +121,21 @@ export class MetalSettingsDto {
   platinumMarginPercent?: number;
 }
 
+export class CashUpSettingsDto {
+  @ApiPropertyOptional({ description: 'Variance threshold (£) for PIN lock' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  varianceThreshold?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  companyRegistrationNumber?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() registerId?: string;
+}
+
 export class UpdateSettingsDto {
   @ApiPropertyOptional({ type: GeneralSettingsDto })
   @IsOptional()
@@ -157,4 +172,10 @@ export class UpdateSettingsDto {
   @ValidateNested()
   @Type(() => ReceiptTypesSettingsDto)
   receiptTypes?: ReceiptTypesSettingsDto;
+
+  @ApiPropertyOptional({ type: CashUpSettingsDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CashUpSettingsDto)
+  cashUp?: CashUpSettingsDto;
 }

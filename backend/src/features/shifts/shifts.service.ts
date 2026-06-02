@@ -2,15 +2,44 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../core/prisma/prisma.service';
-import { ShiftStatus } from '@prisma/client';
-import { StartShiftDto, CloseShiftDto } from './dto/shift.dto';
+import { ShiftStatus, ShiftCashMovementType, Prisma } from '@prisma/client';
+import { CloseShiftDto, CashMovementDto } from './dto/shift.dto';
 import { generateId } from '../../shared/utils/id-generator';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class ShiftsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private settings: SettingsService,
+  ) {}
+
+  /**
+   * Verify a cash-up PIN against any active MANAGER/OWNER in the tenant.
+   * Returns the authorizing user's id, or null if no PIN matches.
+   */
+  async verifyCashUpPin(tenantId: string, pin: string): Promise<string | null> {
+    if (!pin) return null;
+    const managers = await this.prisma.users.findMany({
+      where: {
+        tenantId,
+        isActive: true,
+        role: { in: ['OWNER', 'MANAGER'] },
+        cashUpPin: { not: null },
+      },
+      select: { id: true, cashUpPin: true },
+    });
+    for (const m of managers) {
+      if (m.cashUpPin && (await bcrypt.compare(pin, m.cashUpPin))) {
+        return m.id;
+      }
+    }
+    return null;
+  }
 
   // Generate unique shift number
   async generateShiftNumber(userId: string): Promise<string> {
@@ -125,7 +154,8 @@ export class ShiftsService {
     });
   }
 
-  // Close a shift
+  // Close a shift with full cash-up reconciliation (dynamic expected-cash
+  // formula, mandatory variance reason, and manager-PIN override gate).
   async closeShift(shiftId: string, userId: string, data: CloseShiftDto) {
     const shift = await this.prisma.shifts.findUnique({
       where: { id: shiftId },
@@ -136,6 +166,7 @@ export class ShiftsService {
             paymentStatus: 'COMPLETED',
           },
         },
+        cash_movements: true,
       },
     });
 
@@ -152,33 +183,81 @@ export class ShiftsService {
       throw new BadRequestException('Only active shifts can be closed');
     }
 
-    // Calculate expected float from cash sales minus approved petty cash expenses
-    const cashSales = shift.sales.filter((s) => s.paymentMethod === 'CASH');
-    const totalCashSales = cashSales.reduce(
-      (sum, s) => sum + Number(s.totalAmount),
-      0,
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+
+    // Tender totals from completed sales
+    const totalCashSales = round2(
+      shift.sales
+        .filter((s) => s.paymentMethod === 'CASH')
+        .reduce((sum, s) => sum + Number(s.totalAmount), 0),
+    );
+    const cardExpected = round2(
+      shift.sales
+        .filter((s) => s.paymentMethod === 'CARD')
+        .reduce((sum, s) => sum + Number(s.totalAmount), 0),
     );
 
-    // Deduct approved petty cash expenses that occurred during this shift
-    const pettyCashExpenses =
-      await this.prisma.petty_cash_transactions.findMany({
-        where: {
-          tenantId: shift.tenantId,
-          status: 'APPROVED',
-          createdAt: {
-            gte: shift.startTime,
-            lte: new Date(),
-          },
-        },
+    // Cash movements recorded during the shift
+    const payIns = round2(
+      shift.cash_movements
+        .filter((m) => m.type === ShiftCashMovementType.PAY_IN)
+        .reduce((sum, m) => sum + Number(m.amount), 0),
+    );
+    const payOuts = round2(
+      shift.cash_movements
+        .filter((m) => m.type === ShiftCashMovementType.PAY_OUT)
+        .reduce((sum, m) => sum + Number(m.amount), 0),
+    );
+    const cashRefunds = round2(data.cashRefunds ?? 0);
+
+    // Dynamic expected-cash formula:
+    // Opening Float + Cash Sales + Pay-Ins − Pay-Outs − Cash Refunds
+    const expectedFloat = round2(
+      Number(shift.openingFloat) +
+        totalCashSales +
+        payIns -
+        payOuts -
+        cashRefunds,
+    );
+    const declaredCash = round2(data.closingFloat);
+    const variance = round2(declaredCash - expectedFloat);
+
+    // Mandatory variance reason when the till does not balance exactly
+    if (variance !== 0 && !data.varianceReason?.trim()) {
+      throw new BadRequestException({
+        code: 'VARIANCE_REASON_REQUIRED',
+        message:
+          'Your counted cash does not match the expected amount. Please enter a reason for the discrepancy.',
       });
-    const totalPettyCash = pettyCashExpenses.reduce(
-      (sum, t) => sum + Number(t.amount),
-      0,
-    );
+    }
 
-    const expectedFloat =
-      Number(shift.openingFloat) + totalCashSales - totalPettyCash;
-    const variance = data.closingFloat - expectedFloat;
+    // Manager-PIN gate when the absolute variance exceeds the threshold
+    const { cashUp } = await this.settings.getSettings(shift.tenantId);
+    const threshold = Number(cashUp.varianceThreshold ?? 5);
+    let managerOverrideById: string | null = null;
+    if (Math.abs(variance) > threshold) {
+      if (!data.managerPin) {
+        throw new ForbiddenException({
+          code: 'MANAGER_PIN_REQUIRED',
+          message: `Variance exceeds £${threshold.toFixed(2)}. A manager PIN is required to close this shift.`,
+        });
+      }
+      managerOverrideById = await this.verifyCashUpPin(
+        shift.tenantId,
+        data.managerPin,
+      );
+      if (!managerOverrideById) {
+        throw new ForbiddenException({
+          code: 'MANAGER_PIN_INVALID',
+          message: 'Invalid manager PIN.',
+        });
+      }
+    }
+
+    // Card / PDQ Z-Read reconciliation
+    const cardActual = data.cardActual != null ? round2(data.cardActual) : null;
+    const cardVariance =
+      cardActual != null ? round2(cardActual - cardExpected) : null;
 
     // Calculate shift duration in minutes
     const duration = Math.floor(
@@ -190,9 +269,23 @@ export class ShiftsService {
       data: {
         endTime: new Date(),
         duration,
-        closingFloat: data.closingFloat,
+        closingFloat: declaredCash,
+        declaredCash,
+        denominations: (data.denominations ??
+          undefined) as Prisma.InputJsonValue,
         expectedFloat,
         variance,
+        cardExpected,
+        cardActual,
+        cardVariance,
+        cashPayIns: payIns,
+        cashPayOuts: payOuts,
+        cashRefunds,
+        giftCardSales: round2(data.giftCardSales ?? 0),
+        layawayDeposits: round2(data.layawayDeposits ?? 0),
+        varianceReason: data.varianceReason?.trim() || null,
+        managerOverrideById,
+        managerOverrideAt: managerOverrideById ? new Date() : null,
         closingNotes: data.closingNotes,
         status: ShiftStatus.CLOSED,
         updatedAt: new Date(),
@@ -206,6 +299,51 @@ export class ShiftsService {
           },
         },
       },
+    });
+  }
+
+  // Record a cash movement (pay-in / pay-out) against an active shift
+  async createCashMovement(
+    shiftId: string,
+    userId: string,
+    tenantId: string,
+    data: CashMovementDto,
+  ) {
+    const shift = await this.prisma.shifts.findUnique({
+      where: { id: shiftId },
+      select: { id: true, userId: true, tenantId: true, status: true },
+    });
+    if (!shift || shift.tenantId !== tenantId) {
+      throw new NotFoundException('Shift not found');
+    }
+    if (shift.userId !== userId) {
+      throw new BadRequestException(
+        'You can only record movements on your own shift',
+      );
+    }
+    if (shift.status !== ShiftStatus.ACTIVE) {
+      throw new BadRequestException(
+        'Cash movements can only be recorded on an active shift',
+      );
+    }
+    return this.prisma.shift_cash_movements.create({
+      data: {
+        id: generateId(),
+        shiftId,
+        tenantId,
+        userId,
+        type: data.type,
+        amount: data.amount,
+        reason: data.reason,
+      },
+    });
+  }
+
+  // List cash movements for a shift
+  async getCashMovements(shiftId: string, tenantId: string) {
+    return this.prisma.shift_cash_movements.findMany({
+      where: { shiftId, tenantId },
+      orderBy: { createdAt: 'asc' },
     });
   }
 
@@ -274,6 +412,7 @@ export class ShiftsService {
                   select: {
                     name: true,
                     sku: true,
+                    categories: { select: { name: true } },
                   },
                 },
               },
@@ -407,6 +546,122 @@ export class ShiftsService {
       positiveVariances,
       negativeVariances,
     };
+  }
+
+  // Consolidated master report — aggregates across all shifts matching the
+  // date filter (for the manager Day-End dashboard).
+  async getShiftSummary(
+    tenantId: string,
+    startDate: Date,
+    endDate: Date,
+    userId?: string,
+  ) {
+    const endOfDay = new Date(endDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const shifts = await this.prisma.shifts.findMany({
+      where: {
+        tenantId,
+        startTime: { gte: startDate, lte: endOfDay },
+        ...(userId && userId !== 'all' && { userId }),
+      },
+      select: {
+        id: true,
+        status: true,
+        variance: true,
+        cardExpected: true,
+        cardActual: true,
+        giftCardSales: true,
+        layawayDeposits: true,
+      },
+    });
+
+    const shiftIds = shifts.map((s) => s.id);
+    const num = (v: unknown) => Number(v ?? 0);
+
+    // Revenue / tax / discounts from the completed sales on those shifts
+    let totalRevenue = 0;
+    let totalTax = 0;
+    let totalDiscounts = 0;
+    let totalSales = 0;
+    if (shiftIds.length > 0) {
+      const agg = await this.prisma.sales.aggregate({
+        where: {
+          tenantId,
+          shiftId: { in: shiftIds },
+          status: 'COMPLETED',
+          paymentStatus: 'COMPLETED',
+        },
+        _sum: { totalAmount: true, taxAmount: true, discountAmount: true },
+        _count: { _all: true },
+      });
+      totalRevenue = num(agg._sum.totalAmount);
+      totalTax = num(agg._sum.taxAmount);
+      totalDiscounts = num(agg._sum.discountAmount);
+      totalSales = agg._count._all;
+    }
+
+    const totalVariance = shifts.reduce((sum, s) => sum + num(s.variance), 0);
+    const totalCardTender = shifts.reduce(
+      (sum, s) => sum + num(s.cardActual ?? s.cardExpected),
+      0,
+    );
+    const totalGiftCard = shifts.reduce(
+      (sum, s) => sum + num(s.giftCardSales),
+      0,
+    );
+    const totalLayaway = shifts.reduce(
+      (sum, s) => sum + num(s.layawayDeposits),
+      0,
+    );
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    return {
+      shiftCount: shifts.length,
+      closedShifts: shifts.filter((s) => s.status === ShiftStatus.CLOSED)
+        .length,
+      totalSales,
+      totalRevenue: round2(totalRevenue),
+      totalTax: round2(totalTax),
+      totalDiscounts: round2(totalDiscounts),
+      totalVariance: round2(totalVariance),
+      totalNonCashTenders: round2(
+        totalCardTender + totalGiftCard + totalLayaway,
+      ),
+      totalCardTender: round2(totalCardTender),
+      totalGiftCard: round2(totalGiftCard),
+      totalLayaway: round2(totalLayaway),
+    };
+  }
+
+  // Manager saves an audit resolution note against a shift's variance
+  async saveAuditResolution(
+    shiftId: string,
+    tenantId: string,
+    managerId: string,
+    note: string,
+  ) {
+    const shift = await this.prisma.shifts.findFirst({
+      where: { id: shiftId, tenantId },
+      select: { id: true },
+    });
+    if (!shift) {
+      throw new NotFoundException('Shift not found');
+    }
+    return this.prisma.shifts.update({
+      where: { id: shiftId },
+      data: {
+        auditResolutionNote: note,
+        auditResolvedById: managerId,
+        auditResolvedAt: new Date(),
+        updatedAt: new Date(),
+      },
+      include: {
+        auditResolvedBy: {
+          select: { id: true, firstName: true, lastName: true },
+        },
+      },
+    });
   }
 
   // Get unique users who worked in date range

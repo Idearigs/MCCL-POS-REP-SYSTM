@@ -356,15 +356,57 @@ model shifts {
   closingNotes  String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime
-  sales         sales[]     @relation("ShiftSales")
-  tenant        tenants     @relation("TenantShifts", fields: [tenantId], references: [id], onDelete: Cascade)
-  user          users       @relation("UserShifts", fields: [userId], references: [id])
+  // Cash-up reconciliation (blind close + denomination matrix)
+  declaredCash     Decimal?  // physical cash counted (sum of denomination matrix)
+  denominations    Json?     // { "<penceValue>": qty } snapshot of the note/coin count
+  // Card / PDQ Z-Read reconciliation
+  cardExpected     Decimal?
+  cardActual       Decimal?
+  cardVariance     Decimal?
+  // Cash movement totals (dynamic expected-cash formula)
+  cashPayIns       Decimal?  @default(0)
+  cashPayOuts      Decimal?  @default(0)
+  cashRefunds      Decimal?  @default(0)
+  // Non-revenue cash segregation
+  giftCardSales    Decimal?  @default(0)
+  layawayDeposits  Decimal?  @default(0)
+  // Variance accountability
+  varianceReason     String?
+  managerOverrideById String?
+  managerOverrideAt   DateTime?
+  // Manager audit resolution
+  auditResolutionNote String?
+  auditResolvedById   String?
+  auditResolvedAt     DateTime?
+  sales            sales[]               @relation("ShiftSales")
+  cash_movements   shift_cash_movements[]
+  tenant           tenants               @relation("TenantShifts", fields: [tenantId], references: [id], onDelete: Cascade)
+  user             users                 @relation("UserShifts", fields: [userId], references: [id])
+  managerOverrideBy users?               @relation("ShiftManagerOverride", fields: [managerOverrideById], references: [id])
+  auditResolvedBy   users?               @relation("ShiftAuditResolver", fields: [auditResolvedById], references: [id])
 
   @@unique([tenantId, shiftNumber])
   @@index([userId, startTime])
   @@index([tenantId, startTime])
   @@index([status])
   @@map("shifts")
+}
+
+model shift_cash_movements {
+  id        String                  @id
+  shiftId   String
+  tenantId  String
+  userId    String
+  type      ShiftCashMovementType
+  amount    Decimal
+  reason    String
+  createdAt DateTime                @default(now())
+  shift     shifts                  @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  tenant    tenants                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      users                   @relation(fields: [userId], references: [id])
+
+  @@index([shiftId])
+  @@index([tenantId, createdAt])
 }
 
 model suppliers {
@@ -418,6 +460,7 @@ model tenants {
   repairs                 repairs[]
   sales                   sales[]
   shifts                  shifts[]                  @relation("TenantShifts")
+  shift_cash_movements    shift_cash_movements[]
   stock_take_sessions     stock_take_sessions[]
   suppliers               suppliers[]
   tasks                   tasks[]
@@ -456,6 +499,7 @@ model users {
   isActive                     Boolean                   @default(true)
   lastLogin                    DateTime?
   refreshToken                 String?
+  cashUpPin                    String?                   // hashed PIN for manager cash-up override
   createdAt                    DateTime                  @default(now())
   updatedAt                    DateTime
   implemented_recommendations  ai_recommendations[]      @relation("RecommendationImplementer")
@@ -475,6 +519,9 @@ model users {
   repairs                      repairs[]
   sales                        sales[]
   shifts                       shifts[]                  @relation("UserShifts")
+  shift_overrides              shifts[]                  @relation("ShiftManagerOverride")
+  shift_audits                 shifts[]                  @relation("ShiftAuditResolver")
+  shift_cash_movements         shift_cash_movements[]
   scanned_stock_items          stock_take_items[]
   approved_stock_takes         stock_take_sessions[]     @relation("StockTakeApprover")
   created_stock_takes          stock_take_sessions[]     @relation("StockTakeCreator")
@@ -1144,6 +1191,11 @@ enum ShiftStatus {
   CLOSED
   ABANDONED
   RECONCILED
+}
+
+enum ShiftCashMovementType {
+  PAY_IN
+  PAY_OUT
 }
 
 enum ContactType {

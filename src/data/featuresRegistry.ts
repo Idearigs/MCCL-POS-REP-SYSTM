@@ -614,9 +614,166 @@ const FEATURES: Feature[] = [
       },
     ],
   },
+
+  // ─── REPAIRS ────────────────────────────────────────────────────────────────
+  {
+    id: 'mobile-repair-management',
+    name: 'Mobile Repair Management',
+    description:
+      'A phone-optimised repair management screen — browse, search, filter and change repair statuses on the go, in the same clean mobile theme as the quick-add page.',
+    category: 'Repairs',
+    keywords: ['mobile', 'repair', 'phone', 'status', 'manage', 'list', 'on the go', 'tablet'],
+    dateAdded: '2026-06-01',
+    path: '/mobile/repairs',
+    icon: 'Smartphone',
+    shortGuide: [
+      'Open /mobile/repairs on a phone (or use the back arrow from the mobile add-repair page)',
+      'Search by customer, item or repair number; filter with the status chips',
+      'Tap a repair card to expand it and pick a new status to update it instantly',
+      'Tap the violet + button to add a new repair job',
+    ],
+    fullGuide: [
+      {
+        title: 'Designed for the shop floor',
+        content: 'A standalone, full-screen mobile page (no desktop sidebar) styled like the mobile quick-add page. Repairs show as clean cards with the correct status badge, customer, item, due date and price.',
+      },
+      {
+        title: 'Update status in one tap',
+        content: 'Tapping a card reveals status pills; selecting one updates the repair immediately through the same safe, atomic update path used everywhere else. The desktop Repair Jobs page is unchanged.',
+      },
+    ],
+  },
+
+  // ─── INVENTORY ──────────────────────────────────────────────────────────────
+  {
+    id: 'inventory-valuation',
+    name: 'Inventory Valuation Breakdown',
+    description:
+      'The Inventory page now shows a proper valuation: stock at cost, retail/net realisable value, potential profit and gross margin, plus a per-category breakdown — instead of a single unexplained "Total Value".',
+    category: 'Inventory',
+    keywords: ['inventory', 'valuation', 'cost', 'retail', 'NRV', 'net realisable', 'profit', 'margin', 'stock value', 'category', 'breakdown'],
+    dateAdded: '2026-06-01',
+    path: '/inventory',
+    icon: 'Package',
+    shortGuide: [
+      'Open the Inventory page — the Valuation panel sits below the stat cards',
+      'Cost Value = what your current stock cost; Retail Value (NRV) = ticket value',
+      'Potential Profit = Retail − Cost, with the gross margin %',
+      'Scroll the "By Category" table for the same figures per category',
+    ],
+    fullGuide: [
+      {
+        title: 'What the figures mean',
+        content: 'Cost Value sums (cost price × quantity) across all active stock — the carrying value. Retail Value (NRV) sums (selling price × quantity) — the gross realisable value at current ticket prices. Potential Profit is Retail − Cost, and Gross Margin is Profit ÷ Retail.',
+      },
+      {
+        title: 'Per-category breakdown & depth',
+        content: 'The panel header shows total products and units in stock (depth). The "By Category" table lists units, cost, retail, profit and margin for each category, sorted by retail value, so you can see where your stock value and profit are concentrated.',
+      },
+    ],
+  },
+  {
+    id: 'cashup-blind-close',
+    name: 'End-of-Day Cash-Up & Z-Report',
+    description:
+      'A disciplined shift close: count cash by denomination (blind close), reconcile the card terminal Z-Read, segregate gift-card/layaway cash, and record till pay-ins/pay-outs. Large variances need a manager PIN. Managers get a Day-End dashboard with consolidated totals, variance auditing and a compliant Z-report + detailed journal.',
+    category: 'Shifts',
+    keywords: ['cash up', 'cashup', 'shift', 'close', 'z-report', 'z read', 'denomination', 'variance', 'manager pin', 'pay-in', 'pay-out', 'reconciliation', 'till', 'day end', 'journal', 'audit'],
+    dateAdded: '2026-06-02',
+    path: '/cash-up',
+    icon: 'Calculator',
+    shortGuide: [
+      'Close a shift from the floating shift button → count notes & coins in the denomination grid',
+      'Enter the card terminal Z-Read total and any gift-card / layaway cash',
+      'If the count differs you must give a reason; a large variance needs a manager PIN',
+      'Use Cash In/Out on the shift button to log till pay-ins and pay-outs during the shift',
+      'Managers: open Day End Report for consolidated totals, variance audit and the Z-report',
+    ],
+    fullGuide: [
+      {
+        title: 'Blind close & denomination matrix',
+        content: 'At close the cashier counts the physical cash by denomination (£50…1p); the system sums it as the declared cash and checks it against the expected total without showing the expected figure first. Expected Cash = Opening Float + Cash Sales + Pay-Ins − Pay-Outs − Cash Refunds.',
+      },
+      {
+        title: 'Variance reason & manager PIN',
+        content: 'Any non-zero variance requires a written reason. If the absolute variance exceeds the threshold set in Settings → Cash-Up, a manager PIN (set per manager in User Management) is required to authorise the close, and the override is recorded.',
+      },
+      {
+        title: 'Manager Day-End dashboard',
+        content: 'The Day End Report aggregates revenue, tax, discounts, variance and non-cash tenders across all shifts in the filter. Cashiers (STAFF/READONLY) have Expected and Variance hidden. Managers can click a variance badge to read the cashier’s reason and save an audit resolution note, and expand any shift to see card/gift-card/layaway and pay-in/out detail.',
+      },
+      {
+        title: 'Z-report & detailed journal',
+        content: 'The Z-report prints legal headers (address, phone, VAT, company reg, till ID), a float-audit block, department subtotals, the full payment matrix (printed even at £0), cash movements and signature lines — aggregates only. "Detailed Journal" prints a separate line-by-line chronological log of every transaction for deep auditing.',
+      },
+    ],
+  },
 ];
 
 export default FEATURES;
+
+// ─── Bug Fixes / Changelog ────────────────────────────────────────────────────
+
+export interface BugFix {
+  id: string;
+  title: string;
+  description: string;
+  area: FeatureCategory;
+  dateFixed: string; // ISO date string
+}
+
+export const BUG_FIXES: BugFix[] = [
+  {
+    id: 'fix-repair-status-labels',
+    title: 'Repair status labels now display correctly',
+    description:
+      'Quoted, Approved, Cancelled and "Ready for Collection" repairs previously showed the wrong label (e.g. "Received" or "Completed") on the cards, table and detail screen. Every status now shows its correct label everywhere.',
+    area: 'Repairs',
+    dateFixed: '2026-06-01',
+  },
+  {
+    id: 'fix-service-sale-refunds',
+    title: 'Service-only sales can now be refunded',
+    description:
+      'Refunding a sale that contained only services (battery change, cleaning, repairs) failed with an error because it had no stocked line items. Service sales can now be fully refunded.',
+    area: 'Sales',
+    dateFixed: '2026-06-01',
+  },
+  {
+    id: 'fix-repair-reliability',
+    title: 'Repair create & status updates are safe to retry',
+    description:
+      'Repair creation, status changes and cancellations now run atomically with row locking and idempotency, so a double-tap or network retry can no longer create duplicate repairs, duplicate history entries, or send the customer a duplicate SMS.',
+    area: 'Repairs',
+    dateFixed: '2026-06-01',
+  },
+  {
+    id: 'fix-mobile-repair-back',
+    title: 'Mobile add-repair back button fixed',
+    description:
+      'The back arrow on the mobile add-repair page led to a 404. It now returns to the new mobile Repair Management screen.',
+    area: 'Repairs',
+    dateFixed: '2026-06-01',
+  },
+  {
+    id: 'fix-repair-detail-mobile',
+    title: 'Repair detail screen is now usable on mobile',
+    description:
+      'The repair detail popup was cramped and cut off on phones. It now opens full-screen with readable text and tabs on mobile, while the desktop layout is unchanged.',
+    area: 'Repairs',
+    dateFixed: '2026-06-01',
+  },
+];
+
+/** Returns bug fixes with an isNew flag if dateFixed is within last 30 days */
+export function getBugFixesWithNewFlag(): (BugFix & { isNew: boolean })[] {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  return BUG_FIXES.map((b) => ({
+    ...b,
+    isNew: new Date(b.dateFixed) >= thirtyDaysAgo,
+  }));
+}
 
 /** Returns features with an isNew flag if dateAdded is within last 30 days */
 export function getFeaturesWithNewFlag(): (Feature & { isNew: boolean })[] {
