@@ -10,11 +10,27 @@ import {
   Mail,
   Download,
   Search,
-  RefreshCw
+  RefreshCw,
+  ChevronDown,
+  ChevronRight,
+  Receipt,
+  PoundSterling,
+  Percent,
+  Scale
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { salesService } from '@/services/salesService';
-import { shiftService } from '@/services/shiftService';
+import { shiftService, ShiftSummary } from '@/services/shiftService';
 import { format } from 'date-fns';
 import {
   EndOfDayReportData,
@@ -53,9 +69,22 @@ interface User {
 const CashUpPage = () => {
   const { toast } = useToast();
   const { settings } = useSettings();
+  const { auth } = useAuth();
+  // STAFF + READONLY are treated as "cashier": Expected/Variance are masked.
+  const isManager =
+    auth.user?.role === 'OWNER' || auth.user?.role === 'MANAGER';
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState<EndOfDayReportData | null>(null);
   const [reportText, setReportText] = useState<string>('');
+
+  // Consolidated master summary across the active filter
+  const [summary, setSummary] = useState<ShiftSummary | null>(null);
+  // Expandable shift row (tender accordion)
+  const [expandedShiftId, setExpandedShiftId] = useState<string | null>(null);
+  // Variance audit modal
+  const [auditShift, setAuditShift] = useState<any | null>(null);
+  const [auditNote, setAuditNote] = useState('');
+  const [auditSaving, setAuditSaving] = useState(false);
 
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -80,8 +109,50 @@ const CashUpPage = () => {
       loadAvailableShifts(autoSelect);
       loadUsersByDateRange();
       loadTillsByDateRange();
+      loadSummary();
     }
-  }, [filters.dateFrom, filters.dateTo]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.dateFrom, filters.dateTo, filters.userId]);
+
+  const loadSummary = async () => {
+    try {
+      const data = await shiftService.getShiftSummary(
+        filters.dateFrom,
+        filters.dateTo,
+        filters.userId,
+      );
+      setSummary(data);
+    } catch (error) {
+      console.error('Failed to load shift summary:', error);
+      setSummary(null);
+    }
+  };
+
+  const handleSaveAudit = async () => {
+    if (!auditShift) return;
+    setAuditSaving(true);
+    try {
+      await shiftService.saveAuditResolution(auditShift.id, auditNote.trim());
+      toast({
+        title: 'Audit note saved',
+        description: `Variance for ${auditShift.shiftNumber} resolved`,
+      });
+      setAuditShift(null);
+      setAuditNote('');
+      loadAvailableShifts();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to save audit note',
+        variant: 'destructive',
+      });
+    } finally {
+      setAuditSaving(false);
+    }
+  };
+
+  const gbp = (n: number) =>
+    `£${Number(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   // Auto-generate report when a specific shift is selected
   useEffect(() => {
@@ -657,6 +728,59 @@ const CashUpPage = () => {
           </CardContent>
         </Card>
 
+        {/* Consolidated Master Report */}
+        {summary && summary.shiftCount > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                  <PoundSterling className="h-3.5 w-3.5" /> Total Revenue
+                </div>
+                <div className="text-xl font-bold text-gray-900">{gbp(summary.totalRevenue)}</div>
+                <div className="text-xs text-gray-400 mt-0.5">{summary.totalSales} sales · {summary.shiftCount} shifts</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                  <Receipt className="h-3.5 w-3.5" /> Total Tax (VAT)
+                </div>
+                <div className="text-xl font-bold text-gray-900">{gbp(summary.totalTax)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                  <Percent className="h-3.5 w-3.5" /> Total Discounts
+                </div>
+                <div className="text-xl font-bold text-gray-900">{gbp(summary.totalDiscounts)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                  <Calculator className="h-3.5 w-3.5" /> Non-Cash Tenders
+                </div>
+                <div className="text-xl font-bold text-gray-900">{gbp(summary.totalNonCashTenders)}</div>
+                <div className="text-xs text-gray-400 mt-0.5">Card {gbp(summary.totalCardTender)} · Gift {gbp(summary.totalGiftCard)}</div>
+              </CardContent>
+            </Card>
+            {/* Variance — managers only */}
+            {isManager && (
+              <Card>
+                <CardContent className="pt-4">
+                  <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                    <Scale className="h-3.5 w-3.5" /> Total Variance
+                  </div>
+                  <div className={`text-xl font-bold ${summary.totalVariance === 0 ? 'text-gray-900' : summary.totalVariance > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {summary.totalVariance >= 0 ? '+' : ''}{gbp(summary.totalVariance)}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
         {/* Historical Shifts Table */}
         {availableShifts.length > 0 && (
           <Card className="mb-6">
@@ -666,14 +790,15 @@ const CashUpPage = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-gray-500 text-xs uppercase">
+                      <th className="pb-2 pr-2 w-6"></th>
                       <th className="pb-2 pr-4">Shift</th>
                       <th className="pb-2 pr-4">Staff</th>
                       <th className="pb-2 pr-4">Date</th>
                       <th className="pb-2 pr-4">Status</th>
                       <th className="pb-2 pr-4 text-right">Opening Float</th>
-                      <th className="pb-2 pr-4 text-right">Expected</th>
-                      <th className="pb-2 pr-4 text-right">Closing Float</th>
-                      <th className="pb-2 text-right">Variance</th>
+                      {isManager && <th className="pb-2 pr-4 text-right">Expected</th>}
+                      <th className="pb-2 pr-4 text-right">Declared</th>
+                      {isManager && <th className="pb-2 text-right">Variance</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -682,12 +807,24 @@ const CashUpPage = () => {
                       .sort((a: any, b: any) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
                       .map((shift: any) => {
                         const variance = shift.variance ?? null;
+                        const isExpanded = expandedShiftId === shift.id;
+                        const resolved = !!shift.auditResolutionNote;
+                        const colSpan = isManager ? 9 : 7;
                         return (
+                          <React.Fragment key={shift.id}>
                           <tr
-                            key={shift.id}
                             className={`border-b cursor-pointer hover:bg-blue-50 transition-colors ${filters.shiftId === shift.id ? 'bg-blue-50' : ''}`}
                             onClick={() => setFilters(prev => ({ ...prev, shiftId: shift.id }))}
                           >
+                            <td className="py-2 pr-2">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setExpandedShiftId(isExpanded ? null : shift.id); }}
+                                className="text-gray-400 hover:text-gray-700"
+                                aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                              >
+                                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                              </button>
+                            </td>
                             <td className="py-2 pr-4 font-mono text-xs">{shift.shiftNumber}</td>
                             <td className="py-2 pr-4">{shift.user ? `${shift.user.firstName} ${shift.user.lastName}` : '—'}</td>
                             <td className="py-2 pr-4">{format(new Date(shift.startTime), 'dd MMM yy HH:mm')}</td>
@@ -696,13 +833,50 @@ const CashUpPage = () => {
                                 {shift.status}
                               </span>
                             </td>
-                            <td className="py-2 pr-4 text-right">£{Number(shift.openingFloat ?? 0).toFixed(2)}</td>
-                            <td className="py-2 pr-4 text-right">{shift.expectedFloat != null ? `£${Number(shift.expectedFloat).toFixed(2)}` : '—'}</td>
-                            <td className="py-2 pr-4 text-right">{shift.closingFloat != null ? `£${Number(shift.closingFloat).toFixed(2)}` : '—'}</td>
-                            <td className={`py-2 text-right font-semibold ${variance === null ? 'text-gray-400' : variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {variance === null ? '—' : `${variance >= 0 ? '+' : ''}£${Number(variance).toFixed(2)}`}
-                            </td>
+                            <td className="py-2 pr-4 text-right">{gbp(shift.openingFloat ?? 0)}</td>
+                            {isManager && (
+                              <td className="py-2 pr-4 text-right">{shift.expectedFloat != null ? gbp(shift.expectedFloat) : '—'}</td>
+                            )}
+                            <td className="py-2 pr-4 text-right">{(shift.declaredCash ?? shift.closingFloat) != null ? gbp(shift.declaredCash ?? shift.closingFloat) : '—'}</td>
+                            {isManager && (
+                              <td className="py-2 text-right">
+                                {variance === null ? (
+                                  <span className="text-gray-400">—</span>
+                                ) : (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setAuditShift(shift); setAuditNote(shift.auditResolutionNote || ''); }}
+                                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold transition-colors ${variance === 0 ? 'bg-gray-100 text-gray-500' : variance > 0 ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
+                                    title={resolved ? 'Variance reviewed — click to view' : 'Click to review variance'}
+                                  >
+                                    {variance >= 0 ? '+' : ''}{gbp(variance)}
+                                    {variance !== 0 && (resolved ? ' ✓' : ' !')}
+                                  </button>
+                                )}
+                              </td>
+                            )}
                           </tr>
+                          {isExpanded && (
+                            <tr className="bg-gray-50 border-b">
+                              <td colSpan={colSpan} className="px-6 py-3">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-xs">
+                                  <div className="flex justify-between"><span className="text-gray-500">Card Expected</span><span className="font-medium">{shift.cardExpected != null ? gbp(shift.cardExpected) : '—'}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">Card Actual (Z-Read)</span><span className="font-medium">{shift.cardActual != null ? gbp(shift.cardActual) : '—'}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">Gift Card Sales</span><span className="font-medium">{gbp(shift.giftCardSales ?? 0)}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">Layaway Deposits</span><span className="font-medium">{gbp(shift.layawayDeposits ?? 0)}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">Pay-Ins</span><span className="font-medium text-emerald-600">{gbp(shift.cashPayIns ?? 0)}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">Pay-Outs</span><span className="font-medium text-red-600">{gbp(shift.cashPayOuts ?? 0)}</span></div>
+                                  <div className="flex justify-between"><span className="text-gray-500">Cash Refunds</span><span className="font-medium">{gbp(shift.cashRefunds ?? 0)}</span></div>
+                                  {isManager && shift.cardVariance != null && (
+                                    <div className="flex justify-between"><span className="text-gray-500">Card Variance</span><span className={`font-medium ${shift.cardVariance === 0 ? 'text-gray-700' : 'text-red-600'}`}>{gbp(shift.cardVariance)}</span></div>
+                                  )}
+                                </div>
+                                {shift.varianceReason && (
+                                  <div className="mt-2 text-xs"><span className="text-gray-500">Cashier reason: </span><span className="text-gray-800 italic">"{shift.varianceReason}"</span></div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                          </React.Fragment>
                         );
                       })}
                   </tbody>
@@ -941,6 +1115,78 @@ const CashUpPage = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* Variance Audit Modal */}
+        <Dialog open={!!auditShift} onOpenChange={(open) => !open && setAuditShift(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Scale className="h-5 w-5 text-blue-600" />
+                Variance Review — {auditShift?.shiftNumber}
+              </DialogTitle>
+              <DialogDescription>
+                Review the cash variance and record a resolution note for the audit trail.
+              </DialogDescription>
+            </DialogHeader>
+            {auditShift && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div className="rounded-lg bg-gray-50 p-3">
+                    <div className="text-xs text-gray-500">Expected</div>
+                    <div className="font-semibold">{auditShift.expectedFloat != null ? gbp(auditShift.expectedFloat) : '—'}</div>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 p-3">
+                    <div className="text-xs text-gray-500">Declared</div>
+                    <div className="font-semibold">{(auditShift.declaredCash ?? auditShift.closingFloat) != null ? gbp(auditShift.declaredCash ?? auditShift.closingFloat) : '—'}</div>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 p-3">
+                    <div className="text-xs text-gray-500">Variance</div>
+                    <div className={`font-semibold ${(auditShift.variance ?? 0) === 0 ? 'text-gray-900' : (auditShift.variance ?? 0) > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {(auditShift.variance ?? 0) >= 0 ? '+' : ''}{gbp(auditShift.variance ?? 0)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <div className="text-xs font-semibold text-amber-700 mb-1">Cashier's reason</div>
+                  <div className="text-sm text-gray-800">
+                    {auditShift.varianceReason ? `"${auditShift.varianceReason}"` : <span className="text-gray-400 italic">No reason recorded</span>}
+                  </div>
+                </div>
+
+                {auditShift.managerOverrideAt && (
+                  <p className="text-xs text-gray-500">
+                    Closed with a manager PIN override on {format(new Date(auditShift.managerOverrideAt), 'dd MMM yy HH:mm')}.
+                  </p>
+                )}
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="auditNote" className="text-sm font-medium">Audit Resolution Note</Label>
+                  <Textarea
+                    id="auditNote"
+                    value={auditNote}
+                    onChange={(e) => setAuditNote(e.target.value)}
+                    rows={3}
+                    placeholder="Record how this variance was investigated / resolved…"
+                    className="resize-none"
+                  />
+                  {auditShift.auditResolvedAt && (
+                    <p className="text-xs text-gray-400">
+                      Last resolved {format(new Date(auditShift.auditResolvedAt), 'dd MMM yy HH:mm')}
+                      {auditShift.auditResolvedBy ? ` by ${auditShift.auditResolvedBy.firstName} ${auditShift.auditResolvedBy.lastName}` : ''}.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAuditShift(null)} disabled={auditSaving}>Cancel</Button>
+              <Button onClick={handleSaveAudit} disabled={auditSaving || !auditNote.trim()}>
+                {auditSaving ? 'Saving…' : 'Save Note'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   );

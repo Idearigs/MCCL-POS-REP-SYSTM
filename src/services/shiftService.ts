@@ -96,6 +96,20 @@ export interface ShiftStatistics {
   negativeVariances: number;
 }
 
+export interface ShiftSummary {
+  shiftCount: number;
+  closedShifts: number;
+  totalSales: number;
+  totalRevenue: number;
+  totalTax: number;
+  totalDiscounts: number;
+  totalVariance: number;
+  totalNonCashTenders: number;
+  totalCardTender: number;
+  totalGiftCard: number;
+  totalLayaway: number;
+}
+
 export interface StartShiftData {
   openingFloat: number;
   openingNotes?: string;
@@ -225,6 +239,43 @@ class ShiftService {
     } catch (error: any) {
       console.error('Error getting cash movements:', error);
       return [];
+    }
+  }
+
+  /**
+   * Consolidated master summary across all shifts in the date filter
+   */
+  async getShiftSummary(
+    startDate: string,
+    endDate: string,
+    userId?: string
+  ): Promise<ShiftSummary> {
+    const params = new URLSearchParams();
+    params.append('startDate', startDate);
+    params.append('endDate', endDate);
+    if (userId && userId !== 'all') params.append('userId', userId);
+    return apiClient.get(
+      `${API_CONFIG.ENDPOINTS.SHIFTS}/summary?${params.toString()}`
+    );
+  }
+
+  /**
+   * Manager saves an audit resolution note against a shift's variance
+   */
+  async saveAuditResolution(
+    shiftId: string,
+    auditResolutionNote: string
+  ): Promise<Shift> {
+    try {
+      return await apiClient.patch(
+        `${API_CONFIG.ENDPOINTS.SHIFTS}/${shiftId}/audit`,
+        { auditResolutionNote }
+      );
+    } catch (error: any) {
+      console.error('Error saving audit resolution:', error);
+      throw new Error(
+        error.data?.message || error.message || 'Failed to save audit note'
+      );
     }
   }
 

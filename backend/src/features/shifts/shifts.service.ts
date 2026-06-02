@@ -547,6 +547,122 @@ export class ShiftsService {
     };
   }
 
+  // Consolidated master report — aggregates across all shifts matching the
+  // date filter (for the manager Day-End dashboard).
+  async getShiftSummary(
+    tenantId: string,
+    startDate: Date,
+    endDate: Date,
+    userId?: string,
+  ) {
+    const endOfDay = new Date(endDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const shifts = await this.prisma.shifts.findMany({
+      where: {
+        tenantId,
+        startTime: { gte: startDate, lte: endOfDay },
+        ...(userId && userId !== 'all' && { userId }),
+      },
+      select: {
+        id: true,
+        status: true,
+        variance: true,
+        cardExpected: true,
+        cardActual: true,
+        giftCardSales: true,
+        layawayDeposits: true,
+      },
+    });
+
+    const shiftIds = shifts.map((s) => s.id);
+    const num = (v: unknown) => Number(v ?? 0);
+
+    // Revenue / tax / discounts from the completed sales on those shifts
+    let totalRevenue = 0;
+    let totalTax = 0;
+    let totalDiscounts = 0;
+    let totalSales = 0;
+    if (shiftIds.length > 0) {
+      const agg = await this.prisma.sales.aggregate({
+        where: {
+          tenantId,
+          shiftId: { in: shiftIds },
+          status: 'COMPLETED',
+          paymentStatus: 'COMPLETED',
+        },
+        _sum: { totalAmount: true, taxAmount: true, discountAmount: true },
+        _count: { _all: true },
+      });
+      totalRevenue = num(agg._sum.totalAmount);
+      totalTax = num(agg._sum.taxAmount);
+      totalDiscounts = num(agg._sum.discountAmount);
+      totalSales = agg._count._all;
+    }
+
+    const totalVariance = shifts.reduce((sum, s) => sum + num(s.variance), 0);
+    const totalCardTender = shifts.reduce(
+      (sum, s) => sum + num(s.cardActual ?? s.cardExpected),
+      0,
+    );
+    const totalGiftCard = shifts.reduce(
+      (sum, s) => sum + num(s.giftCardSales),
+      0,
+    );
+    const totalLayaway = shifts.reduce(
+      (sum, s) => sum + num(s.layawayDeposits),
+      0,
+    );
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    return {
+      shiftCount: shifts.length,
+      closedShifts: shifts.filter((s) => s.status === ShiftStatus.CLOSED)
+        .length,
+      totalSales,
+      totalRevenue: round2(totalRevenue),
+      totalTax: round2(totalTax),
+      totalDiscounts: round2(totalDiscounts),
+      totalVariance: round2(totalVariance),
+      totalNonCashTenders: round2(
+        totalCardTender + totalGiftCard + totalLayaway,
+      ),
+      totalCardTender: round2(totalCardTender),
+      totalGiftCard: round2(totalGiftCard),
+      totalLayaway: round2(totalLayaway),
+    };
+  }
+
+  // Manager saves an audit resolution note against a shift's variance
+  async saveAuditResolution(
+    shiftId: string,
+    tenantId: string,
+    managerId: string,
+    note: string,
+  ) {
+    const shift = await this.prisma.shifts.findFirst({
+      where: { id: shiftId, tenantId },
+      select: { id: true },
+    });
+    if (!shift) {
+      throw new NotFoundException('Shift not found');
+    }
+    return this.prisma.shifts.update({
+      where: { id: shiftId },
+      data: {
+        auditResolutionNote: note,
+        auditResolvedById: managerId,
+        auditResolvedAt: new Date(),
+        updatedAt: new Date(),
+      },
+      include: {
+        auditResolvedBy: {
+          select: { id: true, firstName: true, lastName: true },
+        },
+      },
+    });
+  }
+
   // Get unique users who worked in date range
   async getUsersByDateRange(tenantId: string, startDate: Date, endDate: Date) {
     // Set end date to end of day
