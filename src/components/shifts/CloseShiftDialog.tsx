@@ -28,7 +28,10 @@ import {
   CloseShiftError,
 } from '@/services/shiftService';
 import { format } from 'date-fns';
-import { printShiftSummaryThermal } from '@/utils/thermalReceipt';
+import {
+  printShiftSummaryThermal,
+  buildDepartmentsFromShiftReport,
+} from '@/utils/thermalReceipt';
 import { useSettings } from '@/contexts/SettingsContext';
 
 interface CloseShiftDialogProps {
@@ -202,6 +205,7 @@ const CloseShiftDialog: React.FC<CloseShiftDialogProps> = ({
             layawayDeposits: Number(closedShift.layawayDeposits ?? 0),
             payIns: Number(closedShift.cashPayIns ?? 0),
             payOuts: Number(closedShift.cashPayOuts ?? 0),
+            departments: buildDepartmentsFromShiftReport(report.sales),
             totalDiscount: report.metrics.totalDiscount,
             totalTax: report.metrics.totalTax,
             variance: Number(closedShift.variance ?? 0),

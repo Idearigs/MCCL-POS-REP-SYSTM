@@ -412,6 +412,7 @@ export class ShiftsService {
                   select: {
                     name: true,
                     sku: true,
+                    categories: { select: { name: true } },
                   },
                 },
               },

@@ -584,6 +584,9 @@ export async function printShiftSummaryThermal(
   printerName?: string,
 ): Promise<void> {
   function fmtMoney(v: number) { return `£${(v ?? 0).toFixed(2)}`; }
+  // Money shown as a deduction: prefix '-' only for a real (non-zero) amount,
+  // so a zero never prints as "-£0.00".
+  function fmtNeg(v: number) { return (v ?? 0) > 0 ? `-${fmtMoney(v)}` : fmtMoney(0); }
   function fmtDate(iso: string) {
     const d = new Date(iso);
     return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -668,7 +671,7 @@ export async function printShiftSummaryThermal(
   <hr/>
   <div class="section">Sales Summary</div>
   <div class="row"><span>Total Transactions</span><span>${data.totalSales}</span></div>
-  <div class="row"><span>Total Discount</span><span>-${fmtMoney(data.totalDiscount)}</span></div>
+  <div class="row"><span>Total Discount</span><span>${fmtNeg(data.totalDiscount)}</span></div>
   <div class="row"><span>Total Tax</span><span>${fmtMoney(data.totalTax)}</span></div>
   <div class="total-row"><span>TOTAL REVENUE</span><span>${fmtMoney(data.totalRevenue)}</span></div>
   ${deptRows ? `<hr/><div class="section">Departments</div>${deptRows}` : ''}
@@ -678,7 +681,7 @@ export async function printShiftSummaryThermal(
   <hr/>
   <div class="section">Cash Movements</div>
   <div class="row"><span>Pay-Ins</span><span>${fmtMoney(data.payIns ?? 0)}</span></div>
-  <div class="row"><span>Pay-Outs</span><span>-${fmtMoney(data.payOuts ?? 0)}</span></div>
+  <div class="row"><span>Pay-Outs</span><span>${fmtNeg(data.payOuts ?? 0)}</span></div>
   <hr/>
   <div class="sign">
     <div class="sign-line">Cashier Signature</div>
@@ -708,6 +711,38 @@ export async function printShiftSummaryThermal(
   } catch {
     cleanup();
   }
+}
+
+/**
+ * Group a shift report's completed sale line items into department subtotals
+ * (by product category) for the Z-report. Items with no category fall under
+ * "Other".
+ */
+export function buildDepartmentsFromShiftReport(
+  sales: Array<{
+    sale_items: Array<{
+      quantity: number;
+      totalPrice?: number;
+      unitPrice?: number;
+      products?: { categories?: { name: string } | null } | null;
+    }>;
+  }>,
+): { name: string; itemCount: number; salesAmount: number }[] {
+  const map = new Map<string, { name: string; itemCount: number; salesAmount: number }>();
+  (sales || []).forEach((sale) => {
+    (sale.sale_items || []).forEach((item) => {
+      const name = item.products?.categories?.name || 'Other';
+      const qty = Number(item.quantity ?? 0);
+      const amount = Number(
+        item.totalPrice ?? (item.unitPrice ?? 0) * qty,
+      );
+      const cur = map.get(name) || { name, itemCount: 0, salesAmount: 0 };
+      cur.itemCount += qty;
+      cur.salesAmount += amount;
+      map.set(name, cur);
+    });
+  });
+  return Array.from(map.values()).sort((a, b) => b.salesAmount - a.salesAmount);
 }
 
 export interface DetailedJournalEntry {
