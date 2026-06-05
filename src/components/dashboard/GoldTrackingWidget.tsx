@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { RefreshCw, Wifi, WifiOff, ArrowUpRight, ArrowDownRight, Calculator } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
+import { apiClient } from '../../services/apiClient';
+
+interface MetalRate {
+  pricePerGram: number;
+  pricePerOunce: number;
+  currency: string;
+  stale: boolean;
+}
 
 // Constants
-const GOLD_API_URL = 'https://www.goldapi.io/api/XAU/USD';
-const SILVER_API_URL = 'https://www.goldapi.io/api/XAG/USD';
-const PLATINUM_API_URL = 'https://www.goldapi.io/api/XPT/USD';
-const GOLD_API_KEY = 'goldapi-1inbzfsmice24ik-io';
 const TROY_OUNCE_TO_GRAMS = 31.1035;
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 60 minutes
 const STORAGE_KEY = 'liveGoldRateCache';
@@ -20,8 +24,6 @@ const PURITY_MAP = {
   '22K': { multiplier: 0.916, label: '22 Karat', color: 'from-yellow-400 to-amber-500' },
   '24K': { multiplier: 1.000, label: '24 Karat', color: 'from-yellow-300 to-yellow-500' },
 };
-
-const USD_TO_GBP = 0.79;
 
 interface CachedData {
   pricePerOunce: number;
@@ -219,37 +221,30 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
     setIsLoading(true);
 
     try {
-      const response = await fetch(GOLD_API_URL, {
-        method: 'GET',
-        headers: {
-          'x-access-token': GOLD_API_KEY,
-          'Content-Type': 'application/json',
-        },
+      // Server-side feed already returns GBP — no API key or forex fudge in the browser.
+      const data = await apiClient.get<MetalRate>('/metals/gold', {
+        currency: 'GBP',
       });
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+      const priceGbpPerOunce =
+        data.pricePerOunce || data.pricePerGram * TROY_OUNCE_TO_GRAMS;
+      const priceGbpPerGram =
+        data.pricePerGram || priceGbpPerOunce / TROY_OUNCE_TO_GRAMS;
+
+      if (!priceGbpPerGram || priceGbpPerGram <= 0) {
+        throw new Error('No gold rate available');
       }
 
-      const data = await response.json();
-
-      const priceUsdPerOunce = data.price;
-      const prevPriceUsd = data.prev_close_price || priceUsdPerOunce;
-
-      const priceGbpPerOunce = priceUsdPerOunce * USD_TO_GBP;
-      const priceGbpPerGram = priceGbpPerOunce / TROY_OUNCE_TO_GRAMS;
-      const prevPriceGbpPerGram = (prevPriceUsd * USD_TO_GBP) / TROY_OUNCE_TO_GRAMS;
-
-      setPreviousPrice(pricePerGram || prevPriceGbpPerGram);
+      setPreviousPrice(pricePerGram || priceGbpPerGram);
       setPricePerOunce(priceGbpPerOunce);
       setPricePerGram(priceGbpPerGram);
       setLastUpdated(new Date());
-      setIsLive(true);
+      setIsLive(!data.stale);
 
       const cacheData: CachedData = {
         pricePerOunce: priceGbpPerOunce,
         pricePerGram: priceGbpPerGram,
-        previousPrice: prevPriceGbpPerGram,
+        previousPrice: pricePerGram || priceGbpPerGram,
         timestamp: Date.now(),
         currency: 'GBP',
       };
@@ -312,14 +307,13 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
 
       if (!silverDone) {
         try {
-          const res = await fetch(SILVER_API_URL, {
-            headers: { 'x-access-token': GOLD_API_KEY, 'Content-Type': 'application/json' },
+          const d = await apiClient.get<MetalRate>('/metals/XAG', {
+            currency: 'GBP',
           });
-          if (res.ok) {
-            const d = await res.json();
-            const gbpPerGram = (d.price * USD_TO_GBP) / TROY_OUNCE_TO_GRAMS;
+          const gbpPerGram = d.pricePerGram || 0;
+          if (gbpPerGram > 0) {
             setSilverPricePerGram(gbpPerGram);
-            setSilverLive(true);
+            setSilverLive(!d.stale);
             localStorage.setItem(silverCacheKey, JSON.stringify({ pricePerGram: gbpPerGram, timestamp: Date.now() }));
           }
         } catch {
@@ -329,14 +323,13 @@ const GoldTrackingWidget: React.FC<GoldTrackingWidgetProps> = ({ className = '' 
 
       if (!platinumDone) {
         try {
-          const res = await fetch(PLATINUM_API_URL, {
-            headers: { 'x-access-token': GOLD_API_KEY, 'Content-Type': 'application/json' },
+          const d = await apiClient.get<MetalRate>('/metals/XPT', {
+            currency: 'GBP',
           });
-          if (res.ok) {
-            const d = await res.json();
-            const gbpPerGram = (d.price * USD_TO_GBP) / TROY_OUNCE_TO_GRAMS;
+          const gbpPerGram = d.pricePerGram || 0;
+          if (gbpPerGram > 0) {
             setPlatinumPricePerGram(gbpPerGram);
-            setPlatinumLive(true);
+            setPlatinumLive(!d.stale);
             localStorage.setItem(platinumCacheKey, JSON.stringify({ pricePerGram: gbpPerGram, timestamp: Date.now() }));
           }
         } catch {
