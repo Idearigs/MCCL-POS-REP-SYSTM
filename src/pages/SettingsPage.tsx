@@ -20,6 +20,7 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import RepairTagsSettings from '@/components/repair/RepairTagsSettings';
 import PosTilesSettings from '@/components/pos/PosTilesSettings';
+import GoldPricingSettings from '@/components/inventory/GoldPricingSettings';
 import FeaturesHelp from '@/components/settings/FeaturesHelp';
 import { OutletManagement } from '@/components/outlets/OutletManagement';
 import { ReceiptPreviewModal } from '@/components/printer/ReceiptPreviewModal';
@@ -553,6 +554,9 @@ const SettingsPage = () => {
             {(auth.user?.role === 'OWNER' || auth.user?.role === 'MANAGER') && (
               <TabsTrigger value="pos-tiles">POS Tiles</TabsTrigger>
             )}
+            {(auth.user?.role === 'OWNER' || auth.user?.role === 'MANAGER') && (
+              <TabsTrigger value="gold-pricing">Gold Pricing</TabsTrigger>
+            )}
             <TabsTrigger value="repair-tags">Repair Tags</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
             <TabsTrigger value="features" className="relative">
@@ -967,6 +971,12 @@ const SettingsPage = () => {
           {(auth.user?.role === 'OWNER' || auth.user?.role === 'MANAGER') && (
             <TabsContent value="pos-tiles">
               <PosTilesSettings />
+            </TabsContent>
+          )}
+
+          {(auth.user?.role === 'OWNER' || auth.user?.role === 'MANAGER') && (
+            <TabsContent value="gold-pricing">
+              <GoldPricingSettings />
             </TabsContent>
           )}
 

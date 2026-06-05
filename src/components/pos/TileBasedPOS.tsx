@@ -95,6 +95,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { printThermalReceipt } from '@/utils/thermalReceipt';
 import { userService } from '@/services/userService';
 import { posTileService, PosTile } from '@/services/posTileService';
+import { apiClient } from '@/services/apiClient';
 import { getTileIcon, getTileColor, getTileGradient } from '@/lib/posTileVisuals';
 import {
   DndContext,
@@ -588,11 +589,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [metalCalcPlatinumLive, setMetalCalcPlatinumLive] = useState(false);
   const [metalCalcFetching, setMetalCalcFetching] = useState(false);
 
-  // Fetch live silver + platinum from goldapi.io (same key/pattern as LiveGoldRate)
+  // Fetch live silver + platinum from the backend metals feed (GBP, server-side key)
   const fetchSilverPlatinum = async () => {
-    const GOLD_API_KEY = 'goldapi-1inbzfsmice24ik-io';
-    const USD_TO_GBP = 0.79;
-    const TROY_TO_GRAM = 31.1035;
     const CACHE_TTL = 60 * 60 * 1000; // 60 min
 
     const loadCache = (key: string) => {
@@ -625,31 +623,32 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
     setMetalCalcFetching(true);
     try {
-      const fetchMetal = async (symbol: string) => {
-        const res = await fetch(`https://www.goldapi.io/api/${symbol}/USD`, {
-          headers: { 'x-access-token': GOLD_API_KEY, 'Content-Type': 'application/json' },
+      const fetchMetal = (symbol: string) =>
+        apiClient.get<{ pricePerGram: number }>(`/metals/${symbol}`, {
+          currency: 'GBP',
         });
-        if (!res.ok) throw new Error(`${symbol} API error ${res.status}`);
-        return res.json();
-      };
 
       if (!silverFetched) {
         try {
           const data = await fetchMetal('XAG');
-          const pricePerGram = (data.price * USD_TO_GBP) / TROY_TO_GRAM;
-          setMetalCalcSilverPrice(pricePerGram.toFixed(4));
-          setMetalCalcSilverLive(true);
-          saveCache('liveMetalCache_silver', { pricePerGram, timestamp: Date.now() });
+          const pricePerGram = data.pricePerGram || 0;
+          if (pricePerGram > 0) {
+            setMetalCalcSilverPrice(pricePerGram.toFixed(4));
+            setMetalCalcSilverLive(true);
+            saveCache('liveMetalCache_silver', { pricePerGram, timestamp: Date.now() });
+          }
         } catch { /* keep default */ }
       }
 
       if (!platinumFetched) {
         try {
           const data = await fetchMetal('XPT');
-          const pricePerGram = (data.price * USD_TO_GBP) / TROY_TO_GRAM;
-          setMetalCalcPlatinumPrice(pricePerGram.toFixed(2));
-          setMetalCalcPlatinumLive(true);
-          saveCache('liveMetalCache_platinum', { pricePerGram, timestamp: Date.now() });
+          const pricePerGram = data.pricePerGram || 0;
+          if (pricePerGram > 0) {
+            setMetalCalcPlatinumPrice(pricePerGram.toFixed(2));
+            setMetalCalcPlatinumLive(true);
+            saveCache('liveMetalCache_platinum', { pricePerGram, timestamp: Date.now() });
+          }
         } catch { /* keep default */ }
       }
     } finally {

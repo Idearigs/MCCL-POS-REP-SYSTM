@@ -6,10 +6,9 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { goldPricingService } from '@/services/goldPricingService';
 
 // Constants
-const GOLD_API_URL = 'https://www.goldapi.io/api/XAU/USD';
-const GOLD_API_KEY = 'goldapi-1inbzfsmice24ik-io';
 const TROY_OUNCE_TO_GRAMS = 31.1035;
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 60 minutes
 const STORAGE_KEY = 'liveGoldRateCache';
@@ -87,9 +86,6 @@ const LiveGoldRate: React.FC<LiveGoldRateProps> = ({ onPriceUpdate, compact = fa
   const [manualPrice, setManualPrice] = useState<string>('');
   const [currency] = useState<string>('GBP');
 
-  // USD to GBP conversion (approximate - in production use real forex API)
-  const usdToGbp = 0.79;
-
   // Load cached data from localStorage
   const loadCachedData = useCallback((): CachedData | null => {
     try {
@@ -138,42 +134,31 @@ const LiveGoldRate: React.FC<LiveGoldRateProps> = ({ onPriceUpdate, compact = fa
     setError(null);
 
     try {
-      const response = await fetch(GOLD_API_URL, {
-        method: 'GET',
-        headers: {
-          'x-access-token': GOLD_API_KEY,
-          'Content-Type': 'application/json',
-        },
-      });
+      // Server-side feed already returns GBP — no API key or forex fudge in the browser.
+      const data = await goldPricingService.goldRateGBP();
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+      const priceGbpPerOunce =
+        data.pricePerOunce || data.pricePerGram * TROY_OUNCE_TO_GRAMS;
+      const priceGbpPerGram =
+        data.pricePerGram || priceGbpPerOunce / TROY_OUNCE_TO_GRAMS;
+
+      if (!priceGbpPerGram || priceGbpPerGram <= 0) {
+        throw new Error('No gold rate available');
       }
 
-      const data = await response.json();
-
-      // API returns price in USD per troy ounce
-      const priceUsdPerOunce = data.price;
-      const prevPriceUsd = data.prev_close_price || priceUsdPerOunce;
-
-      // Convert to GBP
-      const priceGbpPerOunce = priceUsdPerOunce * usdToGbp;
-      const priceGbpPerGram = priceGbpPerOunce / TROY_OUNCE_TO_GRAMS;
-      const prevPriceGbpPerGram = (prevPriceUsd * usdToGbp) / TROY_OUNCE_TO_GRAMS;
-
-      // Update state
-      setPreviousPrice(pricePerGram || prevPriceGbpPerGram);
+      // Update state (use the prior live value as the change baseline)
+      setPreviousPrice(pricePerGram || priceGbpPerGram);
       setPricePerOunce(priceGbpPerOunce);
       setPricePerGram(priceGbpPerGram);
       setLastUpdated(new Date());
-      setIsLive(true);
+      setIsLive(!data.stale);
       setIsManualMode(false);
 
       // Cache the data
       const cacheData: CachedData = {
         pricePerOunce: priceGbpPerOunce,
         pricePerGram: priceGbpPerGram,
-        previousPrice: prevPriceGbpPerGram,
+        previousPrice: pricePerGram || priceGbpPerGram,
         timestamp: Date.now(),
         currency: 'GBP',
       };
@@ -196,7 +181,7 @@ const LiveGoldRate: React.FC<LiveGoldRateProps> = ({ onPriceUpdate, compact = fa
     } finally {
       setIsLoading(false);
     }
-  }, [loadCachedData, isCacheValid, saveCachedData, onPriceUpdate, pricePerGram, usdToGbp]);
+  }, [loadCachedData, isCacheValid, saveCachedData, onPriceUpdate, pricePerGram]);
 
   // Apply manual price override
   const applyManualPrice = useCallback(() => {
