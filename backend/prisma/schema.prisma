@@ -283,6 +283,26 @@ model repair_tags {
   tenants     tenants  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
+// Owner/manager-defined POS quick-sale tiles (e.g. "Cleaning Kit £12").
+// Render in the POS tiles section; tapping adds a cart line under `saleName`
+// at `defaultPrice` (editable in the price dialog; null/0 ⇒ blank prompt).
+model pos_tiles {
+  id           String   @id
+  tenantId     String
+  label        String   // text shown on the tile
+  saleName     String   // cart / receipt line name (defaults to label)
+  defaultPrice Decimal? // prefilled price; null or 0 ⇒ cashier is prompted
+  color        String   @default("blue") // palette key resolved on the frontend
+  icon         String   @default("Tag")  // lucide icon key resolved on the frontend
+  sortOrder    Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime
+  tenants      tenants  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isActive, sortOrder])
+}
+
 model sale_items {
   id         String   @id
   saleId     String
@@ -466,6 +486,7 @@ model tenants {
   tasks                   tasks[]
   users                   users[]
   gift_cards              gift_cards[]
+  pos_tiles               pos_tiles[]
 }
 
 model outlets {
