@@ -1,5 +1,6 @@
 import { Module, Logger } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { buildThrottlerOptions } from './core/throttler/throttler.factory';
@@ -35,6 +36,7 @@ import { OutletsModule } from './features/outlets/outlets.module';
 import { SettingsModule } from './features/settings/settings.module';
 import { GiftCardsModule } from './features/gift-cards/gift-cards.module';
 import { MetalsModule } from './features/metals/metals.module';
+import { GoldPricingModule } from './features/inventory/gold-pricing.module';
 
 // External integrations
 import {
@@ -46,6 +48,8 @@ import { OpenAIModule } from './integrations/openai/openai.module';
 
 @Module({
   imports: [
+    // Cron scheduling (daily gold repricing, etc.)
+    ScheduleModule.forRoot(),
     // Configuration module
     ConfigModule.forRoot({
       isGlobal: true,
@@ -131,6 +135,7 @@ import { OpenAIModule } from './integrations/openai/openai.module';
     SettingsModule,
     GiftCardsModule,
     MetalsModule,
+    GoldPricingModule,
   ],
   controllers: [AppController],
   providers: [

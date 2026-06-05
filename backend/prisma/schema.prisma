@@ -199,6 +199,8 @@ model products {
   condition      ProductCondition? @default(BRAND_NEW)
   rfidTag        String?
   materials      String?
+  goldPricingEnabled Boolean       @default(false) // auto-reprice from live gold rate
+  lastGoldPricedAt   DateTime?                      // last time the live price was applied
   inventory_logs inventory_logs[]
   product_images product_images[]
   categories     categories?       @relation(fields: [categoryId], references: [id])
