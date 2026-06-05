@@ -2226,6 +2226,14 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         // synthetic "giftcard-…", not a real product) instead of 404ing.
         const isGiftCard = item.sku === 'GIFT-CARD-SALE' || item.id?.startsWith('giftcard-');
         const isServiceItem = item.sku?.startsWith('SERVICE-') || item.id?.startsWith('battery-') || item.id?.startsWith('cleaning-');
+        // Manual Entry + Appraisal are ad-hoc lines with synthetic ids ("manual-…",
+        // "appraisal-…") that are not real products — tag them so the backend skips
+        // the product lookup instead of 404ing ("Product manual-… not found").
+        const isManualEntry = item.sku === 'MANUAL-ENTRY' || item.id?.startsWith('manual-');
+        const isAppraisal = item.id?.startsWith('appraisal-');
+        // Owner-defined custom POS tiles add ad-hoc lines (id "tile-…", sku "TILE-…")
+        // that are not real products — tag them non-stock like the others.
+        const isCustomTile = item.sku?.startsWith('TILE-') || item.id?.startsWith('tile-');
         saleItems.push({
           productId: item.id,
           quantity: item.quantity,
@@ -2235,6 +2243,12 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
           // Non-stock lines carry a marker so backend skips product DB lookup
           notes: isGiftCard
             ? `GIFT CARD: ${item.name}`
+            : isManualEntry
+            ? `MANUAL ENTRY: ${item.name}`
+            : isAppraisal
+            ? `APPRAISAL: ${item.name}`
+            : isCustomTile
+            ? `CUSTOM TILE: ${item.name}`
             : isServiceItem
             ? `REPAIR SERVICE: ${item.name}`
             : undefined,

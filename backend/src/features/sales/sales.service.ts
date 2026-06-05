@@ -33,7 +33,13 @@ import { generateId } from '../../shared/utils/id-generator';
 // Non-stock sale lines (repair services, gift-card sales) carry one of these
 // markers in their notes so the create path skips the products table lookup
 // and does not write a sale_items row (which would violate the productId FK).
-const NON_STOCK_MARKERS = ['REPAIR SERVICE', 'GIFT CARD'];
+const NON_STOCK_MARKERS = [
+  'REPAIR SERVICE',
+  'GIFT CARD',
+  'MANUAL ENTRY',
+  'APPRAISAL',
+  'CUSTOM TILE',
+];
 function isNonStockLine(notes?: string): boolean {
   return !!notes && NON_STOCK_MARKERS.some((m) => notes.includes(m));
 }
