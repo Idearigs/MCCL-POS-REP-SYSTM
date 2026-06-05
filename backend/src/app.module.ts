@@ -21,6 +21,7 @@ import {
   RepairsModule,
 } from './features';
 import { CalendarEventsModule } from './features/calendar-events/calendar-events.module';
+import { PosTilesModule } from './features/pos-tiles/pos-tiles.module';
 import { StockTakingModule } from './features/stock-taking/stock-taking.module';
 import { FloatModule } from './features/float/float.module';
 import { PettyCashModule } from './features/petty-cash/petty-cash.module';
@@ -116,6 +117,7 @@ import { OpenAIModule } from './integrations/openai/openai.module';
     SalesModule,
     RepairsModule,
     CalendarEventsModule,
+    PosTilesModule,
     StockTakingModule,
     FloatModule,
     PettyCashModule,

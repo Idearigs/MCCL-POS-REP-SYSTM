@@ -94,6 +94,23 @@ import { useOutlet } from '@/contexts/OutletContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { printThermalReceipt } from '@/utils/thermalReceipt';
 import { userService } from '@/services/userService';
+import { posTileService, PosTile } from '@/services/posTileService';
+import { getTileIcon, getTileColor, getTileGradient } from '@/lib/posTileVisuals';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  rectSortingStrategy,
+  arrayMove,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { PrinterStatusBadge } from './PrinterStatusBadge';
 import {
   Dialog,
@@ -135,6 +152,44 @@ interface CartItem {
 interface TileBasedPOSProps {
   onClose: () => void;
 }
+
+// A single custom POS tile. Drag-to-reorder is enabled only for managers/owners;
+// cashiers see a static, tappable tile.
+const SortableCustomTile: React.FC<{
+  tile: PosTile;
+  draggable: boolean;
+  onTap: (tile: PosTile) => void;
+}> = ({ tile, draggable, onTap }) => {
+  const sortable = useSortable({ id: tile.id, disabled: !draggable });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    sortable;
+  const Icon = getTileIcon(tile.icon);
+  const c = getTileColor(tile.color);
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+  const priceLabel =
+    tile.defaultPrice != null && tile.defaultPrice > 0
+      ? `£${tile.defaultPrice.toFixed(2)}`
+      : 'Quick add';
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      onClick={() => onTap(tile)}
+      className={`${c.tile} rounded-xl p-5 cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ${
+        draggable ? 'touch-none' : ''
+      }`}
+      {...(draggable ? { ...attributes, ...listeners } : {})}
+    >
+      <Icon className={`h-7 w-7 ${c.icon} mb-3`} />
+      <h3 className={`${c.title} font-semibold text-base`}>{tile.label}</h3>
+      <p className={`${c.subtitle} text-xs mt-0.5`}>{priceLabel}</p>
+    </div>
+  );
+};
 
 const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const { inventory, refreshInventory } = useInventory();
@@ -405,6 +460,76 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [showServicePriceDialog, setShowServicePriceDialog] = useState(false);
   const [serviceType, setServiceType] = useState<'cleaning' | 'battery' | 'watch-links' | 'spring-bar' | 'watch-straps' | 'jewellery-repair-quick' | 'watch-repair-quick'>('cleaning');
   const [servicePrice, setServicePrice] = useState('');
+
+  // Custom owner-defined POS tiles (managed in Settings → POS Tiles).
+  const [customTiles, setCustomTiles] = useState<PosTile[]>([]);
+  // When set, the service-price dialog acts on a custom tile rather than a built-in service.
+  const [customTileMeta, setCustomTileMeta] = useState<{
+    label: string;
+    saleName: string;
+    sku: string;
+    color: string;
+    icon: string;
+  } | null>(null);
+  const canManageTiles =
+    auth.user?.role === 'OWNER' || auth.user?.role === 'MANAGER';
+
+  const loadCustomTiles = useCallback(async () => {
+    try {
+      setCustomTiles(await posTileService.list());
+    } catch {
+      // Non-fatal — POS still works without custom tiles.
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCustomTiles();
+  }, [loadCustomTiles]);
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
+
+  const handleTileDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      setCustomTiles((prev) => {
+        const oldIndex = prev.findIndex((t) => t.id === active.id);
+        const newIndex = prev.findIndex((t) => t.id === over.id);
+        if (oldIndex < 0 || newIndex < 0) return prev;
+        const next = arrayMove(prev, oldIndex, newIndex);
+        // Persist the new order (fire-and-forget; UI already reflects it).
+        posTileService
+          .reorder(next.map((t, i) => ({ id: t.id, sortOrder: i })))
+          .catch(() => {
+            toast({
+              title: 'Could not save order',
+              description: 'The new tile order will reset on reload.',
+              variant: 'destructive',
+            });
+          });
+        return next;
+      });
+    },
+    [toast],
+  );
+
+  const openCustomTile = useCallback((tile: PosTile) => {
+    setCustomTileMeta({
+      label: tile.label,
+      saleName: tile.saleName,
+      sku: `TILE-${tile.id.slice(0, 8).toUpperCase()}`,
+      color: tile.color,
+      icon: tile.icon,
+    });
+    setServicePrice(
+      tile.defaultPrice != null && tile.defaultPrice > 0
+        ? tile.defaultPrice.toFixed(2)
+        : '',
+    );
+    setShowServicePriceDialog(true);
+  }, []);
 
   // Purity multipliers for different metals
   const metalPurityMap: Record<string, { purity: number; color: string; bgColor: string }> = {
@@ -3428,6 +3553,41 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
                 </div>
               </div>
 
+              {/* ===== MY SHORTCUTS (owner-defined custom tiles) ===== */}
+              {customTiles.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-1">
+                    Shortcuts
+                    {canManageTiles && (
+                      <span className="ml-2 normal-case text-gray-300 font-normal">
+                        drag to reorder
+                      </span>
+                    )}
+                  </p>
+                  <DndContext
+                    sensors={dndSensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleTileDragEnd}
+                  >
+                    <SortableContext
+                      items={customTiles.map((t) => t.id)}
+                      strategy={rectSortingStrategy}
+                    >
+                      <div className="grid grid-cols-4 gap-3">
+                        {customTiles.map((tile) => (
+                          <SortableCustomTile
+                            key={tile.id}
+                            tile={tile}
+                            draggable={canManageTiles}
+                            onTap={openCustomTile}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                </div>
+              )}
+
               {/* ===== ROW 4: MONEY & ADMIN ===== */}
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-1">Money & Admin</p>
@@ -5888,9 +6048,27 @@ Deposit is non-refundable.
           'jewellery-repair-quick': { label: 'Jewellery Repair',    icon: <Gem className="h-6 w-6 text-white" />,      color: 'from-purple-500 to-violet-600', activeColor: 'bg-purple-500',  sku: 'SERVICE-JEWELLERY-REPAIR',   presets: ['25','35','50','75'] },
           'watch-repair-quick':     { label: 'Watch Repair',        icon: <Clock className="h-6 w-6 text-white" />,    color: 'from-orange-500 to-amber-600',  activeColor: 'bg-orange-500',  sku: 'SERVICE-WATCH-REPAIR',       presets: ['25','35','50','75'] },
         };
-        const meta = SERVICE_META[serviceType] ?? SERVICE_META['cleaning'];
+        // A custom tile drives the same dialog via a synthetic meta.
+        const CustomIcon = customTileMeta ? getTileIcon(customTileMeta.icon) : null;
+        const customGrad = customTileMeta ? getTileGradient(customTileMeta.color) : null;
+        const meta = customTileMeta
+          ? {
+              label: customTileMeta.label,
+              icon: CustomIcon ? <CustomIcon className="h-6 w-6 text-white" /> : null,
+              color: customGrad!.gradient,
+              activeColor: customGrad!.solid,
+              sku: customTileMeta.sku,
+              presets: [] as string[],
+            }
+          : SERVICE_META[serviceType] ?? SERVICE_META['cleaning'];
         return (
-        <Dialog open={showServicePriceDialog} onOpenChange={setShowServicePriceDialog}>
+        <Dialog
+          open={showServicePriceDialog}
+          onOpenChange={(o) => {
+            setShowServicePriceDialog(o);
+            if (!o) setCustomTileMeta(null);
+          }}
+        >
           <DialogContent className="max-w-sm p-0 overflow-hidden rounded-2xl border-0 shadow-2xl">
             {/* Header */}
             <div className={`px-6 py-4 bg-gradient-to-r ${meta.color}`}>
@@ -5953,20 +6131,25 @@ Deposit is non-refundable.
                       toast({ title: 'Invalid Price', description: 'Please enter a valid price', variant: 'destructive' });
                       return;
                     }
-                    const isQuickRepair = serviceType === 'jewellery-repair-quick' || serviceType === 'watch-repair-quick';
+                    const isQuickRepair = !customTileMeta && (serviceType === 'jewellery-repair-quick' || serviceType === 'watch-repair-quick');
                     const customerSuffix = isQuickRepair && selectedCustomer
                       ? ` — ${selectedCustomer.firstName} ${selectedCustomer.lastName}`
                       : '';
+                    // Custom tiles add a line under their own sale name; built-in services use SERVICE_META.
+                    const lineName = customTileMeta
+                      ? customTileMeta.saleName
+                      : meta.label + customerSuffix;
                     const serviceItem: CartItem = {
-                      id: `${serviceType}-${Date.now()}`,
-                      name: meta.label + customerSuffix,
+                      id: `${customTileMeta ? 'tile' : serviceType}-${Date.now()}`,
+                      name: lineName,
                       price,
                       quantity: 1,
                       sku: meta.sku,
                     };
                     setCart(prev => [...prev, serviceItem]);
-                    toast({ title: 'Added to Cart', description: `${meta.label}${customerSuffix} — £${price.toFixed(2)}` });
+                    toast({ title: 'Added to Cart', description: `${lineName} — £${price.toFixed(2)}` });
                     setShowServicePriceDialog(false);
+                    setCustomTileMeta(null);
                   }}
                   className={`flex-1 h-12 rounded-xl text-white ${meta.activeColor} hover:opacity-90`}
                 >
