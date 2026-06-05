@@ -292,6 +292,15 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   materials?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'When true, this product is auto-repriced daily from the live gold rate',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  goldPricingEnabled?: boolean;
 }
 
 export class UpdateProductDto extends PartialType(CreateProductDto) {
