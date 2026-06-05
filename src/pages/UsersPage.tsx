@@ -165,10 +165,19 @@ const UserCard = memo<UserCardProps>(({ user, onEdit, onResetPassword, onSetPin,
             variant="outline"
             size="sm"
             onClick={() => onSetPin(user)}
-            className="border-amber-200 text-amber-700 hover:bg-amber-50"
+            className={
+              user.hasCashUpPin
+                ? 'border-green-300 text-green-700 hover:bg-green-50'
+                : 'border-amber-200 text-amber-700 hover:bg-amber-50'
+            }
+            title={
+              user.hasCashUpPin
+                ? 'Cash-up PIN is set — click to change or clear'
+                : 'No cash-up PIN set — click to set one'
+            }
           >
             <Lock className="h-4 w-4 mr-1" />
-            PIN
+            {user.hasCashUpPin ? 'PIN ✓' : 'PIN'}
           </Button>
         )}
         <Button
@@ -565,6 +574,7 @@ export const UsersPage: React.FC = () => {
         setIsPinDialogOpen(false);
         setPinValue('');
         setSelectedUser(null);
+        fetchUsers();
       } catch (error: any) {
         toast({
           title: 'Error',
@@ -575,7 +585,7 @@ export const UsersPage: React.FC = () => {
         setLoading(false);
       }
     },
-    [selectedUser, pinValue, toast],
+    [selectedUser, pinValue, toast, fetchUsers],
   );
 
   const openRoleDialog = useCallback((user: User) => {
@@ -1058,6 +1068,18 @@ export const UsersPage: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div
+              className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
+                selectedUser?.hasCashUpPin
+                  ? 'border-green-200 bg-green-50 text-green-700'
+                  : 'border-amber-200 bg-amber-50 text-amber-700'
+              }`}
+            >
+              <Lock className="h-4 w-4" />
+              {selectedUser?.hasCashUpPin
+                ? 'A PIN is currently set for this user (stored securely in the database). Entering a new one replaces it.'
+                : 'No PIN is currently set for this user.'}
+            </div>
             <div>
               <Label htmlFor="cashUpPin">PIN</Label>
               <Input
