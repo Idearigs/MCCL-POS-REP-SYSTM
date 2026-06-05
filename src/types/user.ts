@@ -38,6 +38,8 @@ export interface User {
   lastLogin: string | null;
   createdAt: string;
   updatedAt: string;
+  /** True when this user holds a cash-up override PIN (the hash is never sent to the client). */
+  hasCashUpPin?: boolean;
 }
 
 export interface CreateUserDto {

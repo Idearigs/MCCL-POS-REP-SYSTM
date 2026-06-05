@@ -44,6 +44,7 @@ export class UserManagementService {
             lastLogin: true,
             createdAt: true,
             updatedAt: true,
+            cashUpPin: true,
           },
           orderBy: { createdAt: 'desc' },
           skip: (page - 1) * limit,
@@ -52,7 +53,13 @@ export class UserManagementService {
         this.prismaService.users.count({ where }),
       ]);
 
-      return { data: users, total, page, limit };
+      // Expose only whether a cash-up PIN exists — never the hash itself.
+      const sanitized = users.map((u) => {
+        const { cashUpPin, ...rest } = u;
+        return { ...rest, hasCashUpPin: !!cashUpPin };
+      });
+
+      return { data: sanitized, total, page, limit };
     } catch (error: unknown) {
       this.logger.error(
         'Failed to fetch users:',
@@ -76,6 +83,7 @@ export class UserManagementService {
           lastLogin: true,
           createdAt: true,
           updatedAt: true,
+          cashUpPin: true,
         },
       });
 
@@ -83,7 +91,9 @@ export class UserManagementService {
         throw new UnauthorizedException('User not found');
       }
 
-      return user;
+      // Expose only whether a cash-up PIN exists — never the hash itself.
+      const { cashUpPin, ...rest } = user;
+      return { ...rest, hasCashUpPin: !!cashUpPin };
     } catch (error: unknown) {
       this.logger.error(
         `Failed to fetch user ${userId}:`,
