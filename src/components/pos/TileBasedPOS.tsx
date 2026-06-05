@@ -2231,6 +2231,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         // the product lookup instead of 404ing ("Product manual-… not found").
         const isManualEntry = item.sku === 'MANUAL-ENTRY' || item.id?.startsWith('manual-');
         const isAppraisal = item.id?.startsWith('appraisal-');
+        // Owner-defined custom POS tiles add ad-hoc lines (id "tile-…", sku "TILE-…")
+        // that are not real products — tag them non-stock like the others.
+        const isCustomTile = item.sku?.startsWith('TILE-') || item.id?.startsWith('tile-');
         saleItems.push({
           productId: item.id,
           quantity: item.quantity,
@@ -2244,6 +2247,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             ? `MANUAL ENTRY: ${item.name}`
             : isAppraisal
             ? `APPRAISAL: ${item.name}`
+            : isCustomTile
+            ? `CUSTOM TILE: ${item.name}`
             : isServiceItem
             ? `REPAIR SERVICE: ${item.name}`
             : undefined,
