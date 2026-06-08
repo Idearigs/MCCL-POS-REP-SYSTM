@@ -18,7 +18,7 @@ before a `develop → main` production release.
 - **Staff (Cashier)** — sees POS Shortcuts and can tap them, but **cannot** drag-reorder or reach the Settings tabs.
 
 ## Environment
-- Staging frontend: `https://staging.truedesk.co.uk` · Staging API: `https://staging-api.truedesk.co.uk/api/v1`
+- Staging frontend: `https://staging-pos.truedesk.co.uk` · Staging API: `https://staging-api.truedesk.co.uk/api/v1`
 - Use a **disposable staging tenant**; clean up every tile/product/shift created (see §Cleanup).
 - Staging must **not** use live SMS/payment keys. Confirm gold rate comes from the backend, not the browser.
 
@@ -138,8 +138,44 @@ before a `develop → main` production release.
 ---
 
 ## Results log
-_Record date, tester, build SHA, and pass/fail per ID here as the pass is executed._
 
-| Date | Build (develop SHA) | IDs run | Result | Notes |
-|------|---------------------|---------|--------|-------|
-| | | | | |
+### 2026-06-08 — staging pass (build develop @ 3629fad, tester: Claude via Playwright MCP, OWNER `admin@staging.test`)
+
+**POS Custom Tiles — PASS**
+| ID | Result | Evidence |
+|----|--------|----------|
+| TILE-01 | ✅ | POS Tiles + Gold Pricing tabs visible to OWNER |
+| TILE-02 | ✅ | Created "Ring Polish" via GUI (Gem icon, purple, £18) |
+| TILE-03 | ✅ | Cart line used sale name "Ring Polishing", not label |
+| TILE-04 | ✅ | "Watch Links" (no price) → dialog opened with empty price field |
+| TILE-08 | ✅ | All 3 tiles render in POS "Shortcuts" section |
+| TILE-09 | ✅ | Tap Ring Polish → dialog prefilled £18.00 |
+| TILE-10 | ✅ | Cart line "Ring Polishing" · SKU TILE-BOWCLNU6 · £18 |
+| TILE-12 | ✅ | `PATCH /pos-tiles/reorder` 200; order reversed + persisted |
+| TILE-15 | ✅ | Over-length label → 400 |
+| TILE-16 | ✅ | Negative price → 400 |
+| TILE-18 (empty label) | ✅ | `label:""` → 400 (isNotEmpty) — the PR #34 fix works |
+
+**Non-stock checkout — PASS**
+| ID | Result | Evidence |
+|----|--------|----------|
+| TILE-19 / NS-01 / NS-02 / TILE-11 | ✅ | Mixed cart (3 custom tiles + Manual Entry + Appraisal) → `POST /sales` **201**, `SALE-202606-0020` £77.00. Old "product not found" 404 gone. `items:[]` as expected (non-stock skips FK write). |
+
+**Gold pricing — BLOCKED (config)**
+| ID | Result | Evidence |
+|----|--------|----------|
+| GOLD-01/02/03 | ⚠ BLOCKED | `GET /metals/gold?currency=GBP` and `?currency=USD` both return `pricePerGram:0, stale:true, source:cache`. Backend throws "GOLD_API_KEY not configured" → breaker serves a 0 cache. POS header shows £115.14/g but labelled "Offline rate" (stale localStorage value). |
+| GOLD-12 candidates | ⚠ | `GET /inventory/gold-pricing/candidates` = 0 (no gold-weight products on staging tenant). |
+| GOLD-04…18 | ⏳ NOT RUN | Blocked until `GOLD_API_KEY` is set on the staging backend env + a gold-weight product exists. |
+
+**Validation gaps / bugs found**
+
+| Severity | Area | Finding |
+|----------|------|---------|
+| Minor | Tile label | Whitespace-only label (`"   "`) still accepted (201). `@IsNotEmpty()` does not trim — empty string is caught but whitespace passes. Consider a `@Matches(/\S/)` / trim transform. |
+| **Major** | Monthly accounts — list | `GET /sales?...&paymentStatus=PENDING` → **400** "property paymentStatus should not exist". Frontend `salesService.getInstallmentSales()` sends `paymentStatus`, which the query DTO (`GetSalesDto`) does not define, so the **Monthly Accounts panel can never load** — it silently shows "No outstanding monthly accounts". |
+| **Major** | Monthly accounts — create | `sales.service.ts:251` sums **all** payment lines (incl. the `INSTALLMENT` financed balance) into `paidAmount`. A monthly-account sale (£30 deposit + £70 balance) is stored `paidAmount:100, balanceDue:0, paymentStatus:COMPLETED` — i.e. marked fully paid at creation, so no outstanding balance is ever recorded. Verified: `SALE-202606-0021`. |
+
+> **Net:** the monthly **pay-in** process is non-functional end-to-end — accounts are created already-"paid" (Bug B) and the outstanding list 400s (Bug A). The `POST /sales/:id/installment-payment` endpoint exists and updates `paidAmount`, but is moot while sales carry no balance. Both bugs are pre-existing (not introduced by the tile/gold work) and almost certainly affect production too.
+
+**Test data created on staging tenant (to clean up):** custom tiles Ring Polish / Cleaning Kit / Watch Links; sales `SALE-202606-0020` (£77), `SALE-202606-0021` (£100); open shift `SHIFT-20260608-STAGIN-001`.

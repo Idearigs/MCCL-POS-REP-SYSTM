@@ -247,7 +247,9 @@ export class SalesService {
             : 0;
           const totalAmount = discountedSubtotal + taxAmount;
 
-          // Validate payment amount
+          // Validate payment amount. The payment lines must account for the
+          // whole sale (e.g. a monthly account = cash deposit + INSTALLMENT
+          // balance), so the sum still has to equal the total.
           const totalPayments = createSaleDto.payments.reduce(
             (sum, payment) => sum + payment.amount,
             0,
@@ -257,6 +259,14 @@ export class SalesService {
               `Payment amount (${totalPayments}) does not match total amount (${totalAmount})`,
             );
           }
+
+          // Money actually received now excludes the INSTALLMENT line — that is
+          // the financed balance still owed, not cash in hand. Without this a
+          // monthly account would be stored fully paid (balanceDue 0) the moment
+          // it is created, so it never appears as outstanding.
+          const amountReceived = createSaleDto.payments
+            .filter((payment) => payment.method !== 'INSTALLMENT')
+            .reduce((sum, payment) => sum + payment.amount, 0);
 
           // Determine primary payment method (use first payment or the one with largest amount)
           const primaryPayment =
@@ -312,12 +322,12 @@ export class SalesService {
               totalAmount,
               paymentMethod: primaryPayment.method as PrismaPaymentMethod,
               paymentStatus:
-                totalPayments >= totalAmount - 0.01
+                amountReceived >= totalAmount - 0.01
                   ? PrismaPaymentStatus.COMPLETED
                   : PrismaPaymentStatus.PENDING,
-              paidAmount: totalPayments,
+              paidAmount: amountReceived,
               refundedAmount: 0,
-              balanceDue: Math.max(0, totalAmount - totalPayments),
+              balanceDue: Math.max(0, totalAmount - amountReceived),
               notes: saleNotes,
               clientSaleId: createSaleDto.clientSaleId ?? null,
               createdBy: userId,
@@ -543,6 +553,7 @@ export class SalesService {
         search,
         status,
         paymentMethod,
+        paymentStatus,
         customerId,
         cashierId,
         startDate,
@@ -561,6 +572,9 @@ export class SalesService {
         // Simplified type
         tenantId,
         ...(status && { status: status as PrismaSaleStatus }),
+        ...(paymentStatus && {
+          paymentStatus: paymentStatus as PrismaPaymentStatus,
+        }),
         ...(customerId && { customerId }),
         ...(cashierId && { createdBy: cashierId }),
         ...(startDate &&
