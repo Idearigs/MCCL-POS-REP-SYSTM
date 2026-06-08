@@ -446,6 +446,16 @@ export class SaleQueryDto {
   paymentMethod?: PaymentMethod;
 
   @ApiPropertyOptional({
+    description:
+      'Filter by payment status (e.g. PENDING for outstanding accounts)',
+    enum: PaymentStatus,
+    example: PaymentStatus.PENDING,
+  })
+  @IsOptional()
+  @IsEnum(PaymentStatus)
+  paymentStatus?: PaymentStatus;
+
+  @ApiPropertyOptional({
     description: 'Filter by customer ID',
     example: 'clv123abc456',
   })
