@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsBoolean,
   IsArray,
+  IsNotEmpty,
   ValidateNested,
   Min,
   MaxLength,
@@ -17,6 +18,7 @@ export class CreatePosTileDto {
     description: 'Text shown on the tile',
   })
   @IsString()
+  @IsNotEmpty()
   @MaxLength(40)
   label: string;
 
@@ -55,6 +57,7 @@ export class UpdatePosTileDto {
   @ApiPropertyOptional({ example: 'Cleaning Kit' })
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(40)
   label?: string;
 
