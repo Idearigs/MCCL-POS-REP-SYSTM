@@ -5,6 +5,7 @@ import {
   Put,
   Body,
   Param,
+  Headers,
   BadRequestException,
   NotFoundException,
   InternalServerErrorException,
@@ -12,6 +13,8 @@ import {
 import { SubscriptionsService } from '../services/subscriptions.service';
 import { LemonSqueezyService } from '../services/lemon-squeezy.service';
 import { PrismaService } from '../../../core/prisma/prisma.service';
+import { Public } from '../../auth/decorators/public.decorator';
+import { verifyInternalHmac } from '../../../shared/utils/hmac-verify';
 
 @Controller('mainframe/subscriptions')
 export class SubscriptionsController {
@@ -24,6 +27,21 @@ export class SubscriptionsController {
   @Get('stats')
   async getStats() {
     return this.subscriptionsService.getStats();
+  }
+
+  /**
+   * Internal — billing/payment status of every tenant, for the Mainframe admin
+   * panel's tracking view. Authenticated with the shared HMAC scheme (same as
+   * other Mainframe → POS internal calls), not a user JWT.
+   */
+  @Public()
+  @Get('overview')
+  async overview(
+    @Headers('x-internal-timestamp') timestamp: string,
+    @Headers('x-internal-signature') signature: string,
+  ) {
+    verifyInternalHmac(signature, timestamp, '');
+    return this.subscriptionsService.getOverview();
   }
 
   @Get('profile/:profileId')

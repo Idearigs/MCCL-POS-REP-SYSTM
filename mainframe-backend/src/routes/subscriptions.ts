@@ -1,9 +1,40 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma';
 import { requireAuth } from '../middleware/auth';
+import { buildHmacHeaders } from '../lib/hmac';
 import nodemailer from 'nodemailer';
 
 const router = Router();
+
+// GET /mainframe/subscriptions/overview
+// Real-time billing/payment status for every tenant. The POS backend is the
+// source of truth for LemonSqueezy state, so we proxy to it over the shared
+// internal HMAC channel rather than reading this service's (separate) DB.
+router.get('/overview', requireAuth, async (_req, res) => {
+  const posUrl = process.env.POS_BACKEND_URL;
+  if (!posUrl) {
+    return res.status(503).json({
+      message: 'POS_BACKEND_URL is not configured on the mainframe backend',
+    });
+  }
+  try {
+    const r = await fetch(`${posUrl}/mainframe/subscriptions/overview`, {
+      headers: buildHmacHeaders(''),
+    });
+    if (!r.ok) {
+      const text = await r.text();
+      return res.status(502).json({
+        message: `POS backend returned ${r.status}`,
+        detail: text.slice(0, 300),
+      });
+    }
+    return res.json(await r.json());
+  } catch (err: any) {
+    return res
+      .status(502)
+      .json({ message: `Could not reach POS backend: ${err?.message || err}` });
+  }
+});
 
 // ── Shared mailer ────────────────────────────────────────────────────────────
 function createMailTransport() {
