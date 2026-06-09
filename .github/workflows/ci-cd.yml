@@ -432,6 +432,149 @@ jobs:
           fi
           echo "Mainframe admin deployment triggered"
 
+  # ===================================================================
+  # STAGING DEPLOYS — triggered on push to `develop`.
+  # Each job pings a Coolify *staging* webhook and skips gracefully if
+  # its secret is not configured, so a partially-set-up staging never
+  # reddens the develop pipeline. Mirrors the production jobs above.
+  # ===================================================================
+
+  # -------------------------------------------------------------------
+  # JOB 9 — Deploy POS Backend (Staging)
+  # -------------------------------------------------------------------
+  deploy-pos-backend-staging:
+    name: "Deploy — POS Backend (Staging)"
+    runs-on: ubuntu-latest
+    needs: [changes, test-backend]
+    if: |
+      github.ref == 'refs/heads/develop' &&
+      github.event_name == 'push' &&
+      needs.changes.outputs.pos-backend == 'true'
+    environment:
+      name: staging
+      url: https://staging-api.truedesk.co.uk
+    steps:
+      - name: Trigger Coolify POS backend (staging) deployment
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_BACKEND_STAGING_WEBHOOK: ${{ secrets.COOLIFY_BACKEND_STAGING_WEBHOOK }}
+        run: |
+          TOKEN=$(echo "$COOLIFY_TOKEN" | tr -d '[:space:]')
+          WEBHOOK=$(echo "$COOLIFY_BACKEND_STAGING_WEBHOOK" | tr -d '[:space:]')
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::COOLIFY_BACKEND_STAGING_WEBHOOK not set — skipping staging deploy."
+            exit 0
+          fi
+          HTTP_STATUS=$(curl -s -o /tmp/r.txt -w "%{http_code}" --max-time 30 -X GET \
+            -H "Authorization: Bearer ${TOKEN}" "${WEBHOOK}")
+          echo "Response: $(cat /tmp/r.txt)"; echo "HTTP status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
+            echo "ERROR: POS backend (staging) webhook failed with status $HTTP_STATUS"; exit 1
+          fi
+          echo "POS backend (staging) deployment triggered"
+
+  # -------------------------------------------------------------------
+  # JOB 10 — Deploy POS Frontend (Staging)
+  # -------------------------------------------------------------------
+  deploy-pos-frontend-staging:
+    name: "Deploy — POS Frontend (Staging)"
+    runs-on: ubuntu-latest
+    needs: [changes, test-frontend]
+    if: |
+      github.ref == 'refs/heads/develop' &&
+      github.event_name == 'push' &&
+      needs.changes.outputs.pos-frontend == 'true'
+    environment:
+      name: staging
+      url: https://staging-pos.truedesk.co.uk
+    steps:
+      - name: Trigger Coolify POS frontend (staging) deployment
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_FRONTEND_STAGING_WEBHOOK: ${{ secrets.COOLIFY_FRONTEND_STAGING_WEBHOOK }}
+        run: |
+          TOKEN=$(echo "$COOLIFY_TOKEN" | tr -d '[:space:]')
+          WEBHOOK=$(echo "$COOLIFY_FRONTEND_STAGING_WEBHOOK" | tr -d '[:space:]')
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::COOLIFY_FRONTEND_STAGING_WEBHOOK not set — skipping staging deploy."
+            exit 0
+          fi
+          HTTP_STATUS=$(curl -s -o /tmp/r.txt -w "%{http_code}" --max-time 30 -X GET \
+            -H "Authorization: Bearer ${TOKEN}" "${WEBHOOK}")
+          echo "Response: $(cat /tmp/r.txt)"; echo "HTTP status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
+            echo "ERROR: POS frontend (staging) webhook failed with status $HTTP_STATUS"; exit 1
+          fi
+          echo "POS frontend (staging) deployment triggered"
+
+  # -------------------------------------------------------------------
+  # JOB 11 — Deploy Mainframe Backend (Staging)
+  # -------------------------------------------------------------------
+  deploy-mainframe-backend-staging:
+    name: "Deploy — Mainframe Backend (Staging)"
+    runs-on: ubuntu-latest
+    needs: [changes, test-mainframe-backend]
+    if: |
+      github.ref == 'refs/heads/develop' &&
+      github.event_name == 'push' &&
+      needs.changes.outputs.mainframe-backend == 'true'
+    environment:
+      name: staging
+      url: https://staging-mianframe-api.truedesk.co.uk
+    steps:
+      - name: Trigger Coolify mainframe backend (staging) deployment
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_MAINFRAME_BACKEND_STAGING_WEBHOOK: ${{ secrets.COOLIFY_MAINFRAME_BACKEND_STAGING_WEBHOOK }}
+        run: |
+          TOKEN=$(echo "$COOLIFY_TOKEN" | tr -d '[:space:]')
+          WEBHOOK=$(echo "$COOLIFY_MAINFRAME_BACKEND_STAGING_WEBHOOK" | tr -d '[:space:]')
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::COOLIFY_MAINFRAME_BACKEND_STAGING_WEBHOOK not set — skipping staging deploy."
+            exit 0
+          fi
+          HTTP_STATUS=$(curl -s -o /tmp/r.txt -w "%{http_code}" --max-time 30 -X GET \
+            -H "Authorization: Bearer ${TOKEN}" "${WEBHOOK}")
+          echo "Response: $(cat /tmp/r.txt)"; echo "HTTP status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
+            echo "ERROR: Mainframe backend (staging) webhook failed with status $HTTP_STATUS"; exit 1
+          fi
+          echo "Mainframe backend (staging) deployment triggered"
+
+  # -------------------------------------------------------------------
+  # JOB 12 — Deploy Mainframe Admin (Staging)
+  # -------------------------------------------------------------------
+  deploy-mainframe-admin-staging:
+    name: "Deploy — Mainframe Admin (Staging)"
+    runs-on: ubuntu-latest
+    needs: [changes, test-mainframe-admin]
+    if: |
+      github.ref == 'refs/heads/develop' &&
+      github.event_name == 'push' &&
+      needs.changes.outputs.mainframe-admin == 'true'
+    environment:
+      name: staging
+      url: https://staging-mainframe.truedesk.co.uk
+    steps:
+      - name: Trigger Coolify mainframe admin (staging) deployment
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_MAINFRAME_ADMIN_STAGING_WEBHOOK: ${{ secrets.COOLIFY_MAINFRAME_ADMIN_STAGING_WEBHOOK }}
+        run: |
+          TOKEN=$(echo "$COOLIFY_TOKEN" | tr -d '[:space:]')
+          WEBHOOK=$(echo "$COOLIFY_MAINFRAME_ADMIN_STAGING_WEBHOOK" | tr -d '[:space:]')
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::COOLIFY_MAINFRAME_ADMIN_STAGING_WEBHOOK not set — skipping staging deploy."
+            exit 0
+          fi
+          HTTP_STATUS=$(curl -s -o /tmp/r.txt -w "%{http_code}" --max-time 30 -X GET \
+            -H "Authorization: Bearer ${TOKEN}" "${WEBHOOK}")
+          echo "Response: $(cat /tmp/r.txt)"; echo "HTTP status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
+            echo "ERROR: Mainframe admin (staging) webhook failed with status $HTTP_STATUS"; exit 1
+          fi
+          echo "Mainframe admin (staging) deployment triggered"
+
   # -------------------------------------------------------------------
   # CI GATE — single always-running status check for branch protection
   # The per-service test jobs above are conditional (change detection),

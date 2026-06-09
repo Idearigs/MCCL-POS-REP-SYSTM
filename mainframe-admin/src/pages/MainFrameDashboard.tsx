@@ -345,6 +345,30 @@ const MainFrameDashboard: React.FC = () => {
   const [featureRequests, setFeatureRequests] = useState<FeatureRequest[]>([]);
   const [stats, setStats] = useState({ totalTenants: 0, activeTenants: 0, weeklyGrowth: 0, mrr: 0 });
   const [bugStats, setBugStats] = useState<any>({});
+  // Live billing/payment status, sourced from the POS backend (the LemonSqueezy
+  // source of truth) via the /overview proxy.
+  const [paymentOverview, setPaymentOverview] = useState<any[]>([]);
+  const [paymentOverviewLoading, setPaymentOverviewLoading] = useState(false);
+  const [paymentOverviewError, setPaymentOverviewError] = useState<string | null>(null);
+
+  const loadPaymentOverview = useCallback(async () => {
+    setPaymentOverviewLoading(true);
+    setPaymentOverviewError(null);
+    try {
+      const r = await subscriptionsApi.getOverview();
+      setPaymentOverview(Array.isArray(r.data) ? r.data : []);
+    } catch (e: any) {
+      setPaymentOverviewError(
+        e?.response?.data?.message || 'Could not load live payment status from the POS backend.',
+      );
+    } finally {
+      setPaymentOverviewLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeView === 'billing') void loadPaymentOverview();
+  }, [activeView, loadPaymentOverview]);
 
   // Tenant detail (full slide-in state)
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
@@ -2688,6 +2712,73 @@ const MainFrameDashboard: React.FC = () => {
                       </div>
                     ))}
                   </div>
+                  {/* Live payment status — sourced from the POS backend (LemonSqueezy source of truth) */}
+                  <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                    <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                      <div>
+                        <p className="font-bold" style={{ color: '#1D1D1F' }}>Payment Status — Live</p>
+                        <p className="text-[11px]" style={{ color: '#8E8E93' }}>Real-time from LemonSqueezy via the POS backend — has the client paid, are they on trial, when does it renew.</p>
+                      </div>
+                      <button onClick={() => loadPaymentOverview()} disabled={paymentOverviewLoading}
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
+                        style={{ background: 'rgba(0,122,255,0.08)', color: '#007AFF' }}>
+                        <RefreshCw className={`w-3.5 h-3.5 ${paymentOverviewLoading ? 'animate-spin' : ''}`} /> Refresh
+                      </button>
+                    </div>
+                    {paymentOverviewError ? (
+                      <div className="px-5 py-4 text-sm" style={{ color: '#FF3B30' }}>{paymentOverviewError}</div>
+                    ) : paymentOverviewLoading && paymentOverview.length === 0 ? (
+                      <div className="px-5 py-6 text-sm" style={{ color: '#8E8E93' }}>Loading live payment status…</div>
+                    ) : paymentOverview.length === 0 ? (
+                      <div className="px-5 py-6 text-sm" style={{ color: '#8E8E93' }}>No subscriptions found on the POS backend.</div>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                            {['Business', 'Plan', 'Billing Status', 'Trial Ends', 'Last Payment', 'Next Renewal'].map(h => (
+                              <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#6E6E73' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paymentOverview.map((row: any) => {
+                            const badge: Record<string, { bg: string; fg: string; label: string }> = {
+                              PAID:           { bg: 'rgba(52,199,89,0.12)',  fg: '#248A3D', label: 'Paid · Active' },
+                              TRIAL:          { bg: 'rgba(0,122,255,0.12)',  fg: '#007AFF', label: 'On Trial' },
+                              TRIAL_EXPIRED:  { bg: 'rgba(255,59,48,0.12)',  fg: '#FF3B30', label: 'Trial Expired' },
+                              PAYMENT_DUE:    { bg: 'rgba(255,159,10,0.14)', fg: '#C76E00', label: 'Payment Due' },
+                              CANCELLED:      { bg: 'rgba(142,142,147,0.15)',fg: '#6E6E73', label: 'Cancelled' },
+                              INACTIVE:       { bg: 'rgba(142,142,147,0.15)',fg: '#6E6E73', label: 'Inactive' },
+                              NO_SUBSCRIPTION:{ bg: 'rgba(142,142,147,0.12)',fg: '#8E8E93', label: 'No Subscription' },
+                            };
+                            const b = badge[row.billingState] || badge.NO_SUBSCRIPTION;
+                            const fmt = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+                            return (
+                              <tr key={row.profileId} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                                <td className="px-5 py-3.5">
+                                  <p className="font-semibold text-sm" style={{ color: '#1D1D1F' }}>{row.businessName}</p>
+                                  <p className="text-[11px] font-mono" style={{ color: '#8E8E93' }}>{row.subdomain}</p>
+                                </td>
+                                <td className="px-5 py-3.5 text-sm" style={{ color: '#3C3C43' }}>
+                                  {row.plan || '—'}{row.basePrice ? <span style={{ color: '#8E8E93' }}> · £{row.basePrice}</span> : ''}
+                                </td>
+                                <td className="px-5 py-3.5">
+                                  <span className="text-[11px] font-semibold px-2 py-1 rounded-full" style={{ background: b.bg, color: b.fg }}>{b.label}</span>
+                                  {row.billingState === 'TRIAL' && row.trialDaysLeft != null && (
+                                    <span className="ml-2 text-[11px]" style={{ color: '#8E8E93' }}>{row.trialDaysLeft}d left</span>
+                                  )}
+                                </td>
+                                <td className="px-5 py-3.5 text-sm" style={{ color: '#6E6E73' }}>{row.isOnTrial ? fmt(row.trialEndsAt) : '—'}</td>
+                                <td className="px-5 py-3.5 text-sm" style={{ color: '#6E6E73' }}>{fmt(row.lastPaymentAt)}</td>
+                                <td className="px-5 py-3.5 text-sm" style={{ color: '#8E8E93' }}>{fmt(row.nextBillingDate)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+
                   <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.6)' }}>
                     <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                       <p className="font-bold" style={{ color: '#1D1D1F' }}>All Subscriptions</p>
