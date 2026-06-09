@@ -296,6 +296,7 @@ const SkeletonCard: React.FC = () => (
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Tenant {
   id: string; businessName: string; businessEmail: string; businessPhone?: string;
+  businessAddress?: string;
   subdomain: string; status: string; createdAt: string;
   contact?: { firstName: string; lastName: string; email: string; phone?: string };
   subscription?: { plan: string; basePrice: number; billingCycle?: string; currentUsers: number; nextBillingDate: string };
