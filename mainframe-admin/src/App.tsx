@@ -5,6 +5,7 @@ import MainFrameDashboard from './pages/MainFrameDashboard';
 import DevPortalPage from './pages/DevPortalPage';
 import OnboardingPage from './pages/OnboardingPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import StagingBadge from './components/StagingBadge';
 import './index.css';
 
 const queryClient = new QueryClient();
@@ -58,6 +59,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
+          <StagingBadge />
           <AppRoutes />
         </AuthProvider>
       </BrowserRouter>
