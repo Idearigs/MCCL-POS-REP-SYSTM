@@ -1,5 +1,6 @@
 import { Module, Logger } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { buildThrottlerOptions } from './core/throttler/throttler.factory';
@@ -21,6 +22,7 @@ import {
   RepairsModule,
 } from './features';
 import { CalendarEventsModule } from './features/calendar-events/calendar-events.module';
+import { PosTilesModule } from './features/pos-tiles/pos-tiles.module';
 import { StockTakingModule } from './features/stock-taking/stock-taking.module';
 import { FloatModule } from './features/float/float.module';
 import { PettyCashModule } from './features/petty-cash/petty-cash.module';
@@ -34,6 +36,7 @@ import { OutletsModule } from './features/outlets/outlets.module';
 import { SettingsModule } from './features/settings/settings.module';
 import { GiftCardsModule } from './features/gift-cards/gift-cards.module';
 import { MetalsModule } from './features/metals/metals.module';
+import { GoldPricingModule } from './features/inventory/gold-pricing.module';
 
 // External integrations
 import {
@@ -45,6 +48,8 @@ import { OpenAIModule } from './integrations/openai/openai.module';
 
 @Module({
   imports: [
+    // Cron scheduling (daily gold repricing, etc.)
+    ScheduleModule.forRoot(),
     // Configuration module
     ConfigModule.forRoot({
       isGlobal: true,
@@ -116,6 +121,7 @@ import { OpenAIModule } from './integrations/openai/openai.module';
     SalesModule,
     RepairsModule,
     CalendarEventsModule,
+    PosTilesModule,
     StockTakingModule,
     FloatModule,
     PettyCashModule,
@@ -129,6 +135,7 @@ import { OpenAIModule } from './integrations/openai/openai.module';
     SettingsModule,
     GiftCardsModule,
     MetalsModule,
+    GoldPricingModule,
   ],
   controllers: [AppController],
   providers: [

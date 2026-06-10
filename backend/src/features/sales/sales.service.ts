@@ -38,6 +38,7 @@ const NON_STOCK_MARKERS = [
   'GIFT CARD',
   'MANUAL ENTRY',
   'APPRAISAL',
+  'CUSTOM TILE',
 ];
 function isNonStockLine(notes?: string): boolean {
   return !!notes && NON_STOCK_MARKERS.some((m) => notes.includes(m));
