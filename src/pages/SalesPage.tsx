@@ -481,6 +481,56 @@ const SalesPage = () => {
     }
   };
 
+  // Non-stock lines (custom POS tiles, manual entries, appraisals, gift cards,
+  // repair services) carry their real title in the item notes as "MARKER: <title>"
+  // because there is no product row (backend returns productName "Unknown Product").
+  // This recovers the title "as is" so exports show what was actually sold.
+  const NON_STOCK_MARKER = /^\s*(GIFT CARD|MANUAL ENTRY|APPRAISAL|CUSTOM TILE|REPAIR SERVICE)\s*:\s*/i;
+  const CONDITION_TOKEN = /\s*CONDITION:(BRAND_NEW|USED)\s*/i;
+
+  const itemTitle = (item: any): string => {
+    const notes = String(item?.notes || '');
+    if (NON_STOCK_MARKER.test(notes)) {
+      const title = notes.replace(NON_STOCK_MARKER, '').replace(CONDITION_TOKEN, '').trim();
+      if (title) return title;
+    }
+    const name = item?.productName && item.productName !== 'Unknown Product'
+      ? item.productName
+      : notes.replace(CONDITION_TOKEN, '').trim();
+    return name || 'Item';
+  };
+
+  // Non-stock lines (tiles, repairs, gift cards, manual entries, appraisals) are
+  // NOT saved as sale_items — the backend folds them into the sale-level notes as
+  // "Repair Services: <MARKER>: <title>: £<price>, ...". Recover each title here.
+  const extractNoteTitles = (notes?: string): string[] => {
+    const s = String(notes || '');
+    const idx = s.search(/Repair Services:\s*/i);
+    if (idx === -1) return [];
+    return s
+      .slice(idx)
+      .replace(/Repair Services:\s*/i, '')
+      .split(/,(?=\s)/)
+      .map((seg) =>
+        seg
+          .replace(/:\s*£\s*[\d.,]+\s*$/, '') // drop trailing ": £10.00"
+          .replace(NON_STOCK_MARKER, '')      // drop "CUSTOM TILE: " / "REPAIR SERVICE: " etc.
+          .replace(CONDITION_TOKEN, '')
+          .trim(),
+      )
+      .filter(Boolean);
+  };
+
+  const itemsSummary = (sale: any): string => {
+    const fromItems = (sale?.items || []).map((i: any) => {
+      const qty = Number(i?.quantity || 1);
+      const title = itemTitle(i);
+      return qty > 1 ? `${title} x${qty}` : title;
+    });
+    const all = [...fromItems, ...extractNoteTitles(sale?.notes)].filter(Boolean);
+    return all.length ? all.join('; ') : '—';
+  };
+
   const handleExportCSV = () => {
     try {
       const conditionLabel = (notes?: string) => {
@@ -508,6 +558,7 @@ const SalesPage = () => {
         'Date',
         'Customer',
         'Items',
+        'Items Sold',
         'Condition',
         'Subtotal',
         'Tax',
@@ -525,6 +576,7 @@ const SalesPage = () => {
           format(new Date(sale.createdAt), 'yyyy-MM-dd HH:mm'),
           `"${sale.customerName || 'Walk-in'}"`,
           sale.items?.length || 0,
+          `"${itemsSummary(sale).replace(/"/g, '""')}"`,
           `"${saleConditionSummary(sale.items || [])}"`,
           sale.subtotal,
           sale.taxAmount,
@@ -569,6 +621,7 @@ const SalesPage = () => {
         'Date': format(new Date(sale.createdAt), 'yyyy-MM-dd HH:mm'),
         'Customer': sale.customerName || 'Walk-in',
         'Items': sale.items?.length || 0,
+        'Items Sold': itemsSummary(sale),
         'Subtotal': sale.subtotal,
         'Discount': sale.discountAmount,
         'Tax': sale.taxAmount,
