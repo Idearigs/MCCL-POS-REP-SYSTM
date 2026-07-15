@@ -7,6 +7,9 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 import { PayrollCalcService } from './payroll-calc.service';
+import { PayslipPdfService } from './payslip-pdf.service';
+import { EncryptionService } from '../employees/encryption.service';
+import { SettingsService } from '../../settings/settings.service';
 import {
   CreatePayrollRunDto,
   AddPayslipAdjustmentsDto,
@@ -19,6 +22,9 @@ export class PayrollService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly calc: PayrollCalcService,
+    private readonly pdf: PayslipPdfService,
+    private readonly encryption: EncryptionService,
+    private readonly settings: SettingsService,
   ) {}
 
   // ─── Payroll Runs ────────────────────────────────────────────────────────────
@@ -159,6 +165,7 @@ export class PayrollService {
           ? Number(emp.employeePensionPct)
           : 5,
         studentLoanPlan: emp.studentLoanPlan,
+        payDate: run.payDate,
       });
 
       // Year-to-date from finalized payslips in this tax year
@@ -242,6 +249,94 @@ export class PayrollService {
     return slip;
   }
 
+  // ─── Payslip PDF ─────────────────────────────────────────────────────────────
+
+  async getPayslipPdf(
+    id: string,
+    tenantId: string,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const slip = await this.prisma.hrms_payslips.findFirst({
+      where: { id, tenantId },
+      include: {
+        employee: {
+          select: {
+            firstName: true,
+            lastName: true,
+            employeeNumber: true,
+            jobTitle: true,
+            niNumber: true,
+            addressLine1: true,
+            addressLine2: true,
+            city: true,
+            postcode: true,
+          },
+        },
+      },
+    });
+    if (!slip) throw new NotFoundException(`Payslip ${id} not found`);
+
+    const settings = await this.settings.getSettings(tenantId);
+    const emp = slip.employee;
+    const niDecrypted = this.encryption.decryptOptional(emp?.niNumber ?? null);
+
+    const buffer = await this.pdf.build(
+      {
+        taxCode: String(slip.taxCode),
+        niCategory: String(slip.niCategory),
+        payFrequency: String(slip.payFrequency),
+        payPeriodStart: slip.payPeriodStart,
+        payPeriodEnd: slip.payPeriodEnd,
+        payDate: slip.payDate,
+        basicPay: Number(slip.basicPay),
+        overtimePay: Number(slip.overtimePay),
+        bonusPay: Number(slip.bonusPay),
+        commissionPay: Number(slip.commissionPay),
+        sickPay: Number(slip.sickPay),
+        holidayPay: Number(slip.holidayPay),
+        otherAdditions: Number(slip.otherAdditions),
+        grossPay: Number(slip.grossPay),
+        paye: Number(slip.paye),
+        employeeNI: Number(slip.employeeNI),
+        employeePension: Number(slip.employeePension),
+        studentLoanRepayment: Number(slip.studentLoanRepayment),
+        otherDeductions: Number(slip.otherDeductions),
+        totalDeductions: Number(slip.totalDeductions),
+        netPay: Number(slip.netPay),
+        employerNI: Number(slip.employerNI),
+        employerPension: Number(slip.employerPension),
+        ytdGross: Number(slip.ytdGross),
+        ytdTax: Number(slip.ytdTax),
+        ytdEmployeeNI: Number(slip.ytdEmployeeNI),
+        notes: slip.notes,
+      },
+      {
+        name: settings.general.storeName,
+        tradingName: settings.general.tradingName,
+        address: settings.general.address,
+        phone: settings.general.phone,
+        vatNumber: settings.printer.vatNumber,
+        companyRegistrationNumber:
+          settings.cashUp.companyRegistrationNumber || null,
+      },
+      {
+        fullName: slip.employeeName,
+        employeeNumber: slip.employeeNumber,
+        jobTitle: emp?.jobTitle,
+        niNumberMasked: niDecrypted
+          ? this.encryption.maskNi(niDecrypted)
+          : null,
+        addressLine1: emp?.addressLine1,
+        addressLine2: emp?.addressLine2,
+        city: emp?.city,
+        postcode: emp?.postcode,
+      },
+    );
+
+    const period = slip.payDate.toISOString().split('T')[0];
+    const safeName = slip.employeeName.replace(/[^a-z0-9]+/gi, '_');
+    return { buffer, filename: `payslip_${safeName}_${period}.pdf` };
+  }
+
   async updatePayslip(
     id: string,
     dto: AddPayslipAdjustmentsDto,
@@ -279,6 +374,7 @@ export class PayrollService {
         ? Number(emp.employeePensionPct)
         : 5,
       studentLoanPlan: emp?.studentLoanPlan ?? null,
+      payDate: slip.payDate,
     });
 
     const extraDeductions = dto.otherDeductions ?? Number(slip.otherDeductions);

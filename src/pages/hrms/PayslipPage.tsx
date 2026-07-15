@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Printer, Edit, Save, X } from 'lucide-react';
+import { ArrowLeft, Printer, Edit, Save, X, Download } from 'lucide-react';
 import MainLayout from '../../components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -108,6 +108,21 @@ const PayslipPage: React.FC = () => {
   const [payslip, setPayslip] = useState<Payslip | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    if (!payslip) return;
+    setDownloading(true);
+    try {
+      const period = new Date(payslip.payDate).toISOString().split('T')[0];
+      const safeName = payslip.employeeName.replace(/[^a-z0-9]+/gi, '_');
+      await hrmsService.downloadPayslipPdf(payslip.id, `payslip_${safeName}_${period}.pdf`);
+    } catch {
+      toast.error('Failed to download payslip PDF');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -162,6 +177,9 @@ const PayslipPage: React.FC = () => {
               <Edit size={13} className="mr-1" /> Adjust
             </Button>
           )}
+          <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading}>
+            <Download size={13} className="mr-1" /> {downloading ? 'Preparing…' : 'PDF'}
+          </Button>
           <Button size="sm" variant="outline" onClick={() => window.print()}>
             <Printer size={13} className="mr-1" /> Print
           </Button>

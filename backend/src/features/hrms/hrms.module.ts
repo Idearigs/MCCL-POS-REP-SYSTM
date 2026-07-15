@@ -5,15 +5,18 @@ import { EncryptionService } from './employees/encryption.service';
 import { PayrollController } from './payroll/payroll.controller';
 import { PayrollService } from './payroll/payroll.service';
 import { PayrollCalcService } from './payroll/payroll-calc.service';
+import { PayslipPdfService } from './payroll/payslip-pdf.service';
 import { AttendanceController } from './attendance/attendance.controller';
 import { AttendanceService } from './attendance/attendance.service';
 import { TimesheetTokensService } from './attendance/timesheet-tokens.service';
 import { ReportsController } from './reports/reports.controller';
 import { ReportsService } from './reports/reports.service';
+import { ReportsPdfService } from './reports/reports-pdf.service';
 import { CacheServiceModule } from '../../core/cache/cache.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
-  imports: [CacheServiceModule],
+  imports: [CacheServiceModule, SettingsModule],
   controllers: [
     EmployeesController,
     PayrollController,
@@ -25,9 +28,11 @@ import { CacheServiceModule } from '../../core/cache/cache.module';
     EncryptionService,
     PayrollService,
     PayrollCalcService,
+    PayslipPdfService,
     AttendanceService,
     TimesheetTokensService,
     ReportsService,
+    ReportsPdfService,
   ],
   exports: [
     EmployeesService,

@@ -1,35 +1,101 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
-// ── UK 2024/25 PAYE rates (England / Wales / Northern Ireland) ─────────────────
-const PERSONAL_ALLOWANCE = 12_570;
-const BASIC_RATE_LIMIT = 50_270; // upper boundary of basic-rate band
-const ADDITIONAL_RATE_LIMIT = 125_140; // start of additional rate
-const TAPER_THRESHOLD = 100_000; // PA reduces by £1 per £2 above this
-const BASIC_RATE = 0.2;
-const HIGHER_RATE = 0.4;
-const ADDITIONAL_RATE = 0.45;
+// ─── Per-tax-year rate sets ────────────────────────────────────────────────────
+// Every rate/threshold that changes between UK tax years lives here, keyed by the
+// tax-year string ("2024-25"). To onboard a new tax year, add one entry — no code
+// changes elsewhere. The resolver picks the correct set from the pay date.
 
-// ── UK 2024/25 Class 1 NI ──────────────────────────────────────────────────────
-const NI_PRIMARY_THRESHOLD = 12_570; // employee NI starts (annual)
-const NI_UPPER_EARNINGS_LIMIT = 50_270; // employee upper limit (annual)
-const NI_SECONDARY_THRESHOLD = 9_100; // employer NI starts (annual)
-const NI_EMPLOYEE_MAIN = 0.08; // 8% (reduced from 10% in April 2024)
-const NI_EMPLOYEE_UPPER = 0.02; // 2% above UEL
-const NI_EMPLOYER = 0.138; // 13.8%
+export interface TaxYearRates {
+  taxYear: string;
+  // Income Tax (England / Wales / Northern Ireland)
+  personalAllowance: number;
+  basicRateLimit: number; // upper boundary of the basic-rate band
+  additionalRateLimit: number; // start of the additional rate
+  taperThreshold: number; // PA reduces by £1 per £2 above this
+  basicRate: number;
+  higherRate: number;
+  additionalRate: number;
+  // Class 1 National Insurance (annualised thresholds)
+  niPrimaryThreshold: number; // employee NI starts
+  niUpperEarningsLimit: number; // employee upper limit
+  niSecondaryThreshold: number; // employer NI starts
+  niEmployeeMain: number;
+  niEmployeeUpper: number;
+  niEmployer: number;
+  // Student loans (annual repayment thresholds)
+  studentLoanThresholds: Record<string, number>;
+  studentLoanRate: number;
+  postgradRate: number;
+  // Pension auto-enrolment qualifying earnings
+  pensionLowerThreshold: number;
+}
 
-// ── Student loan 2024/25 annual repayment thresholds ──────────────────────────
-const STUDENT_LOAN_THRESHOLDS: Record<string, number> = {
-  PLAN1: 24_990,
-  PLAN2: 27_295,
-  PLAN3: 21_000, // Postgraduate Loan
-  PLAN4: 31_395,
-  PLAN5: 25_000,
+const TAX_YEARS: Record<string, TaxYearRates> = {
+  // ── 2024/25 (6 Apr 2024 – 5 Apr 2025) ──
+  '2024-25': {
+    taxYear: '2024-25',
+    personalAllowance: 12_570,
+    basicRateLimit: 50_270,
+    additionalRateLimit: 125_140,
+    taperThreshold: 100_000,
+    basicRate: 0.2,
+    higherRate: 0.4,
+    additionalRate: 0.45,
+    niPrimaryThreshold: 12_570,
+    niUpperEarningsLimit: 50_270,
+    niSecondaryThreshold: 9_100,
+    niEmployeeMain: 0.08, // reduced from 10% in April 2024
+    niEmployeeUpper: 0.02,
+    niEmployer: 0.138,
+    studentLoanThresholds: {
+      PLAN1: 24_990,
+      PLAN2: 27_295,
+      PLAN3: 21_000, // Postgraduate Loan
+      PLAN4: 31_395,
+      PLAN5: 25_000,
+    },
+    studentLoanRate: 0.09,
+    postgradRate: 0.06,
+    pensionLowerThreshold: 6_240,
+  },
+
+  // ── 2025/26 (6 Apr 2025 – 5 Apr 2026) ──
+  // NOTE: Income-tax bands and employee NI are frozen at 2024/25 levels.
+  // CHANGED for 2025/26 (Autumn Budget 2024): employer NI rate → 15% and the
+  // secondary (employer) threshold → £5,000. Student-loan thresholds uprated.
+  // ⚠ Verify the student-loan figures against HMRC before running live 2025/26
+  // payroll — they are set annually.
+  '2025-26': {
+    taxYear: '2025-26',
+    personalAllowance: 12_570,
+    basicRateLimit: 50_270,
+    additionalRateLimit: 125_140,
+    taperThreshold: 100_000,
+    basicRate: 0.2,
+    higherRate: 0.4,
+    additionalRate: 0.45,
+    niPrimaryThreshold: 12_570,
+    niUpperEarningsLimit: 50_270,
+    niSecondaryThreshold: 5_000, // ↓ from £9,100
+    niEmployeeMain: 0.08,
+    niEmployeeUpper: 0.02,
+    niEmployer: 0.15, // ↑ from 13.8%
+    studentLoanThresholds: {
+      PLAN1: 26_065,
+      PLAN2: 28_470,
+      PLAN3: 21_000,
+      PLAN4: 32_745,
+      PLAN5: 25_000,
+    },
+    studentLoanRate: 0.09,
+    postgradRate: 0.06,
+    pensionLowerThreshold: 6_240,
+  },
 };
-const STUDENT_LOAN_RATE = 0.09;
-const POSTGRAD_RATE = 0.06;
 
-// ── Pension qualifying earnings 2024/25 ────────────────────────────────────────
-const PENSION_LOWER_THRESHOLD = 6_240; // annual lower qualifying earnings limit
+// The most recent configured tax year, used as a safe fallback for pay dates
+// beyond the latest entry (rather than silently reverting to an old year).
+const LATEST_TAX_YEAR = Object.keys(TAX_YEARS).sort().pop() as string;
 
 // ── Pay periods per year ───────────────────────────────────────────────────────
 const PERIODS_PER_YEAR: Record<string, number> = {
@@ -40,6 +106,7 @@ const PERIODS_PER_YEAR: Record<string, number> = {
 };
 
 export interface PayrollCalculation {
+  taxYear: string;
   grossPay: number;
   paye: number;
   employeeNI: number;
@@ -53,9 +120,36 @@ export interface PayrollCalculation {
 
 @Injectable()
 export class PayrollCalcService {
+  private readonly logger = new Logger(PayrollCalcService.name);
+
+  // ─── Tax-year resolution ──────────────────────────────────────────────────────
+
+  /** Map a UK date to its tax-year key, e.g. 2025-05-01 → "2025-26". */
+  taxYearKeyFor(date: Date): string {
+    const y = date.getUTCFullYear();
+    const m = date.getUTCMonth() + 1;
+    const d = date.getUTCDate();
+    const startYr = m > 4 || (m === 4 && d >= 6) ? y : y - 1;
+    return `${startYr}-${String(startYr + 1).slice(2)}`;
+  }
+
+  /** Resolve the rate set for a pay date, falling back to the latest year. */
+  resolveRates(payDate: Date): TaxYearRates {
+    const key = this.taxYearKeyFor(payDate);
+    const rates = TAX_YEARS[key];
+    if (rates) return rates;
+    this.logger.warn(
+      `No configured payroll rates for tax year ${key}; falling back to ${LATEST_TAX_YEAR}. Add a TAX_YEARS entry for ${key} to remove this warning.`,
+    );
+    return TAX_YEARS[LATEST_TAX_YEAR];
+  }
+
   // ─── Tax code parsing ────────────────────────────────────────────────────────
 
-  private parseTaxCode(code: string): {
+  private parseTaxCode(
+    code: string,
+    rates: TaxYearRates,
+  ): {
     annualAllowance: number;
     flatRate: number | null;
     noTax: boolean;
@@ -64,11 +158,15 @@ export class PayrollCalcService {
 
     if (c === 'NT') return { annualAllowance: 0, flatRate: null, noTax: true };
     if (c === 'BR')
-      return { annualAllowance: 0, flatRate: BASIC_RATE, noTax: false };
+      return { annualAllowance: 0, flatRate: rates.basicRate, noTax: false };
     if (c === 'D0')
-      return { annualAllowance: 0, flatRate: HIGHER_RATE, noTax: false };
+      return { annualAllowance: 0, flatRate: rates.higherRate, noTax: false };
     if (c === 'D1')
-      return { annualAllowance: 0, flatRate: ADDITIONAL_RATE, noTax: false };
+      return {
+        annualAllowance: 0,
+        flatRate: rates.additionalRate,
+        noTax: false,
+      };
     if (c === '0T') return { annualAllowance: 0, flatRate: null, noTax: false };
 
     // K code: addition to taxable pay (negative allowance)
@@ -88,7 +186,7 @@ export class PayrollCalcService {
 
     // Fallback: standard personal allowance
     return {
-      annualAllowance: PERSONAL_ALLOWANCE,
+      annualAllowance: rates.personalAllowance,
       flatRate: null,
       noTax: false,
     };
@@ -99,17 +197,26 @@ export class PayrollCalcService {
   private taperedAllowance(
     annualAllowance: number,
     annualisedGross: number,
+    rates: TaxYearRates,
   ): number {
-    if (annualisedGross <= TAPER_THRESHOLD) return annualAllowance;
-    const reduction = Math.floor((annualisedGross - TAPER_THRESHOLD) / 2);
+    if (annualisedGross <= rates.taperThreshold) return annualAllowance;
+    const reduction = Math.floor((annualisedGross - rates.taperThreshold) / 2);
     return Math.max(0, annualAllowance - reduction);
   }
 
   // ─── PAYE ─────────────────────────────────────────────────────────────────────
 
-  calculatePAYE(grossPay: number, taxCode: string, frequency: string): number {
+  calculatePAYE(
+    grossPay: number,
+    taxCode: string,
+    frequency: string,
+    rates: TaxYearRates,
+  ): number {
     const periods = PERIODS_PER_YEAR[frequency] ?? 12;
-    const { annualAllowance, flatRate, noTax } = this.parseTaxCode(taxCode);
+    const { annualAllowance, flatRate, noTax } = this.parseTaxCode(
+      taxCode,
+      rates,
+    );
 
     if (noTax) return 0;
     if (flatRate !== null) return this.r2(Math.max(0, grossPay * flatRate));
@@ -118,6 +225,7 @@ export class PayrollCalcService {
     const effectiveAllowance = this.taperedAllowance(
       annualAllowance,
       annualisedGross,
+      rates,
     );
     const periodAllowance = effectiveAllowance / periods;
 
@@ -125,22 +233,23 @@ export class PayrollCalcService {
     if (taxablePay <= 0) return 0;
 
     // Band sizes per period (above the personal allowance)
-    const basicBandEnd = (BASIC_RATE_LIMIT - effectiveAllowance) / periods;
+    const basicBandEnd = (rates.basicRateLimit - effectiveAllowance) / periods;
     const higherBandEnd =
-      (ADDITIONAL_RATE_LIMIT - effectiveAllowance) / periods;
+      (rates.additionalRateLimit - effectiveAllowance) / periods;
 
     let tax: number;
     if (taxablePay <= basicBandEnd) {
-      tax = taxablePay * BASIC_RATE;
+      tax = taxablePay * rates.basicRate;
     } else if (taxablePay <= higherBandEnd) {
       tax =
-        basicBandEnd * BASIC_RATE + (taxablePay - basicBandEnd) * HIGHER_RATE;
+        basicBandEnd * rates.basicRate +
+        (taxablePay - basicBandEnd) * rates.higherRate;
     } else {
       const higherBand = higherBandEnd - basicBandEnd;
       tax =
-        basicBandEnd * BASIC_RATE +
-        higherBand * HIGHER_RATE +
-        (taxablePay - higherBandEnd) * ADDITIONAL_RATE;
+        basicBandEnd * rates.basicRate +
+        higherBand * rates.higherRate +
+        (taxablePay - higherBandEnd) * rates.additionalRate;
     }
 
     return this.r2(Math.max(0, tax));
@@ -152,25 +261,27 @@ export class PayrollCalcService {
     grossPay: number,
     frequency: string,
     niCategory: string,
+    rates: TaxYearRates,
   ): {
     employeeNI: number;
     employerNI: number;
   } {
     const periods = PERIODS_PER_YEAR[frequency] ?? 12;
-    const pt = NI_PRIMARY_THRESHOLD / periods;
-    const uel = NI_UPPER_EARNINGS_LIMIT / periods;
-    const st = NI_SECONDARY_THRESHOLD / periods;
+    const pt = rates.niPrimaryThreshold / periods;
+    const uel = rates.niUpperEarningsLimit / periods;
+    const st = rates.niSecondaryThreshold / periods;
 
     // Employee NI: Category C = no employee contribution (State Pension age)
     let employeeNI = 0;
     if (niCategory !== 'C' && grossPay > pt) {
       const mainBand = Math.min(grossPay, uel) - pt;
       const upperBand = Math.max(0, grossPay - uel);
-      employeeNI = mainBand * NI_EMPLOYEE_MAIN + upperBand * NI_EMPLOYEE_UPPER;
+      employeeNI =
+        mainBand * rates.niEmployeeMain + upperBand * rates.niEmployeeUpper;
     }
 
     // Employer NI (all categories)
-    const employerNI = grossPay > st ? (grossPay - st) * NI_EMPLOYER : 0;
+    const employerNI = grossPay > st ? (grossPay - st) * rates.niEmployer : 0;
 
     return {
       employeeNI: this.r2(Math.max(0, employeeNI)),
@@ -185,10 +296,11 @@ export class PayrollCalcService {
     frequency: string,
     employerPct: number,
     employeePct: number,
+    rates: TaxYearRates,
   ): { employeePension: number; employerPension: number } {
     const periods = PERIODS_PER_YEAR[frequency] ?? 12;
-    const lower = PENSION_LOWER_THRESHOLD / periods;
-    const upper = NI_UPPER_EARNINGS_LIMIT / periods;
+    const lower = rates.pensionLowerThreshold / periods;
+    const upper = rates.niUpperEarningsLimit / periods;
 
     const pensionable = Math.max(0, Math.min(grossPay, upper) - lower);
     return {
@@ -203,15 +315,16 @@ export class PayrollCalcService {
     grossPay: number,
     frequency: string,
     plan: string | null,
+    rates: TaxYearRates,
   ): number {
     if (!plan) return 0;
     const periods = PERIODS_PER_YEAR[frequency] ?? 12;
     const key = plan.toUpperCase().replace(/\s/g, '');
-    const annual = STUDENT_LOAN_THRESHOLDS[key];
+    const annual = rates.studentLoanThresholds[key];
     if (!annual) return 0;
     const threshold = annual / periods;
     if (grossPay <= threshold) return 0;
-    const rate = key === 'PLAN3' ? POSTGRAD_RATE : STUDENT_LOAN_RATE;
+    const rate = key === 'PLAN3' ? rates.postgradRate : rates.studentLoanRate;
     return this.r2((grossPay - threshold) * rate);
   }
 
@@ -245,6 +358,8 @@ export class PayrollCalcService {
     employerPensionPct: number;
     employeePensionPct: number;
     studentLoanPlan: string | null;
+    /** Pay date drives which tax-year rate set is applied. */
+    payDate: Date;
   }): PayrollCalculation {
     const {
       grossPay,
@@ -256,13 +371,17 @@ export class PayrollCalcService {
       employerPensionPct,
       employeePensionPct,
       studentLoanPlan,
+      payDate,
     } = params;
 
-    const paye = this.calculatePAYE(grossPay, taxCode, frequency);
+    const rates = this.resolveRates(payDate);
+
+    const paye = this.calculatePAYE(grossPay, taxCode, frequency, rates);
     const { employeeNI, employerNI } = this.calculateNI(
       grossPay,
       frequency,
       niCategory,
+      rates,
     );
 
     let employeePension = 0;
@@ -273,6 +392,7 @@ export class PayrollCalcService {
         frequency,
         employerPensionPct,
         employeePensionPct,
+        rates,
       );
       employeePension = p.employeePension;
       employerPension = p.employerPension;
@@ -282,6 +402,7 @@ export class PayrollCalcService {
       grossPay,
       frequency,
       studentLoanPlan,
+      rates,
     );
     const totalDeductions = this.r2(
       paye + employeeNI + employeePension + studentLoanRepayment,
@@ -289,6 +410,7 @@ export class PayrollCalcService {
     const netPay = this.r2(Math.max(0, grossPay - totalDeductions));
 
     return {
+      taxYear: rates.taxYear,
       grossPay: this.r2(grossPay),
       paye,
       employeeNI,

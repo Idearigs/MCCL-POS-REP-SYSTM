@@ -222,6 +222,7 @@ function PayslipsTab({ employeeId }: { employeeId: string }) {
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<Payslip | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -230,6 +231,18 @@ function PayslipsTab({ employeeId }: { employeeId: string }) {
       .catch(() => toast.error('Failed to load payslips'))
       .finally(() => setLoading(false));
   }, [employeeId]);
+
+  const downloadPdf = async (p: Payslip) => {
+    setDownloadingId(p.id);
+    try {
+      const period = new Date(p.payDate).toISOString().split('T')[0];
+      await hrmsService.downloadPayslipPdf(p.id, `payslip_${period}.pdf`);
+    } catch {
+      toast.error('Failed to download payslip PDF');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   if (loading) return <div className="text-center py-12 text-muted-foreground">Loading payslips…</div>;
 
@@ -268,9 +281,22 @@ function PayslipsTab({ employeeId }: { employeeId: string }) {
                 <TableCell className="text-right text-sm text-orange-600">{fmt(p.employeeNI)}</TableCell>
                 <TableCell className="text-right text-sm font-bold">{fmt(p.netPay)}</TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="sm" onClick={() => setDetail(p)}>
-                    <FileText className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => setDetail(p)}>
+                      <FileText className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => downloadPdf(p)}
+                      disabled={downloadingId === p.id}
+                      title="Download PDF"
+                    >
+                      {downloadingId === p.id
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Download className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -351,8 +377,14 @@ function PayslipsTab({ employeeId }: { employeeId: string }) {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => window.print()}>
-              <Download className="h-4 w-4 mr-1" /> Print
+            <Button
+              variant="outline"
+              onClick={() => detail && downloadPdf(detail)}
+              disabled={!detail || downloadingId === detail?.id}
+            >
+              {detail && downloadingId === detail.id
+                ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                : <Download className="h-4 w-4 mr-1" />} Download PDF
             </Button>
             <Button onClick={() => setDetail(null)}>Close</Button>
           </DialogFooter>

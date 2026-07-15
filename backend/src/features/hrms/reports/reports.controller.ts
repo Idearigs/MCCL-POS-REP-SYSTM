@@ -8,9 +8,11 @@ import {
   Query,
   UseGuards,
   Request,
+  Res,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../features/auth/guards/jwt-auth.guard';
 import { ReportsService } from './reports.service';
@@ -50,6 +52,27 @@ export class ReportsController {
     );
   }
 
+  @Get('p60/:employeeId/pdf')
+  @ApiOperation({ summary: 'Download a P60 certificate as a PDF' })
+  async getP60Pdf(
+    @Param('employeeId') employeeId: string,
+    @Query('taxYear') taxYear: string,
+    @Request() req: any,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.reportsService.getP60Pdf(
+      employeeId,
+      taxYear ?? currentTaxYear(),
+      req.user.tenantId,
+    );
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   // ─── P11D ─────────────────────────────────────────────────────────────────────
 
   @Get('p11d')
@@ -75,6 +98,27 @@ export class ReportsController {
       taxYear ?? currentTaxYear(),
       req.user.tenantId,
     );
+  }
+
+  @Get('p11d/:employeeId/pdf')
+  @ApiOperation({ summary: 'Download a P11D benefits statement as a PDF' })
+  async getP11dPdf(
+    @Param('employeeId') employeeId: string,
+    @Query('taxYear') taxYear: string,
+    @Request() req: any,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.reportsService.getP11dPdf(
+      employeeId,
+      taxYear ?? currentTaxYear(),
+      req.user.tenantId,
+    );
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Post('p11d/:employeeId')
