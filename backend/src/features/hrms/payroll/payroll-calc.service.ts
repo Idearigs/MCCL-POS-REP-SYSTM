@@ -95,7 +95,7 @@ const TAX_YEARS: Record<string, TaxYearRates> = {
 
 // The most recent configured tax year, used as a safe fallback for pay dates
 // beyond the latest entry (rather than silently reverting to an old year).
-const LATEST_TAX_YEAR = Object.keys(TAX_YEARS).sort().pop() as string;
+const LATEST_TAX_YEAR = Object.keys(TAX_YEARS).sort().pop();
 
 // ── Pay periods per year ───────────────────────────────────────────────────────
 const PERIODS_PER_YEAR: Record<string, number> = {

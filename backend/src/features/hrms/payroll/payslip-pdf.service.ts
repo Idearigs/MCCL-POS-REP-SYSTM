@@ -87,9 +87,7 @@ export class PayslipPdfService {
       doc.font('Helvetica').fontSize(9).fillColor('#555555');
       if (employer.tradingName) doc.text(employer.tradingName);
       if (employer.address) {
-        employer.address
-          .split('\n')
-          .forEach((line) => doc.text(line.trim()));
+        employer.address.split('\n').forEach((line) => doc.text(line.trim()));
       }
       const idBits: string[] = [];
       if (employer.phone) idBits.push(`Tel: ${employer.phone}`);
@@ -150,22 +148,28 @@ export class PayslipPdfService {
           y + 24,
         );
       if (empAddr)
-        doc.fontSize(8).fillColor('#777777').text(empAddr, LEFT, y + 36, {
-          width: MID - LEFT - 10,
-        });
+        doc
+          .fontSize(8)
+          .fillColor('#777777')
+          .text(empAddr, LEFT, y + 36, {
+            width: MID - LEFT - 10,
+          });
 
       // Right column: pay meta grid
       const rx = MID + 10;
-      const metaRow = (
-        lbl: string,
-        val: string,
-        col: 0 | 1,
-        row: number,
-      ) => {
+      const metaRow = (lbl: string, val: string, col: 0 | 1, row: number) => {
         const x = col === 0 ? rx : rx + 120;
         const yy = y + row * 26;
-        doc.font('Helvetica').fontSize(7.5).fillColor('#888888').text(lbl.toUpperCase(), x, yy);
-        doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#111111').text(val, x, yy + 9);
+        doc
+          .font('Helvetica')
+          .fontSize(7.5)
+          .fillColor('#888888')
+          .text(lbl.toUpperCase(), x, yy);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(9.5)
+          .fillColor('#111111')
+          .text(val, x, yy + 9);
       };
       metaRow('Pay Date', fmtDate(payslip.payDate), 0, 0);
       metaRow('Frequency', title(payslip.payFrequency), 1, 0);
@@ -208,7 +212,11 @@ export class PayslipPdfService {
         lbl: string,
         amt: number,
       ): number => {
-        doc.font('Helvetica').fontSize(9).fillColor('#333333').text(lbl, x + 4, yy, { width: colW * 0.6 });
+        doc
+          .font('Helvetica')
+          .fontSize(9)
+          .fillColor('#333333')
+          .text(lbl, x + 4, yy, { width: colW * 0.6 });
         doc
           .font('Helvetica')
           .fontSize(9)
@@ -222,25 +230,43 @@ export class PayslipPdfService {
 
       // Earnings
       earnY = line(earnX, earnY, 'Basic Pay', payslip.basicPay);
-      if (payslip.overtimePay > 0) earnY = line(earnX, earnY, 'Overtime', payslip.overtimePay);
-      if (payslip.bonusPay > 0) earnY = line(earnX, earnY, 'Bonus', payslip.bonusPay);
-      if (payslip.commissionPay > 0) earnY = line(earnX, earnY, 'Commission', payslip.commissionPay);
-      if (payslip.sickPay > 0) earnY = line(earnX, earnY, 'Sick Pay', payslip.sickPay);
-      if (payslip.holidayPay > 0) earnY = line(earnX, earnY, 'Holiday Pay', payslip.holidayPay);
-      if (payslip.otherAdditions > 0) earnY = line(earnX, earnY, 'Other Additions', payslip.otherAdditions);
+      if (payslip.overtimePay > 0)
+        earnY = line(earnX, earnY, 'Overtime', payslip.overtimePay);
+      if (payslip.bonusPay > 0)
+        earnY = line(earnX, earnY, 'Bonus', payslip.bonusPay);
+      if (payslip.commissionPay > 0)
+        earnY = line(earnX, earnY, 'Commission', payslip.commissionPay);
+      if (payslip.sickPay > 0)
+        earnY = line(earnX, earnY, 'Sick Pay', payslip.sickPay);
+      if (payslip.holidayPay > 0)
+        earnY = line(earnX, earnY, 'Holiday Pay', payslip.holidayPay);
+      if (payslip.otherAdditions > 0)
+        earnY = line(earnX, earnY, 'Other Additions', payslip.otherAdditions);
 
       // Deductions
       dedY = line(dedX, dedY, 'Income Tax (PAYE)', payslip.paye);
       dedY = line(dedX, dedY, 'National Insurance', payslip.employeeNI);
-      if (payslip.employeePension > 0) dedY = line(dedX, dedY, 'Pension', payslip.employeePension);
-      if (payslip.studentLoanRepayment > 0) dedY = line(dedX, dedY, 'Student Loan', payslip.studentLoanRepayment);
-      if (payslip.otherDeductions > 0) dedY = line(dedX, dedY, 'Other Deductions', payslip.otherDeductions);
+      if (payslip.employeePension > 0)
+        dedY = line(dedX, dedY, 'Pension', payslip.employeePension);
+      if (payslip.studentLoanRepayment > 0)
+        dedY = line(dedX, dedY, 'Student Loan', payslip.studentLoanRepayment);
+      if (payslip.otherDeductions > 0)
+        dedY = line(dedX, dedY, 'Other Deductions', payslip.otherDeductions);
 
       // Totals row for each column
       const totalsY = Math.max(earnY, dedY) + 4;
       const totalLine = (x: number, lbl: string, amt: number) => {
-        doc.moveTo(x, totalsY).lineTo(x + colW, totalsY).strokeColor('#cbd5e1').lineWidth(0.5).stroke();
-        doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#111111').text(lbl, x + 4, totalsY + 5, { width: colW * 0.6 });
+        doc
+          .moveTo(x, totalsY)
+          .lineTo(x + colW, totalsY)
+          .strokeColor('#cbd5e1')
+          .lineWidth(0.5)
+          .stroke();
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(9.5)
+          .fillColor('#111111')
+          .text(lbl, x + 4, totalsY + 5, { width: colW * 0.6 });
         doc
           .font('Helvetica-Bold')
           .fontSize(9.5)
@@ -278,7 +304,8 @@ export class PayslipPdfService {
       let ecY = y + 24;
       let ytdY = y + 24;
       ecY = line(earnX, ecY, 'Employer NI', payslip.employerNI);
-      if (payslip.employerPension > 0) ecY = line(earnX, ecY, 'Employer Pension', payslip.employerPension);
+      if (payslip.employerPension > 0)
+        ecY = line(earnX, ecY, 'Employer Pension', payslip.employerPension);
 
       ytdY = line(dedX, ytdY, 'Gross Pay YTD', payslip.ytdGross);
       ytdY = line(dedX, ytdY, 'Tax Paid YTD', payslip.ytdTax);
@@ -287,9 +314,13 @@ export class PayslipPdfService {
       y = Math.max(ecY, ytdY) + 14;
 
       if (payslip.notes) {
-        doc.font('Helvetica-Oblique').fontSize(8.5).fillColor('#555555').text(`Notes: ${payslip.notes}`, LEFT, y, {
-          width: RIGHT - LEFT,
-        });
+        doc
+          .font('Helvetica-Oblique')
+          .fontSize(8.5)
+          .fillColor('#555555')
+          .text(`Notes: ${payslip.notes}`, LEFT, y, {
+            width: RIGHT - LEFT,
+          });
         y = doc.y + 8;
       }
 

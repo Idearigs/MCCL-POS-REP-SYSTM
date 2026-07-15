@@ -86,11 +86,7 @@ export class ReportsPdfService {
       let y = 112;
       const boxW = (RIGHT - LEFT - 16) / 2;
 
-      const block = (
-        x: number,
-        heading: string,
-        lines: string[],
-      ): void => {
+      const block = (x: number, heading: string, lines: string[]): void => {
         doc.rect(x, y, boxW, 92).lineWidth(0.7).strokeColor('#cbd5e1').stroke();
         doc
           .font('Helvetica-Bold')
@@ -100,9 +96,11 @@ export class ReportsPdfService {
         doc.font('Helvetica').fontSize(9.5).fillColor('#111111');
         let ly = y + 22;
         lines.filter(Boolean).forEach((ln, i) => {
-          doc.font(i === 0 ? 'Helvetica-Bold' : 'Helvetica').text(ln, x + 8, ly, {
-            width: boxW - 16,
-          });
+          doc
+            .font(i === 0 ? 'Helvetica-Bold' : 'Helvetica')
+            .text(ln, x + 8, ly, {
+              width: boxW - 16,
+            });
           ly += 13;
         });
       };
@@ -110,19 +108,19 @@ export class ReportsPdfService {
       block(LEFT, 'Employer', [
         employer.name,
         employer.tradingName ?? '',
-        ...(employer.address ? employer.address.split('\n').map((s) => s.trim()) : []),
+        ...(employer.address
+          ? employer.address.split('\n').map((s) => s.trim())
+          : []),
         employer.vatNumber ? `VAT: ${employer.vatNumber}` : '',
       ]);
 
       block(LEFT + boxW + 16, 'Employee', [
         data.employee.fullName,
         `#${data.employee.employeeNumber}`,
-        data.employee.niNumberMasked ? `NI: ${data.employee.niNumberMasked}` : '',
-        [
-          data.employee.addressLine1,
-          data.employee.city,
-          data.employee.postcode,
-        ]
+        data.employee.niNumberMasked
+          ? `NI: ${data.employee.niNumberMasked}`
+          : '',
+        [data.employee.addressLine1, data.employee.city, data.employee.postcode]
           .filter(Boolean)
           .join(', '),
         `Tax code: ${data.employee.taxCode}   NI table: ${data.employee.niCategory}`,
@@ -142,13 +140,21 @@ export class ReportsPdfService {
       };
 
       const figure = (label: string, amount: number, note?: string) => {
-        doc.font('Helvetica').fontSize(9.5).fillColor('#333333').text(label, LEFT + 8, y, {
-          width: 320,
-        });
-        if (note)
-          doc.font('Helvetica').fontSize(7.5).fillColor('#94a3b8').text(note, LEFT + 8, y + 12, {
+        doc
+          .font('Helvetica')
+          .fontSize(9.5)
+          .fillColor('#333333')
+          .text(label, LEFT + 8, y, {
             width: 320,
           });
+        if (note)
+          doc
+            .font('Helvetica')
+            .fontSize(7.5)
+            .fillColor('#94a3b8')
+            .text(note, LEFT + 8, y + 12, {
+              width: 320,
+            });
         doc
           .font('Helvetica-Bold')
           .fontSize(10)
@@ -174,7 +180,11 @@ export class ReportsPdfService {
       y += 6;
 
       sectionTitle('National Insurance contributions');
-      figure('Employee contributions (this employment)', data.employeeNI, `NI category ${data.employee.niCategory}`);
+      figure(
+        'Employee contributions (this employment)',
+        data.employeeNI,
+        `NI category ${data.employee.niCategory}`,
+      );
       figure('Employer contributions', data.employerNI);
 
       sectionTitle('Other deductions');
@@ -252,14 +262,21 @@ export class ReportsPdfService {
 
       // ── Employer / Employee summary ──
       let y = 112;
-      doc.font('Helvetica-Bold').fontSize(11).fillColor('#111111').text(employer.name, LEFT, y);
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(11)
+        .fillColor('#111111')
+        .text(employer.name, LEFT, y);
       if (employer.address)
         doc
           .font('Helvetica')
           .fontSize(8.5)
           .fillColor('#555555')
           .text(
-            employer.address.split('\n').map((s) => s.trim()).join(', '),
+            employer.address
+              .split('\n')
+              .map((s) => s.trim())
+              .join(', '),
             LEFT,
             y + 15,
             { width: 260 },
@@ -290,7 +307,12 @@ export class ReportsPdfService {
         );
 
       y += 52;
-      doc.moveTo(LEFT, y).lineTo(RIGHT, y).lineWidth(1).strokeColor('#111111').stroke();
+      doc
+        .moveTo(LEFT, y)
+        .lineTo(RIGHT, y)
+        .lineWidth(1)
+        .strokeColor('#111111')
+        .stroke();
       y += 14;
 
       // ── Table header ──
@@ -301,7 +323,10 @@ export class ReportsPdfService {
       doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#334155');
       doc.text('BENEFIT', cType, y + 6);
       doc.text('DESCRIPTION', cDesc, y + 6);
-      doc.text('CASH EQUIVALENT', cAmt, y + 6, { width: RIGHT - cAmt - 4, align: 'right' });
+      doc.text('CASH EQUIVALENT', cAmt, y + 6, {
+        width: RIGHT - cAmt - 4,
+        align: 'right',
+      });
       y += 26;
 
       // ── Rows ──
@@ -333,7 +358,12 @@ export class ReportsPdfService {
               align: 'right',
             });
           y += 16;
-          doc.moveTo(LEFT, y - 3).lineTo(RIGHT, y - 3).lineWidth(0.4).strokeColor('#e2e8f0').stroke();
+          doc
+            .moveTo(LEFT, y - 3)
+            .lineTo(RIGHT, y - 3)
+            .lineWidth(0.4)
+            .strokeColor('#e2e8f0')
+            .stroke();
         }
       }
 
