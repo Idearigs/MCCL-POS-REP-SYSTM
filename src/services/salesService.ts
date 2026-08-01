@@ -258,9 +258,15 @@ class SalesService {
 
   async createSale(saleData: CreateSaleData, idempotencyKey?: string): Promise<Sale> {
     try {
-      const config = idempotencyKey
-        ? { headers: { 'Idempotency-Key': idempotencyKey } }
-        : undefined;
+      // Give checkout a longer timeout than the 10s global default so a slow
+      // (but succeeding) sale doesn't abort with a "timeout" error mid-payment.
+      // The idempotency key makes a retry safe if it ever does time out.
+      const config = {
+        timeout: 30000,
+        ...(idempotencyKey
+          ? { headers: { 'Idempotency-Key': idempotencyKey } }
+          : {}),
+      };
       return await apiClient.post<Sale>(API_CONFIG.ENDPOINTS.CREATE_SALE, saleData, config);
     } catch (error) {
       console.error('Failed to create sale:', error);
