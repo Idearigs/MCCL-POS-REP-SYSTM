@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Param,
+  Query,
   Res,
   UploadedFiles,
   UseInterceptors,
@@ -172,6 +173,33 @@ export class FileStorageController {
     @Res() res: Response,
   ): Promise<void> {
     await this.fileStorageService.streamDriveFile(fileId, res);
+  }
+
+  @Get('thumb')
+  @ApiOperation({
+    summary: 'Serve a cached, resized thumbnail of a local image',
+  })
+  async getThumbnail(
+    @Query('src') src: string,
+    @Query('w') w: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const width = parseInt(w, 10) || 200;
+    const thumb = src
+      ? await this.fileStorageService.getLocalThumbnail(src, width)
+      : null;
+
+    if (!thumb) {
+      // Fall back to the original so the image always displays.
+      if (src) res.redirect(302, src);
+      else res.status(404).end();
+      return;
+    }
+
+    res.setHeader('Content-Type', thumb.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=604800'); // 7 days
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.end(thumb.buffer);
   }
 
   @Get('status')
