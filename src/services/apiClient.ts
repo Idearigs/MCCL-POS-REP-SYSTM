@@ -226,6 +226,19 @@ class ApiClient {
     localStorage.removeItem('refreshToken');
   }
 
+  /**
+   * Sign in using a stored refresh token (used by PIN quick-unlock). Exchanges
+   * it for a fresh access + refresh token pair. Returns true on success, false
+   * if the refresh token is expired/invalid (caller should fall back to a full
+   * password login).
+   */
+  public async loginWithRefreshToken(refreshToken: string): Promise<boolean> {
+    this.refreshToken = refreshToken;
+    localStorage.setItem('refreshToken', refreshToken);
+    const tokens = await this.refreshAccessToken();
+    return !!tokens;
+  }
+
   public isAuthenticated(): boolean {
     return !!this.token;
   }
