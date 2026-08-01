@@ -15,6 +15,7 @@ import { Calendar, Mail, MapPin, Phone, ShoppingBag, User, ExternalLink, Eye, Wr
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import ConsentForm from '@/components/gdpr/ConsentForm';
 import CustomerPurchaseHistory from './CustomerPurchaseHistory';
+import { fetchAllPages } from '@/lib/fetchAllPages';
 import { Customer } from '@/contexts/CustomerContext';
 import { repairService } from '@/services/repairService';
 import { salesService, Sale } from '@/services/salesService';
@@ -54,16 +55,13 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
       setLoadingRepairs(true);
       setRepairError(null);
       
-      // Fetch repairs filtered by this customer - parallelize pages
-      const firstRes = await repairService.getRepairs(1, 100, { customerId: customer.id });
-      const totalPages = firstRes.meta?.totalPages || 1;
-      const customerRepairsList = [...(firstRes.data || [])];
-      if (totalPages > 1) {
-        const remaining = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
-        const results = await Promise.all(remaining.map(p => repairService.getRepairs(p, 100, { customerId: customer.id })));
-        for (const r of results) customerRepairsList.push(...(r.data || []));
-      }
-      
+      // Fetch this customer's repairs with bounded concurrency (never bursts
+      // the API rate limiter, even for customers with many repairs).
+      const customerRepairsList = await fetchAllPages(
+        (p) => repairService.getRepairs(p, 100, { customerId: customer.id }),
+        { maxPages: 20 },
+      );
+
       setCustomerRepairs(customerRepairsList);
       console.log(`✅ Loaded ${customerRepairsList.length} repairs for customer ${customer.name}`, customerRepairsList);
     } catch (error: any) {

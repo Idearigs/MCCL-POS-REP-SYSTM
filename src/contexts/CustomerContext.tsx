@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { customerService, Customer as ServiceCustomer, CreateCustomerData } from '../services/customerService';
 import { useAuth } from './AuthContext';
+import { fetchAllPages } from '../lib/fetchAllPages';
 
 // Extended Customer interface that includes backend fields plus legacy UI fields
 export interface Customer extends Omit<ServiceCustomer, 'phone' | 'email' | 'notes'> {
@@ -109,23 +110,12 @@ export const CustomerProvider: React.FC<{ children: ReactNode }> = ({ children }
     setError(null);
     try {
       console.log('📦 Loading customers for authenticated user...');
-      // Fetch first page to get total count, then fetch remaining pages in parallel
-      const firstResult = await customerService.getCustomers(undefined, 1, 1000);
-      const firstPage = Array.isArray(firstResult) ? firstResult : firstResult.data;
-      const meta = Array.isArray(firstResult) ? null : (firstResult as any).meta;
-      const totalPages = meta?.totalPages || 1;
-
-      const allBackendCustomers = [...firstPage];
-      if (totalPages > 1) {
-        const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
-        const results = await Promise.all(
-          remainingPages.map(p => customerService.getCustomers(undefined, p, 1000))
-        );
-        for (const res of results) {
-          const pageData = Array.isArray(res) ? res : res.data;
-          allBackendCustomers.push(...pageData);
-        }
-      }
+      // Fetch all pages with bounded concurrency so we never burst past the API
+      // rate limiter (large page size keeps this to a handful of requests).
+      const allBackendCustomers = await fetchAllPages(
+        (p) => customerService.getCustomers(undefined, p, 1000),
+        { maxPages: 20 },
+      );
       const uiCustomers = allBackendCustomers.map(convertBackendCustomer);
       setCustomers(uiCustomers);
       console.log(`✅ Loaded ${uiCustomers.length} customers from database`);
