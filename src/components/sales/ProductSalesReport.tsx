@@ -30,7 +30,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { salesService, Sale } from '@/services/salesService';
-import { repairService } from '@/services/repairService';
+import { repairService, RepairStats } from '@/services/repairService';
 import { productService } from '@/services/productService';
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
 
@@ -71,6 +71,7 @@ const ProductSalesReport: React.FC = () => {
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'all'>('all');
   const [viewMode, setViewMode] = useState<'products' | 'repairs'>('products');
   const [repairData, setRepairData] = useState<any[]>([]);
+  const [repairStats, setRepairStats] = useState<RepairStats | null>(null);
   const [productCategories, setProductCategories] = useState<Map<string, string>>(new Map());
   const [allCategories, setAllCategories] = useState<Array<{ id: string; name: string }>>([]);
 
@@ -146,62 +147,24 @@ const ProductSalesReport: React.FC = () => {
       }
       setSales(salesData);
 
-      // Load repairs - try without the third param like other pages do
-      console.log('🔧 Loading repairs...');
-      let repairsResponse: any;
+      // Repair totals come from the server-side aggregate stats endpoint
+      // (avoids pulling every repair page — that flooded the API rate limiter
+      // and starved checkout). Only the 10 most-recent repairs are fetched for
+      // the preview table.
+      console.log('🔧 Loading repair stats + recent repairs...');
       try {
-        const firstRep = await repairService.getRepairs(1, 100);
-        const repTotalPages = firstRep.meta?.totalPages || 1;
-        const allRepData = [...firstRep.data];
-        if (repTotalPages > 1) {
-          const remaining = Array.from({ length: repTotalPages - 1 }, (_, i) => i + 2);
-          const results = await Promise.all(remaining.map(p => repairService.getRepairs(p, 100)));
-          for (const r of results) allRepData.push(...r.data);
-        }
-        repairsResponse = { data: allRepData };
-        console.log('🔧 Repairs loaded:', allRepData.length);
+        const [stats, recentRep] = await Promise.all([
+          repairService.getRepairStats().catch(() => null),
+          repairService.getRepairs(1, 10).catch(() => ({ data: [] as any[] })),
+        ]);
+        setRepairStats(stats);
+        setRepairData(recentRep.data || []);
+        console.log('🔧 Repair stats:', stats?.totalRepairs, '· recent:', (recentRep.data || []).length);
       } catch (repairError) {
-        console.error('❌ Failed to load repairs list:', repairError);
-        repairsResponse = { data: [] };
+        console.error('❌ Failed to load repairs:', repairError);
+        setRepairStats(null);
+        setRepairData([]);
       }
-
-      // Handle different response structures
-      const repairs = Array.isArray(repairsResponse)
-        ? repairsResponse
-        : (repairsResponse?.data || repairsResponse?.items || repairsResponse?.repairs || []);
-      console.log('🔧 Repairs loaded:', repairs.length);
-      if (repairs.length > 0) {
-        console.log('🔧 Sample repair:', repairs[0]);
-        console.log('🔧 Repair cost fields:', {
-          totalCost: repairs[0].totalCost,
-          actualCost: repairs[0].actualCost,
-          estimatedCost: repairs[0].estimatedCost,
-          depositAmount: repairs[0].depositAmount,
-          finalCost: repairs[0].finalCost,
-          cost: repairs[0].cost,
-          price: repairs[0].price,
-          amount: repairs[0].amount,
-          allKeys: Object.keys(repairs[0])
-        });
-      }
-
-      // If no repairs from list, try to get stats as fallback
-      if (repairs.length === 0) {
-        console.log('🔧 No repairs from list, trying stats...');
-        try {
-          const repairStats = await repairService.getRepairStats();
-          console.log('🔧 Repair stats:', repairStats);
-          // Create dummy repair entries from stats if available
-          if (repairStats && repairStats.totalRepairs > 0) {
-            // Store stats for later use
-            (window as any).__repairStats = repairStats;
-          }
-        } catch (statsError) {
-          console.error('❌ Failed to load repair stats:', statsError);
-        }
-      }
-
-      setRepairData(repairs);
     } catch (error: any) {
       console.error('❌ Error loading data:', error);
       setError(error?.message || 'Failed to load data');
@@ -368,40 +331,42 @@ const ProductSalesReport: React.FC = () => {
     const salesRevenue = repairSalesData.reduce((sum, rs) => sum + rs.amount, 0);
     console.log('🔧 Repair revenue from sales:', salesRevenue);
 
-    // Also calculate from repair records (for repairs not yet paid)
-    const recordsRevenue = repairData.reduce((sum, r) => {
+    // Repair-record revenue/counts come from the server-side aggregate stats;
+    // fall back to the recent-repairs sample if stats are unavailable.
+    const recordsRevenue = repairStats?.totalRevenue ?? repairData.reduce((sum, r) => {
       const cost = Number(r.totalCost) || Number(r.actualCost) || Number(r.estimatedCost) ||
                    Number(r.finalCost) || Number(r.cost) || Number(r.price) ||
                    Number(r.amount) || Number(r.depositAmount) || 0;
       return sum + cost;
     }, 0);
-    console.log('🔧 Repair revenue from records:', recordsRevenue);
 
     // Use the higher value or combine them
     // If we have sales revenue, that's the actual paid amount
     const totalRevenue = salesRevenue > 0 ? salesRevenue : recordsRevenue;
 
-    const completed = repairData.filter(r =>
+    const completedCount = repairStats?.completedRepairs ?? repairData.filter(r =>
       r.status === 'DELIVERED' || r.status === 'COMPLETED' || r.status === 'COLLECTED' || r.status === 'READY_FOR_COLLECTION'
-    );
+    ).length;
 
-    const statusCounts: Record<string, number> = {};
-    repairData.forEach(r => {
-      const status = r.status || 'UNKNOWN';
-      statusCounts[status] = (statusCounts[status] || 0) + 1;
-    });
+    const statusCounts: Record<string, number> = repairStats?.statusBreakdown
+      ?? repairStats?.byStatus
+      ?? repairData.reduce((c: Record<string, number>, r) => {
+        const status = r.status || 'UNKNOWN';
+        c[status] = (c[status] || 0) + 1;
+        return c;
+      }, {});
 
-    // Use repair sales count if we have them, otherwise use repair records
-    const paidRepairsCount = repairSalesData.length > 0 ? repairSalesData.length : completed.length;
+    // Use repair sales count if we have them, otherwise use completed repairs
+    const paidRepairsCount = repairSalesData.length > 0 ? repairSalesData.length : completedCount;
 
     return {
-      totalRepairs: repairData.length,
+      totalRepairs: repairStats?.totalRepairs ?? repairData.length,
       completedRepairs: paidRepairsCount,
       totalRevenue,
       averageRepairValue: paidRepairsCount > 0 ? totalRevenue / paidRepairsCount : 0,
       repairsByStatus: statusCounts,
     };
-  }, [repairData, repairSalesData]);
+  }, [repairData, repairSalesData, repairStats]);
 
   // Filter products by search and category
   const displayedProducts = useMemo(() => {
