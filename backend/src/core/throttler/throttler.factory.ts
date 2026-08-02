@@ -5,13 +5,26 @@ import Redis from 'ioredis';
 
 /**
  * Single global throttler tier — applied to every route by the global
- * ThrottlerGuard at 100 req/min/IP. Stricter routes (e.g. login) OVERRIDE
- * this named tier per-handler with @Throttle({ global: { limit, ttl } }).
+ * ThrottlerGuard. Stricter routes (e.g. login) OVERRIDE this named tier
+ * per-handler with @Throttle({ global: { limit, ttl } }).
  * (In throttler v6 every named tier applies to every route, so we keep one
  * tier and override it where needed rather than declaring extra global tiers.)
+ *
+ * The limit is PER USER for authenticated traffic (GlobalThrottlerGuard keys on
+ * the JWT subject), not per IP — so a busy shop where several tills share one
+ * public IP is not collectively throttled. 300/min ≈ 5 req/s per cashier, ample
+ * for browsing inventory + ringing sales. Anonymous traffic still keys per IP.
  */
-export const AUTH_THROTTLE = { limit: 5, ttl: 15 * 60_000 };
-export const THROTTLER_TIERS = [{ name: 'global', ttl: 60_000, limit: 100 }];
+export const THROTTLER_TIERS = [{ name: 'global', ttl: 60_000, limit: 300 }];
+
+/**
+ * Credential-endpoint throttle (login, PIN unlock). Deliberately NOT a long
+ * lockout: a cashier who mistypes during a rush must never be stalled. 15
+ * attempts / 3 min per IP still starves a brute-force bot (~300/hr against an
+ * unknown password) while comfortably absorbing a multi-till morning + typos.
+ * PIN brute-force is separately bounded by the per-device server-side lockout.
+ */
+export const AUTH_THROTTLE = { limit: 15, ttl: 3 * 60_000 };
 
 /**
  * Builds ThrottlerModule options. Uses a Redis-backed store when a Redis

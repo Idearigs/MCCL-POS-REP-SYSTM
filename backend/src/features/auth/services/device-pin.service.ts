@@ -24,7 +24,10 @@ import { AuthResponseDto } from '../dto/auth.dto';
 export class DevicePinService {
   private readonly logger = new Logger(DevicePinService.name);
   private readonly MAX_ATTEMPTS = 5;
-  private readonly LOCK_MINUTES = 15;
+  // Short cool-off, not a wall: after too many wrong PINs the client drops to
+  // the (forgiving) password login immediately, so the cashier is never stalled
+  // — this only gates further PIN retries on that device.
+  private readonly LOCK_MINUTES = 5;
 
   constructor(
     private prisma: PrismaService,
