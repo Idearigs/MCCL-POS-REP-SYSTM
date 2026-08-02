@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
 import { AuthCoreService } from './services/auth-core.service';
 import { UserManagementService } from './services/user-management.service';
 import { TenantProvisioningService } from './services/tenant-provisioning.service';
+import { DevicePinService } from './services/device-pin.service';
 import type { RegisterDto, RefreshTokenDto } from './dto/auth.dto';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ describe('AuthService', () => {
   let authCore: jest.Mocked<AuthCoreService>;
   let userManagement: jest.Mocked<UserManagementService>;
   let tenantProvisioning: jest.Mocked<TenantProvisioningService>;
+  let devicePin: jest.Mocked<DevicePinService>;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -60,7 +62,19 @@ describe('AuthService', () => {
       updateTenantStatus: jest.fn(),
     } as unknown as jest.Mocked<TenantProvisioningService>;
 
-    service = new AuthService(authCore, userManagement, tenantProvisioning);
+    devicePin = {
+      setupPin: jest.fn(),
+      unlock: jest.fn(),
+      listDevices: jest.fn(),
+      revoke: jest.fn(),
+    } as unknown as jest.Mocked<DevicePinService>;
+
+    service = new AuthService(
+      authCore,
+      userManagement,
+      tenantProvisioning,
+      devicePin,
+    );
   });
 
   it('should be defined', () => {

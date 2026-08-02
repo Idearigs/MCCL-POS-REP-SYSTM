@@ -21,6 +21,7 @@ import {
 import { AuthCoreService } from './services/auth-core.service';
 import { UserManagementService } from './services/user-management.service';
 import { TenantProvisioningService } from './services/tenant-provisioning.service';
+import { DevicePinService } from './services/device-pin.service';
 
 @Injectable()
 export class AuthService {
@@ -28,6 +29,7 @@ export class AuthService {
     private authCore: AuthCoreService,
     private userManagement: UserManagementService,
     private tenantProvisioning: TenantProvisioningService,
+    private devicePin: DevicePinService,
   ) {}
 
   // ── Auth core ──────────────────────────────────────────────────────────────
@@ -101,6 +103,30 @@ export class AuthService {
     pin?: string,
   ): Promise<{ success: boolean; hasPin: boolean }> {
     return this.userManagement.setCashUpPin(tenantId, userId, pin);
+  }
+
+  // ── Device PIN quick sign-in ─────────────────────────────────────────────────
+
+  setupDevicePin(
+    tenantId: string,
+    userId: string,
+    deviceId: string,
+    pin: string,
+    label?: string,
+  ) {
+    return this.devicePin.setupPin(tenantId, userId, deviceId, pin, label);
+  }
+
+  unlockDevicePin(deviceId: string, pin: string): Promise<AuthResponseDto> {
+    return this.devicePin.unlock(deviceId, pin);
+  }
+
+  listDevicePins(tenantId: string, userId: string) {
+    return this.devicePin.listDevices(tenantId, userId);
+  }
+
+  revokeDevicePin(tenantId: string, userId: string, deviceId: string) {
+    return this.devicePin.revoke(tenantId, userId, deviceId);
   }
 
   // ── Tenant provisioning ────────────────────────────────────────────────────
