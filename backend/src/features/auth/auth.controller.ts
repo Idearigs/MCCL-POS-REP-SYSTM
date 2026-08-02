@@ -42,6 +42,8 @@ import {
   RefreshTokenDto,
   ChangePasswordDto,
   AuthResponseDto,
+  SetupDevicePinDto,
+  UnlockDevicePinDto,
 } from './dto/auth.dto';
 
 @ApiTags('Authentication')
@@ -340,6 +342,85 @@ export class AuthController {
    * Internal endpoint — called by Mainframe to provision a new tenant + owner user.
    * Requires X-Internal-Key header matching INTERNAL_API_KEY env var.
    */
+  // ── Device PIN quick sign-in ─────────────────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard)
+  @Post('device-pin/setup')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Set a 6-digit quick-sign-in PIN for this device',
+    description:
+      'Stores a bcrypt hash of the PIN server-side, bound to the current user and the supplied opaque deviceId.',
+  })
+  @ApiResponse({ status: 200, description: 'PIN set' })
+  @ApiBody({ type: SetupDevicePinDto })
+  async setupDevicePin(
+    @CurrentUser() user: { id: string; tenantId: string },
+    @Body() dto: SetupDevicePinDto,
+  ) {
+    return this.authService.setupDevicePin(
+      user.tenantId,
+      user.id,
+      dto.deviceId,
+      dto.pin,
+      dto.label,
+    );
+  }
+
+  @Public()
+  @Post('device-pin/unlock')
+  // Same strict credential throttle as password login, on top of the
+  // per-device server-side attempt lockout.
+  @Throttle({ global: { limit: 5, ttl: 15 * 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Exchange a device PIN for a session',
+    description:
+      'Verifies deviceId + PIN against the stored hash and returns a fresh token pair.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Unlock successful',
+    type: AuthResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Incorrect PIN or unknown device' })
+  @ApiResponse({ status: 403, description: 'PIN locked — use password' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiBody({ type: UnlockDevicePinDto })
+  async unlockDevicePin(
+    @Body() dto: UnlockDevicePinDto,
+  ): Promise<AuthResponseDto> {
+    // Tenant is derived from the device row (deviceId is globally unique), not
+    // from the request header — the pre-auth login screen has no valid tenant.
+    return this.authService.unlockDevicePin(dto.deviceId, dto.pin);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('device-pin/devices')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'List this user’s trusted PIN devices' })
+  @ApiResponse({ status: 200, description: 'Devices retrieved' })
+  async listDevicePins(@CurrentUser() user: { id: string; tenantId: string }) {
+    return this.authService.listDevicePins(user.tenantId, user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('device-pin/:deviceId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Revoke a trusted PIN device',
+    description: 'Disables PIN sign-in for the given device (remote sign-out).',
+  })
+  @ApiResponse({ status: 204, description: 'Device revoked' })
+  async revokeDevicePin(
+    @CurrentUser() user: { id: string; tenantId: string },
+    @Param('deviceId') deviceId: string,
+  ): Promise<void> {
+    await this.authService.revokeDevicePin(user.tenantId, user.id, deviceId);
+  }
+
   @Public()
   @Post('provision-tenant')
   @HttpCode(HttpStatus.CREATED)

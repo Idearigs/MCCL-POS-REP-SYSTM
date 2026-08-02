@@ -5,6 +5,7 @@ import {
   MinLength,
   MaxLength,
   IsOptional,
+  Matches,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -148,6 +149,60 @@ export class ResetPasswordDto {
   @MinLength(8, { message: 'Password must be at least 8 characters long' })
   @MaxLength(128, { message: 'Password must not exceed 128 characters' })
   newPassword: string;
+}
+
+export class SetupDevicePinDto {
+  @ApiProperty({
+    description: 'Opaque device id (client-generated UUID) to bind this PIN to',
+    example: '9f1c1e2a-7b3d-4c5e-8f9a-0b1c2d3e4f5a',
+  })
+  @IsString()
+  @MinLength(8)
+  @MaxLength(100)
+  deviceId: string;
+
+  @ApiProperty({ description: '6-digit numeric PIN', example: '246813' })
+  @IsString()
+  @Matches(/^\d{6}$/, { message: 'PIN must be exactly 6 digits' })
+  pin: string;
+
+  @ApiProperty({
+    description: 'Human-readable device label',
+    example: 'Front till — Chrome',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  label?: string;
+}
+
+export class UnlockDevicePinDto {
+  @ApiProperty({
+    description: 'Opaque device id stored on this device at setup',
+    example: '9f1c1e2a-7b3d-4c5e-8f9a-0b1c2d3e4f5a',
+  })
+  @IsString()
+  @MinLength(8)
+  @MaxLength(100)
+  deviceId: string;
+
+  @ApiProperty({ description: '6-digit numeric PIN', example: '246813' })
+  @IsString()
+  @Matches(/^\d{6}$/, { message: 'PIN must be exactly 6 digits' })
+  pin: string;
+
+  @ApiProperty({
+    description: 'Company code / subdomain (for multi-tenant resolution)',
+    example: 'buymejewellery',
+    required: false,
+  })
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
+  @IsString()
+  companySlug?: string;
 }
 
 export class AuthResponseDto {

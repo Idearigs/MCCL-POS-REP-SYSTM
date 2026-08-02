@@ -489,6 +489,7 @@ model tenants {
   users                   users[]
   gift_cards              gift_cards[]
   pos_tiles               pos_tiles[]
+  trusted_devices         trusted_devices[]
 }
 
 model outlets {
@@ -552,9 +553,34 @@ model users {
   task_comments                task_comments[]
   created_tasks                tasks[]                   @relation("TaskCreator")
   created_gift_cards           gift_cards[]              @relation("GiftCardCreatedBy")
+  trusted_devices              trusted_devices[]
   tenants                      tenants                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([email, tenantId])
+}
+
+/// A device (browser/till) a user has trusted for 6-digit PIN quick sign-in.
+/// The PIN is stored only as a bcrypt hash here — never on the device — so a
+/// stolen device has no offline-crackable secret. Brute-force is stopped by the
+/// server-side attempt counter + lockout, and access can be revoked remotely.
+model trusted_devices {
+  id             String    @id
+  tenantId       String
+  userId         String
+  deviceId       String    @unique // opaque random id the client keeps (non-secret)
+  pinHash        String // bcrypt hash of the 6-digit PIN
+  label          String? // e.g. "Front till — Chrome on Windows"
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime
+  users          users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenants        tenants   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@map("trusted_devices")
 }
 
 model stock_take_sessions {

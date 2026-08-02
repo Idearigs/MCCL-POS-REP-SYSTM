@@ -19,13 +19,12 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { apiClient } from "@/services/apiClient";
 import {
   hasPinDevice,
   getPinDevice,
   setupPin,
   unlockPin,
-  clearPinDevice,
+  forgetPinDevice,
   isValidPin,
   PIN_LENGTH,
   PinUnlockError,
@@ -126,26 +125,9 @@ const Login = () => {
     setIsLoading(true);
     setPinError(null);
     try {
-      const refreshToken = await unlockPin(enteredPin); // throws on wrong PIN
-      const ok = await apiClient.loginWithRefreshToken(refreshToken);
-      if (!ok) {
-        // PIN was correct but the saved session has expired.
-        clearPinDevice();
-        setMode("password");
-        toast({
-          title: "Session expired",
-          description: "Please sign in with your password once more.",
-        });
-        return;
-      }
-      // Rotate: re-encrypt the fresh refresh token under the same PIN.
-      const dev = getPinDevice() ?? pinDevice;
-      const rotated = localStorage.getItem("refreshToken");
-      if (dev && rotated) {
-        await setupPin(enteredPin, rotated, dev.email, dev.companySlug).catch(
-          () => undefined,
-        );
-      }
+      // Verifies the PIN server-side and, on success, installs a fresh token
+      // pair into the apiClient (throws PinUnlockError otherwise).
+      await unlockPin(enteredPin);
       // Hard-reload into the app so AuthContext bootstraps from the fresh token.
       window.location.replace(redirectTarget());
     } catch (err) {
@@ -154,9 +136,12 @@ const Login = () => {
         setMode("password");
         toast({
           title: "Too many attempts",
-          description: "Quick sign-in was reset. Please use your password.",
+          description: "Quick sign-in is locked. Please use your password.",
           variant: "destructive",
         });
+      } else if (e.code === "NETWORK") {
+        setPin("");
+        setPinError("Network error — check your connection and try again");
       } else {
         setPin("");
         setPinError(
@@ -188,13 +173,15 @@ const Login = () => {
       setSetupError("PINs do not match");
       return;
     }
-    const refreshToken = localStorage.getItem("refreshToken");
-    if (!setupCtx || !refreshToken) {
+    if (!setupCtx) {
       finishSetup();
       return;
     }
     try {
-      await setupPin(newPin, refreshToken, setupCtx.email, setupCtx.companySlug);
+      await setupPin(newPin, {
+        email: setupCtx.email,
+        companySlug: setupCtx.companySlug,
+      });
       toast({ title: "Quick sign-in enabled", description: "Next time, just enter your PIN." });
     } catch {
       // Non-fatal — proceed into the app either way.
@@ -295,7 +282,7 @@ const Login = () => {
                 <button
                   type="button"
                   className="text-slate-400 hover:text-red-500"
-                  onClick={() => { clearPinDevice(); setPin(""); setPinError(null); setMode("password"); }}
+                  onClick={() => { void forgetPinDevice(); setPin(""); setPinError(null); setMode("password"); }}
                 >
                   Forget this device
                 </button>
