@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { google } from 'googleapis';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
+import { Jimp } from 'jimp';
 import { Readable } from 'stream';
 
 export interface FileUploadResult {
@@ -520,6 +522,64 @@ export class FileStorageService {
    * This is necessary because Shared Drive files are private — browsers cannot
    * access them directly, but the service account can.
    */
+  /**
+   * Return a small, cached JPEG thumbnail of a locally-stored (/uploads) image,
+   * or null if the source can't be resolved/resized (caller then falls back to
+   * the original). Phone photos are multi-MB; the grid only needs ~100px, so
+   * serving a resized copy cuts the transfer ~100-200x. Thumbnails are generated
+   * once with jimp and cached to /uploads/.thumbs; originals are never modified.
+   */
+  async getLocalThumbnail(
+    src: string,
+    width: number,
+  ): Promise<{ buffer: Buffer; contentType: string } | null> {
+    try {
+      // Pull the path under /uploads/ out of a relative or absolute URL.
+      const marker = '/uploads/';
+      const idx = src.indexOf(marker);
+      if (idx === -1) return null;
+      const relative = decodeURIComponent(
+        src.slice(idx + marker.length).split('?')[0],
+      );
+      if (!relative || relative.includes('..')) return null;
+
+      // Resolve within the uploads root and guard against path traversal.
+      const uploadsRoot = path.resolve(this.uploadDirectory);
+      const fullPath = path.resolve(uploadsRoot, relative);
+      if (!fullPath.startsWith(uploadsRoot + path.sep)) return null;
+      if (relative.startsWith('.thumbs')) return null; // never re-thumb a thumb
+      if (!fs.existsSync(fullPath)) return null;
+
+      const w = Math.max(32, Math.min(Math.floor(width) || 200, 800));
+      const hash = crypto.createHash('sha1').update(relative).digest('hex');
+      const cacheDir = path.join(uploadsRoot, '.thumbs', `w${w}`);
+      const cachePath = path.join(cacheDir, `${hash}.jpg`);
+
+      // Serve the cached thumbnail if we already made one.
+      if (fs.existsSync(cachePath)) {
+        return {
+          buffer: await fs.promises.readFile(cachePath),
+          contentType: 'image/jpeg',
+        };
+      }
+
+      const image = await Jimp.read(fullPath);
+      if (image.bitmap.width > w) image.resize({ w });
+      const buffer = await image.getBuffer('image/jpeg', { quality: 80 });
+
+      // Cache best-effort — a write failure must not break serving the image.
+      await fs.promises.mkdir(cacheDir, { recursive: true });
+      await fs.promises.writeFile(cachePath, buffer).catch(() => undefined);
+
+      return { buffer, contentType: 'image/jpeg' };
+    } catch (error) {
+      this.logger.warn(
+        `Thumbnail generation failed for ${src}: ${(error as Error).message}`,
+      );
+      return null;
+    }
+  }
+
   async streamDriveFile(
     fileId: string,
     res: import('express').Response,

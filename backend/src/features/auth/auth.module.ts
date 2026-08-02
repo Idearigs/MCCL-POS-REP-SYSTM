@@ -8,6 +8,7 @@ import { AuthService } from './auth.service';
 import { AuthCoreService } from './services/auth-core.service';
 import { UserManagementService } from './services/user-management.service';
 import { TenantProvisioningService } from './services/tenant-provisioning.service';
+import { DevicePinService } from './services/device-pin.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -35,6 +36,7 @@ import { OutletsModule } from '../outlets/outlets.module';
     AuthCoreService,
     UserManagementService,
     TenantProvisioningService,
+    DevicePinService,
     AuthService,
     JwtStrategy,
     JwtRefreshStrategy,

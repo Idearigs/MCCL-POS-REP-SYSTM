@@ -35,17 +35,27 @@ const BACKEND_HOST = API_BASE.replace(/\/api\/v1\/?$/, '');
 /**
  * Normalise any image URL for display:
  * - Google Drive URLs → backend proxy (Drive files are private)
+ * - Local /uploads images → optionally a small cached thumbnail (opts.w) for
+ *   grids/avatars, so a 40px cell doesn't download a multi-MB phone photo
  * - Relative /uploads paths → prefixed with the real backend host
  * - Stale localhost /uploads URLs (saved in DB) → rewritten to real backend host
  * - Everything else (CDN, external) → returned as-is
  */
-export function normalizeImageUrl(url?: string | null): string | undefined {
+export function normalizeImageUrl(
+  url?: string | null,
+  opts?: { w?: number },
+): string | undefined {
   if (!url) return undefined;
 
   // Google Drive → proxy
   const driveId = extractDriveFileId(url);
   if (driveId) {
     return `${API_BASE}/file-storage/drive/${driveId}`;
+  }
+
+  // Local upload + a requested width → cached, resized thumbnail endpoint.
+  if (opts?.w && url.includes('/uploads/')) {
+    return `${API_BASE}/file-storage/thumb?src=${encodeURIComponent(url)}&w=${opts.w}`;
   }
 
   // Relative path e.g. /uploads/product-images/...
