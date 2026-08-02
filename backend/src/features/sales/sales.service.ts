@@ -63,6 +63,7 @@ export class SalesService {
     tenantId: string,
     userId: string,
     idempotencyKey?: string,
+    attempt = 0,
   ): Promise<SaleResponseDto> {
     // Idempotency key resolution: prefer the Idempotency-Key header, fall back to
     // the body's clientSaleId (offline-sync path). Either uniquely identifies a
@@ -452,9 +453,55 @@ export class SalesService {
           return this.mapToResponseDto(existing);
         }
       }
+
+      // ── SALE-NUMBER RACE ───────────────────────────────────────────────
+      // generateSaleNumber derives the sequence from count()+1, so two
+      // concurrent checkouts can compute the same SALE-YYYYMM-NNNN and the
+      // unique constraint [tenantId, saleNumber] rejects the loser with P2002.
+      // This is transient — retry with a fresh count (and a little jittered
+      // backoff so retries de-sync) rather than surfacing a 500 to the till.
+      const MAX_SALE_NUMBER_RETRIES = 6;
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        this.isSaleNumberConflict(error) &&
+        attempt < MAX_SALE_NUMBER_RETRIES
+      ) {
+        const backoff = 15 * (attempt + 1) + Math.floor(Math.random() * 25);
+        this.logger.warn(
+          `Sale number collision (attempt ${attempt + 1}/${MAX_SALE_NUMBER_RETRIES}) — retrying in ${backoff}ms`,
+        );
+        await new Promise((r) => setTimeout(r, backoff));
+        return this.create(
+          createSaleDto,
+          tenantId,
+          userId,
+          idempotencyKey,
+          attempt + 1,
+        );
+      }
+
       this.logger.error('Failed to create sale:', error.message);
       throw error;
     }
+  }
+
+  /**
+   * Distinguish a saleNumber unique-constraint violation (retryable — two
+   * tills computed the same sequence) from any other P2002 (e.g. clientSaleId,
+   * handled separately above). Prisma exposes the offending columns in
+   * error.meta.target.
+   */
+  private isSaleNumberConflict(
+    error: Prisma.PrismaClientKnownRequestError,
+  ): boolean {
+    const target = error.meta?.target;
+    const asStr = Array.isArray(target)
+      ? target.join(',')
+      : typeof target === 'string'
+        ? target
+        : '';
+    return asStr.toLowerCase().includes('salenumber');
   }
 
   /**
