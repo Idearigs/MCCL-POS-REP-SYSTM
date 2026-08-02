@@ -24,6 +24,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { AUTH_THROTTLE } from '../../core/throttler/throttler.factory';
 import { AuthService } from './auth.service';
 import { verifyInternalHmac } from '../../shared/utils/hmac-verify';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -54,9 +55,10 @@ export class AuthController {
 
   @Public()
   @Post('login')
-  // Stricter rate limit on credentials: 5 attempts / 15 min per IP (overrides
-  // the global 100/min tier for this handler only).
-  @Throttle({ global: { limit: 5, ttl: 15 * 60_000 } })
+  // Forgiving credential throttle (see AUTH_THROTTLE) — enough to stop a bot
+  // without stalling a cashier who mistypes during a rush. Its own per-handler
+  // bucket, separate from PIN unlock.
+  @Throttle({ global: AUTH_THROTTLE })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'User login',
@@ -370,9 +372,9 @@ export class AuthController {
 
   @Public()
   @Post('device-pin/unlock')
-  // Same strict credential throttle as password login, on top of the
-  // per-device server-side attempt lockout.
-  @Throttle({ global: { limit: 5, ttl: 15 * 60_000 } })
+  // Forgiving IP throttle (own bucket) on top of the per-device server-side
+  // attempt lockout, which is the real brute-force defense for PINs.
+  @Throttle({ global: AUTH_THROTTLE })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Exchange a device PIN for a session',
