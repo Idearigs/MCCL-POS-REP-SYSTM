@@ -345,6 +345,57 @@ export class AuthCoreService {
     }
   }
 
+  /**
+   * Mint a fresh session (access + rotated refresh) for an already-authenticated
+   * user and return the standard auth response. Used by alternative sign-in
+   * paths (e.g. device-PIN quick unlock) that have verified identity by other
+   * means and now need the same token pair a password login would produce.
+   * `user` must include its `tenants` relation.
+   */
+  async issueSession(user: any): Promise<AuthResponseDto> {
+    const tokens = await this.generateTokens(user);
+    const hashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 10);
+
+    await this.prismaService.users.update({
+      where: { id: user.id },
+      data: { refreshToken: hashedRefreshToken, lastLogin: new Date() },
+    });
+
+    await this.cacheService.setUserData(
+      user.id,
+      'session',
+      {
+        id: user.id,
+        email: user.email,
+        tenantId: user.tenantId,
+        role: user.role,
+      },
+      3600,
+    );
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        tenantId: user.tenantId,
+      },
+      tenant: user.tenants
+        ? {
+            id: user.tenants.id,
+            name: user.tenants.name,
+            subdomain: user.tenants.subdomain,
+            status: user.tenants.status,
+          }
+        : undefined,
+      expiresIn: this.getExpirationTime(),
+    };
+  }
+
   private async generateTokens(user: any) {
     const payload = {
       sub: user.id,
