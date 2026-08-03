@@ -48,8 +48,10 @@ const ProductCard: React.FC<ProductCardProps> = ({
       <div className="aspect-square w-full bg-gray-100 relative overflow-hidden">
         {image ? (
           <img
-            src={normalizeImageUrl(image)}
+            src={normalizeImageUrl(image, { w: 200 })}
             alt={name}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover"
           />
         ) : (
