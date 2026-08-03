@@ -2,6 +2,16 @@
 import { apiClient } from './apiClient';
 import { API_CONFIG, PaginatedResponse } from '../config/api';
 
+// Short-lived dedupe/cache for repair stats. The dashboard fires getRepairStats
+// from three different code paths on a single load; without this that's three
+// identical /repairs/stats hits (each ~1–2s) competing for the connection pool.
+// Concurrent callers share one in-flight request, and a brief TTL lets quick
+// re-navigations reuse the result. Stats are read-only aggregates, so a few
+// seconds of staleness is harmless.
+let repairStatsCache: { data: unknown; at: number } | null = null;
+let repairStatsInflight: Promise<unknown> | null = null;
+const REPAIR_STATS_TTL_MS = 5000;
+
 export interface Repair {
   id: string;
   repairNumber?: string;
@@ -280,8 +290,24 @@ class RepairService {
   }
 
   async getRepairStats(): Promise<RepairStats> {
+    const now = Date.now();
+    if (repairStatsCache && now - repairStatsCache.at < REPAIR_STATS_TTL_MS) {
+      return repairStatsCache.data as RepairStats;
+    }
+    if (repairStatsInflight) {
+      return repairStatsInflight as Promise<RepairStats>;
+    }
+    repairStatsInflight = apiClient
+      .get<RepairStats>(API_CONFIG.ENDPOINTS.REPAIR_STATS)
+      .then((data) => {
+        repairStatsCache = { data, at: Date.now() };
+        return data;
+      })
+      .finally(() => {
+        repairStatsInflight = null;
+      });
     try {
-      return await apiClient.get<RepairStats>(API_CONFIG.ENDPOINTS.REPAIR_STATS);
+      return (await repairStatsInflight) as RepairStats;
     } catch (error) {
       console.error('Failed to fetch repair stats:', error);
       throw error;
