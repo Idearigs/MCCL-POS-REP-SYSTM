@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { salesService, Sale, CreateSaleData } from '../services/salesService';
 import { repairService, Repair, CreateRepairData } from '../services/repairService';
 import { useAuth } from './AuthContext';
+import { fetchAllPages } from '../lib/fetchAllPages';
 
 // Types for our transaction data (extending backend types)
 export type TransactionType = 'sale' | 'repair';
@@ -63,26 +64,21 @@ export const TransactionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setLoading(true);
     setError(null);
     try {
-      // Load first pages of sales and repairs in parallel to get totals
-      const [firstSalesRes, firstRepairsRes] = await Promise.all([
-        salesService.getSales(1, 100),
-        repairService.getRepairs(1, 100),
+      // Concurrency- and page-capped fetch. Firing every page in parallel
+      // (Promise.all over all pages) stormed the API — a client with 130 pages
+      // of repairs sent 130 simultaneous requests on every app load, tripping
+      // the rate limiter and starving auth calls (spurious logouts) + ~50s
+      // loads. fetchAllPages fetches at most `maxPages` pages, 3 at a time.
+      const [allSales, allRepairsData] = await Promise.all([
+        fetchAllPages((page) => salesService.getSales(page, 100), {
+          concurrency: 3,
+          maxPages: 30,
+        }),
+        fetchAllPages((page) => repairService.getRepairs(page, 100), {
+          concurrency: 3,
+          maxPages: 30,
+        }),
       ]);
-
-      const salesTotalPages = firstSalesRes.meta?.totalPages || 1;
-      const repairsTotalPages = firstRepairsRes.meta?.totalPages || 1;
-
-      // Build remaining page numbers then fetch all in parallel
-      const remainingSalesPages = Array.from({ length: Math.max(0, salesTotalPages - 1) }, (_, i) => i + 2);
-      const remainingRepairsPages = Array.from({ length: Math.max(0, repairsTotalPages - 1) }, (_, i) => i + 2);
-
-      const [remainingSalesResults, remainingRepairsResults] = await Promise.all([
-        Promise.all(remainingSalesPages.map(p => salesService.getSales(p, 100))),
-        Promise.all(remainingRepairsPages.map(p => repairService.getRepairs(p, 100))),
-      ]);
-
-      const allSales = [...firstSalesRes.data, ...remainingSalesResults.flatMap(r => r.data)];
-      const allRepairsData = [...firstRepairsRes.data, ...remainingRepairsResults.flatMap(r => r.data)];
 
       const sales = allSales.map(convertSaleToTransaction);
       const repairs = allRepairsData.map(convertRepairToTransaction);
