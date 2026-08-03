@@ -155,6 +155,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check authentication status on mount — call /auth/me so we always
   // get the real user name/role from the server, not just the JWT payload
   useEffect(() => {
+    // Call /auth/me, retrying transient backend failures (no response, timeout,
+    // 5xx, 429) with a short backoff. Genuine auth errors (401/403) are thrown
+    // immediately so the caller can act on them without waiting out retries.
+    const getMeWithRetry = async (attempts = 3): Promise<any> => {
+      for (let i = 0; i < attempts; i++) {
+        try {
+          return await authService.getMe();
+        } catch (err: any) {
+          const status = err?.response?.status ?? err?.status ?? err?.statusCode;
+          const isTransient =
+            status === undefined || status === 0 || status === 408 ||
+            status === 429 || status >= 500;
+          // Don't retry real auth failures, and don't sleep after the last try.
+          if (!isTransient || i === attempts - 1) throw err;
+          await new Promise(res => setTimeout(res, 400 * (i + 1)));
+        }
+      }
+    };
+
     const checkAuthStatus = async () => {
       try {
         const accessToken = authService.getToken();
@@ -168,7 +187,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Call /auth/me. If the access token is expired the apiClient interceptor
         // will automatically use the refresh token to get a new one and retry.
-        const me = await authService.getMe();
+        // Retry transient failures (backend briefly saturated under load) with a
+        // short backoff before giving up — a network blip must NOT log a cashier
+        // out mid-shift.
+        const me = await getMeWithRetry();
         setAuth(prev => ({
           ...prev,
           user: {
@@ -183,8 +205,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }));
         return;
       } catch (err: any) {
+        const status = err?.response?.status ?? err?.status ?? err?.statusCode;
+
         // 403 TENANT_SUSPENDED — show the suspension screen without logging out
-        if (err?.response?.status === 403 || err?.status === 403) {
+        if (status === 403) {
           const data = err?.response?.data || err?.data || {};
           setAuth(prev => ({
             ...prev,
@@ -197,7 +221,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }));
           return;
         }
-        // Token invalid or /auth/me failed — force logout
+
+        // Transient backend failure (no response, timeout, 5xx, 429) — the token
+        // is almost certainly still valid, the backend was just briefly
+        // unreachable (e.g. saturated by a burst of image/thumbnail requests on
+        // cold cache). Do NOT clear auth. If the stored access token is still
+        // locally valid, keep the session so the shop keeps trading; the app's
+        // own requests will succeed once the backend recovers. Only a genuine
+        // 401 (below) means the credentials are actually bad.
+        const isTransient =
+          status === undefined || status === 0 || status === 408 ||
+          status === 429 || status >= 500;
+        const accessToken = authService.getToken();
+        if (isTransient && accessToken && isTokenValid(accessToken)) {
+          console.warn(
+            '⚠️ /auth/me failed transiently (status:', status,
+            ') — keeping session, backend likely saturated.'
+          );
+          setAuth(prev => ({ ...prev, isAuthenticated: true, loading: false }));
+          return;
+        }
+
+        // Genuine auth failure (401 / invalid or expired credentials with no
+        // usable token) — force logout.
         authService.clearAuth();
         setAuth(prev => ({ ...prev, user: null, isAuthenticated: false, loading: false }));
       }
