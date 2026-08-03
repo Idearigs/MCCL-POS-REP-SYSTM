@@ -14,6 +14,7 @@ import { InventoryProvider } from "./contexts/InventoryContext";
 import { RepairMessagesProvider } from "./contexts/RepairMessagesContext";
 import { RepairTagsProvider } from "./contexts/RepairTagsContext";
 import { SettingsProvider } from "./contexts/SettingsContext";
+import PerfHud from "./components/dev/PerfHud";
 import PrivateRoute from "./components/auth/PrivateRoute";
 import PermissionGuard from "./components/auth/PermissionGuard";
 import FeatureGuard from "./components/auth/FeatureGuard";
@@ -89,6 +90,8 @@ const App = () => (
                     <TooltipProvider>
               <Toaster />
               <Sonner />
+              {/* Dev/staging-only live perf overlay — hard-gated off production. */}
+              <PerfHud />
               <PageTransition>
                 <Routes>
                   {/* Public routes */}
