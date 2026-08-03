@@ -41,8 +41,13 @@ COPY --from=builder --chown=node:node /app/node_modules/.bin/prisma ./node_modul
 
 EXPOSE 3002
 
+# Liveness, NOT readiness: the container should only be restarted when the
+# process itself is dead — never because the DB/cache is briefly saturated
+# under load (restarting can't fix a downstream dependency, and doing so mid-
+# load causes a 503 restart storm). /health (readiness, hits the DB) stays
+# available for external uptime monitors; the container probe uses /health/live.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3002/health', r => process.exit(r.statusCode === 200 ? 0 : 1))" || exit 1
+  CMD node -e "require('http').get('http://localhost:3002/health/live', r => process.exit(r.statusCode === 200 ? 0 : 1))" || exit 1
 
 ENTRYPOINT ["dumb-init", "--"]
 # Create upload subdirs (volume is root-owned so must run as root), migrate, then start
