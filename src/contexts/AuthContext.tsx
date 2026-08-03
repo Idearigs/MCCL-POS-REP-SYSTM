@@ -236,9 +236,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isTransient && accessToken && isTokenValid(accessToken)) {
           console.warn(
             '⚠️ /auth/me failed transiently (status:', status,
-            ') — keeping session, backend likely saturated.'
+            ') — keeping session from token, backend likely saturated.'
           );
-          setAuth(prev => ({ ...prev, isAuthenticated: true, loading: false }));
+          // Populate a provisional user/tenant from the JWT claims so role-gated
+          // pages stay usable while the backend is unreachable (otherwise the
+          // app renders "no permission" with an empty user). This is refined on
+          // the next successful /auth/me. Never overwrite an already-loaded user.
+          const claims = decodeJwtPayload(accessToken);
+          setAuth(prev => ({
+            ...prev,
+            user: prev.user ?? (claims?.sub ? {
+              id: claims.sub,
+              name: claims.email ?? '',
+              email: claims.email ?? '',
+              role: claims.role,
+            } : prev.user),
+            tenantInfo: prev.tenantInfo ?? (claims ? {
+              status: 'ACTIVE',
+              tenantSlug: claims.tenantId ?? null,
+            } : prev.tenantInfo),
+            isAuthenticated: true,
+            loading: false,
+          }));
           return;
         }
 
@@ -260,6 +279,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAuth(prev => ({ ...prev, tenantInfo: buildTenantInfo(me) }));
     } catch {
       // ignore
+    }
+  };
+
+  // Decode the JWT payload without verifying (client-side, best-effort). Used
+  // as a fallback source of user/tenant claims when /auth/me is unreachable.
+  const decodeJwtPayload = (
+    token: string,
+  ): { sub?: string; email?: string; role?: string; tenantId?: string } | null => {
+    try {
+      return JSON.parse(atob(token.split('.')[1]));
+    } catch {
+      return null;
     }
   };
 
