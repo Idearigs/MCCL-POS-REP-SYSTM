@@ -8,7 +8,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit, Trash2, Tag, Image as ImageIcon } from "lucide-react";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { normalizeImageUrl } from "@/lib/utils";
 
 export interface InventoryItemProps {
@@ -58,15 +57,27 @@ const InventoryItem: React.FC<InventoryItemProps> = ({
       <CardContent className="p-3">
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-2">
-            <Avatar className="h-10 w-10 rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-              {imageUrl ? (
-                <AvatarImage src={normalizeImageUrl(imageUrl, { w: 100 })} alt={name} loading="lazy" />
-              ) : (
-                <AvatarFallback className="bg-gradient-to-br from-gray-50 to-gray-100">
-                  <ImageIcon className="h-5 w-5 text-gray-400" />
-                </AvatarFallback>
+            {/* Plain native-lazy <img> instead of Radix AvatarImage: AvatarImage
+                pre-fetches every image immediately (internal `new Image()`),
+                which fired all ~186 thumbnails at once on inventory load and
+                saturated the backend. A native `loading="lazy"` <img> only
+                fetches thumbnails as they scroll into view. The fallback icon
+                sits behind and shows through if there's no image or it errors. */}
+            <div className="h-10 w-10 rounded-xl border border-gray-100 shadow-sm overflow-hidden shrink-0 relative flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+              <ImageIcon className="h-5 w-5 text-gray-400" />
+              {imageUrl && (
+                <img
+                  src={normalizeImageUrl(imageUrl, { w: 100 })}
+                  alt={name}
+                  loading="lazy"
+                  decoding="async"
+                  className="absolute inset-0 h-full w-full object-cover"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  }}
+                />
               )}
-            </Avatar>
+            </div>
             <div>
               <h3 className="font-medium text-sm text-gray-800 line-clamp-1">{name}</h3>
               <div className="flex items-center gap-1 mt-1">

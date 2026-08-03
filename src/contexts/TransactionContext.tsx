@@ -69,6 +69,12 @@ export const TransactionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       // of repairs sent 130 simultaneous requests on every app load, tripping
       // the rate limiter and starving auth calls (spurious logouts) + ~50s
       // loads. fetchAllPages fetches at most `maxPages` pages, 3 at a time.
+      //
+      // This provider is mounted app-wide, so these run on EVERY login even
+      // though only the History page reads the full list. Repairs are the bulk
+      // (a shop can have thousands), so they're capped to the 500 most recent —
+      // enough for the History view; the dedicated Repair Jobs page paginates
+      // server-side for older records. Sales are few pages, left uncapped-ish.
       const [allSales, allRepairsData] = await Promise.all([
         fetchAllPages((page) => salesService.getSales(page, 100), {
           concurrency: 3,
@@ -76,7 +82,7 @@ export const TransactionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         }),
         fetchAllPages((page) => repairService.getRepairs(page, 100), {
           concurrency: 3,
-          maxPages: 30,
+          maxPages: 5,
         }),
       ]);
 
