@@ -96,14 +96,26 @@ async function bootstrap() {
       origin: string | undefined,
       callback: (err: Error | null, allow?: boolean) => void,
     ) => {
+      // Origins from env: accept CORS_ORIGIN (single) and CORS_ORIGINS
+      // (comma-separated) so this matches the mainframe backend's var name.
+      const envOrigins = ['CORS_ORIGIN', 'CORS_ORIGINS']
+        .flatMap((key) => String(configService.get(key) ?? '').split(','))
+        .map((o) => o.trim())
+        .filter(Boolean);
+
       const allowedOrigins = [
-        configService.get('CORS_ORIGIN', 'http://localhost:3000'),
+        ...envOrigins,
         // Production domains
         'https://pos.truedesk.co.uk',
         'https://api.truedesk.co.uk',
         'https://truedesk.co.uk',
         'https://mainframe.truedesk.co.uk',
         'https://apimainframe.truedesk.co.uk',
+        // Staging domains
+        'https://staging-pos.truedesk.co.uk',
+        'https://staging-api.truedesk.co.uk',
+        'https://staging-mainframe.truedesk.co.uk',
+        'https://staging-mianframe-api.truedesk.co.uk',
         // Legacy domains
         'https://pos.buymejewellery.co.uk',
         'https://buymejewellery.co.uk',
