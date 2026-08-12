@@ -19,6 +19,7 @@ import { XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Eye, Printer, RotateCcw, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { salesService, Sale, SaleFilters as SaleFiltersType } from '@/services/salesService';
+import { fetchAllPages } from '@/lib/fetchAllPages';
 import SalesStatsCards from '@/components/sales/SalesStatsCards';
 import SalesFilters, { SalesFilterValues } from '@/components/sales/SalesFilters';
 import SaleDetailModal from '@/components/sales/SaleDetailModal';
@@ -80,14 +81,29 @@ const SalesPage = () => {
 
   const { toast } = useToast();
 
-  // Load sales data
+  // Load static reference data once.
   useEffect(() => {
-    loadSales();
     loadStatistics();
     loadCashiers();
   }, []);
 
-  // Apply filters when they change
+  // (Re)load sales from the server whenever a server-side filter changes — the
+  // date range especially must hit the DB, not filter a stale 100-row page.
+  useEffect(() => {
+    loadSales();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    filters.dateFrom,
+    filters.dateTo,
+    filters.status,
+    filters.paymentMethod,
+    filters.paymentStatus,
+    filters.cashierId,
+    auth.user?.id,
+  ]);
+
+  // Apply the client-only filters (search, customer type, shift) to whatever
+  // the server returned.
   useEffect(() => {
     applyFilters();
   }, [sales, filters]);
@@ -126,14 +142,44 @@ const SalesPage = () => {
     try {
       setLoading(true);
 
-      // For STAFF users, filter by their cashier ID
-      const filters: SaleFiltersType = {};
+      // Push the filters the backend understands down to the query so the DB
+      // returns the right rows — previously this always fetched only the first
+      // 100 sales and filtered them in the browser, so any date range reaching
+      // past the 100 most-recent sales showed (and exported) the wrong records.
+      const serverFilters: SaleFiltersType = {};
+
+      // STAFF users are always scoped to their own sales; managers can pick.
       if (auth.user?.role === 'STAFF') {
-        filters.cashierId = auth.user.id;
+        serverFilters.cashierId = auth.user.id;
+      } else if (filters.cashierId && filters.cashierId !== 'all') {
+        serverFilters.cashierId = filters.cashierId;
+      }
+      if (filters.status && filters.status !== 'all') serverFilters.status = filters.status;
+      if (filters.paymentMethod && filters.paymentMethod !== 'all') serverFilters.paymentMethod = filters.paymentMethod;
+      if (filters.paymentStatus && filters.paymentStatus !== 'all') serverFilters.paymentStatus = filters.paymentStatus;
+
+      // The backend only applies its createdAt range when BOTH bounds are
+      // present, and expects plain YYYY-MM-DD (it appends the end-of-day time
+      // itself). Passing full ISO strings broke the query.
+      const hasRange = !!(filters.dateFrom && filters.dateTo);
+      if (hasRange) {
+        serverFilters.startDate = format(filters.dateFrom!, 'yyyy-MM-dd');
+        serverFilters.endDate = format(filters.dateTo!, 'yyyy-MM-dd');
       }
 
-      const response = await salesService.getSales(1, 100, filters); // Load sales with max limit
-      setSales(response.data || []);
+      if (hasRange) {
+        // A date range can match far more than one page — pull them all so the
+        // list and CSV/XLSX export are complete, not capped at 100.
+        const all = await fetchAllPages(
+          (page) => salesService.getSales(page, 100, serverFilters),
+          { concurrency: 3, maxPages: 100 },
+        );
+        setSales(all);
+      } else {
+        // No range: show the most recent sales (server already sorts newest-first).
+        const response = await salesService.getSales(1, 100, serverFilters);
+        setSales(response.data || []);
+      }
     } catch (error) {
       console.error('Error loading sales:', error);
       toast({
@@ -241,21 +287,11 @@ const SalesPage = () => {
       result = result.filter(sale => sale.status === filters.status);
     }
 
-    // Date range filter
-    if (filters.dateFrom) {
-      result = result.filter(sale => {
-        const saleDate = new Date(sale.createdAt);
-        return saleDate >= filters.dateFrom!;
-      });
-    }
-    if (filters.dateTo) {
-      result = result.filter(sale => {
-        const saleDate = new Date(sale.createdAt);
-        const endOfDay = new Date(filters.dateTo!);
-        endOfDay.setHours(23, 59, 59, 999);
-        return saleDate <= endOfDay;
-      });
-    }
+    // Date range is filtered server-side in loadSales (see there). We must NOT
+    // re-filter here: filters.dateFrom/dateTo are local-midnight Dates, and
+    // re-comparing against UTC createdAt would wrongly drop boundary-day sales
+    // that the server correctly included — keeping the list/export consistent
+    // with what the DB returned.
 
     // Cashier filter
     if (filters.cashierId && filters.cashierId !== 'all') {
