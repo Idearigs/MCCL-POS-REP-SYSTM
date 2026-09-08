@@ -550,7 +550,7 @@ export class FileStorageService {
       if (relative.startsWith('.thumbs')) return null; // never re-thumb a thumb
       if (!fs.existsSync(fullPath)) return null;
 
-      const w = Math.max(32, Math.min(Math.floor(width) || 200, 800));
+      const w = Math.max(32, Math.min(Math.floor(width) || 200, 1600));
       const hash = crypto.createHash('sha1').update(relative).digest('hex');
       const cacheDir = path.join(uploadsRoot, '.thumbs', `w${w}`);
       const cachePath = path.join(cacheDir, `${hash}.jpg`);
