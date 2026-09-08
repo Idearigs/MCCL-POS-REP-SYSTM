@@ -652,6 +652,20 @@ export class SalesService {
                 ],
               },
             },
+            // Match sales that contain a line item for a product whose code
+            // (SKU or barcode) matches — lets staff find a sale by product code.
+            {
+              sale_items: {
+                some: {
+                  products: {
+                    OR: [
+                      { sku: { contains: search, mode: 'insensitive' } },
+                      { barcode: { contains: search, mode: 'insensitive' } },
+                    ],
+                  },
+                },
+              },
+            },
           ],
         }),
       };
