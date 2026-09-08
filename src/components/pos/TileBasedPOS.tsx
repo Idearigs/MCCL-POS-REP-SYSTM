@@ -95,6 +95,7 @@ import { useOutlet } from '@/contexts/OutletContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { printThermalReceipt } from '@/utils/thermalReceipt';
 import PosRefundView from '@/components/pos/PosRefundView';
+import PosTodaySalesView from '@/components/pos/PosTodaySalesView';
 import { userService } from '@/services/userService';
 import { posTileService, PosTile } from '@/services/posTileService';
 import { apiClient } from '@/services/apiClient';
@@ -217,6 +218,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   });
   const [showHeldDialog, setShowHeldDialog] = useState(false);
   const [showRefundView, setShowRefundView] = useState(false);
+  const [showTodaySalesView, setShowTodaySalesView] = useState(false);
 
   // Stores the last completed sale so we can show the print receipt screen
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
@@ -2440,6 +2442,12 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             <PosRefundView onClose={() => setShowRefundView(false)} />
           </div>
         )}
+        {/* Today's Sales (current shift) — full-page over the tile grid */}
+        {showTodaySalesView && (
+          <div className="absolute inset-0 z-30 bg-white rounded-2xl p-6">
+            <PosTodaySalesView onClose={() => setShowTodaySalesView(false)} />
+          </div>
+        )}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             {/* Back Button for Category View or Appraisal View */}
@@ -3332,6 +3340,32 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             /* TILE VIEW - Organized POS Grid - Apple-like smooth transition */
             <div className="space-y-6 animate-scale-in">
 
+              {/* ===== ROW 0: REGISTER (Today's Sales + Refund) ===== */}
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-1">Register</p>
+                <div className="grid grid-cols-4 gap-3">
+                  {/* Today's Sales */}
+                  <div
+                    onClick={() => setShowTodaySalesView(true)}
+                    className="bg-blue-50/60 border border-blue-100 rounded-xl p-5 cursor-pointer hover:border-blue-300 hover:bg-blue-50 hover:shadow-md hover:scale-[1.02] transition-all"
+                  >
+                    <Receipt className="h-7 w-7 text-blue-600 mb-3" />
+                    <h3 className="text-gray-900 font-semibold text-base">Today's Sales</h3>
+                    <p className="text-gray-400 text-xs mt-0.5">Current shift</p>
+                  </div>
+
+                  {/* Refund */}
+                  <div
+                    onClick={() => setShowRefundView(true)}
+                    className="bg-orange-50/60 border border-orange-100 rounded-xl p-5 cursor-pointer hover:border-orange-300 hover:bg-orange-50 hover:shadow-md hover:scale-[1.02] transition-all"
+                  >
+                    <RefreshCcw className="h-7 w-7 text-orange-600 mb-3" />
+                    <h3 className="text-gray-900 font-semibold text-base">Refund</h3>
+                    <p className="text-gray-400 text-xs mt-0.5">Return a past sale</p>
+                  </div>
+                </div>
+              </div>
+
               {/* ===== ROW 1 & 2: INVENTORY CATEGORIES ===== */}
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-1">Inventory</p>
@@ -4047,15 +4081,6 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
               </button>
             )}
           </div>
-
-          {/* Refund a past sale — opens the sales-search + refund flow */}
-          <button
-            onClick={() => setShowRefundView(true)}
-            className="w-full h-10 mt-2 rounded-xl font-medium text-sm flex items-center justify-center gap-1.5 border-2 border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-300 transition-all"
-          >
-            <RefreshCcw className="h-4 w-4" />
-            Refund a Sale
-          </button>
 
           {/* Checkout Button */}
           <button

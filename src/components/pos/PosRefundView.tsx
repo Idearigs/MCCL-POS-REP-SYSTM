@@ -11,10 +11,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Search, RotateCcw, Loader2, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Search, RotateCcw, Loader2, ArrowLeft, RefreshCw, Wrench } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useInventory } from '@/contexts/InventoryContext';
+import { normalizeImageUrl } from '@/lib/utils';
 import { salesService, Sale } from '@/services/salesService';
 import { printRefundReceipt, RefundReceiptData } from '@/utils/thermalReceipt';
 import RefundSaleDialog from '@/components/sales/RefundSaleDialog';
@@ -36,6 +38,28 @@ const PosRefundView: React.FC<PosRefundViewProps> = ({ onClose }) => {
   const { toast } = useToast();
   const { auth } = useAuth();
   const { settings } = useSettings();
+  const { inventory } = useInventory();
+
+  // Resolve a sale's lead item to a thumbnail (inventory product) or a flag
+  // that it's a service line (repair/gift-card/manual) → show an icon instead.
+  const leadItemVisual = (
+    sale: Sale,
+  ): { image?: string; isService: boolean } => {
+    const first = ((sale.items || []) as any[])[0];
+    if (!first) return { isService: false };
+    const notes: string = first.notes || '';
+    const isService = /REPAIR SERVICE|GIFT CARD|MANUAL ENTRY|APPRAISAL|CUSTOM TILE/i.test(
+      notes,
+    );
+    if (isService) return { isService: true };
+    const match = inventory.find(
+      (p) =>
+        p.id === first.productId ||
+        (first.productSku && p.sku === first.productSku) ||
+        (first.sku && p.sku === first.sku),
+    );
+    return { image: match?.imageUrl, isService: false };
+  };
 
   const [query, setQuery] = useState('');
   const [sales, setSales] = useState<Sale[]>([]);
@@ -258,7 +282,30 @@ const PosRefundView: React.FC<PosRefundViewProps> = ({ onClose }) => {
               key={sale.id}
               className="flex items-center justify-between border border-gray-200 rounded-xl p-4 bg-white hover:shadow-sm transition-shadow"
             >
-              <div className="min-w-0 pr-4">
+              {(() => {
+                const v = leadItemVisual(sale);
+                return (
+                  <div className="h-12 w-12 rounded-lg border border-gray-100 overflow-hidden shrink-0 mr-3 flex items-center justify-center bg-gray-50">
+                    {v.isService ? (
+                      <Wrench className="h-5 w-5 text-gray-400" />
+                    ) : v.image ? (
+                      <img
+                        src={normalizeImageUrl(v.image, { w: 100 }) || v.image}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <RotateCcw className="h-5 w-5 text-gray-300" />
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="min-w-0 pr-4 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-sm text-gray-900">
                     {sale.receiptNumber || (sale as any).saleNumber || sale.id.slice(0, 8)}
