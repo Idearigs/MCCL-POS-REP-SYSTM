@@ -23,6 +23,7 @@ export interface InventoryItemProps {
   isDuplicate?: boolean;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onImageClick?: (id: string) => void;
   className?: string;
 }
 
@@ -39,6 +40,7 @@ const InventoryItem: React.FC<InventoryItemProps> = ({
   isDuplicate,
   onEdit,
   onDelete,
+  onImageClick,
   className
 }) => {
   // Determine stock status
@@ -63,7 +65,14 @@ const InventoryItem: React.FC<InventoryItemProps> = ({
                 saturated the backend. A native `loading="lazy"` <img> only
                 fetches thumbnails as they scroll into view. The fallback icon
                 sits behind and shows through if there's no image or it errors. */}
-            <div className="h-10 w-10 rounded-xl border border-gray-100 shadow-sm overflow-hidden shrink-0 relative flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+            <div
+              className={`h-10 w-10 rounded-xl border border-gray-100 shadow-sm overflow-hidden shrink-0 relative flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 ${
+                imageUrl && onImageClick ? 'cursor-zoom-in hover:ring-2 hover:ring-navy/30 transition' : ''
+              }`}
+              onClick={imageUrl && onImageClick ? () => onImageClick(id) : undefined}
+              role={imageUrl && onImageClick ? 'button' : undefined}
+              title={imageUrl && onImageClick ? 'Click to view larger' : undefined}
+            >
               <ImageIcon className="h-5 w-5 text-gray-400" />
               {imageUrl && (
                 <img

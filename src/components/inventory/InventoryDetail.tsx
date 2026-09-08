@@ -23,6 +23,7 @@ import { X, Upload, Image as ImageIcon, Plus, Trash2, Shuffle } from "lucide-rea
 import { cn, normalizeImageUrl } from "@/lib/utils";
 import { productService } from "@/services/productService";
 import { useAuth } from "@/contexts/AuthContext";
+import ImageLightbox from "@/components/inventory/ImageLightbox";
 
 const WATCH_BRANDS = ['Rosefeild', 'Roamer', 'Briston', 'Festina', 'Secondhand watches'];
 
@@ -148,6 +149,7 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
   const [editedItem, setEditedItem] = useState<InventoryItemDetails>(item || defaultItem);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -308,6 +310,7 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
@@ -674,11 +677,15 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
               {previewUrls.length > 0 ? (
                 previewUrls.map((url, index) => (
                   <div key={index} className="relative">
-                    <Avatar className={cn(
-                      "h-20 w-20 rounded-md border",
-                      index === 0 ? "ring-2 ring-primary" : ""
-                    )}>
-                      <AvatarImage src={url} alt={`Product image ${index + 1}`} className="object-cover" />
+                    <Avatar
+                      className={cn(
+                        "h-20 w-20 rounded-md border cursor-zoom-in hover:ring-2 hover:ring-navy/40 transition",
+                        index === 0 ? "ring-2 ring-primary" : ""
+                      )}
+                      onClick={() => setLightboxIndex(index)}
+                      title="Click to view larger"
+                    >
+                      <AvatarImage src={normalizeImageUrl(url, { w: 200 }) || url} alt={`Product image ${index + 1}`} className="object-cover" />
                       <AvatarFallback className="rounded-md">
                         <ImageIcon className="h-8 w-8 text-muted-foreground" />
                       </AvatarFallback>
@@ -687,8 +694,8 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
                       type="button"
                       variant="destructive"
                       size="icon"
-                      className="h-5 w-5 absolute -top-2 -right-2 rounded-full"
-                      onClick={() => handleRemoveImage(index)}
+                      className="h-5 w-5 absolute -top-2 -right-2 rounded-full z-10"
+                      onClick={(e) => { e.stopPropagation(); handleRemoveImage(index); }}
                     >
                       <X className="h-3 w-3" />
                     </Button>
@@ -744,6 +751,15 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <ImageLightbox
+      open={lightboxIndex !== null}
+      images={previewUrls}
+      startIndex={lightboxIndex ?? 0}
+      title={editedItem.name}
+      onClose={() => setLightboxIndex(null)}
+    />
+    </>
   );
 };
 

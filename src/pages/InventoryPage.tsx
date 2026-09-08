@@ -72,6 +72,7 @@ import BulkRFIDAssignment from '@/components/inventory/BulkRFIDAssignment';
 import InventoryItemComponent, { InventoryItemProps} from '@/components/inventory/InventoryItem';
 import InventoryDetail from '@/components/inventory/InventoryDetail';
 import InventoryFilter from '@/components/inventory/InventoryFilter';
+import ImageLightbox from '@/components/inventory/ImageLightbox';
 
 const InventoryPage = () => {
   const { inventory, updateItem, addItem, deleteItem, refreshInventory } = useInventory();
@@ -100,6 +101,7 @@ const InventoryPage = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [lightbox, setLightbox] = useState<{ images: string[]; title: string } | null>(null);
   const [isNewItem, setIsNewItem] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -1203,6 +1205,13 @@ const InventoryPage = () => {
                   isDuplicate={duplicateIds.has(item.id)}
                   onEdit={handleEditItem}
                   onDelete={handleDeleteItem}
+                  onImageClick={() => {
+                    const imgs = [
+                      item.imageUrl,
+                      ...(((item as any).additionalImages as string[]) || []),
+                    ].filter(Boolean) as string[];
+                    if (imgs.length) setLightbox({ images: imgs, title: item.name });
+                  }}
                   className="bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-all duration-200"
                 />
               ))}
@@ -1381,6 +1390,13 @@ const InventoryPage = () => {
           isOpen={isBulkRFIDDialogOpen}
           onClose={() => setIsBulkRFIDDialogOpen(false)}
           onAssign={handleBulkRFIDAssign}
+        />
+
+        <ImageLightbox
+          open={!!lightbox}
+          images={lightbox?.images || []}
+          title={lightbox?.title}
+          onClose={() => setLightbox(null)}
         />
       </div>
     </MainLayout>
