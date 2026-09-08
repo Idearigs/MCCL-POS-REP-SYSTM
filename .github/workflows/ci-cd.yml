@@ -262,7 +262,7 @@ jobs:
           WEBHOOK=$(echo "$COOLIFY_BACKEND_WEBHOOK" | tr -d '[:space:]')
 
           HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
-            --max-time 30 -X GET \
+            --max-time 30 -X POST \
             -H "Authorization: Bearer ${TOKEN}" \
             "${WEBHOOK}")
 
@@ -316,7 +316,7 @@ jobs:
           WEBHOOK=$(echo "$COOLIFY_FRONTEND_WEBHOOK" | tr -d '[:space:]')
 
           HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
-            --max-time 30 -X GET \
+            --max-time 30 -X POST \
             -H "Authorization: Bearer ${TOKEN}" \
             "${WEBHOOK}")
 
@@ -376,7 +376,7 @@ jobs:
           fi
 
           HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
-            --max-time 30 -X GET \
+            --max-time 30 -X POST \
             -H "Authorization: Bearer ${TOKEN}" \
             "${WEBHOOK}")
 
@@ -420,7 +420,7 @@ jobs:
           fi
 
           HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
-            --max-time 30 -X GET \
+            --max-time 30 -X POST \
             -H "Authorization: Bearer ${TOKEN}" \
             "${WEBHOOK}")
 
@@ -465,7 +465,7 @@ jobs:
             echo "::warning::COOLIFY_BACKEND_STAGING_WEBHOOK not set — skipping staging deploy."
             exit 0
           fi
-          HTTP_STATUS=$(curl -s -o /tmp/r.txt -w "%{http_code}" --max-time 30 -X GET \
+          HTTP_STATUS=$(curl -s -o /tmp/r.txt -w "%{http_code}" --max-time 30 -X POST \
             -H "Authorization: Bearer ${TOKEN}" "${WEBHOOK}")
           echo "Response: $(cat /tmp/r.txt)"; echo "HTTP status: $HTTP_STATUS"
           if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
@@ -499,7 +499,7 @@ jobs:
             echo "::warning::COOLIFY_FRONTEND_STAGING_WEBHOOK not set — skipping staging deploy."
             exit 0
           fi
-          HTTP_STATUS=$(curl -s -o /tmp/r.txt -w "%{http_code}" --max-time 30 -X GET \
+          HTTP_STATUS=$(curl -s -o /tmp/r.txt -w "%{http_code}" --max-time 30 -X POST \
             -H "Authorization: Bearer ${TOKEN}" "${WEBHOOK}")
           echo "Response: $(cat /tmp/r.txt)"; echo "HTTP status: $HTTP_STATUS"
           if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
@@ -533,7 +533,7 @@ jobs:
             echo "::warning::COOLIFY_MAINFRAME_BACKEND_STAGING_WEBHOOK not set — skipping staging deploy."
             exit 0
           fi
-          HTTP_STATUS=$(curl -s -o /tmp/r.txt -w "%{http_code}" --max-time 30 -X GET \
+          HTTP_STATUS=$(curl -s -o /tmp/r.txt -w "%{http_code}" --max-time 30 -X POST \
             -H "Authorization: Bearer ${TOKEN}" "${WEBHOOK}")
           echo "Response: $(cat /tmp/r.txt)"; echo "HTTP status: $HTTP_STATUS"
           if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
@@ -567,7 +567,7 @@ jobs:
             echo "::warning::COOLIFY_MAINFRAME_ADMIN_STAGING_WEBHOOK not set — skipping staging deploy."
             exit 0
           fi
-          HTTP_STATUS=$(curl -s -o /tmp/r.txt -w "%{http_code}" --max-time 30 -X GET \
+          HTTP_STATUS=$(curl -s -o /tmp/r.txt -w "%{http_code}" --max-time 30 -X POST \
             -H "Authorization: Bearer ${TOKEN}" "${WEBHOOK}")
           echo "Response: $(cat /tmp/r.txt)"; echo "HTTP status: $HTTP_STATUS"
           if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
