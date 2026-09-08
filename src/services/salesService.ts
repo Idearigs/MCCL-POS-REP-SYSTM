@@ -192,6 +192,8 @@ export interface RefundData {
     quantity: number;
   }>;
   notes?: string;
+  // Shared refund-authorisation password; required when the tenant has one set.
+  refundPassword?: string;
 }
 
 export interface Receipt {
@@ -284,6 +286,28 @@ class SalesService {
       console.error(`Failed to refund sale ${saleId}:`, error);
       throw error;
     }
+  }
+
+  // ─── Refund authorisation password ──────────────────────────────────────────
+
+  /** Whether the tenant has configured a shared refund password. */
+  async getRefundPasswordStatus(): Promise<{ isSet: boolean }> {
+    return apiClient.get<{ isSet: boolean }>('/settings/refund-password');
+  }
+
+  /** Set or replace the shared refund password (OWNER only, enforced server-side). */
+  async setRefundPassword(password: string): Promise<{ success: boolean }> {
+    return apiClient.post<{ success: boolean }>('/settings/refund-password', {
+      password,
+    });
+  }
+
+  /** Verify a candidate refund password before opening the refund options. */
+  async verifyRefundPassword(password: string): Promise<{ valid: boolean }> {
+    return apiClient.post<{ valid: boolean }>(
+      '/settings/refund-password/verify',
+      { password },
+    );
   }
 
 

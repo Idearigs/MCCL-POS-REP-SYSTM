@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from '@/components/ui/checkbox';
-import { AlertTriangle, Gift, Package, Percent } from 'lucide-react';
+import { AlertTriangle, Gift, Package, Percent, ShieldCheck } from 'lucide-react';
 import { Sale, SaleItem } from '@/services/salesService';
 
 type RefundDestination = 'original' | 'store_credit';
@@ -39,8 +39,11 @@ interface RefundSaleDialogProps {
     destination: RefundDestination;
     restockingFee: number;
     itemCondition: ItemCondition;
+    refundPassword?: string;
   }) => void;
   isProcessing?: boolean;
+  /** When true, the shared refund password must be entered to confirm. */
+  passwordRequired?: boolean;
 }
 
 const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
@@ -48,7 +51,8 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
   onClose,
   sale,
   onConfirmRefund,
-  isProcessing = false
+  isProcessing = false,
+  passwordRequired = false,
 }) => {
   const [refundType, setRefundType] = useState<'full' | 'partial'>('full');
   const [refundReason, setRefundReason] = useState('');
@@ -56,6 +60,7 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
   const [destination, setDestination] = useState<RefundDestination>('original');
   const [restockingFee, setRestockingFee] = useState<string>('');
   const [itemCondition, setItemCondition] = useState<ItemCondition>('back_to_shelf');
+  const [refundPassword, setRefundPassword] = useState('');
   // Map<saleItemId, quantity>
   const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map());
 
@@ -134,12 +139,14 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
       destination,
       restockingFee: fee > 0 ? fee : 0,
       itemCondition,
+      refundPassword: passwordRequired ? refundPassword : undefined,
     });
   };
 
   const isValid = () => {
     if (!refundReason) return false;
     if (refundType === 'partial' && selectedItems.size === 0) return false;
+    if (passwordRequired && refundPassword.trim().length === 0) return false;
     return true;
   };
 
@@ -151,6 +158,7 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
     setDestination('original');
     setRestockingFee('');
     setItemCondition('back_to_shelf');
+    setRefundPassword('');
   };
 
   const handleClose = () => {
@@ -172,6 +180,28 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Refund authorisation — shared password gate */}
+          {passwordRequired && (
+            <div className="space-y-2 border border-red-200 bg-red-50 p-4 rounded-lg">
+              <Label htmlFor="refundPassword" className="text-sm font-semibold flex items-center gap-1.5 text-red-700">
+                <ShieldCheck size={14} className="text-red-500" />
+                Refund Password <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="refundPassword"
+                type="password"
+                placeholder="Enter the refund authorisation password"
+                value={refundPassword}
+                onChange={(e) => setRefundPassword(e.target.value)}
+                autoComplete="off"
+                className="max-w-xs bg-white"
+              />
+              <p className="text-xs text-red-600">
+                A refund cannot be processed without the shop's refund password.
+              </p>
+            </div>
+          )}
+
           {/* Sale Summary */}
           <div className="bg-gray-50 p-4 rounded-lg space-y-2">
             <div className="flex justify-between text-sm">

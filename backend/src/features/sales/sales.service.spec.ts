@@ -5,6 +5,7 @@ import { SalesRepository } from './sales.repository';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CacheService } from '../../core/cache/cache.service';
 import { ShiftsService } from '../shifts/shifts.service';
+import { SettingsService } from '../settings/settings.service';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Fixtures
@@ -150,6 +151,11 @@ const mockShiftsService = {
   addSaleToShift: jest.fn().mockResolvedValue(undefined),
 };
 
+const mockSettingsService = {
+  hasRefundPassword: jest.fn().mockResolvedValue(false),
+  verifyRefundPassword: jest.fn().mockResolvedValue(true),
+};
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Test Suite
 // ──────────────────────────────────────────────────────────────────────────────
@@ -163,6 +169,7 @@ describe('SalesService', () => {
       mockPrismaService as unknown as PrismaService,
       mockCacheService as unknown as CacheService,
       mockShiftsService as unknown as ShiftsService,
+      mockSettingsService as unknown as SettingsService,
     );
   });
 

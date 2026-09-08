@@ -72,6 +72,7 @@ import {
   Shuffle,
   CalendarClock,
   PauseCircle,
+  RefreshCcw,
   ListOrdered,
   UserPlus,
   Beaker,
@@ -93,6 +94,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useOutlet } from '@/contexts/OutletContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { printThermalReceipt } from '@/utils/thermalReceipt';
+import PosRefundDialog from '@/components/pos/PosRefundDialog';
 import { userService } from '@/services/userService';
 import { posTileService, PosTile } from '@/services/posTileService';
 import { apiClient } from '@/services/apiClient';
@@ -214,6 +216,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     } catch { return []; }
   });
   const [showHeldDialog, setShowHeldDialog] = useState(false);
+  const [showRefundDialog, setShowRefundDialog] = useState(false);
 
   // Stores the last completed sale so we can show the print receipt screen
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
@@ -4039,6 +4042,15 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             )}
           </div>
 
+          {/* Refund a past sale — opens the sales-search + refund flow */}
+          <button
+            onClick={() => setShowRefundDialog(true)}
+            className="w-full h-10 mt-2 rounded-xl font-medium text-sm flex items-center justify-center gap-1.5 border-2 border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-300 transition-all"
+          >
+            <RefreshCcw className="h-4 w-4" />
+            Refund a Sale
+          </button>
+
           {/* Checkout Button */}
           <button
             onClick={handleCheckout}
@@ -6235,6 +6247,11 @@ Deposit is non-refundable.
       </Dialog>
 
       {/* ===== HELD / SUSPENDED TRANSACTIONS DIALOG ===== */}
+      <PosRefundDialog
+        open={showRefundDialog}
+        onClose={() => setShowRefundDialog(false)}
+      />
+
       <Dialog open={showHeldDialog} onOpenChange={setShowHeldDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

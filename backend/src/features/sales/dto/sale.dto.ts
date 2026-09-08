@@ -383,6 +383,16 @@ export class CreateRefundDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Shared refund-authorisation password. Required when the tenant has ' +
+      'configured a refund password; verified server-side before the refund ' +
+      'is processed.',
+  })
+  @IsOptional()
+  @IsString()
+  refundPassword?: string;
 }
 
 export class SaleQueryDto {

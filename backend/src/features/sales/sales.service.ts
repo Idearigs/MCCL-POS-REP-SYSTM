@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -10,6 +11,7 @@ import { PrismaService } from '../../core/prisma/prisma.service';
 import { SalesRepository } from './sales.repository';
 import { CacheService } from '../../core/cache/cache.service';
 import { ShiftsService } from '../shifts/shifts.service';
+import { SettingsService } from '../settings/settings.service';
 import {
   PaymentMethod as PrismaPaymentMethod,
   PaymentStatus as PrismaPaymentStatus,
@@ -53,6 +55,7 @@ export class SalesService {
     private prismaService: PrismaService,
     private cacheService: CacheService,
     private shiftsService: ShiftsService,
+    private settingsService: SettingsService,
   ) {}
 
   /**
@@ -1100,6 +1103,22 @@ export class SalesService {
     userId: string,
     idempotencyKey?: string,
   ): Promise<SaleResponseDto> {
+    // ── Refund authorisation gate ──────────────────────────────────────────
+    // When the tenant has configured a shared refund password, every refund
+    // must carry the correct password — verified server-side so the client
+    // cannot bypass it. No password configured → gate is inactive.
+    if (await this.settingsService.hasRefundPassword(tenantId)) {
+      const ok = await this.settingsService.verifyRefundPassword(
+        tenantId,
+        createRefundDto.refundPassword ?? '',
+      );
+      if (!ok) {
+        throw new ForbiddenException(
+          'Incorrect refund password. Refund not authorised.',
+        );
+      }
+    }
+
     return this.replayOrRun('refund', idempotencyKey, async () => {
       try {
         return await this.prismaService.$transaction(async (prisma) => {
