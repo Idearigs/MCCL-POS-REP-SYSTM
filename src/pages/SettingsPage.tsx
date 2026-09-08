@@ -543,8 +543,15 @@ const SettingsPage = () => {
 
         <Separator className="my-6" />
 
-        <Tabs defaultValue="general" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="flex w-full justify-start overflow-x-auto [&>*]:flex-shrink-0">
+        <Tabs
+          defaultValue="general"
+          value={activeTab}
+          onValueChange={setActiveTab}
+          orientation="vertical"
+          className="flex flex-col md:flex-row gap-6 items-start"
+        >
+          {/* Vertical left-hand nav — no more horizontal scrolling to reach a tab */}
+          <TabsList className="flex md:flex-col h-auto w-full md:w-52 shrink-0 bg-transparent p-0 gap-1 items-stretch overflow-x-auto md:overflow-visible [&>*]:flex-shrink-0 [&>*]:justify-start [&>*]:w-full [&>*]:rounded-lg [&>*]:px-3 [&>*]:py-2 [&>*]:data-[state=active]:bg-navy [&>*]:data-[state=active]:text-white [&>*]:data-[state=active]:shadow-sm [&>*]:text-gray-600 [&>*]:hover:bg-gray-100">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
@@ -562,9 +569,12 @@ const SettingsPage = () => {
             <TabsTrigger value="security">Security</TabsTrigger>
             <TabsTrigger value="features" className="relative">
               Features
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full" />
+              <span className="absolute top-1.5 right-2 w-2 h-2 bg-blue-500 rounded-full" />
             </TabsTrigger>
           </TabsList>
+
+          {/* Right-hand content pane */}
+          <div className="flex-1 min-w-0 w-full">
 
           {/* General Settings Tab */}
           <TabsContent value="general">
@@ -1516,6 +1526,7 @@ const SettingsPage = () => {
               </CardContent>
             </Card>
           </TabsContent>
+          </div>
         </Tabs>
       </div>
 
