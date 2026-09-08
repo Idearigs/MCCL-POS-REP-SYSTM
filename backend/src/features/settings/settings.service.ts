@@ -1,11 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CacheService } from '../../core/cache/cache.service';
 import { UpdateSettingsDto } from './dto/settings.dto';
 
-// Keys in tenants.settings that are NOT app-level settings (reserved for QZ certs etc.)
-const RESERVED_KEYS = new Set(['qzCertificate', 'qzPrivateKey']);
+// Keys in tenants.settings that are NOT app-level settings (reserved for QZ
+// certs and the refund-authorisation password hash). These are preserved
+// across settings writes and NEVER returned to the client by getSettings().
+const REFUND_PASSWORD_KEY = 'refundPasswordHash';
+const RESERVED_KEYS = new Set([
+  'qzCertificate',
+  'qzPrivateKey',
+  REFUND_PASSWORD_KEY,
+]);
 const APP_SETTINGS_KEY = 'appSettings';
 // Config cache: semi-static workspace settings read on every sales lookup.
 const SETTINGS_CACHE_KEY = 'settings:app';
@@ -260,5 +268,64 @@ export class SettingsService {
     await this.cache.delTenantData(tenantId, SETTINGS_CACHE_KEY);
 
     return next;
+  }
+
+  // ─── Refund authorisation password ─────────────────────────────────────────
+  // A single shared password, set by an OWNER in Settings, that every user must
+  // enter to authorise a refund. Stored bcrypt-hashed under a reserved key so it
+  // is never returned by getSettings(). Enforced server-side in the refund path.
+
+  private async readRefundHash(tenantId: string): Promise<string | null> {
+    const tenant = await this.prisma.tenants.findUnique({
+      where: { id: tenantId },
+      select: { settings: true },
+    });
+    const blob = (tenant?.settings ?? {}) as Record<string, unknown>;
+    const hash = blob[REFUND_PASSWORD_KEY];
+    return typeof hash === 'string' && hash.length > 0 ? hash : null;
+  }
+
+  /** Whether a refund password has been configured for this tenant. */
+  async hasRefundPassword(tenantId: string): Promise<boolean> {
+    return (await this.readRefundHash(tenantId)) !== null;
+  }
+
+  /** Set (or replace) the shared refund password. OWNER-only at the controller. */
+  async setRefundPassword(tenantId: string, password: string): Promise<void> {
+    const trimmed = (password ?? '').trim();
+    if (trimmed.length < 4) {
+      throw new Error('Refund password must be at least 4 characters');
+    }
+    const hash = await bcrypt.hash(trimmed, 10);
+    const tenant = await this.prisma.tenants.findUnique({
+      where: { id: tenantId },
+      select: { settings: true },
+    });
+    const existing = (tenant?.settings ?? {}) as Record<string, unknown>;
+    await this.prisma.tenants.update({
+      where: { id: tenantId },
+      data: {
+        settings: {
+          ...existing,
+          [REFUND_PASSWORD_KEY]: hash,
+        } as unknown as Prisma.InputJsonValue,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Verify a candidate refund password. Returns true when it matches the stored
+   * hash. When NO password is configured this returns true (gate is inactive) —
+   * callers that must require one should check hasRefundPassword() first.
+   */
+  async verifyRefundPassword(
+    tenantId: string,
+    password: string,
+  ): Promise<boolean> {
+    const hash = await this.readRefundHash(tenantId);
+    if (!hash) return true; // no gate configured
+    if (!password) return false;
+    return bcrypt.compare(password, hash);
   }
 }

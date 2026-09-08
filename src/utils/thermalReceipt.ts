@@ -542,6 +542,172 @@ export async function printThermalReceipt(
   printIframeFallback(data, options);
 }
 
+// ─── Refund Receipt (thermal) ─────────────────────────────────────────────────
+
+export interface RefundReceiptData {
+  storeName: string;
+  tradingName?: string;
+  storeAddress?: string;
+  storePhone?: string;
+  storeEmail?: string;
+  vatNumber?: string;
+  tillNumber?: string;
+  originalSaleNumber: string; // receipt/sale number being refunded
+  date: string; // ISO — when the refund happened
+  cashierName: string;
+  customerName?: string;
+  items: Array<{
+    name: string;
+    sku?: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }>;
+  refundAmount: number; // net amount refunded
+  reason?: string;
+  paymentMethod?: string; // original tender, informational
+  headerMessage?: string;
+  footerMessage?: string;
+}
+
+export function buildRefundReceiptHTML(
+  data: RefundReceiptData,
+  copyLabel: string,
+): string {
+  const itemRows = data.items
+    .map((item) => {
+      const name =
+        item.name.length > 26 ? item.name.slice(0, 26) + '…' : item.name;
+      const qtyPrice = `${item.quantity}@${fmt(item.unitPrice)}`;
+      const rows = [
+        `<div class="item-line">
+        <span class="item-name">${name}</span>
+        <span class="item-mid">${qtyPrice}</span>
+        <span class="item-amt">-${fmt(item.total)}</span>
+      </div>`,
+      ];
+      if (item.sku) rows.push(`<div class="item-disc">SKU: ${item.sku}</div>`);
+      return rows.join('');
+    })
+    .join('');
+
+  const header = (() => {
+    const till = data.tillNumber ?? '01';
+    const date = formatDate(data.date);
+    return `<div class="meta-grid">
+      <div><div class="meta-lbl">Till</div><div>${till}</div></div>
+      <div><div class="meta-lbl">Date &amp; Time</div><div>${date}</div></div>
+      <div><div class="meta-lbl">Operator</div><div>${data.cashierName}</div></div>
+      <div style="grid-column:1/-1"><div class="meta-lbl">Original Sale</div><div><strong>${data.originalSaleNumber}</strong></div></div>
+    </div>`;
+  })();
+
+  const customerRow = data.customerName
+    ? `<div class="row"><span>Customer</span><span>${data.customerName}</span></div>`
+    : '';
+  const reasonRow = data.reason
+    ? `<div class="row"><span>Reason</span><span>${data.reason}</span></div>`
+    : '';
+
+  return `<div class="receipt-copy">
+    <div class="copy-badge">${copyLabel}</div>
+    <div class="store-name">${data.storeName.toUpperCase()}</div>
+    ${data.tradingName ? `<div class="trading-name">${data.tradingName}</div>` : ''}
+    <div class="store-sub">${[
+      data.storeAddress,
+      data.storePhone,
+      data.storeEmail,
+      data.vatNumber ? `VAT No: GB ${data.vatNumber}` : null,
+    ]
+      .filter(Boolean)
+      .join('<br>')}</div>
+
+    ${data.headerMessage ? `<hr class="divider"/><div class="header-msg">${data.headerMessage.replace(/\n/g, '<br>')}</div>` : ''}
+    <hr class="divider"/>
+    <div class="center"><strong>REFUND</strong></div>
+    <hr class="divider"/>
+
+    ${header}
+    ${customerRow}
+    <hr class="divider"/>
+
+    ${itemRows}
+    <hr class="divider"/>
+
+    ${reasonRow}
+    <div class="total-row"><span>TOTAL REFUNDED</span><span>-${fmt(data.refundAmount)}</span></div>
+    ${data.paymentMethod ? `<div class="row"><span>Refunded to</span><span>${(PAYMENT_LABELS[data.paymentMethod] ?? data.paymentMethod.toUpperCase())}</span></div>` : ''}
+
+    <hr class="divider"/>
+    <div class="footer">${(data.footerMessage ?? 'Thank you\nKEEP THIS RECEIPT AS PROOF OF REFUND').replace(/\n/g, '<br>')}</div>
+  </div>`;
+}
+
+function buildRefundReceiptDocument(
+  data: RefundReceiptData,
+  copyLabel: string,
+): string {
+  // Reuse the sales receipt's stylesheet by wrapping a single copy in the same
+  // document shell buildReceiptHTML produces.
+  const body = buildRefundReceiptHTML(data, copyLabel);
+  const shell = buildReceiptHTML(
+    { ...(data as unknown as ThermalReceiptData), receiptNumber: data.originalSaleNumber, items: [], subtotal: 0, discountAmount: 0, taxAmount: 0, totalAmount: 0, paymentMethod: data.paymentMethod ?? 'CASH', date: data.date, cashierName: data.cashierName },
+    { copies: 1 },
+  );
+  // Swap the generated body content for our refund copy, keeping the <head>/style.
+  return shell.replace(
+    /<body>[\s\S]*<\/body>/,
+    `<body>${body}</body>`,
+  );
+}
+
+/**
+ * Print a single refund receipt copy (CUSTOMER COPY / SHOP COPY). Same QZ-then-
+ * iframe strategy as the sales receipt. Call once per copy so the shop copy can
+ * be prompted for separately.
+ */
+export async function printRefundReceipt(
+  data: RefundReceiptData,
+  copyLabel: string,
+  printerName?: string,
+): Promise<void> {
+  const html = buildRefundReceiptDocument(data, copyLabel);
+  if (printerName) {
+    try {
+      const { printHtmlViaQZ } = await import('./qzBridge');
+      await printHtmlViaQZ(printerName, html);
+      return;
+    } catch {
+      // fall through to iframe
+    }
+  }
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText =
+    'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:none;visibility:hidden;';
+  document.body.appendChild(iframe);
+  const cleanup = () =>
+    setTimeout(() => {
+      if (document.body.contains(iframe)) document.body.removeChild(iframe);
+    }, 2000);
+  try {
+    const doc = iframe.contentWindow?.document;
+    if (!doc) throw new Error('iframe unavailable');
+    doc.open();
+    doc.write(html);
+    doc.close();
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } finally {
+        cleanup();
+      }
+    }, 280);
+  } catch {
+    cleanup();
+  }
+}
+
 // ─── Shift Summary (thermal) ──────────────────────────────────────────────────
 
 export interface ShiftSummaryData {

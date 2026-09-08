@@ -22,6 +22,7 @@ import RepairTagsSettings from '@/components/repair/RepairTagsSettings';
 import PosTilesSettings from '@/components/pos/PosTilesSettings';
 import GoldPricingSettings from '@/components/inventory/GoldPricingSettings';
 import FeaturesHelp from '@/components/settings/FeaturesHelp';
+import RefundPasswordCard from '@/components/settings/RefundPasswordCard';
 import { OutletManagement } from '@/components/outlets/OutletManagement';
 import { ReceiptPreviewModal } from '@/components/printer/ReceiptPreviewModal';
 import { usePrinterDetection } from '@/hooks/usePrinterDetection';
@@ -1499,6 +1500,12 @@ const SettingsPage = () => {
                 </Form>
               </CardContent>
             </Card>
+
+            {auth.user?.role === 'OWNER' && (
+              <div className="mt-6">
+                <RefundPasswordCard />
+              </div>
+            )}
           </TabsContent>
 
           {/* Features & Help Tab */}

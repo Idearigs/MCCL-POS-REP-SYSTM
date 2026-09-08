@@ -25,6 +25,18 @@ import SaleDetailModal from '@/components/sales/SaleDetailModal';
 import RefundSaleDialog from '@/components/sales/RefundSaleDialog';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSettings } from '@/contexts/SettingsContext';
+import { printRefundReceipt, RefundReceiptData } from '@/utils/thermalReceipt';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { userService } from '@/services/userService';
 import { shiftService, Shift } from '@/services/shiftService';
 import ShiftList from '@/components/shifts/ShiftList';
@@ -40,6 +52,9 @@ const SalesPage = () => {
   const [isRefundDialogOpen, setIsRefundDialogOpen] = useState(false);
   const [refundingSale, setRefundingSale] = useState<Sale | null>(null);
   const [isRefundProcessing, setIsRefundProcessing] = useState(false);
+  const [refundPasswordRequired, setRefundPasswordRequired] = useState(false);
+  // Refund receipt held for the optional "print shop copy?" prompt.
+  const [pendingShopCopy, setPendingShopCopy] = useState<RefundReceiptData | null>(null);
 
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
   const [voidingSale, setVoidingSale] = useState<Sale | null>(null);
@@ -55,6 +70,15 @@ const SalesPage = () => {
   const [selectedShiftForReport, setSelectedShiftForReport] = useState<string | null>(null);
 
   const { auth } = useAuth();
+  const { settings } = useSettings();
+
+  // Whether refunds require the shared refund password (configured in Settings).
+  useEffect(() => {
+    salesService
+      .getRefundPasswordStatus()
+      .then((s) => setRefundPasswordRequired(s.isSet))
+      .catch(() => setRefundPasswordRequired(false));
+  }, []);
 
   // Statistics
   const [todayRevenue, setTodayRevenue] = useState(0);
@@ -449,33 +473,128 @@ const SalesPage = () => {
     setIsRefundDialogOpen(true);
   };
 
+  // Build the refund receipt from the original sale + what was just refunded.
+  const buildRefundReceipt = (
+    original: Sale,
+    refundData: any,
+    thisRefundAmount: number,
+  ): RefundReceiptData => {
+    const originalItems = (original.items || []) as any[];
+    const items = (refundData.items || [])
+      .map((ri: { saleItemId: string; quantity: number }) => {
+        const src = originalItems.find((i) => i.id === ri.saleItemId);
+        if (!src) return null;
+        const unit =
+          (src.totalPrice ?? src.total ?? src.unitPrice * src.quantity) /
+          (src.quantity || 1);
+        return {
+          name: src.productName || src.name || 'Item',
+          sku: src.sku || src.productSku,
+          quantity: ri.quantity,
+          unitPrice: unit,
+          total: unit * ri.quantity,
+        };
+      })
+      .filter(Boolean) as RefundReceiptData['items'];
+
+    return {
+      storeName: settings.general.storeName,
+      tradingName: settings.general.tradingName,
+      storeAddress: settings.general.address,
+      storePhone: settings.general.phone,
+      storeEmail: settings.general.email,
+      vatNumber: settings.printer.vatNumber,
+      originalSaleNumber:
+        original.receiptNumber || (original as any).saleNumber || original.id.slice(0, 8),
+      date: new Date().toISOString(),
+      cashierName:
+        `${auth.user?.firstName ?? ''} ${auth.user?.lastName ?? ''}`.trim() ||
+        auth.user?.email ||
+        'Staff',
+      customerName: (original as any).customerName,
+      items: items.length
+        ? items
+        : [
+            {
+              name: 'Refund',
+              quantity: 1,
+              unitPrice: thisRefundAmount,
+              total: thisRefundAmount,
+            },
+          ],
+      refundAmount: thisRefundAmount,
+      reason: refundData.reason,
+      paymentMethod: (original as any).paymentMethod,
+      headerMessage:
+        settings.receiptTypes?.sales?.headerText ||
+        settings.printer.headerText ||
+        undefined,
+      footerMessage:
+        settings.receiptTypes?.sales?.footerText ||
+        settings.printer.footerText ||
+        undefined,
+    };
+  };
+
   const handleConfirmRefund = async (refundData: any) => {
+    const original = refundingSale;
     try {
       setIsRefundProcessing(true);
+      const prevRefunded = original?.refundedAmount || 0;
       const updated = await salesService.refundSale(refundData.saleId, {
         reason: refundData.reason,
         items: refundData.items,
         notes: refundData.notes,
+        refundPassword: refundData.refundPassword,
       });
+
+      // Amount refunded in THIS transaction (refundedAmount is cumulative).
+      const thisRefundAmount = Math.max(
+        0,
+        (updated.refundedAmount || 0) - prevRefunded,
+      );
 
       toast({
         title: 'Refund Processed',
-        description: `Refund of ${formatCurrency(updated.refundedAmount || 0)} has been processed successfully`
+        description: `Refund of ${formatCurrency(thisRefundAmount)} has been processed successfully`,
       });
 
       setIsRefundDialogOpen(false);
       setRefundingSale(null);
 
+      // Print the customer copy immediately, then offer the shop copy.
+      if (original) {
+        const receipt = buildRefundReceipt(original, refundData, thisRefundAmount);
+        try {
+          await printRefundReceipt(
+            receipt,
+            'CUSTOMER COPY',
+            settings.printer.printerName || undefined,
+          );
+        } catch (e) {
+          console.error('Refund receipt print failed:', e);
+        }
+        setPendingShopCopy(receipt); // opens the "print shop copy?" prompt
+      }
+
       // Reload data
       await loadSales();
       await loadStatistics();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error processing refund:', error);
+      const status = error?.response?.status;
+      const isAuth = status === 403;
       toast({
-        title: 'Error',
-        description: 'Failed to process refund',
-        variant: 'destructive'
+        title: isAuth ? 'Refund Not Authorised' : 'Error',
+        description: isAuth
+          ? 'Incorrect refund password. Please try again.'
+          : 'Failed to process refund',
+        variant: 'destructive',
       });
+      // On a wrong password keep the dialog open so they can retry.
+      if (!isAuth) {
+        setIsRefundDialogOpen(false);
+      }
     } finally {
       setIsRefundProcessing(false);
     }
@@ -947,7 +1066,50 @@ const SalesPage = () => {
         sale={refundingSale}
         onConfirmRefund={handleConfirmRefund}
         isProcessing={isRefundProcessing}
+        passwordRequired={refundPasswordRequired}
       />
+
+      {/* Print shop copy? — asked after the customer refund receipt prints */}
+      <AlertDialog
+        open={!!pendingShopCopy}
+        onOpenChange={(open) => {
+          if (!open) setPendingShopCopy(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Print shop copy?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The customer's refund receipt has printed. Print a second copy for
+              the shop's records?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingShopCopy(null)}>
+              No, skip
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                const receipt = pendingShopCopy;
+                setPendingShopCopy(null);
+                if (receipt) {
+                  try {
+                    await printRefundReceipt(
+                      receipt,
+                      'SHOP COPY',
+                      settings.printer.printerName || undefined,
+                    );
+                  } catch (e) {
+                    console.error('Shop copy print failed:', e);
+                  }
+                }
+              }}
+            >
+              Yes, print shop copy
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Void Transaction Dialog */}
       <VoidTransactionDialog
