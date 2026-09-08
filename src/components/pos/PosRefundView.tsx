@@ -1,11 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,7 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Search, RotateCcw, Loader2 } from 'lucide-react';
+import { Search, RotateCcw, Loader2, ArrowLeft, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -26,8 +19,7 @@ import { salesService, Sale } from '@/services/salesService';
 import { printRefundReceipt, RefundReceiptData } from '@/utils/thermalReceipt';
 import RefundSaleDialog from '@/components/sales/RefundSaleDialog';
 
-interface PosRefundDialogProps {
-  open: boolean;
+interface PosRefundViewProps {
   onClose: () => void;
 }
 
@@ -35,55 +27,52 @@ const gbp = (n: number) =>
   new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(n);
 
 /**
- * POS-window refund entry: search a past sale (by product code, sale #,
- * receipt or customer), pick it, then run the same password-gated refund +
- * receipt flow used in Sales Management.
+ * Full-page POS refund view (rendered over the tile grid, cart stays visible).
+ * Shows recent sales on open, filterable by product code / sale # / receipt /
+ * customer, each as a card with a Refund button. Choosing one runs the same
+ * password-gated refund + receipt flow used in Sales Management.
  */
-const PosRefundDialog: React.FC<PosRefundDialogProps> = ({ open, onClose }) => {
+const PosRefundView: React.FC<PosRefundViewProps> = ({ onClose }) => {
   const { toast } = useToast();
   const { auth } = useAuth();
   const { settings } = useSettings();
 
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Sale[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [searched, setSearched] = useState(false);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const [refundingSale, setRefundingSale] = useState<Sale | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [passwordRequired, setPasswordRequired] = useState(false);
   const [pendingShopCopy, setPendingShopCopy] = useState<RefundReceiptData | null>(null);
 
+  // Load recent sales (or search results when a query is present).
+  const load = useCallback(async (q?: string) => {
+    setLoading(true);
+    try {
+      const term = (q ?? '').trim();
+      const res = await salesService.getSales(1, 25, term ? { search: term } : {});
+      setSales(res.data || []);
+    } catch {
+      setSales([]);
+      toast({
+        title: 'Could not load sales',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
   useEffect(() => {
-    if (!open) return;
-    setQuery('');
-    setResults([]);
-    setSearched(false);
+    load();
     salesService
       .getRefundPasswordStatus()
       .then((s) => setPasswordRequired(s.isSet))
       .catch(() => setPasswordRequired(false));
-  }, [open]);
-
-  const runSearch = async () => {
-    const q = query.trim();
-    if (!q) return;
-    setSearching(true);
-    setSearched(true);
-    try {
-      const found = await salesService.searchSales(q, 20);
-      setResults(found || []);
-    } catch {
-      setResults([]);
-      toast({
-        title: 'Search failed',
-        description: 'Could not search sales. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setSearching(false);
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const buildReceipt = (
     original: Sale,
@@ -177,8 +166,7 @@ const PosRefundDialog: React.FC<PosRefundDialogProps> = ({ open, onClose }) => {
         }
         setPendingShopCopy(receipt);
       }
-      // Refresh the search results so refunded totals show.
-      runSearch();
+      load(query); // refresh so refunded totals update
     } catch (error: any) {
       const isAuth = error?.response?.status === 403;
       toast({
@@ -195,85 +183,125 @@ const PosRefundDialog: React.FC<PosRefundDialogProps> = ({ open, onClose }) => {
   };
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <RotateCcw className="h-5 w-5 text-orange-500" />
-              Refund a Sale
-            </DialogTitle>
-            <DialogDescription>
-              Search by product code, sale number, receipt, or customer, then
-              choose the sale to refund.
-            </DialogDescription>
-          </DialogHeader>
+    <div className="h-full flex flex-col animate-scale-in">
+      {/* Header: back + title + search */}
+      <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+        <button
+          onClick={onClose}
+          className="h-10 w-10 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors"
+          aria-label="Back"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <div className="flex items-center gap-2 mr-2">
+          <RotateCcw className="h-5 w-5 text-orange-500" />
+          <h2 className="text-lg font-semibold text-gray-900">Refund a Sale</h2>
+        </div>
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <Input
+            autoFocus
+            className="pl-10"
+            placeholder="Product code, sale #, receipt, or customer…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') load(query);
+            }}
+          />
+        </div>
+        <Button variant="outline" onClick={() => load(query)} disabled={loading}>
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+        </Button>
+        {query && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setQuery('');
+              load('');
+            }}
+          >
+            Clear
+          </Button>
+        )}
+      </div>
 
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <Input
-                autoFocus
-                className="pl-10"
-                placeholder="Product code, sale #, receipt, or customer…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') runSearch();
-                }}
-              />
-            </div>
-            <Button onClick={runSearch} disabled={searching || !query.trim()}>
-              {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
-            </Button>
+      {/* Body: recent sales / results as cards */}
+      <div className="flex-1 overflow-y-auto py-4 space-y-3">
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+          {query ? 'Search results' : 'Recent sales'}
+        </p>
+
+        {loading && sales.length === 0 && (
+          <div className="flex items-center justify-center py-16 text-gray-400">
+            <Loader2 className="h-6 w-6 animate-spin" />
           </div>
+        )}
 
-          <div className="mt-4 space-y-2">
-            {searched && !searching && results.length === 0 && (
-              <p className="text-sm text-gray-500 text-center py-6">
-                No sales found. Try a different code or number.
-              </p>
-            )}
-            {results.map((sale) => {
-              const remaining =
-                (sale.totalAmount || 0) - (sale.refundedAmount || 0);
-              const fullyRefunded = remaining <= 0;
-              return (
-                <div
-                  key={sale.id}
-                  className="flex items-center justify-between border rounded-lg p-3 bg-white"
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm truncate">
-                      {sale.receiptNumber || (sale as any).saleNumber || sale.id.slice(0, 8)}
-                      {(sale as any).customerName ? ` · ${(sale as any).customerName}` : ''}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {sale.createdAt
-                        ? new Date(sale.createdAt).toLocaleString('en-GB')
-                        : ''}{' '}
-                      · Total {gbp(sale.totalAmount || 0)}
-                      {(sale.refundedAmount || 0) > 0
-                        ? ` · Refunded ${gbp(sale.refundedAmount)}`
-                        : ''}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant={fullyRefunded ? 'outline' : 'default'}
-                    disabled={fullyRefunded}
-                    className={!fullyRefunded ? 'bg-orange-600 hover:bg-orange-700' : ''}
-                    onClick={() => setRefundingSale(sale)}
-                  >
-                    {fullyRefunded ? 'Refunded' : 'Refund'}
-                  </Button>
+        {!loading && sales.length === 0 && (
+          <div className="text-center py-16 text-gray-500">
+            <RefreshCw className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+            {query ? 'No sales match that search.' : 'No sales found.'}
+          </div>
+        )}
+
+        {sales.map((sale) => {
+          const remaining = (sale.totalAmount || 0) - (sale.refundedAmount || 0);
+          const fullyRefunded = remaining <= 0;
+          const itemNames = ((sale.items || []) as any[])
+            .map((i) => i.productName || i.name)
+            .filter(Boolean)
+            .slice(0, 3)
+            .join(', ');
+          return (
+            <div
+              key={sale.id}
+              className="flex items-center justify-between border border-gray-200 rounded-xl p-4 bg-white hover:shadow-sm transition-shadow"
+            >
+              <div className="min-w-0 pr-4">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm text-gray-900">
+                    {sale.receiptNumber || (sale as any).saleNumber || sale.id.slice(0, 8)}
+                  </span>
+                  {(sale.refundedAmount || 0) > 0 && (
+                    <span className="text-[10px] font-medium bg-orange-100 text-orange-700 rounded-full px-2 py-0.5">
+                      {fullyRefunded ? 'Refunded' : 'Part-refunded'}
+                    </span>
+                  )}
                 </div>
-              );
-            })}
-          </div>
-        </DialogContent>
-      </Dialog>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {sale.createdAt
+                    ? new Date(sale.createdAt).toLocaleString('en-GB')
+                    : ''}
+                  {(sale as any).customerName ? ` · ${(sale as any).customerName}` : ''}
+                </p>
+                {itemNames && (
+                  <p className="text-xs text-gray-400 mt-0.5 truncate">{itemNames}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-4 flex-shrink-0">
+                <div className="text-right">
+                  <p className="font-semibold text-gray-900">{gbp(sale.totalAmount || 0)}</p>
+                  {(sale.refundedAmount || 0) > 0 && (
+                    <p className="text-xs text-orange-600">-{gbp(sale.refundedAmount)}</p>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant={fullyRefunded ? 'outline' : 'default'}
+                  disabled={fullyRefunded}
+                  className={!fullyRefunded ? 'bg-orange-600 hover:bg-orange-700' : ''}
+                  onClick={() => setRefundingSale(sale)}
+                >
+                  {fullyRefunded ? 'Refunded' : 'Refund'}
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
+      {/* Refund options dialog (with the password gate) */}
       <RefundSaleDialog
         isOpen={!!refundingSale}
         onClose={() => setRefundingSale(null)}
@@ -283,6 +311,7 @@ const PosRefundDialog: React.FC<PosRefundDialogProps> = ({ open, onClose }) => {
         passwordRequired={passwordRequired}
       />
 
+      {/* Print shop copy? */}
       <AlertDialog
         open={!!pendingShopCopy}
         onOpenChange={(o) => !o && setPendingShopCopy(null)}
@@ -321,8 +350,8 @@ const PosRefundDialog: React.FC<PosRefundDialogProps> = ({ open, onClose }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
 };
 
-export default PosRefundDialog;
+export default PosRefundView;
