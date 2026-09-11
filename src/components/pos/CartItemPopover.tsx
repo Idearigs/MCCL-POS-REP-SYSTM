@@ -13,6 +13,7 @@ export interface CartItemWithMeta {
   id: string;
   name: string;
   price: number;
+  cost?: number; // inventory unit cost — owner profit preview only
   quantity: number;
   sku?: string;
   stock?: number;
@@ -40,6 +41,8 @@ interface CartItemPopoverProps {
   onUpdateDiscount: (discount: LineDiscount | undefined) => void;
   onUpdateStaff: (staffId: string, staffName: string) => void;
   onClose: () => void;
+  /** Show the profit-after-discount hint (owner only; never printed). */
+  showProfit?: boolean;
 }
 
 const CartItemPopover: React.FC<CartItemPopoverProps> = ({
@@ -49,6 +52,7 @@ const CartItemPopover: React.FC<CartItemPopoverProps> = ({
   onUpdateDiscount,
   onUpdateStaff,
   onClose,
+  showProfit = false,
 }) => {
   const [discountType, setDiscountType] = useState<'percent' | 'fixed'>(
     item.lineDiscount?.type ?? 'percent',
@@ -216,6 +220,19 @@ const CartItemPopover: React.FC<CartItemPopoverProps> = ({
             <span className="text-slate-400 ml-1">(was £{lineRaw.toFixed(2)})</span>
           </p>
         )}
+        {/* Owner-only profit-after-discount preview. Not printed on any receipt. */}
+        {showProfit && typeof item.cost === 'number' && item.cost > 0 && (() => {
+          const revenue = previewDiscount();
+          const cost = item.cost * item.quantity;
+          const profit = revenue - cost;
+          const pct = revenue > 0 ? (profit / revenue) * 100 : 0;
+          return (
+            <p className={`text-xs mt-1 font-medium ${profit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              Profit: £{profit.toFixed(2)} ({pct.toFixed(0)}%)
+              <span className="text-slate-400 font-normal ml-1">· owner only</span>
+            </p>
+          );
+        })()}
       </div>
 
       {/* Staff Commission Tag */}

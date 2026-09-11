@@ -152,6 +152,7 @@ interface CartItem {
   purity?: string;
   category?: string;
   serialNumber?: string;
+  sourceBill?: string; // optional source-bill # for bespoke/second-hand lines
 }
 
 interface TileBasedPOSProps {
@@ -220,6 +221,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   const [showHeldDialog, setShowHeldDialog] = useState(false);
   const [showRefundView, setShowRefundView] = useState(false);
   const [showTodaySalesView, setShowTodaySalesView] = useState(false);
+  const [todaysTotal, setTodaysTotal] = useState<number | null>(null);
 
   // Stores the last completed sale so we can show the print receipt screen
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
@@ -465,6 +467,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
 
   // Quick Service Price Dialog (for Cleaning, Watch Battery, Watch Links, Spring Bar, Watch Straps)
   const [showServicePriceDialog, setShowServicePriceDialog] = useState(false);
+  // Optional source-bill # for bespoke / second-hand custom-tile lines (F6).
+  const [serviceSourceBill, setServiceSourceBill] = useState('');
   const [serviceType, setServiceType] = useState<'cleaning' | 'battery' | 'watch-links' | 'spring-bar' | 'watch-straps' | 'jewellery-repair-quick' | 'watch-repair-quick'>('cleaning');
   const [servicePrice, setServicePrice] = useState('');
 
@@ -977,6 +981,8 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       }]);
     }
     toast({ title: 'Added to cart', description: product.name, duration: 1000 });
+    // Return focus to the scan/search box, ready for the next item.
+    setTimeout(() => searchRef.current?.focus(), 0);
   };
 
   // Add repair to cart
@@ -2042,30 +2048,18 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
   };
 
   // Barcode / QR scan handler — looks up product by SKU or barcode then adds to cart
-  const handleBarcodeScanned = useCallback(async (code: string) => {
-    try {
-      let product = null;
-      try {
-        product = await productService.getProductByBarcode(code);
-      } catch {
-        product = await productService.getProductBySku(code);
-      }
-      if (product) {
-        const inventoryItem = inventory.find(i => i.id === product!.id) ?? {
-          id: product.id,
-          name: product.name,
-          price: product.price,
-          stock: product.stock,
-          imageUrl: product.imageUrl,
-          sku: product.sku,
-        } as any;
-        addToCart(inventoryItem);
-        toast({ title: `Scanned: ${product.name}`, duration: 1500 });
-      }
-    } catch {
-      toast({ title: 'Product not found', description: `No product matched code: ${code}`, variant: 'destructive', duration: 2000 });
-    }
-  }, [inventory]);
+  const handleBarcodeScanned = useCallback((code: string) => {
+    // A scan now lands in the search box and filters the tile grid — the owner
+    // then clicks the matched product to add it (was: auto-add to cart). Keeps
+    // the register in the owner's control when a customer brings an item over.
+    setSearchQuery(code);
+    setShowProductGrid(false);
+    // Re-focus so subsequent scans keep flowing into the search box.
+    setTimeout(() => {
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    }, 0);
+  }, []);
 
   // Wire up keyboard shortcuts
   usePOSKeyboard({
@@ -2083,6 +2077,34 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     removeFromCart,
     setShowAltOverlay,
   });
+
+  // Today's net sales total for the Register tile. Refreshes when the Today's
+  // Sales view closes (a refund there may have changed it).
+  useEffect(() => {
+    let cancelled = false;
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    salesService
+      .getSales(1, 200, { startDate: d.toISOString() })
+      .then((res) => {
+        if (cancelled) return;
+        const total = (res.data || []).reduce(
+          (s: number, x: any) => s + ((x.totalAmount || 0) - (x.refundedAmount || 0)),
+          0,
+        );
+        setTodaysTotal(total);
+      })
+      .catch(() => !cancelled && setTodaysTotal(null));
+    return () => { cancelled = true; };
+  }, [showTodaySalesView]);
+
+  // Keep the search/scan box focused so a scanner's input always lands there.
+  // Runs on mount and whenever we return to the tile grid (views closed).
+  useEffect(() => {
+    if (!showRefundView && !showTodaySalesView && !showCategoryView && !showRepairView && !showAppraisalView) {
+      const t = setTimeout(() => searchRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [showRefundView, showTodaySalesView, showCategoryView, showRepairView, showAppraisalView]);
 
   const parkTransaction = (type: 'hold' | 'suspend') => {
     if (cart.length === 0) {
@@ -2241,6 +2263,11 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         // Owner-defined custom POS tiles add ad-hoc lines (id "tile-…", sku "TILE-…")
         // that are not real products — tag them non-stock like the others.
         const isCustomTile = item.sku?.startsWith('TILE-') || item.id?.startsWith('tile-');
+        // Per-line discount → the amount taken off this line (so the stored
+        // sale_items reconcile with what was actually charged; previously the
+        // line discount only affected the on-screen total).
+        const lineRaw = item.price * item.quantity;
+        const lineDiscountAmount = Math.max(0, lineRaw - getLineTotal(item));
         saleItems.push({
           productId: item.id,
           quantity: item.quantity,
@@ -2248,9 +2275,11 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
           // COGS snapshot for real inventory lines (undefined for non-stock /
           // service / tile lines). Reporting only — never on customer receipts.
           unitCost: typeof item.cost === 'number' ? item.cost : undefined,
-          discountAmount: 0,
+          discountAmount: lineDiscountAmount,
           taxRate: 0,
-          // Non-stock lines carry a marker so backend skips product DB lookup
+          // Non-stock lines carry a marker so backend skips product DB lookup.
+          // Custom-tile lines (bespoke/second-hand) also append an optional
+          // source-bill so the Sales tab can record the cost for VAT.
           notes: isGiftCard
             ? `GIFT CARD: ${item.name}`
             : isManualEntry
@@ -2258,7 +2287,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             : isAppraisal
             ? `APPRAISAL: ${item.name}`
             : isCustomTile
-            ? `CUSTOM TILE: ${item.name}`
+            ? `CUSTOM TILE: ${item.name}${item.sourceBill ? ` | BILL:${item.sourceBill}` : ''}`
             : isServiceItem
             ? `REPAIR SERVICE: ${item.name}`
             : undefined,
@@ -3349,24 +3378,33 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-1">Register</p>
                 <div className="grid grid-cols-4 gap-3">
-                  {/* Today's Sales */}
+                  {/* Today's Sales — prominent, shows today's net value */}
                   <div
                     onClick={() => setShowTodaySalesView(true)}
-                    className="bg-blue-50/60 border border-blue-100 rounded-xl p-5 cursor-pointer hover:border-blue-300 hover:bg-blue-50 hover:shadow-md hover:scale-[1.02] transition-all"
+                    className="col-span-2 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl p-5 cursor-pointer hover:from-blue-500 hover:to-indigo-500 hover:shadow-lg hover:scale-[1.01] transition-all flex items-center justify-between"
                   >
-                    <Receipt className="h-7 w-7 text-blue-600 mb-3" />
-                    <h3 className="text-gray-900 font-semibold text-base">Today's Sales</h3>
-                    <p className="text-gray-400 text-xs mt-0.5">Current shift</p>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Receipt className="h-6 w-6 text-white/90" />
+                        <h3 className="text-white font-semibold text-base">Today's Sales</h3>
+                      </div>
+                      <p className="text-blue-100 text-xs">Tap to view today's items &amp; totals</p>
+                    </div>
+                    <p className="text-white font-bold text-3xl">
+                      {todaysTotal === null ? '—' : `£${todaysTotal.toFixed(2)}`}
+                    </p>
                   </div>
 
                   {/* Refund */}
                   <div
                     onClick={() => setShowRefundView(true)}
-                    className="bg-orange-50/60 border border-orange-100 rounded-xl p-5 cursor-pointer hover:border-orange-300 hover:bg-orange-50 hover:shadow-md hover:scale-[1.02] transition-all"
+                    className="col-span-2 bg-orange-50/60 border border-orange-100 rounded-xl p-5 cursor-pointer hover:border-orange-300 hover:bg-orange-50 hover:shadow-md hover:scale-[1.02] transition-all flex items-center gap-3"
                   >
-                    <RefreshCcw className="h-7 w-7 text-orange-600 mb-3" />
-                    <h3 className="text-gray-900 font-semibold text-base">Refund</h3>
-                    <p className="text-gray-400 text-xs mt-0.5">Return a past sale</p>
+                    <RefreshCcw className="h-7 w-7 text-orange-600" />
+                    <div>
+                      <h3 className="text-gray-900 font-semibold text-base">Refund</h3>
+                      <p className="text-gray-400 text-xs mt-0.5">Return a past sale</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -4153,6 +4191,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         const invItem = inventory.find(i => i.id === item.id || i.sku === item.sku);
         const enriched = {
           ...item,
+          cost: typeof item.cost === 'number' ? item.cost : (invItem as any)?.cost,
           material: (invItem as any)?.material ?? item.material,
           weight: (invItem as any)?.weight?.toString() ?? item.weight,
           purity: (invItem as any)?.purity ?? item.purity,
@@ -4168,6 +4207,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
             onUpdateDiscount={(d) => updateLineDiscount(item.id, d)}
             onUpdateStaff={(sid, sname) => updateLineStaff(item.id, sid, sname)}
             onClose={() => setPopoverItemId(null)}
+            showProfit={auth.user?.role === 'OWNER'}
           />
         );
       })()}
@@ -6176,11 +6216,25 @@ Deposit is non-refundable.
                 ))}
               </div>
 
+              {/* Optional source-bill # for bespoke / second-hand tiles (F6) */}
+              {customTileMeta && /bespoke|second[-\s]?hand|second\s*sale/i.test(customTileMeta.saleName || customTileMeta.label || '') && (
+                <div className="mt-4">
+                  <Label className="text-xs text-slate-500">Source bill # (optional)</Label>
+                  <Input
+                    value={serviceSourceBill}
+                    onChange={(e) => setServiceSourceBill(e.target.value)}
+                    placeholder="e.g. INV-2231 — the bill this item's cost came from"
+                    className="mt-1 h-9 text-sm"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">Used later in Sales to record the cost for VAT. Not on the customer receipt.</p>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="flex gap-3 mt-6">
                 <Button
                   variant="outline"
-                  onClick={() => setShowServicePriceDialog(false)}
+                  onClick={() => { setShowServicePriceDialog(false); setServiceSourceBill(''); }}
                   className="flex-1 h-12 rounded-xl"
                 >
                   Cancel
@@ -6206,11 +6260,13 @@ Deposit is non-refundable.
                       price,
                       quantity: 1,
                       sku: meta.sku,
+                      sourceBill: serviceSourceBill.trim() || undefined,
                     };
                     setCart(prev => [...prev, serviceItem]);
                     toast({ title: 'Added to Cart', description: `${lineName} — £${price.toFixed(2)}` });
                     setShowServicePriceDialog(false);
                     setCustomTileMeta(null);
+                    setServiceSourceBill('');
                   }}
                   className={`flex-1 h-12 rounded-xl text-white ${meta.activeColor} hover:opacity-90`}
                 >

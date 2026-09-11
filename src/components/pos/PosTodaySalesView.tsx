@@ -4,6 +4,8 @@ import { ArrowLeft, Loader2, Receipt, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { salesService, Sale } from '@/services/salesService';
 import { shiftService } from '@/services/shiftService';
+import { useInventory } from '@/contexts/InventoryContext';
+import { normalizeImageUrl } from '@/lib/utils';
 
 interface PosTodaySalesViewProps {
   onClose: () => void;
@@ -19,9 +21,27 @@ const gbp = (n: number) =>
  */
 const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
   const { toast } = useToast();
+  const { inventory } = useInventory();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(false);
   const [shiftNumber, setShiftNumber] = useState<string | null>(null);
+
+  // Thumbnails of the inventory items on a sale (skip non-stock/service lines).
+  const saleThumbnails = (sale: Sale, max = 4): string[] => {
+    const urls: string[] = [];
+    for (const it of ((sale.items || []) as any[])) {
+      if (/GIFT CARD|MANUAL ENTRY|APPRAISAL|CUSTOM TILE|REPAIR SERVICE/i.test(it.notes || '')) continue;
+      const m = inventory.find(
+        (p) => p.id === it.productId || (it.productSku && p.sku === it.productSku) || (it.sku && p.sku === it.sku),
+      );
+      if (m?.imageUrl) {
+        const u = normalizeImageUrl(m.imageUrl, { w: 48 });
+        if (u && !urls.includes(u)) urls.push(u);
+      }
+      if (urls.length >= max) break;
+    }
+    return urls;
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,7 +157,25 @@ const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
               key={sale.id}
               className="flex items-center justify-between border border-gray-200 rounded-xl p-4 bg-white"
             >
-              <div className="min-w-0 pr-4">
+              {(() => {
+                const thumbs = saleThumbnails(sale);
+                if (thumbs.length === 0) return null;
+                return (
+                  <div className="flex -space-x-2 mr-3 shrink-0">
+                    {thumbs.map((u, i) => (
+                      <img
+                        key={i}
+                        src={u}
+                        alt=""
+                        loading="lazy"
+                        className="h-10 w-10 rounded-lg object-cover border-2 border-white shadow-sm bg-gray-50"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ))}
+                  </div>
+                );
+              })()}
+              <div className="min-w-0 pr-4 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-sm text-gray-900">
                     {sale.receiptNumber ||
