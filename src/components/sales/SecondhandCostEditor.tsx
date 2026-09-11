@@ -15,7 +15,9 @@ const CONDITION_TOKEN = /\s*CONDITION:(BRAND_NEW|USED)\s*/i;
 const BESPOKE_RE = /bespoke/i;
 const SECONDHAND_RE = /(second[-\s]?hand|second\s*sale)/i;
 
-function parseSecondhandBespoke(notes?: string): { title: string; price: number }[] {
+function parseSecondhandBespoke(
+  notes?: string,
+): { title: string; price: number; bill?: string }[] {
   const s = String(notes || '');
   const idx = s.search(/Repair Services:\s*/i);
   if (idx === -1) return [];
@@ -26,12 +28,15 @@ function parseSecondhandBespoke(notes?: string): { title: string; price: number 
     .map((seg) => {
       const priceM = seg.match(/£\s*([\d.,]+)\s*$/);
       const price = priceM ? parseFloat(priceM[1].replace(/,/g, '')) : 0;
-      const title = seg
-        .replace(/:\s*£\s*[\d.,]+\s*$/, '')
+      const noPrice = seg.replace(/:\s*£\s*[\d.,]+\s*$/, '');
+      const billM = noPrice.match(/\|\s*BILL:([^|]*)$/i); // optional "| BILL:xxx" (F6)
+      const bill = billM ? billM[1].trim() : undefined;
+      const title = noPrice
         .replace(NON_STOCK_MARKER, '')
         .replace(CONDITION_TOKEN, '')
+        .replace(/\s*\|\s*BILL:[^|]*$/i, '')
         .trim();
-      return { title, price };
+      return { title, price, bill };
     })
     .filter((x) => x.title && (BESPOKE_RE.test(x.title) || SECONDHAND_RE.test(x.title)));
 }
@@ -70,7 +75,8 @@ const SecondhandCostEditor: React.FC<Props> = ({ sale }) => {
           const existing = rows.find((r) => r.lineKey === l.title);
           next[l.title] = {
             cost: existing ? String(existing.cost) : '',
-            bill: existing?.sourceBillNumber || '',
+            // Prefer a saved bill; otherwise pre-fill the one captured at POS (F6).
+            bill: existing?.sourceBillNumber || l.bill || '',
           };
         }
         setValues(next);
