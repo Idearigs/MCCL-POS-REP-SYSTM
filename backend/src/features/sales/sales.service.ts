@@ -223,6 +223,12 @@ export class SalesService {
                 productId: item.productId,
                 quantity: item.quantity,
                 unitPrice: item.unitPrice,
+                // COGS snapshot at sale time (per-unit); used for profit/margin
+                // reporting only. Falls back to null when not supplied.
+                unitCost:
+                  item.unitCost !== undefined && item.unitCost !== null
+                    ? item.unitCost
+                    : null,
                 discount: itemDiscountAmount,
                 totalPrice,
               });
@@ -1505,6 +1511,52 @@ export class SalesService {
   /**
    * Map sale to response DTO
    */
+  // ── Manual line costs (second-hand / bespoke) ──────────────────────────────
+  // Cost + source-bill entered after the fact for note-only sale lines that have
+  // no sale_items row. Keyed by (saleId, lineKey = recovered line title).
+
+  async getManualCosts(
+    tenantId: string,
+    saleId: string,
+  ): Promise<
+    Array<{ lineKey: string; cost: number; sourceBillNumber?: string }>
+  > {
+    const rows = await (this.prismaService as any).manual_line_costs.findMany({
+      where: { tenantId, saleId },
+    });
+    return rows.map((r: any) => ({
+      lineKey: r.lineKey,
+      cost: Number(r.cost),
+      sourceBillNumber: r.sourceBillNumber ?? undefined,
+    }));
+  }
+
+  async upsertManualCost(
+    tenantId: string,
+    saleId: string,
+    lineKey: string,
+    cost: number,
+    sourceBillNumber?: string,
+  ) {
+    if (!lineKey || cost == null || Number.isNaN(Number(cost)) || cost < 0) {
+      throw new BadRequestException('A valid lineKey and cost are required');
+    }
+    const sale = await this.prismaService.sales.findFirst({
+      where: { id: saleId, tenantId },
+      select: { id: true },
+    });
+    if (!sale) throw new NotFoundException('Sale not found');
+
+    await (this.prismaService as any).manual_line_costs.upsert({
+      where: { saleId_lineKey: { saleId, lineKey } },
+      create: { tenantId, saleId, lineKey, cost, sourceBillNumber: sourceBillNumber || null },
+      update: { cost, sourceBillNumber: sourceBillNumber || null },
+    });
+    // Bust the sales list cache so exports/reports pick up the new cost.
+    await this.cacheService.delTenantData(tenantId, 'sales:list').catch(() => undefined);
+    return this.getManualCosts(tenantId, saleId);
+  }
+
   private mapToResponseDto(sale: any): SaleResponseDto {
     return {
       id: sale.id,
@@ -1519,9 +1571,10 @@ export class SalesService {
       paymentMethod: sale.paymentMethod,
       paymentStatus: sale.paymentStatus,
       subtotal: Number(sale.subtotal),
-      discountPercentage: Number(sale.discountPercentage),
+      // These columns do not exist on `sales` — guard the Number(undefined)=NaN.
+      discountPercentage: Number(sale.discountPercentage) || 0,
       discountAmount: Number(sale.discountAmount),
-      taxRate: Number(sale.taxRate),
+      taxRate: Number(sale.taxRate) || 0,
       taxAmount: Number(sale.taxAmount),
       totalAmount: Number(sale.totalAmount),
       paidAmount: Number(sale.paidAmount),
@@ -1538,6 +1591,15 @@ export class SalesService {
           productSku: item.products?.sku || '',
           quantity: item.quantity,
           unitPrice: Number(item.unitPrice),
+          // COGS per unit: the snapshot stored at sale time, else the product's
+          // current cost (for sales made before the snapshot existed). Undefined
+          // when neither is known. Reporting only — never on customer receipts.
+          unitCost:
+            item.unitCost != null
+              ? Number(item.unitCost)
+              : item.products?.costPrice != null
+                ? Number(item.products.costPrice)
+                : undefined,
           discountPercentage: 0,
           discountAmount: Number(item.discount || 0),
           taxRate: 0,

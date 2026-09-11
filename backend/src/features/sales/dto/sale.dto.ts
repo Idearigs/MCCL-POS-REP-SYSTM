@@ -68,6 +68,18 @@ export class CreateSaleItemDto {
   unitPrice: number;
 
   @ApiPropertyOptional({
+    description:
+      'Unit cost (COGS) captured at the time of sale, from the product. ' +
+      'Used for profit/margin reporting — never shown to the customer.',
+    example: 180.0,
+    minimum: 0,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  unitCost?: number;
+
+  @ApiPropertyOptional({
     description: 'Discount percentage (0-100)',
     example: 10.5,
     minimum: 0,
@@ -557,6 +569,18 @@ export class SaleItemResponseDto {
 
   @ApiProperty()
   unitPrice: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Unit cost (COGS) — the stored snapshot if present, else the current ' +
+      'product cost. For profit/margin reporting only.',
+  })
+  unitCost?: number;
+
+  @ApiPropertyOptional({
+    description: 'Primary product image URL (for reporting thumbnails).',
+  })
+  imageUrl?: string;
 
   @ApiProperty()
   discountPercentage: number;

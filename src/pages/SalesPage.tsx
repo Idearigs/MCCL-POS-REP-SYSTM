@@ -300,6 +300,18 @@ const SalesPage = () => {
       }
     }
 
+    // Item-type filter (second-hand / bespoke / inventory / service). A sale
+    // matches when it contains at least one line of the requested type.
+    if (filters.lineType && filters.lineType !== 'all') {
+      result = result.filter((sale) => flattenSaleToLines(sale).some((l) => {
+        if (filters.lineType === 'secondhand') return l.type === 'Second-hand';
+        if (filters.lineType === 'bespoke') return l.type === 'Bespoke';
+        if (filters.lineType === 'inventory') return l.type === 'Inventory';
+        if (filters.lineType === 'service') return l.type === 'Service';
+        return true;
+      }));
+    }
+
     setFilteredSales(result);
   };
 
@@ -650,7 +662,126 @@ const SalesPage = () => {
     return all.length ? all.join('; ') : '—';
   };
 
-  const handleExportCSV = () => {
+  // ── Per-item export model + margin-scheme VAT ──────────────────────────────
+  // VAT-inclusive "margin scheme": VAT is already inside the price. Inventory
+  // item VAT = profit / 6; service VAT = price / 6; second-hand/bespoke = 0 until
+  // a cost is entered (Phase 2). None of this appears on customer receipts.
+  const VAT_DIVISOR = 6;
+  const BESPOKE_RE = /bespoke/i;
+  const SECONDHAND_RE = /(second[-\s]?hand|second\s*sale)/i;
+
+  type ExportLineType = 'Inventory' | 'Service' | 'Second-hand' | 'Bespoke';
+  interface ExportLine {
+    saleNumber: string; date: string; customer: string;
+    item: string; type: ExportLineType; qty: number;
+    unitPrice: number; lineTotal: number;
+    cost: number | ''; profit: number | ''; vat: number;
+    paymentMethod: string; cashier: string;
+  }
+
+  const classifyLine = (title: string, isInventory: boolean): ExportLineType => {
+    if (BESPOKE_RE.test(title)) return 'Bespoke';
+    if (SECONDHAND_RE.test(title)) return 'Second-hand';
+    return isInventory ? 'Inventory' : 'Service';
+  };
+
+  // Recover the non-stock (service/repair/tile/gift/manual/appraisal) lines from
+  // the sale notes, keeping each line's price (extractNoteTitles drops it).
+  const parseServiceLines = (notes?: string): { title: string; price: number }[] => {
+    const s = String(notes || '');
+    const idx = s.search(/Repair Services:\s*/i);
+    if (idx === -1) return [];
+    return s
+      .slice(idx)
+      .replace(/Repair Services:\s*/i, '')
+      .split(/,(?=\s)/)
+      .map((seg) => {
+        const priceM = seg.match(/£\s*([\d.,]+)\s*$/);
+        const price = priceM ? parseFloat(priceM[1].replace(/,/g, '')) : 0;
+        const title = seg
+          .replace(/:\s*£\s*[\d.,]+\s*$/, '')
+          .replace(NON_STOCK_MARKER, '')
+          .replace(CONDITION_TOKEN, '')
+          .trim();
+        return { title, price };
+      })
+      .filter((x) => x.title);
+  };
+
+  const flattenSaleToLines = (sale: any): ExportLine[] => {
+    const base = {
+      saleNumber: sale.receiptNumber || sale.id.slice(0, 8),
+      date: format(new Date(sale.createdAt), 'yyyy-MM-dd HH:mm'),
+      customer: sale.customerName || 'Walk-in',
+      paymentMethod: sale.paymentMethod,
+      cashier: sale.cashierName || 'Unknown',
+    };
+    const lines: ExportLine[] = [];
+
+    // Inventory lines (real products carry unitCost)
+    for (const it of (sale.items || []) as any[]) {
+      const title = itemTitle(it);
+      const qty = Number(it.quantity || 1);
+      const unitPrice = Number(it.unitPrice || 0);
+      const lineTotal = Number(it.total ?? it.totalPrice ?? unitPrice * qty);
+      const hasCost = it.unitCost != null && !Number.isNaN(Number(it.unitCost));
+      const cost = hasCost ? Number(it.unitCost) * qty : '';
+      const profit = hasCost ? lineTotal - (cost as number) : '';
+      const type = classifyLine(title, true);
+      // Inventory (incl. second-hand/bespoke that DO have a cost) → VAT on profit.
+      const vat = hasCost ? Math.max(0, profit as number) / VAT_DIVISOR : 0;
+      lines.push({ ...base, item: title, type, qty, unitPrice, lineTotal, cost, profit, vat });
+    }
+
+    // Service / non-stock lines recovered from notes
+    const manualCosts: Array<{ lineKey: string; cost: number; sourceBillNumber?: string }> =
+      (sale.manualCosts as any) || [];
+    for (const svc of parseServiceLines(sale.notes)) {
+      const type = classifyLine(svc.title, false);
+      if (type === 'Service') {
+        // Plain services → VAT on full price (÷6).
+        lines.push({ ...base, item: svc.title, type, qty: 1, unitPrice: svc.price, lineTotal: svc.price, cost: '', profit: '', vat: svc.price / VAT_DIVISOR });
+      } else {
+        // Second-hand / bespoke → VAT on profit once a cost has been entered.
+        const mc = manualCosts.find((m) => m.lineKey === svc.title);
+        const cost = mc ? mc.cost : '';
+        const profit = mc ? svc.price - mc.cost : '';
+        const vat = mc ? Math.max(0, svc.price - mc.cost) / VAT_DIVISOR : 0;
+        lines.push({ ...base, item: svc.title, type, qty: 1, unitPrice: svc.price, lineTotal: svc.price, cost, profit, vat });
+      }
+    }
+
+    return lines;
+  };
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  // A sale has a second-hand/bespoke line if any recovered note-line classifies
+  // as non-Service. Used to decide which sales need their manual costs fetched.
+  const saleHasManualLine = (sale: any): boolean =>
+    parseServiceLines(sale?.notes).some(
+      (svc) => classifyLine(svc.title, false) !== 'Service',
+    );
+
+  // Fetch stored second-hand/bespoke costs for the sales that need them, on
+  // demand at export time, and attach them so VAT is computed on profit.
+  const withManualCosts = async (list: any[]): Promise<any[]> => {
+    const targets = list.filter((s) => !s.manualCosts && saleHasManualLine(s));
+    if (targets.length === 0) return list;
+    const map = new Map<string, any[]>();
+    await Promise.all(
+      targets.map(async (s) => {
+        try {
+          map.set(s.id, await salesService.getManualCosts(s.id));
+        } catch {
+          map.set(s.id, []);
+        }
+      }),
+    );
+    return list.map((s) => (map.has(s.id) ? { ...s, manualCosts: map.get(s.id) } : s));
+  };
+
+  const handleExportCSV = async () => {
     try {
       const conditionLabel = (notes?: string) => {
         const m = (notes || '').match(/CONDITION:(BRAND_NEW|USED)/);
@@ -671,40 +802,26 @@ const SalesPage = () => {
         return parts.join(' / ') || '—';
       };
 
-      // One row per sale — summary condition column
+      // One row per item sold (inventory lines carry Cost/Profit; VAT per the
+      // margin scheme). saleConditionSummary/conditionLabel kept for reference.
+      void saleConditionSummary;
       const headers = [
-        'Sale Number',
-        'Date',
-        'Customer',
-        'Items',
-        'Items Sold',
-        'Condition',
-        'Subtotal',
-        'Tax',
-        'Total',
-        'Payment Method',
-        'Payment Status',
-        'Status',
-        'Cashier'
+        'Sale #', 'Date', 'Customer', 'Item', 'Type', 'Qty',
+        'Unit Price', 'Line Total', 'Cost', 'Profit', 'VAT',
+        'Payment Method', 'Cashier',
       ];
 
+      const q = (v: any) => `"${String(v).replace(/"/g, '""')}"`;
+      const salesForExport = await withManualCosts(filteredSales);
+      const exportLines = salesForExport.flatMap(flattenSaleToLines);
       const csvRows = [
         headers.join(','),
-        ...filteredSales.map(sale => [
-          sale.receiptNumber || sale.id.slice(0, 8),
-          format(new Date(sale.createdAt), 'yyyy-MM-dd HH:mm'),
-          `"${sale.customerName || 'Walk-in'}"`,
-          sale.items?.length || 0,
-          `"${itemsSummary(sale).replace(/"/g, '""')}"`,
-          `"${saleConditionSummary(sale.items || [])}"`,
-          sale.subtotal,
-          sale.taxAmount,
-          sale.totalAmount,
-          sale.paymentMethod,
-          sale.paymentStatus,
-          sale.status,
-          `"${sale.cashierName || 'Unknown'}"`
-        ].join(','))
+        ...exportLines.map((l) => [
+          q(l.saleNumber), q(l.date), q(l.customer), q(l.item), l.type, l.qty,
+          round2(l.unitPrice), round2(l.lineTotal),
+          l.cost === '' ? '' : round2(l.cost), l.profit === '' ? '' : round2(l.profit),
+          round2(l.vat), l.paymentMethod, q(l.cashier),
+        ].join(',')),
       ];
 
       const csvContent = csvRows.join('\n');
@@ -720,7 +837,7 @@ const SalesPage = () => {
 
       toast({
         title: 'Export Successful',
-        description: `Exported ${filteredSales.length} sales to CSV`
+        description: `Exported ${exportLines.length} item lines from ${filteredSales.length} sales to CSV`
       });
     } catch (error) {
       console.error('Error exporting CSV:', error);
@@ -735,28 +852,27 @@ const SalesPage = () => {
   const handleExportXLSX = async () => {
     try {
       const XLSX = await import('xlsx');
-      const rows = filteredSales.map(sale => ({
-        'Sale #': sale.receiptNumber || sale.id.slice(0, 8),
-        'Date': format(new Date(sale.createdAt), 'yyyy-MM-dd HH:mm'),
-        'Customer': sale.customerName || 'Walk-in',
-        'Items': sale.items?.length || 0,
-        'Items Sold': itemsSummary(sale),
-        'Subtotal': sale.subtotal,
-        'Discount': sale.discountAmount,
-        'Tax': sale.taxAmount,
-        'Total': sale.totalAmount,
-        'Refunded': sale.refundedAmount || 0,
-        'Payment Method': sale.paymentMethod,
-        'Payment Status': sale.paymentStatus,
-        'Sale Status': sale.status,
-        'Cashier': sale.cashierName || 'Unknown',
-        'Salesperson': sale.salespersonName || '',
+      const salesForExport = await withManualCosts(filteredSales);
+      const rows = salesForExport.flatMap(flattenSaleToLines).map((l) => ({
+        'Sale #': l.saleNumber,
+        'Date': l.date,
+        'Customer': l.customer,
+        'Item': l.item,
+        'Type': l.type,
+        'Qty': l.qty,
+        'Unit Price': round2(l.unitPrice),
+        'Line Total': round2(l.lineTotal),
+        'Cost': l.cost === '' ? '' : round2(l.cost),
+        'Profit': l.profit === '' ? '' : round2(l.profit),
+        'VAT': round2(l.vat),
+        'Payment Method': l.paymentMethod,
+        'Cashier': l.cashier,
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Sales');
+      XLSX.utils.book_append_sheet(wb, ws, 'Sales (items)');
       XLSX.writeFile(wb, `sales-export-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
-      toast({ title: 'XLSX Export Successful', description: `Exported ${rows.length} sales` });
+      toast({ title: 'XLSX Export Successful', description: `Exported ${rows.length} item lines` });
     } catch {
       toast({ title: 'Export Failed', variant: 'destructive', description: 'Could not generate XLSX file' });
     }
