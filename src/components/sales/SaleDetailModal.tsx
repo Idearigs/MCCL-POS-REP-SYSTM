@@ -36,6 +36,8 @@ import {
 } from 'lucide-react';
 import { Sale } from '@/services/salesService';
 import SecondhandCostEditor from '@/components/sales/SecondhandCostEditor';
+import { useInventory } from '@/contexts/InventoryContext';
+import { normalizeImageUrl } from '@/lib/utils';
 import { format } from 'date-fns';
 
 interface SaleDetailModalProps {
@@ -65,6 +67,9 @@ const SaleDetailModal: React.FC<SaleDetailModalProps> = ({
   onPrintReceipt,
   onRefund,
 }) => {
+  // Hook must run before the early return (rules of hooks).
+  const { inventory } = useInventory();
+
   if (!sale) return null;
 
   const canRefund = sale.paymentStatus === 'COMPLETED' && sale.status === 'COMPLETED';
@@ -74,9 +79,22 @@ const SaleDetailModal: React.FC<SaleDetailModalProps> = ({
     return m ? (m[1] === 'BRAND_NEW' ? 'Brand New' : 'Used') : null;
   };
 
+  // Match a sold line to its inventory product image (client-side; deactivated
+  // products won't match). Returns a small resized thumbnail URL.
+  const imgFor = (item: any): string | undefined => {
+    const match = inventory.find(
+      (p) =>
+        p.id === item.productId ||
+        (item.productSku && p.sku === item.productSku) ||
+        (item.sku && p.sku === item.sku),
+    );
+    return match?.imageUrl ? normalizeImageUrl(match.imageUrl, { w: 48 }) : undefined;
+  };
+
   // ── Margin calculation ─────────────────────────────────────────────────
   const itemsWithMargin = (sale.items || []).map((item) => {
-    const cost = (item as any).costPrice ? Number((item as any).costPrice) * item.quantity : null;
+    // unitCost is the COGS snapshot exposed on the sale item (else current cost).
+    const cost = (item as any).unitCost != null ? Number((item as any).unitCost) * item.quantity : null;
     const revenue = item.totalPrice ?? item.total ?? item.unitPrice * item.quantity;
     const margin = cost !== null ? revenue - cost : null;
     const marginPct = cost !== null && revenue > 0 ? ((revenue - cost) / revenue) * 100 : null;
@@ -209,7 +227,24 @@ const SaleDetailModal: React.FC<SaleDetailModalProps> = ({
                       const lineTotal = item.totalPrice ?? item.total ?? (item.unitPrice * item.quantity - (item.discount || 0));
                       return (
                         <TableRow key={i}>
-                          <TableCell className="font-medium text-sm">{item.productName}</TableCell>
+                          <TableCell className="font-medium text-sm">
+                            <div className="flex items-center gap-2">
+                              {imgFor(item) ? (
+                                <img
+                                  src={imgFor(item)}
+                                  alt=""
+                                  loading="lazy"
+                                  className="h-8 w-8 rounded object-cover border border-gray-100 shrink-0"
+                                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                />
+                              ) : (
+                                <span className="h-8 w-8 rounded bg-gray-100 border border-gray-100 shrink-0 flex items-center justify-center">
+                                  <Package size={12} className="text-gray-300" />
+                                </span>
+                              )}
+                              <span>{item.productName}</span>
+                            </div>
+                          </TableCell>
                           <TableCell className="text-xs text-gray-500 font-mono">{sku}</TableCell>
                           <TableCell>
                             {condition ? (

@@ -32,7 +32,10 @@ import {
 import { salesService, Sale } from '@/services/salesService';
 import { repairService, RepairStats } from '@/services/repairService';
 import { productService } from '@/services/productService';
-import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
+import { format, subDays, startOfMonth, endOfMonth, startOfQuarter } from 'date-fns';
+import { useInventory } from '@/contexts/InventoryContext';
+import { normalizeImageUrl } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 interface ProductSale {
   productId: string;
@@ -68,7 +71,80 @@ const ProductSalesReport: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'all'>('all');
+  const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'quarter' | 'all' | 'custom'>('all');
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
+  const [exporting, setExporting] = useState(false);
+  const { inventory } = useInventory();
+  const { toast } = useToast();
+
+  // Match a product-sales row to its inventory image (client-side).
+  const productImageUrl = (p: { productId?: string; productSku?: string }, w = 48): string | undefined => {
+    const m = inventory.find((inv) => inv.id === p.productId || (p.productSku && inv.sku === p.productSku));
+    return m?.imageUrl ? normalizeImageUrl(m.imageUrl, { w }) : undefined;
+  };
+
+  // Export the sold inventory products to Excel with an embedded thumbnail per
+  // row (ExcelJS). Images are fetched from the /thumb endpoint; a fetch that is
+  // blocked (e.g. CORS) is skipped gracefully so the row still exports.
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Products Sold');
+      ws.columns = [
+        { header: 'Image', key: 'image', width: 10 },
+        { header: 'SKU', key: 'sku', width: 16 },
+        { header: 'Name', key: 'name', width: 32 },
+        { header: 'Category', key: 'category', width: 16 },
+        { header: 'Qty Sold', key: 'qty', width: 10 },
+        { header: 'Revenue', key: 'revenue', width: 14 },
+        { header: 'Avg Price', key: 'avg', width: 12 },
+      ];
+      ws.getRow(1).font = { bold: true };
+
+      for (const p of displayedProducts) {
+        const row = ws.addRow({
+          image: '',
+          sku: p.productSku,
+          name: p.productName,
+          category: p.category,
+          qty: p.quantitySold,
+          revenue: Number(p.totalRevenue.toFixed(2)),
+          avg: Number(p.averagePrice.toFixed(2)),
+        });
+        row.height = 40;
+        const url = productImageUrl(p, 64);
+        if (url) {
+          try {
+            const resp = await fetch(url);
+            if (resp.ok) {
+              const buf = await resp.arrayBuffer();
+              const ct = resp.headers.get('content-type') || '';
+              const extension = ct.includes('png') ? 'png' : 'jpeg';
+              const imageId = wb.addImage({ buffer: buf as any, extension });
+              ws.addImage(imageId, {
+                tl: { col: 0.1, row: row.number - 1 + 0.1 } as any,
+                ext: { width: 40, height: 40 },
+              });
+            }
+          } catch {
+            /* image blocked — skip, keep the row */
+          }
+        }
+      }
+
+      const out = await wb.xlsx.writeBuffer();
+      const { saveAs } = await import('file-saver');
+      saveAs(new Blob([out]), `products-sold-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+      toast({ title: 'Export ready', description: `${displayedProducts.length} products exported` });
+    } catch {
+      toast({ title: 'Export failed', description: 'Could not build the Excel file', variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
+  };
   const [viewMode, setViewMode] = useState<'products' | 'repairs'>('products');
   const [repairData, setRepairData] = useState<any[]>([]);
   const [repairStats, setRepairStats] = useState<RepairStats | null>(null);
@@ -175,7 +251,6 @@ const ProductSalesReport: React.FC = () => {
 
   // Filter sales by date range
   const filteredSales = useMemo(() => {
-    console.log('🔍 Filtering sales, total:', sales.length, 'dateRange:', dateRange);
 
     // Check if sale is valid (completed or has no status)
     const isValidSale = (s: any) => {
@@ -186,6 +261,7 @@ const ProductSalesReport: React.FC = () => {
 
     const now = new Date();
     let startDate: Date;
+    let endDate: Date | null = null;
 
     switch (dateRange) {
       case 'today':
@@ -197,21 +273,33 @@ const ProductSalesReport: React.FC = () => {
       case 'month':
         startDate = startOfMonth(now);
         break;
+      case 'quarter':
+        startDate = startOfQuarter(now);
+        break;
+      case 'custom': {
+        if (!customFrom && !customTo) return sales.filter(isValidSale);
+        startDate = customFrom ? new Date(customFrom) : new Date(0);
+        if (customTo) {
+          endDate = new Date(customTo);
+          endDate.setHours(23, 59, 59, 999);
+        }
+        break;
+      }
       default: {
         // All time - return all valid sales
         const allSales = sales.filter(isValidSale);
-        console.log('🔍 All time sales:', allSales.length);
         return allSales;
       }
     }
 
     const filtered = sales.filter(sale => {
       const saleDate = new Date(sale.createdAt);
-      return saleDate >= startDate && isValidSale(sale);
+      if (saleDate < startDate) return false;
+      if (endDate && saleDate > endDate) return false;
+      return isValidSale(sale);
     });
-    console.log('🔍 Filtered sales:', filtered.length);
     return filtered;
-  }, [sales, dateRange]);
+  }, [sales, dateRange, customFrom, customTo]);
 
   // Calculate product sales with categories from product map
   const productSales = useMemo(() => {
@@ -513,12 +601,6 @@ const ProductSalesReport: React.FC = () => {
           </Button>
         </div>
       )}
-      {/* Debug info - remove after fixing */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs">
-        <strong>Debug:</strong> Raw Sales: {sales.length} | Filtered Sales: {filteredSales.length} |
-        Products in Map: {productCategories.size} | Repairs: {repairData.length} |
-        Product Sales: {productSales.length} | All Categories: {allCategories.length}
-      </div>
       {/* Header Controls */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -550,20 +632,31 @@ const ProductSalesReport: React.FC = () => {
         </div>
 
         {/* Date Range */}
-        <div className="inline-flex bg-gray-100 rounded-xl p-1">
-          {(['today', 'week', 'month', 'all'] as const).map(range => (
-            <button
-              key={range}
-              onClick={() => setDateRange(range)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                dateRange === range
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {range === 'today' ? 'Today' : range === 'week' ? '7 Days' : range === 'month' ? 'Month' : 'All Time'}
-            </button>
-          ))}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="inline-flex bg-gray-100 rounded-xl p-1">
+            {(['today', 'week', 'month', 'quarter', 'all', 'custom'] as const).map(range => (
+              <button
+                key={range}
+                onClick={() => setDateRange(range)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  dateRange === range
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {range === 'today' ? 'Today' : range === 'week' ? '7 Days' : range === 'month' ? 'Month' : range === 'quarter' ? 'Quarter' : range === 'all' ? 'All Time' : 'Custom'}
+              </button>
+            ))}
+          </div>
+          {dateRange === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
+                className="h-9 rounded-lg border border-gray-200 px-2 text-sm" />
+              <span className="text-gray-400 text-sm">to</span>
+              <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
+                className="h-9 rounded-lg border border-gray-200 px-2 text-sm" />
+            </div>
+          )}
         </div>
       </div>
 
@@ -621,9 +714,9 @@ const ProductSalesReport: React.FC = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button variant="outline" className="rounded-xl border-gray-200">
+                <Button variant="outline" className="rounded-xl border-gray-200" onClick={handleExportExcel} disabled={exporting || displayedProducts.length === 0}>
                   <Download className="h-4 w-4 mr-2" />
-                  Export
+                  {exporting ? 'Exporting…' : 'Export'}
                 </Button>
               </div>
             </div>
@@ -644,8 +737,13 @@ const ProductSalesReport: React.FC = () => {
                       <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-500">
                         {index + 1}
                       </div>
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center">
-                        {getCategoryIcon(product.category)}
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center overflow-hidden">
+                        {productImageUrl(product) ? (
+                          <img src={productImageUrl(product)} alt="" loading="lazy" className="w-full h-full object-cover"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                        ) : (
+                          getCategoryIcon(product.category)
+                        )}
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">{product.productName}</p>
