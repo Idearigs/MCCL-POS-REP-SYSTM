@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Body,
   Patch,
   Param,
@@ -27,6 +28,8 @@ import {
 import { SalesService } from './sales.service';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
+import { RolesGuard } from '../../shared/guards/roles.guard';
+import { Roles } from '../../shared/decorators/roles.decorator';
 import { CurrentUser } from '../../shared/decorators/user.decorator';
 import { TenantId } from '../../shared/decorators/tenant.decorator';
 import {
@@ -402,6 +405,39 @@ export class SalesController {
       tenantId,
       userId,
       idempotencyKey,
+    );
+  }
+
+  @Get(':id/manual-costs')
+  @ApiOperation({
+    summary: 'Get manually-entered costs for a sale (second-hand / bespoke)',
+  })
+  async getManualCosts(
+    @Param('id') id: string,
+    @TenantId() tenantId: string,
+  ) {
+    return this.salesService.getManualCosts(tenantId, id);
+  }
+
+  @Put(':id/manual-costs')
+  @Roles('OWNER', 'MANAGER')
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary:
+      'Set the cost + source-bill for a second-hand/bespoke line (OWNER/MANAGER)',
+  })
+  async upsertManualCost(
+    @Param('id') id: string,
+    @TenantId() tenantId: string,
+    @Body()
+    body: { lineKey: string; cost: number; sourceBillNumber?: string },
+  ) {
+    return this.salesService.upsertManualCost(
+      tenantId,
+      id,
+      body.lineKey,
+      body.cost,
+      body.sourceBillNumber,
     );
   }
 

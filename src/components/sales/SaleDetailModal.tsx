@@ -35,6 +35,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { Sale } from '@/services/salesService';
+import SecondhandCostEditor from '@/components/sales/SecondhandCostEditor';
 import { format } from 'date-fns';
 
 interface SaleDetailModalProps {
@@ -244,6 +245,9 @@ const SaleDetailModal: React.FC<SaleDetailModalProps> = ({
               </Table>
             </div>
           </div>
+
+          {/* Second-hand / bespoke cost entry (owner/manager; only if present) */}
+          <SecondhandCostEditor sale={sale} />
 
           <div className="grid grid-cols-2 gap-4">
             {/* ── Split Payment Breakdown ── */}

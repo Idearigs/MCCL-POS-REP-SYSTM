@@ -59,6 +59,8 @@ export interface Sale {
   tenantId: string;
   createdAt: string;
   updatedAt: string;
+  // Costs entered after the fact for note-only second-hand/bespoke lines.
+  manualCosts?: Array<{ lineKey: string; cost: number; sourceBillNumber?: string }>;
 }
 
 export interface CreateSaleData {
@@ -312,6 +314,20 @@ class SalesService {
       '/settings/refund-password/verify',
       { password },
     );
+  }
+
+  // ── Manual line costs (second-hand / bespoke) ──────────────────────────────
+  async getManualCosts(
+    saleId: string,
+  ): Promise<Array<{ lineKey: string; cost: number; sourceBillNumber?: string }>> {
+    return apiClient.get(`/sales/${saleId}/manual-costs`);
+  }
+
+  async setManualCost(
+    saleId: string,
+    payload: { lineKey: string; cost: number; sourceBillNumber?: string },
+  ): Promise<Array<{ lineKey: string; cost: number; sourceBillNumber?: string }>> {
+    return apiClient.put(`/sales/${saleId}/manual-costs`, payload);
   }
 
 

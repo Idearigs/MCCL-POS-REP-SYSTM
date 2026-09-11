@@ -30,6 +30,7 @@ export interface SalesFilterValues {
   dateTo?: Date;
   customerType?: string;
   outletId?: string;
+  lineType?: string; // 'all' | 'secondhand' | 'bespoke' | 'inventory' | 'service'
 }
 
 interface Shift {
@@ -111,6 +112,7 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
       shift: 'all',
       customerType: 'all',
       outletId: 'all',
+      lineType: 'all',
     });
     setIsFilterOpen(false);
   };
@@ -126,6 +128,7 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
     if (filters.shift && filters.shift !== 'all') count++;
     if (filters.customerType && filters.customerType !== 'all') count++;
     if (filters.outletId && filters.outletId !== 'all') count++;
+    if (filters.lineType && filters.lineType !== 'all') count++;
     return count;
   };
 
@@ -325,6 +328,26 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
                     <SelectItem value="COMPLETED">Completed</SelectItem>
                     <SelectItem value="CANCELLED">Cancelled</SelectItem>
                     <SelectItem value="REFUNDED">Refunded</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Item type (second-hand / bespoke) */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Item Type</Label>
+                <Select
+                  value={filters.lineType || 'all'}
+                  onValueChange={(v) => onFilterChange({ ...filters, lineType: v })}
+                >
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="All items" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Items</SelectItem>
+                    <SelectItem value="secondhand">Second-hand sales</SelectItem>
+                    <SelectItem value="bespoke">Bespoke sales</SelectItem>
+                    <SelectItem value="inventory">Inventory items</SelectItem>
+                    <SelectItem value="service">Services / repairs</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

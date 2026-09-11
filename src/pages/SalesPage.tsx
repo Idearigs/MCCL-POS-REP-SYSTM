@@ -300,6 +300,18 @@ const SalesPage = () => {
       }
     }
 
+    // Item-type filter (second-hand / bespoke / inventory / service). A sale
+    // matches when it contains at least one line of the requested type.
+    if (filters.lineType && filters.lineType !== 'all') {
+      result = result.filter((sale) => flattenSaleToLines(sale).some((l) => {
+        if (filters.lineType === 'secondhand') return l.type === 'Second-hand';
+        if (filters.lineType === 'bespoke') return l.type === 'Bespoke';
+        if (filters.lineType === 'inventory') return l.type === 'Inventory';
+        if (filters.lineType === 'service') return l.type === 'Service';
+        return true;
+      }));
+    }
+
     setFilteredSales(result);
   };
 
@@ -722,11 +734,21 @@ const SalesPage = () => {
     }
 
     // Service / non-stock lines recovered from notes
+    const manualCosts: Array<{ lineKey: string; cost: number; sourceBillNumber?: string }> =
+      (sale.manualCosts as any) || [];
     for (const svc of parseServiceLines(sale.notes)) {
       const type = classifyLine(svc.title, false);
-      // Plain services → VAT on full price. Second-hand/bespoke → 0 (no cost yet).
-      const vat = type === 'Service' ? svc.price / VAT_DIVISOR : 0;
-      lines.push({ ...base, item: svc.title, type, qty: 1, unitPrice: svc.price, lineTotal: svc.price, cost: '', profit: '', vat });
+      if (type === 'Service') {
+        // Plain services → VAT on full price (÷6).
+        lines.push({ ...base, item: svc.title, type, qty: 1, unitPrice: svc.price, lineTotal: svc.price, cost: '', profit: '', vat: svc.price / VAT_DIVISOR });
+      } else {
+        // Second-hand / bespoke → VAT on profit once a cost has been entered.
+        const mc = manualCosts.find((m) => m.lineKey === svc.title);
+        const cost = mc ? mc.cost : '';
+        const profit = mc ? svc.price - mc.cost : '';
+        const vat = mc ? Math.max(0, svc.price - mc.cost) / VAT_DIVISOR : 0;
+        lines.push({ ...base, item: svc.title, type, qty: 1, unitPrice: svc.price, lineTotal: svc.price, cost, profit, vat });
+      }
     }
 
     return lines;
@@ -734,7 +756,32 @@ const SalesPage = () => {
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
-  const handleExportCSV = () => {
+  // A sale has a second-hand/bespoke line if any recovered note-line classifies
+  // as non-Service. Used to decide which sales need their manual costs fetched.
+  const saleHasManualLine = (sale: any): boolean =>
+    parseServiceLines(sale?.notes).some(
+      (svc) => classifyLine(svc.title, false) !== 'Service',
+    );
+
+  // Fetch stored second-hand/bespoke costs for the sales that need them, on
+  // demand at export time, and attach them so VAT is computed on profit.
+  const withManualCosts = async (list: any[]): Promise<any[]> => {
+    const targets = list.filter((s) => !s.manualCosts && saleHasManualLine(s));
+    if (targets.length === 0) return list;
+    const map = new Map<string, any[]>();
+    await Promise.all(
+      targets.map(async (s) => {
+        try {
+          map.set(s.id, await salesService.getManualCosts(s.id));
+        } catch {
+          map.set(s.id, []);
+        }
+      }),
+    );
+    return list.map((s) => (map.has(s.id) ? { ...s, manualCosts: map.get(s.id) } : s));
+  };
+
+  const handleExportCSV = async () => {
     try {
       const conditionLabel = (notes?: string) => {
         const m = (notes || '').match(/CONDITION:(BRAND_NEW|USED)/);
@@ -765,7 +812,8 @@ const SalesPage = () => {
       ];
 
       const q = (v: any) => `"${String(v).replace(/"/g, '""')}"`;
-      const exportLines = filteredSales.flatMap(flattenSaleToLines);
+      const salesForExport = await withManualCosts(filteredSales);
+      const exportLines = salesForExport.flatMap(flattenSaleToLines);
       const csvRows = [
         headers.join(','),
         ...exportLines.map((l) => [
@@ -804,7 +852,8 @@ const SalesPage = () => {
   const handleExportXLSX = async () => {
     try {
       const XLSX = await import('xlsx');
-      const rows = filteredSales.flatMap(flattenSaleToLines).map((l) => ({
+      const salesForExport = await withManualCosts(filteredSales);
+      const rows = salesForExport.flatMap(flattenSaleToLines).map((l) => ({
         'Sale #': l.saleNumber,
         'Date': l.date,
         'Customer': l.customer,

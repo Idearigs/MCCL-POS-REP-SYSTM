@@ -1511,6 +1511,52 @@ export class SalesService {
   /**
    * Map sale to response DTO
    */
+  // ── Manual line costs (second-hand / bespoke) ──────────────────────────────
+  // Cost + source-bill entered after the fact for note-only sale lines that have
+  // no sale_items row. Keyed by (saleId, lineKey = recovered line title).
+
+  async getManualCosts(
+    tenantId: string,
+    saleId: string,
+  ): Promise<
+    Array<{ lineKey: string; cost: number; sourceBillNumber?: string }>
+  > {
+    const rows = await (this.prismaService as any).manual_line_costs.findMany({
+      where: { tenantId, saleId },
+    });
+    return rows.map((r: any) => ({
+      lineKey: r.lineKey,
+      cost: Number(r.cost),
+      sourceBillNumber: r.sourceBillNumber ?? undefined,
+    }));
+  }
+
+  async upsertManualCost(
+    tenantId: string,
+    saleId: string,
+    lineKey: string,
+    cost: number,
+    sourceBillNumber?: string,
+  ) {
+    if (!lineKey || cost == null || Number.isNaN(Number(cost)) || cost < 0) {
+      throw new BadRequestException('A valid lineKey and cost are required');
+    }
+    const sale = await this.prismaService.sales.findFirst({
+      where: { id: saleId, tenantId },
+      select: { id: true },
+    });
+    if (!sale) throw new NotFoundException('Sale not found');
+
+    await (this.prismaService as any).manual_line_costs.upsert({
+      where: { saleId_lineKey: { saleId, lineKey } },
+      create: { tenantId, saleId, lineKey, cost, sourceBillNumber: sourceBillNumber || null },
+      update: { cost, sourceBillNumber: sourceBillNumber || null },
+    });
+    // Bust the sales list cache so exports/reports pick up the new cost.
+    await this.cacheService.delTenantData(tenantId, 'sales:list').catch(() => undefined);
+    return this.getManualCosts(tenantId, saleId);
+  }
+
   private mapToResponseDto(sale: any): SaleResponseDto {
     return {
       id: sale.id,
