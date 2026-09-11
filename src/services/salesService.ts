@@ -13,9 +13,12 @@ export interface SaleItem {
   productSku?: string;
   quantity: number;
   unitPrice: number;
+  unitCost?: number;   // COGS per unit (reporting only) — snapshot or current product cost
+  imageUrl?: string;   // primary product image (reporting thumbnails)
   discount: number;
   total: number;
   totalPrice?: number;
+  notes?: string;
 }
 
 export interface SalePayment {
@@ -64,6 +67,7 @@ export interface CreateSaleData {
     productId: string;
     quantity: number;
     unitPrice: number;
+    unitCost?: number; // COGS snapshot for inventory lines (reporting only)
     discountAmount?: number;
     discountPercentage?: number;
     taxRate?: number;

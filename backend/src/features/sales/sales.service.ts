@@ -223,6 +223,12 @@ export class SalesService {
                 productId: item.productId,
                 quantity: item.quantity,
                 unitPrice: item.unitPrice,
+                // COGS snapshot at sale time (per-unit); used for profit/margin
+                // reporting only. Falls back to null when not supplied.
+                unitCost:
+                  item.unitCost !== undefined && item.unitCost !== null
+                    ? item.unitCost
+                    : null,
                 discount: itemDiscountAmount,
                 totalPrice,
               });
@@ -1519,9 +1525,10 @@ export class SalesService {
       paymentMethod: sale.paymentMethod,
       paymentStatus: sale.paymentStatus,
       subtotal: Number(sale.subtotal),
-      discountPercentage: Number(sale.discountPercentage),
+      // These columns do not exist on `sales` — guard the Number(undefined)=NaN.
+      discountPercentage: Number(sale.discountPercentage) || 0,
       discountAmount: Number(sale.discountAmount),
-      taxRate: Number(sale.taxRate),
+      taxRate: Number(sale.taxRate) || 0,
       taxAmount: Number(sale.taxAmount),
       totalAmount: Number(sale.totalAmount),
       paidAmount: Number(sale.paidAmount),
@@ -1538,6 +1545,15 @@ export class SalesService {
           productSku: item.products?.sku || '',
           quantity: item.quantity,
           unitPrice: Number(item.unitPrice),
+          // COGS per unit: the snapshot stored at sale time, else the product's
+          // current cost (for sales made before the snapshot existed). Undefined
+          // when neither is known. Reporting only — never on customer receipts.
+          unitCost:
+            item.unitCost != null
+              ? Number(item.unitCost)
+              : item.products?.costPrice != null
+                ? Number(item.products.costPrice)
+                : undefined,
           discountPercentage: 0,
           discountAmount: Number(item.discount || 0),
           taxRate: 0,

@@ -134,6 +134,7 @@ interface CartItem {
   id: string;
   name: string;
   price: number;
+  cost?: number; // inventory unit cost (COGS) — owner profit calc only, never on receipts
   quantity: number;
   stock?: number;
   image?: string;
@@ -967,6 +968,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         id: product.id,
         name: product.name,
         price: product.price,
+        cost: typeof (product as any).cost === 'number' ? (product as any).cost : undefined,
         quantity: 1,
         stock: product.stock,
         image: product.imageUrl,
@@ -2243,6 +2245,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
           productId: item.id,
           quantity: item.quantity,
           unitPrice: item.price,
+          // COGS snapshot for real inventory lines (undefined for non-stock /
+          // service / tile lines). Reporting only — never on customer receipts.
+          unitCost: typeof item.cost === 'number' ? item.cost : undefined,
           discountAmount: 0,
           taxRate: 0,
           // Non-stock lines carry a marker so backend skips product DB lookup
