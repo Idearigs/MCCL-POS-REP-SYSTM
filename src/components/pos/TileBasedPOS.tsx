@@ -73,6 +73,7 @@ import {
   CalendarClock,
   PauseCircle,
   RefreshCcw,
+  Receipt,
   ListOrdered,
   UserPlus,
   Beaker,
