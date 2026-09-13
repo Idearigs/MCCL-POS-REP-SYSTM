@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -61,6 +61,13 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
   const [restockingFee, setRestockingFee] = useState<string>('');
   const [itemCondition, setItemCondition] = useState<ItemCondition>('back_to_shelf');
   const [refundPassword, setRefundPassword] = useState('');
+
+  // Clear the PIN each time the dialog opens so a previous (e.g. wrong) entry
+  // never carries over into the next attempt. (Declared before any early return
+  // to keep hook order stable.)
+  useEffect(() => {
+    if (isOpen) setRefundPassword('');
+  }, [isOpen]);
   // Map<saleItemId, quantity>
   const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map());
 
@@ -146,7 +153,8 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
   const isValid = () => {
     if (!refundReason) return false;
     if (refundType === 'partial' && selectedItems.size === 0) return false;
-    if (passwordRequired && refundPassword.trim().length === 0) return false;
+    // Require a 4-digit PIN when the gate is active.
+    if (passwordRequired && !/^\d{4}$/.test(refundPassword)) return false;
     return true;
   };
 
@@ -180,24 +188,27 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Refund authorisation — shared password gate */}
+          {/* Refund authorisation — shared 4-digit PIN gate */}
           {passwordRequired && (
             <div className="space-y-2 border border-red-200 bg-red-50 p-4 rounded-lg">
               <Label htmlFor="refundPassword" className="text-sm font-semibold flex items-center gap-1.5 text-red-700">
                 <ShieldCheck size={14} className="text-red-500" />
-                Refund Password <span className="text-red-500">*</span>
+                Refund PIN <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="refundPassword"
                 type="password"
-                placeholder="Enter the refund authorisation password"
+                inputMode="numeric"
+                maxLength={4}
+                autoFocus
+                placeholder="• • • •"
                 value={refundPassword}
-                onChange={(e) => setRefundPassword(e.target.value)}
+                onChange={(e) => setRefundPassword(e.target.value.replace(/\D/g, '').slice(0, 4))}
                 autoComplete="off"
-                className="max-w-xs bg-white"
+                className="w-32 bg-white text-center text-2xl tracking-[0.5em]"
               />
               <p className="text-xs text-red-600">
-                A refund cannot be processed without the shop's refund password.
+                Enter the shop's 4-digit refund PIN to authorise this refund.
               </p>
             </div>
           )}
