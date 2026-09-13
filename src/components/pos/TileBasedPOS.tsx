@@ -2096,7 +2096,9 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
       })
       .catch(() => !cancelled && setTodaysTotal(null));
     return () => { cancelled = true; };
-  }, [showTodaySalesView]);
+    // Refetch when the Today's Sales view toggles AND after each completed sale
+    // (completedSale changes), so the tile total stays current without a reload.
+  }, [showTodaySalesView, completedSale]);
 
   // Keep the search/scan box focused so a scanner's input always lands there.
   // Runs on mount and whenever we return to the tile grid (views closed).
