@@ -594,12 +594,14 @@ const SalesPage = () => {
       await loadStatistics();
     } catch (error: any) {
       console.error('Error processing refund:', error);
-      const status = error?.response?.status;
+      // apiClient rejects with a custom { statusCode } shape (not axios's
+      // error.response.status), so check both.
+      const status = error?.statusCode ?? error?.response?.status;
       const isAuth = status === 403;
       toast({
         title: isAuth ? 'Refund Not Authorised' : 'Error',
         description: isAuth
-          ? 'Incorrect refund password. Please try again.'
+          ? 'Incorrect refund PIN. Please try again.'
           : 'Failed to process refund',
         variant: 'destructive',
       });

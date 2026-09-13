@@ -192,11 +192,13 @@ const PosRefundView: React.FC<PosRefundViewProps> = ({ onClose }) => {
       }
       load(query); // refresh so refunded totals update
     } catch (error: any) {
-      const isAuth = error?.response?.status === 403;
+      // apiClient rejects with a custom { statusCode } shape (not axios's
+      // error.response.status), so check both.
+      const isAuth = (error?.statusCode ?? error?.response?.status) === 403;
       toast({
         title: isAuth ? 'Refund Not Authorised' : 'Error',
         description: isAuth
-          ? 'Incorrect refund password. Please try again.'
+          ? 'Incorrect refund PIN. Please try again.'
           : 'Failed to process refund',
         variant: 'destructive',
       });
