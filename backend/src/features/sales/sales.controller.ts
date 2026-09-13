@@ -412,10 +412,7 @@ export class SalesController {
   @ApiOperation({
     summary: 'Get manually-entered costs for a sale (second-hand / bespoke)',
   })
-  async getManualCosts(
-    @Param('id') id: string,
-    @TenantId() tenantId: string,
-  ) {
+  async getManualCosts(@Param('id') id: string, @TenantId() tenantId: string) {
     return this.salesService.getManualCosts(tenantId, id);
   }
 

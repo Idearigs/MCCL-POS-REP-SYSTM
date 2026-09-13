@@ -1549,11 +1549,19 @@ export class SalesService {
 
     await (this.prismaService as any).manual_line_costs.upsert({
       where: { saleId_lineKey: { saleId, lineKey } },
-      create: { tenantId, saleId, lineKey, cost, sourceBillNumber: sourceBillNumber || null },
+      create: {
+        tenantId,
+        saleId,
+        lineKey,
+        cost,
+        sourceBillNumber: sourceBillNumber || null,
+      },
       update: { cost, sourceBillNumber: sourceBillNumber || null },
     });
     // Bust the sales list cache so exports/reports pick up the new cost.
-    await this.cacheService.delTenantData(tenantId, 'sales:list').catch(() => undefined);
+    await this.cacheService
+      .delTenantData(tenantId, 'sales:list')
+      .catch(() => undefined);
     return this.getManualCosts(tenantId, saleId);
   }
 
