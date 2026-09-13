@@ -13,9 +13,12 @@ export interface SaleItem {
   productSku?: string;
   quantity: number;
   unitPrice: number;
+  unitCost?: number;   // COGS per unit (reporting only) — snapshot or current product cost
+  imageUrl?: string;   // primary product image (reporting thumbnails)
   discount: number;
   total: number;
   totalPrice?: number;
+  notes?: string;
 }
 
 export interface SalePayment {
@@ -56,6 +59,8 @@ export interface Sale {
   tenantId: string;
   createdAt: string;
   updatedAt: string;
+  // Costs entered after the fact for note-only second-hand/bespoke lines.
+  manualCosts?: Array<{ lineKey: string; cost: number; sourceBillNumber?: string }>;
 }
 
 export interface CreateSaleData {
@@ -64,6 +69,7 @@ export interface CreateSaleData {
     productId: string;
     quantity: number;
     unitPrice: number;
+    unitCost?: number; // COGS snapshot for inventory lines (reporting only)
     discountAmount?: number;
     discountPercentage?: number;
     taxRate?: number;
@@ -308,6 +314,20 @@ class SalesService {
       '/settings/refund-password/verify',
       { password },
     );
+  }
+
+  // ── Manual line costs (second-hand / bespoke) ──────────────────────────────
+  async getManualCosts(
+    saleId: string,
+  ): Promise<Array<{ lineKey: string; cost: number; sourceBillNumber?: string }>> {
+    return apiClient.get(`/sales/${saleId}/manual-costs`);
+  }
+
+  async setManualCost(
+    saleId: string,
+    payload: { lineKey: string; cost: number; sourceBillNumber?: string },
+  ): Promise<Array<{ lineKey: string; cost: number; sourceBillNumber?: string }>> {
+    return apiClient.put(`/sales/${saleId}/manual-costs`, payload);
   }
 
 

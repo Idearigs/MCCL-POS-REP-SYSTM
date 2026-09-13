@@ -311,11 +311,30 @@ model sale_items {
   productId  String
   quantity   Int
   unitPrice  Decimal
+  unitCost   Decimal? // COGS snapshot captured at sale time (for profit/margin reporting)
   discount   Decimal  @default(0)
   totalPrice Decimal
   notes      String?
   products   products @relation(fields: [productId], references: [id])
   sales      sales    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+}
+
+// Cost + source-bill entered after the fact for note-only sale lines that have
+// no sale_items row (second-hand / bespoke custom-tile & manual entries). Keyed
+// by the sale plus a stable line key (the recovered line title). Lets the Sales
+// export compute margin-scheme VAT (profit / 6) on these lines.
+model manual_line_costs {
+  id               String   @id @default(uuid())
+  tenantId         String
+  saleId           String
+  lineKey          String // normalised recovered line title
+  cost             Decimal
+  sourceBillNumber String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([saleId, lineKey])
+  @@index([tenantId])
 }
 
 model sales {
