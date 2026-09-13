@@ -55,6 +55,8 @@ import {
 import { apiClient } from '@/services/apiClient';
 import { pettyCashService, PettyCashStatus } from '@/services/pettyCashService';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useInventory } from '@/contexts/InventoryContext';
+import { normalizeImageUrl } from '@/lib/utils';
 
 interface FilterState {
   dateFrom: string;
@@ -76,6 +78,11 @@ const CashUpPage = () => {
   const { toast } = useToast();
   const { settings } = useSettings();
   const { auth } = useAuth();
+  const { inventory } = useInventory();
+  const invImg = (it: { productId?: string; sku?: string }): string | undefined => {
+    const m = inventory.find((p) => p.id === it.productId || (it.sku && p.sku === it.sku));
+    return m?.imageUrl ? normalizeImageUrl(m.imageUrl, { w: 48 }) : undefined;
+  };
   // STAFF + READONLY are treated as "cashier": Expected/Variance are masked.
   const isManager =
     auth.user?.role === 'OWNER' || auth.user?.role === 'MANAGER';
@@ -467,6 +474,8 @@ const CashUpPage = () => {
     let otherCount = 0, otherAmount = 0;
 
     const departmentMap: Map<string, { count: number; refund: number; sales: number }> = new Map();
+    // Per-product aggregation of inventory items sold today (for the owner view).
+    const inventoryMap: Map<string, { productId?: string; sku?: string; name: string; quantity: number; revenue: number }> = new Map();
     const hourlyMap: Map<string, { items: number; refund: number; sales: number }> = new Map();
     const vatMap: Map<string, { vatAmount: number; totalAmount: number }> = new Map();
 
@@ -543,6 +552,20 @@ const CashUpPage = () => {
         } else {
           dept.sales += itemPrice;
         }
+
+        // Inventory items sold: real product lines only (skip non-stock/service
+        // lines & refunds). Keyed by productId (else name).
+        const name = item.productName || item.product?.name || item.name;
+        const isNonStock = /GIFT CARD|MANUAL ENTRY|APPRAISAL|CUSTOM TILE|REPAIR SERVICE/i.test(item.notes || '');
+        if (name && name !== 'Unknown Product' && !isNonStock && sale.status !== 'REFUNDED') {
+          const key = item.productId || item.sku || name;
+          if (!inventoryMap.has(key)) {
+            inventoryMap.set(key, { productId: item.productId, sku: item.productSku || item.sku, name, quantity: 0, revenue: 0 });
+          }
+          const inv = inventoryMap.get(key)!;
+          inv.quantity += (item.quantity || 1);
+          inv.revenue += itemPrice;
+        }
       });
 
       // Hourly breakdown
@@ -592,6 +615,10 @@ const CashUpPage = () => {
       refundAmount: data.refund,
       salesAmount: data.sales
     }));
+
+    const inventoryItemsSold = Array.from(inventoryMap.values()).sort(
+      (a, b) => b.revenue - a.revenue,
+    );
 
     const hourlySales = Array.from(hourlyMap.entries())
       .map(([hour, data]) => ({
@@ -652,6 +679,7 @@ const CashUpPage = () => {
       },
 
       departments,
+      inventoryItemsSold,
       vatBreakdown,
 
       exceptions: {
@@ -1175,6 +1203,35 @@ const CashUpPage = () => {
                               ))}
                             </tbody>
                           </table>
+                        </div>
+                      )}
+
+                      {/* Inventory Items Sold (owner view; not on the printed report) */}
+                      {reportData && (reportData.inventoryItemsSold?.length ?? 0) > 0 && (
+                        <div className="border-t-2 border-dashed border-gray-300 pt-4">
+                          <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center">
+                            <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm mr-2">Inventory Items Sold</span>
+                          </h3>
+                          <div className="space-y-2">
+                            {reportData.inventoryItemsSold!.map((it, idx) => (
+                              <div key={idx} className="flex items-center gap-3 border-b border-gray-100 pb-2">
+                                {invImg(it) ? (
+                                  <img src={invImg(it)} alt="" loading="lazy" className="h-10 w-10 rounded object-cover border border-gray-100 shrink-0"
+                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                                ) : (
+                                  <span className="h-10 w-10 rounded bg-gray-100 border border-gray-100 shrink-0" />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-gray-800 truncate">{it.name}</p>
+                                  {it.sku && <p className="text-xs text-gray-400 font-mono">{it.sku}</p>}
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <p className="text-sm font-semibold">£{it.revenue.toFixed(2)}</p>
+                                  <p className="text-xs text-gray-500">×{it.quantity}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
 
