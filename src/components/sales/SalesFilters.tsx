@@ -138,7 +138,7 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-navy/70" size={18} />
         <Input
           className="pl-10 bg-white/90 backdrop-blur-sm border border-navy/10 rounded-xl shadow-sm focus:ring-2 focus:ring-navy/10 focus:border-navy/20 text-navy"
-          placeholder="Search by sale #, receipt, customer..."
+          placeholder="Search by sale #, receipt, customer, or product code..."
           value={filters.search}
           onChange={(e) => handleSearchChange(e.target.value)}
         />
