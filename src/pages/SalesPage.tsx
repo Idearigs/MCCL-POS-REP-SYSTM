@@ -702,6 +702,7 @@ const SalesPage = () => {
           .replace(/:\s*£\s*[\d.,]+\s*$/, '')
           .replace(NON_STOCK_MARKER, '')
           .replace(CONDITION_TOKEN, '')
+          .replace(/\s*\|\s*BILL:[^|]*$/i, '') // drop optional "| BILL:xxx" (F6)
           .trim();
         return { title, price };
       })
