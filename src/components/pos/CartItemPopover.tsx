@@ -63,21 +63,43 @@ const CartItemPopover: React.FC<CartItemPopoverProps> = ({
   const [selectedStaffId, setSelectedStaffId] = useState(item.staffId ?? '');
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Position the popover near the anchor element
-  const [style, setStyle] = useState<React.CSSProperties>({});
+  // Position the popover near the anchor element. Start hidden (off-screen,
+  // invisible) so we can measure it, then clamp fully inside the viewport —
+  // previously a tall popover anchored near the top of the cart computed a
+  // NEGATIVE top and rendered off-screen (the discount/profit panel vanished).
+  const [style, setStyle] = useState<React.CSSProperties>({
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    visibility: 'hidden',
+    zIndex: 9999,
+  });
   useEffect(() => {
     if (anchorRef.current && popoverRef.current) {
       const rect = anchorRef.current.getBoundingClientRect();
       const pop = popoverRef.current.getBoundingClientRect();
       const viewH = window.innerHeight;
-      const top = rect.bottom + 8 + pop.height > viewH
-        ? rect.top - pop.height - 8
-        : rect.bottom + 8;
+      const viewW = window.innerWidth;
+      const m = 8; // viewport margin
+      const popH = pop.height || 400;
+      const popW = pop.width || 320;
+
+      // Prefer below the anchor; if that overflows the bottom, try above; then
+      // clamp so it is always fully on-screen regardless of anchor position.
+      let top = rect.bottom + m;
+      if (top + popH > viewH - m) {
+        const above = rect.top - popH - m;
+        top = above >= m ? above : Math.max(m, viewH - popH - m);
+      }
+      const left = Math.max(m, Math.min(rect.left, viewW - popW - m));
       setStyle({
         position: 'fixed',
         top,
-        left: Math.min(rect.left, window.innerWidth - pop.width - 8),
+        left,
         zIndex: 9999,
+        // Never taller than the viewport; scroll if the content is long.
+        maxHeight: `${viewH - 2 * m}px`,
+        overflowY: 'auto',
       });
     }
   }, []);
