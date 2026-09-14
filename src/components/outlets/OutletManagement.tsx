@@ -177,18 +177,18 @@ export function OutletManagement() {
       {/* Outlet list */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
               <CardTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
+                <Building2 className="h-5 w-5 shrink-0" />
                 Outlets
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="mt-1">
                 Each outlet has its own password. Staff must select and unlock an outlet at login.
               </CardDescription>
             </div>
             {isOwner && (
-              <Button size="sm" onClick={openCreate} className="flex items-center gap-2">
+              <Button size="sm" onClick={openCreate} className="flex items-center gap-2 shrink-0 self-start">
                 <Plus className="h-4 w-4" />
                 Add Outlet
               </Button>
