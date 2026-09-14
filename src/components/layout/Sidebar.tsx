@@ -29,7 +29,11 @@ import { useToast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { UserPermissions } from '@/types/user';
 import { useFeatures } from '@/contexts/FeatureContext';
+import { useSettings } from '@/contexts/SettingsContext';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+
+// Shown at the bottom of the sidebar. Bump on release.
+const APP_VERSION = 'v2.2 (beta)';
 
 interface NavigationItem {
   title: string;
@@ -108,7 +112,12 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const { logout, auth } = useAuth();
   const { currentOutlet, clearOutlet } = useOutlet();
-  const businessName = auth.tenantInfo?.tenantName ?? 'My Business';
+  const { settings } = useSettings();
+  // Prefer the real store name from Settings; fall back to the tenant name.
+  const businessName =
+    settings?.general?.storeName?.trim() ||
+    auth.tenantInfo?.tenantName ||
+    'My Business';
   const outletName = currentOutlet?.name ?? 'No outlet selected';
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
@@ -175,22 +184,55 @@ const Sidebar = () => {
         .category-content {
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
+        /* Nav items — clearer, easier-to-see hover & active highlight */
+        .modern-scrollbar [data-sidebar="menu-button"] {
+          position: relative;
+          border: 1px solid transparent;
+          transition: background-color .14s, color .14s, border-color .14s;
+        }
+        .modern-scrollbar [data-sidebar="menu-button"]:hover {
+          background-color: #1c2842 !important;
+          color: #ffffff !important;
+          border-color: #2c3a5a;
+        }
+        .modern-scrollbar [data-sidebar="menu-button"][data-active="true"] {
+          background-color: rgba(246, 121, 43, 0.14) !important;
+          color: #ffffff !important;
+          border-color: rgba(246, 121, 43, 0.42);
+          font-weight: 600;
+        }
+        /* Accent bar on the active item */
+        .modern-scrollbar [data-sidebar="menu-button"][data-active="true"]::before {
+          content: "";
+          position: absolute;
+          left: 3px; top: 7px; bottom: 7px;
+          width: 3px; border-radius: 3px;
+          background: #f6792b;
+          box-shadow: 0 0 12px 1px rgba(246, 121, 43, 0.5);
+        }
+        .modern-scrollbar [data-sidebar="menu-button"][data-active="true"] svg {
+          color: #f6792b !important;
+        }
+        /* In collapsed icon-rail mode the bar would clip — hide it */
+        [data-collapsible="icon"] .modern-scrollbar [data-sidebar="menu-button"][data-active="true"]::before {
+          display: none;
+        }
       `}</style>
 
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <div className="flex flex-col space-y-3">
           {/* Company Logo & Branding */}
           <div className="flex items-center space-x-3 px-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
+            <div className="w-10 h-10 shrink-0 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-sm">
               <span className="text-white text-xl font-bold">
                 {businessName.charAt(0).toUpperCase()}
               </span>
             </div>
-            <div className="text-left overflow-hidden">
-              <h2 className="text-base font-bold text-sidebar-foreground truncate">
+            <div className="text-left overflow-hidden min-w-0">
+              <h2 className="text-sm font-bold leading-tight text-sidebar-foreground line-clamp-2">
                 {businessName}
               </h2>
-              <p className="text-[10px] text-muted-foreground">Powered by TrueDesk</p>
             </div>
           </div>
 
@@ -336,6 +378,10 @@ const Sidebar = () => {
           <LogOut size={20} />
           <span className="text-sm">Logout</span>
         </Button>
+        {/* Build/version — replaces the old "Powered by TrueDesk" line */}
+        <div className="px-3 pt-1.5 text-right text-[10px] font-medium tracking-wide text-muted-foreground group-data-[collapsible=icon]:hidden">
+          TruedeskPOS · {APP_VERSION}
+        </div>
       </SidebarFooter>
     </SidebarComponent>
   );
