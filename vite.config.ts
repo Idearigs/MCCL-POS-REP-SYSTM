@@ -2,7 +2,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { readFileSync } from "fs";
 import { componentTagger } from "lovable-tagger";
+
+// Single source of truth for the app version — read from package.json so the
+// UI (e.g. the sidebar footer) always shows the real build version. Bump the
+// "version" field in package.json to change it.
+const pkg = JSON.parse(
+  readFileSync(path.resolve(__dirname, "package.json"), "utf-8"),
+);
 
 // https://vitejs.dev/config/
 // NOTE: VitePWA / service worker has been intentionally removed.
@@ -10,6 +18,9 @@ import { componentTagger } from "lovable-tagger";
 // after logout, even after new deployments. A POS system always runs
 // online so offline caching provides no benefit and only causes issues.
 export default defineConfig(({ mode }) => ({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   server: {
     host: "::",
     port: 8080,

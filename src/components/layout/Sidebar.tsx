@@ -32,8 +32,9 @@ import { useFeatures } from '@/contexts/FeatureContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
-// Shown at the bottom of the sidebar. Bump on release.
-const APP_VERSION = 'v2.2';
+// Real build version, injected from package.json by Vite (see vite.config.ts).
+// Bump the "version" field in package.json to change what's shown.
+const APP_VERSION = `v${__APP_VERSION__}`;
 
 interface NavigationItem {
   title: string;
@@ -285,6 +286,7 @@ const Sidebar = () => {
           <OutletSelectorDialog
             open={switchOutletOpen}
             onSelected={() => setSwitchOutletOpen(false)}
+            onClose={() => setSwitchOutletOpen(false)}
           />
         </div>
       </SidebarHeader>

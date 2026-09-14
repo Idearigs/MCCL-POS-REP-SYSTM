@@ -11,11 +11,14 @@ interface Props {
   open: boolean;
   onSelected: () => void;
   onUnavailable?: () => void;
+  /** When provided, the dialog is dismissible — the X, Escape and
+   *  click-outside all close it via this callback. */
+  onClose?: () => void;
 }
 
 type Step = 'list' | 'password';
 
-export function OutletSelectorDialog({ open, onSelected, onUnavailable }: Props) {
+export function OutletSelectorDialog({ open, onSelected, onUnavailable, onClose }: Props) {
   const { selectOutlet } = useOutlet();
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);
@@ -75,11 +78,11 @@ export function OutletSelectorDialog({ open, onSelected, onUnavailable }: Props)
   };
 
   return (
-    <Dialog open={open} onOpenChange={() => {}}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose?.(); }}>
       <DialogContent
         className="sm:max-w-md"
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={onClose ? undefined : (e) => e.preventDefault()}
+        onEscapeKeyDown={onClose ? undefined : (e) => e.preventDefault()}
       >
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
