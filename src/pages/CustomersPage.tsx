@@ -61,6 +61,23 @@ const CustomersPage = () => {
     (customer.phone?.includes(searchQuery))
   );
 
+  // Paginate the RENDER. This store can hold 7,000+ customers; rendering them
+  // all mounts ~200k DOM nodes, which fills RAM and freezes low-end tills.
+  // The data is already in memory — this only limits how many cards/rows are
+  // mounted at once (the rest are one Next click away, or filtered via search).
+  const CUSTOMERS_PAGE_SIZE = 60;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / CUSTOMERS_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedCustomers = filteredCustomers.slice(
+    (safePage - 1) * CUSTOMERS_PAGE_SIZE,
+    safePage * CUSTOMERS_PAGE_SIZE,
+  );
+  // Jump back to the first page whenever the search query changes.
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery]);
+
   // Calculate dashboard statistics
   const totalCustomers = customers.length;
   const vipCustomers = customers.filter(c => c.customerGroup === 'VIP').length;
@@ -264,9 +281,10 @@ const CustomersPage = () => {
             </div>
           </div>
         ) : filteredCustomers.length > 0 ? (
-          viewMode === 'grid' ? (
+          <>
+          {viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredCustomers.map((customer) => (
+              {pagedCustomers.map((customer) => (
                 <CustomerCard
                   key={customer.id}
                   id={customer.id}
@@ -296,7 +314,7 @@ const CustomersPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredCustomers.map((customer) => (
+                  {pagedCustomers.map((customer) => (
                     <TableRow
                       key={customer.id}
                       className="cursor-pointer hover:bg-navy/5 transition-colors"
@@ -405,7 +423,31 @@ const CustomersPage = () => {
                 </TableBody>
               </Table>
             </div>
-          )
+          )}
+          {totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-center gap-3 text-sm">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Prev
+              </Button>
+              <span className="text-gray-600">
+                Page {safePage} of {totalPages} · {filteredCustomers.length.toLocaleString()} customers
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          )}
+          </>
         ) : (
           <div className="flex items-center justify-center h-40 border border-gray-100 rounded-xl bg-white/50 backdrop-blur-sm">
             <div className="text-center">

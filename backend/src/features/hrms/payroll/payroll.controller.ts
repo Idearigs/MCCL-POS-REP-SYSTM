@@ -9,9 +9,11 @@ import {
   Query,
   UseGuards,
   Request,
+  Res,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../features/auth/guards/jwt-auth.guard';
 import { PayrollService } from './payroll.service';
@@ -86,6 +88,25 @@ export class PayrollController {
   @ApiOperation({ summary: 'Get a single payslip' })
   getPayslip(@Param('id') id: string, @Request() req: any) {
     return this.payrollService.getPayslip(id, req.user.tenantId);
+  }
+
+  @Get('payslips/:id/pdf')
+  @ApiOperation({ summary: 'Download a payslip as a PDF' })
+  async getPayslipPdf(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.payrollService.getPayslipPdf(
+      id,
+      req.user.tenantId,
+    );
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Put('payslips/:id')

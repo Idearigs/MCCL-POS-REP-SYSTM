@@ -22,6 +22,7 @@ import RepairTagsSettings from '@/components/repair/RepairTagsSettings';
 import PosTilesSettings from '@/components/pos/PosTilesSettings';
 import GoldPricingSettings from '@/components/inventory/GoldPricingSettings';
 import FeaturesHelp from '@/components/settings/FeaturesHelp';
+import RefundPasswordCard from '@/components/settings/RefundPasswordCard';
 import { OutletManagement } from '@/components/outlets/OutletManagement';
 import { ReceiptPreviewModal } from '@/components/printer/ReceiptPreviewModal';
 import { usePrinterDetection } from '@/hooks/usePrinterDetection';
@@ -542,8 +543,15 @@ const SettingsPage = () => {
 
         <Separator className="my-6" />
 
-        <Tabs defaultValue="general" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="flex w-full justify-start overflow-x-auto [&>*]:flex-shrink-0">
+        <Tabs
+          defaultValue="general"
+          value={activeTab}
+          onValueChange={setActiveTab}
+          orientation="vertical"
+          className="flex flex-col md:flex-row gap-6 items-start"
+        >
+          {/* Vertical left-hand nav — no more horizontal scrolling to reach a tab */}
+          <TabsList className="flex md:flex-col h-auto w-full md:w-52 shrink-0 bg-transparent p-0 gap-1 items-stretch overflow-x-auto md:overflow-visible [&>*]:flex-shrink-0 [&>*]:justify-start [&>*]:w-full [&>*]:rounded-lg [&>*]:px-3 [&>*]:py-2 [&>*]:data-[state=active]:bg-navy [&>*]:data-[state=active]:text-white [&>*]:data-[state=active]:shadow-sm [&>*]:text-gray-600 [&>*:hover]:bg-gray-100 [&>*]:transition-colors">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
@@ -561,9 +569,12 @@ const SettingsPage = () => {
             <TabsTrigger value="security">Security</TabsTrigger>
             <TabsTrigger value="features" className="relative">
               Features
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full" />
+              <span className="absolute top-1.5 right-2 w-2 h-2 bg-blue-500 rounded-full" />
             </TabsTrigger>
           </TabsList>
+
+          {/* Right-hand content pane */}
+          <div className="flex-1 min-w-0 w-full">
 
           {/* General Settings Tab */}
           <TabsContent value="general">
@@ -668,6 +679,69 @@ const SettingsPage = () => {
                     </Button>
                   </form>
                 </Form>
+              </CardContent>
+            </Card>
+
+            {/* Business identity — legal identifiers that also print on receipts /
+                the Z-report. Grouped here with the store details rather than
+                scattered across the Printer and Cash-Up tabs. */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Business Identity</CardTitle>
+                <CardDescription>
+                  Your legal identifiers. These print on receipts and the
+                  end-of-day Z-report.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="space-y-1.5 max-w-xs">
+                  <Label htmlFor="vatNumberGeneral">VAT registration number</Label>
+                  <Input
+                    id="vatNumberGeneral"
+                    value={vatNumber}
+                    onChange={(e) => setVatNumber(e.target.value)}
+                    placeholder="GB 123 4567 89"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Printed on every receipt below the store address.
+                  </p>
+                </div>
+                <div className="space-y-1.5 max-w-xs">
+                  <Label htmlFor="companyRegistrationNumberGeneral">
+                    Company registration number
+                  </Label>
+                  <Input
+                    id="companyRegistrationNumberGeneral"
+                    value={cashUpForm.companyRegistrationNumber}
+                    onChange={(e) =>
+                      setCashUpForm((p) => ({
+                        ...p,
+                        companyRegistrationNumber: e.target.value,
+                      }))
+                    }
+                    placeholder="e.g. 01234567"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Printed on the Z-report alongside the store address.
+                  </p>
+                </div>
+                <Button
+                  className="flex items-center gap-2"
+                  disabled={loading}
+                  onClick={async () => {
+                    // Override just these fields on the already-persisted
+                    // settings so nothing else in Printer / Cash-Up is disturbed.
+                    await updatePrinterSettings({
+                      ...settings.printer,
+                      vatNumber: vatNumber || undefined,
+                    });
+                    await updateCashUpSettings(cashUpForm);
+                    toast.success('Business identity saved');
+                  }}
+                >
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  Save Business Identity
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -944,21 +1018,18 @@ const SettingsPage = () => {
                     />
                     <p className="text-xs text-gray-500">Printed on the Z-report header.</p>
                   </div>
-                  <div className="space-y-1.5 md:col-span-2">
-                    <Label htmlFor="companyRegistrationNumber">Company registration number</Label>
-                    <Input
-                      id="companyRegistrationNumber"
-                      value={cashUpForm.companyRegistrationNumber}
-                      onChange={(e) =>
-                        setCashUpForm((p) => ({ ...p, companyRegistrationNumber: e.target.value }))
-                      }
-                      placeholder="e.g. 01234567"
-                    />
-                    <p className="text-xs text-gray-500">
-                      Printed on the Z-report alongside the store address and VAT number (set in the Printer tab).
-                    </p>
-                  </div>
                 </div>
+                <p className="text-xs text-gray-500">
+                  Your company registration number and VAT number are now set under{' '}
+                  <button
+                    type="button"
+                    className="underline hover:text-gray-700"
+                    onClick={() => setActiveTab('general')}
+                  >
+                    General → Business Identity
+                  </button>
+                  .
+                </p>
                 <Button onClick={() => updateCashUpSettings(cashUpForm)} disabled={loading} className="gap-2">
                   {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                   Save Cash-Up Settings
@@ -1088,17 +1159,18 @@ const SettingsPage = () => {
 
                 <Separator />
 
-                {/* VAT number */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">VAT Registration Number</label>
-                  <p className="text-sm text-muted-foreground">Printed on every receipt below the store address (e.g. GB 123 4567 89).</p>
-                  <Input
-                    value={vatNumber}
-                    onChange={(e) => setVatNumber(e.target.value)}
-                    placeholder="GB 123 4567 89"
-                    className="max-w-xs"
-                  />
-                </div>
+                {/* VAT number moved to General → Business Identity */}
+                <p className="text-sm text-muted-foreground">
+                  Your VAT registration number is now set under{' '}
+                  <button
+                    type="button"
+                    className="underline hover:text-foreground"
+                    onClick={() => setActiveTab('general')}
+                  >
+                    General → Business Identity
+                  </button>
+                  .
+                </p>
 
                 {/* Drawer PIN — OWNER only */}
                 {auth.user?.role === 'OWNER' ? (
@@ -1499,6 +1571,12 @@ const SettingsPage = () => {
                 </Form>
               </CardContent>
             </Card>
+
+            {auth.user?.role === 'OWNER' && (
+              <div className="mt-6">
+                <RefundPasswordCard />
+              </div>
+            )}
           </TabsContent>
 
           {/* Features & Help Tab */}
@@ -1509,6 +1587,7 @@ const SettingsPage = () => {
               </CardContent>
             </Card>
           </TabsContent>
+          </div>
         </Tabs>
       </div>
 

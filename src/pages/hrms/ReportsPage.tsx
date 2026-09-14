@@ -81,6 +81,19 @@ function P60Tab({ taxYear }: { taxYear: string }) {
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<P60Detail | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const downloadP60 = async (employeeId: string, fullName: string) => {
+    setDownloadingId(employeeId);
+    try {
+      const safeName = fullName.replace(/[^a-z0-9]+/gi, '_');
+      await hrmsService.downloadP60Pdf(employeeId, taxYear, `P60_${safeName}_${taxYear}.pdf`);
+    } catch {
+      toast.error('Failed to download P60 PDF');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -177,9 +190,20 @@ function P60Tab({ taxYear }: { taxYear: string }) {
                 <TableCell className="text-right text-sm text-orange-600">{fmt(r.employeeNI)}</TableCell>
                 <TableCell className="text-right text-sm font-medium">{fmt(r.netPay)}</TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="sm" onClick={() => openDetail(r.employeeId)}>
-                    <FileText className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => openDetail(r.employeeId)}>
+                      <FileText className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => downloadP60(r.employeeId, r.fullName)}
+                      disabled={downloadingId === r.employeeId}
+                      title="Download P60 PDF"
+                    >
+                      <Download className={`h-4 w-4 ${downloadingId === r.employeeId ? 'animate-pulse' : ''}`} />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -233,8 +257,12 @@ function P60Tab({ taxYear }: { taxYear: string }) {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => window.print()}>
-              <Download className="h-4 w-4 mr-1" /> Print
+            <Button
+              variant="outline"
+              onClick={() => detail && downloadP60(detail.employee.id, detail.employee.fullName)}
+              disabled={!detail || downloadingId === detail?.employee.id}
+            >
+              <Download className="h-4 w-4 mr-1" /> Download PDF
             </Button>
             <Button onClick={() => setDetailOpen(false)}>Close</Button>
           </DialogFooter>
@@ -321,6 +349,19 @@ function P11dTab({ taxYear }: { taxYear: string }) {
     }
   };
 
+  const [downloadingP11d, setDownloadingP11d] = useState<string | null>(null);
+  const downloadP11d = async (employeeId: string, fullName: string) => {
+    setDownloadingP11d(employeeId);
+    try {
+      const safeName = fullName.replace(/[^a-z0-9]+/gi, '_');
+      await hrmsService.downloadP11dPdf(employeeId, taxYear, `P11D_${safeName}_${taxYear}.pdf`);
+    } catch {
+      toast.error('Failed to download P11D PDF');
+    } finally {
+      setDownloadingP11d(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -365,6 +406,17 @@ function P11dTab({ taxYear }: { taxYear: string }) {
               </button>
               {expanded.has(emp.employeeId) && (
                 <div className="border-t">
+                  <div className="flex justify-end p-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => downloadP11d(emp.employeeId, emp.fullName)}
+                      disabled={downloadingP11d === emp.employeeId}
+                    >
+                      <Download className="h-4 w-4 mr-1" />
+                      {downloadingP11d === emp.employeeId ? 'Preparing…' : 'Download P11D PDF'}
+                    </Button>
+                  </div>
                   <Table>
                     <TableHeader>
                       <TableRow>

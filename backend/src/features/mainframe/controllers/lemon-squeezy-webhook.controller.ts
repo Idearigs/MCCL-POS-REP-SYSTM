@@ -105,6 +105,63 @@ export class LemonSqueezyWebhookController implements OnModuleInit {
     }
   }
 
+  /**
+   * Apply a billing-derived status to BOTH the mainframe profile and the POS
+   * `tenants` table. The tenants table is what actually gates the POS app and
+   * drives the in-app billing banner, so it MUST be kept in sync here — the
+   * earlier code wrote invalid enum values straight to mf_customer_profiles
+   * (PAYMENT_WARNING / INACTIVE aren't CustomerProfileStatus values) and never
+   * touched the tenant row.
+   */
+  private async applyStatus(
+    profileId: string,
+    tenantStatus: 'ACTIVE' | 'PAYMENT_WARNING' | 'SUSPENDED' | 'INACTIVE',
+    opts?: { billingDueDate?: Date | null; suspendedReason?: string },
+  ): Promise<void> {
+    // CustomerProfileStatus is narrower than TenantStatus — still-functional
+    // billing states stay ACTIVE on the profile; the precise state lives on the
+    // tenant row.
+    const profileStatus =
+      tenantStatus === 'SUSPENDED'
+        ? 'SUSPENDED'
+        : tenantStatus === 'INACTIVE'
+          ? 'DEACTIVATED'
+          : 'ACTIVE';
+
+    const profile = await this.prisma.mf_customer_profiles
+      .update({
+        where: { id: profileId },
+        data: { status: profileStatus as any },
+        select: { subdomain: true },
+      })
+      .catch(() => null);
+
+    if (!profile) {
+      this.logger.warn(`[LS] applyStatus — profile ${profileId} not found`);
+      return;
+    }
+
+    await this.prisma.tenants
+      .update({
+        where: { subdomain: profile.subdomain.toLowerCase() },
+        data: {
+          status: tenantStatus as any,
+          suspendedAt: tenantStatus === 'SUSPENDED' ? new Date() : null,
+          suspendedReason:
+            tenantStatus === 'SUSPENDED'
+              ? (opts?.suspendedReason ?? 'PAYMENT')
+              : null,
+          billingDueDate: opts?.billingDueDate ?? undefined,
+          updatedAt: new Date(),
+        },
+      })
+      .catch((err) =>
+        this.logger.warn(
+          `[LS] tenant status sync failed for '${profile.subdomain}': ${err}`,
+        ),
+      );
+  }
+
   // ── Event handlers ───────────────────────────────────────────────────────────
 
   private async handleOrderCreated(payload: LsWebhookPayload) {
@@ -160,6 +217,9 @@ export class LemonSqueezyWebhookController implements OnModuleInit {
         lsVariantId: String(attrs.variant_id ?? ''),
         lsStatus: attrs.status ?? 'active',
         isActive: true,
+        // The customer has now subscribed through LemonSqueezy — end any local
+        // pre-purchase trial so the trial banner stops showing.
+        isOnTrial: false,
         currentPeriodStart: createdAt,
         currentPeriodEnd: renewsAt,
         nextBillingDate: renewsAt,
@@ -167,10 +227,7 @@ export class LemonSqueezyWebhookController implements OnModuleInit {
       },
     });
 
-    await this.prisma.mf_customer_profiles.updateMany({
-      where: { id: profileId },
-      data: { status: status as any },
-    });
+    await this.applyStatus(profileId, status, { billingDueDate: renewsAt });
 
     this.logger.log(
       `[LS] Subscription ACTIVATED for profileId=${profileId}  lsId=${lsId}`,
@@ -208,9 +265,8 @@ export class LemonSqueezyWebhookController implements OnModuleInit {
       },
     });
 
-    await this.prisma.mf_customer_profiles.updateMany({
-      where: { id: sub.customerProfileId },
-      data: { status: status as any },
+    await this.applyStatus(sub.customerProfileId, status, {
+      billingDueDate: renewsAt,
     });
 
     this.logger.log(
@@ -227,22 +283,32 @@ export class LemonSqueezyWebhookController implements OnModuleInit {
     });
     if (!sub) return;
 
+    // A cancelled LemonSqueezy subscription usually stays active until the end
+    // of the paid period (ends_at). Keep the tenant running until then; the
+    // subsequent `subscription_expired` event does the actual suspend.
+    const endsAt = attrs.ends_at ? new Date(attrs.ends_at) : null;
+    const stillActive = endsAt ? endsAt.getTime() > Date.now() : false;
+
     await this.prisma.mf_subscriptions.update({
       where: { id: sub.id },
       data: {
         lsStatus: 'cancelled',
-        isActive: false,
+        isActive: stillActive,
         cancelledAt: new Date(),
         cancellationReason: 'Cancelled via LemonSqueezy',
+        ...(endsAt ? { currentPeriodEnd: endsAt } : {}),
       },
     });
 
-    await this.prisma.mf_customer_profiles.updateMany({
-      where: { id: sub.customerProfileId },
-      data: { status: 'SUSPENDED' as any },
-    });
+    await this.applyStatus(
+      sub.customerProfileId,
+      stillActive ? 'ACTIVE' : 'SUSPENDED',
+      { suspendedReason: 'CANCELLED', billingDueDate: endsAt },
+    );
 
-    this.logger.log(`[LS] Subscription CANCELLED  lsId=${lsId}`);
+    this.logger.log(
+      `[LS] Subscription CANCELLED  lsId=${lsId}  stillActive=${stillActive}`,
+    );
   }
 
   private async handleSubscriptionExpired(payload: LsWebhookPayload) {
@@ -257,10 +323,7 @@ export class LemonSqueezyWebhookController implements OnModuleInit {
       data: { lsStatus: 'expired', isActive: false },
     });
 
-    await this.prisma.mf_customer_profiles.updateMany({
-      where: { id: sub.customerProfileId },
-      data: { status: 'INACTIVE' as any },
-    });
+    await this.applyStatus(sub.customerProfileId, 'INACTIVE');
 
     this.logger.log(`[LS] Subscription EXPIRED  lsId=${lsId}`);
   }
@@ -283,15 +346,15 @@ export class LemonSqueezyWebhookController implements OnModuleInit {
       data: {
         lsStatus: 'active',
         isActive: true,
+        isOnTrial: false,
         lastPaymentAt: new Date(),
         currentPeriodEnd: renewsAt,
         nextBillingDate: renewsAt,
       },
     });
 
-    await this.prisma.mf_customer_profiles.updateMany({
-      where: { id: sub.customerProfileId },
-      data: { status: 'ACTIVE' as any },
+    await this.applyStatus(sub.customerProfileId, 'ACTIVE', {
+      billingDueDate: renewsAt,
     });
 
     this.logger.log(`[LS] Payment SUCCESS  lsId=${lsId}`);
@@ -309,9 +372,8 @@ export class LemonSqueezyWebhookController implements OnModuleInit {
       data: { lsStatus: 'past_due' },
     });
 
-    await this.prisma.mf_customer_profiles.updateMany({
-      where: { id: sub.customerProfileId },
-      data: { status: 'PAYMENT_WARNING' as any },
+    await this.applyStatus(sub.customerProfileId, 'PAYMENT_WARNING', {
+      billingDueDate: new Date(),
     });
 
     this.logger.log(`[LS] Payment FAILED  lsId=${lsId}`);

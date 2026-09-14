@@ -6,6 +6,9 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 import { CreateP11dBenefitDto } from './dto/reports.dto';
+import { EncryptionService } from '../employees/encryption.service';
+import { SettingsService } from '../../settings/settings.service';
+import { ReportsPdfService } from './reports-pdf.service';
 
 function generateId(): string {
   return require('crypto').randomUUID();
@@ -41,7 +44,12 @@ function currentTaxYear(): string {
 export class ReportsService {
   private readonly logger = new Logger(ReportsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly encryption: EncryptionService,
+    private readonly settings: SettingsService,
+    private readonly pdf: ReportsPdfService,
+  ) {}
 
   // ─── P60 ─────────────────────────────────────────────────────────────────────
 
@@ -111,9 +119,7 @@ export class ReportsService {
         fullName: `${employee.firstName} ${employee.lastName}`,
         taxCode: lastPayslip?.taxCode ?? employee.taxCode ?? '1257L',
         niCategory: lastPayslip?.niCategory ?? employee.niCategory,
-        niNumberMasked: employee.niNumber
-          ? `${employee.niNumber.slice(0, 2)}****${employee.niNumber.slice(-2)}`
-          : undefined,
+        niNumberMasked: this.maskNi(employee.niNumber),
         addressLine1: employee.addressLine1,
         addressLine2: employee.addressLine2,
         city: employee.city,
@@ -126,6 +132,58 @@ export class ReportsService {
         taxYearEnd: end.toISOString().split('T')[0],
       },
     };
+  }
+
+  /** Decrypt the stored NI number and return a masked form, or null. */
+  private maskNi(encrypted: string | null | undefined): string | null {
+    const plain = this.encryption.decryptOptional(encrypted ?? null);
+    return plain ? this.encryption.maskNi(plain) : null;
+  }
+
+  async getP60Pdf(
+    employeeId: string,
+    taxYear: string,
+    tenantId: string,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const p60 = await this.getP60(employeeId, taxYear, tenantId);
+    const settings = await this.settings.getSettings(tenantId);
+
+    const buffer = await this.pdf.buildP60(
+      {
+        taxYear: p60.taxYear,
+        taxYearStart: p60.summary.taxYearStart,
+        taxYearEnd: p60.summary.taxYearEnd,
+        employee: {
+          fullName: p60.employee.fullName,
+          employeeNumber: p60.employee.employeeNumber,
+          niNumberMasked: p60.employee.niNumberMasked,
+          taxCode: p60.employee.taxCode,
+          niCategory: String(p60.employee.niCategory),
+          addressLine1: p60.employee.addressLine1,
+          addressLine2: p60.employee.addressLine2,
+          city: p60.employee.city,
+          postcode: p60.employee.postcode,
+        },
+        totalPay: p60.summary.grossPay,
+        totalTax: p60.summary.paye,
+        employeeNI: p60.summary.employeeNI,
+        employerNI: p60.summary.employerNI,
+        employeePension: p60.summary.employeePension,
+        studentLoan: p60.summary.studentLoan,
+        payslipCount: p60.summary.payslipCount,
+      },
+      {
+        name: settings.general.storeName,
+        tradingName: settings.general.tradingName,
+        address: settings.general.address,
+        vatNumber: settings.printer.vatNumber,
+        companyRegistrationNumber:
+          settings.cashUp.companyRegistrationNumber || null,
+      },
+    );
+
+    const safeName = p60.employee.fullName.replace(/[^a-z0-9]+/gi, '_');
+    return { buffer, filename: `P60_${safeName}_${taxYear}.pdf` };
   }
 
   async getAllP60s(taxYear: string, tenantId: string) {
@@ -224,6 +282,50 @@ export class ReportsService {
       })),
       totalCashEquivalent: total,
     };
+  }
+
+  async getP11dPdf(
+    employeeId: string,
+    taxYear: string,
+    tenantId: string,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const data = await this.getP11dBenefits(employeeId, taxYear, tenantId);
+    const [employee, settings] = await Promise.all([
+      this.prisma.hrms_employees.findFirst({
+        where: { id: employeeId, tenantId },
+        select: { niNumber: true },
+      }),
+      this.settings.getSettings(tenantId),
+    ]);
+
+    const buffer = await this.pdf.buildP11d(
+      {
+        taxYear,
+        employee: {
+          fullName: data.employee.fullName,
+          employeeNumber: data.employee.employeeNumber,
+          niNumberMasked: this.maskNi(employee?.niNumber),
+        },
+        benefits: data.benefits.map((b) => ({
+          benefitType: String(b.benefitType),
+          description: b.description,
+          cashEquivalent: b.cashEquivalent,
+          notes: b.notes,
+        })),
+        totalCashEquivalent: data.totalCashEquivalent,
+      },
+      {
+        name: settings.general.storeName,
+        tradingName: settings.general.tradingName,
+        address: settings.general.address,
+        vatNumber: settings.printer.vatNumber,
+        companyRegistrationNumber:
+          settings.cashUp.companyRegistrationNumber || null,
+      },
+    );
+
+    const safeName = data.employee.fullName.replace(/[^a-z0-9]+/gi, '_');
+    return { buffer, filename: `P11D_${safeName}_${taxYear}.pdf` };
   }
 
   async createP11dBenefit(

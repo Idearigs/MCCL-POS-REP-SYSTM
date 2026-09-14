@@ -46,6 +46,16 @@ export interface EndOfDayReportData {
     salesAmount: number;
   }>;
 
+  // Inventory items sold today (screen-only; not rendered in the text/print
+  // report). Aggregated per product for the owner's at-a-glance view.
+  inventoryItemsSold?: Array<{
+    productId?: string;
+    sku?: string;
+    name: string;
+    quantity: number;
+    revenue: number;
+  }>;
+
   // VAT Breakdown
   vatBreakdown: Array<{
     rate: string;

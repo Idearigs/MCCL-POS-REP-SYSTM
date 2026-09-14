@@ -124,6 +124,104 @@ export class SubscriptionsService {
     });
   }
 
+  /**
+   * Billing/payment status for every tenant — powers the Mainframe admin
+   * tracking view ("has the client paid / are they active / when does the
+   * trial end"). Derives a single coarse `billingState` per tenant.
+   */
+  async getOverview() {
+    const profiles = await this.prisma.mf_customer_profiles.findMany({
+      select: {
+        id: true,
+        businessName: true,
+        subdomain: true,
+        status: true,
+        subscription: {
+          select: {
+            plan: true,
+            billingCycle: true,
+            basePrice: true,
+            isActive: true,
+            isOnTrial: true,
+            trialEndsAt: true,
+            lsStatus: true,
+            lsSubscriptionId: true,
+            lastPaymentAt: true,
+            currentPeriodEnd: true,
+            nextBillingDate: true,
+            cancelledAt: true,
+          },
+        },
+      },
+      orderBy: { businessName: 'asc' },
+    });
+
+    const now = Date.now();
+
+    return profiles.map((p) => {
+      const s = p.subscription;
+      let billingState:
+        | 'NO_SUBSCRIPTION'
+        | 'TRIAL'
+        | 'TRIAL_EXPIRED'
+        | 'PAID'
+        | 'PAYMENT_DUE'
+        | 'CANCELLED'
+        | 'INACTIVE' = 'NO_SUBSCRIPTION';
+
+      if (s) {
+        const trialEnded = s.trialEndsAt
+          ? new Date(s.trialEndsAt).getTime() < now
+          : false;
+
+        if (s.lsStatus === 'past_due' || s.lsStatus === 'unpaid') {
+          billingState = 'PAYMENT_DUE';
+        } else if (s.lsStatus === 'cancelled') {
+          billingState = 'CANCELLED';
+        } else if (s.lsStatus === 'expired') {
+          billingState = 'INACTIVE';
+        } else if (s.lsSubscriptionId && s.isActive) {
+          billingState = 'PAID';
+        } else if (s.isOnTrial && !trialEnded) {
+          billingState = 'TRIAL';
+        } else if (s.isOnTrial && trialEnded) {
+          billingState = 'TRIAL_EXPIRED';
+        } else if (s.isActive) {
+          billingState = 'PAID';
+        } else {
+          billingState = 'INACTIVE';
+        }
+      }
+
+      const trialDaysLeft =
+        s?.isOnTrial && s.trialEndsAt
+          ? Math.ceil(
+              (new Date(s.trialEndsAt).getTime() - now) / (1000 * 60 * 60 * 24),
+            )
+          : null;
+
+      return {
+        profileId: p.id,
+        businessName: p.businessName,
+        subdomain: p.subdomain,
+        profileStatus: p.status,
+        billingState,
+        plan: s?.plan ?? null,
+        billingCycle: s?.billingCycle ?? null,
+        basePrice: s ? Number(s.basePrice) : null,
+        isPaid: !!(s?.lsSubscriptionId && s.isActive),
+        isOnTrial: s?.isOnTrial ?? false,
+        trialEndsAt: s?.trialEndsAt ?? null,
+        trialDaysLeft,
+        lsStatus: s?.lsStatus ?? null,
+        lastPaymentAt: s?.lastPaymentAt ?? null,
+        nextBillingDate: s?.nextBillingDate ?? null,
+        currentPeriodEnd: s?.currentPeriodEnd ?? null,
+        cancelledAt: s?.cancelledAt ?? null,
+      };
+    });
+  }
+
   async getStats() {
     const [total, active, byPlan, mrr] = await Promise.all([
       this.prisma.mf_subscriptions.count(),

@@ -197,7 +197,7 @@ export class FileStorageController {
     }
 
     res.setHeader('Content-Type', thumb.contentType);
-    res.setHeader('Cache-Control', 'public, max-age=604800'); // 7 days
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // 1 year — thumb key is a hash of the file path, so a new upload gets a new URL
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.end(thumb.buffer);
   }

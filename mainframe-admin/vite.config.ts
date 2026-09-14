@@ -21,6 +21,7 @@ export default defineConfig({
   preview: {
     host: '0.0.0.0',
     port: 3000,
-    allowedHosts: ['mainframe.truedesk.co.uk'],
+    // Leading dot allows the domain and all subdomains (prod + staging-*)
+    allowedHosts: ['.truedesk.co.uk'],
   },
 })

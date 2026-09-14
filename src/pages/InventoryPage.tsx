@@ -72,6 +72,7 @@ import BulkRFIDAssignment from '@/components/inventory/BulkRFIDAssignment';
 import InventoryItemComponent, { InventoryItemProps} from '@/components/inventory/InventoryItem';
 import InventoryDetail from '@/components/inventory/InventoryDetail';
 import InventoryFilter from '@/components/inventory/InventoryFilter';
+import ImageLightbox from '@/components/inventory/ImageLightbox';
 
 const InventoryPage = () => {
   const { inventory, updateItem, addItem, deleteItem, refreshInventory } = useInventory();
@@ -81,9 +82,26 @@ const InventoryPage = () => {
   const [filteredInventory, setFilteredInventory] = useState<InventoryItem[]>(inventory);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('name');
+
+  // Paginate the RENDER: a shop can have 1,000+ products, and mounting every
+  // card/row at once bloats the DOM and slows low-end tills. The full dataset
+  // stays in memory (valuation totals, export, etc. still use it) — only the
+  // visible page is mounted. Page resets to 1 whenever the filtered set changes.
+  const INVENTORY_PAGE_SIZE = 60;
+  const [invPage, setInvPage] = useState(1);
+  const invTotalPages = Math.max(1, Math.ceil(filteredInventory.length / INVENTORY_PAGE_SIZE));
+  const invSafePage = Math.min(invPage, invTotalPages);
+  const pagedInventory = filteredInventory.slice(
+    (invSafePage - 1) * INVENTORY_PAGE_SIZE,
+    invSafePage * INVENTORY_PAGE_SIZE,
+  );
+  useEffect(() => {
+    setInvPage(1);
+  }, [filteredInventory]);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [lightbox, setLightbox] = useState<{ images: string[]; title: string } | null>(null);
   const [isNewItem, setIsNewItem] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -1169,9 +1187,10 @@ const InventoryPage = () => {
 
         {/* Inventory grid/table */}
         {filteredInventory.length > 0 ? (
-          viewMode === 'grid' ? (
+          <>
+          {viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredInventory.map((item) => (
+              {pagedInventory.map((item) => (
                 <InventoryItemComponent
                   key={item.id}
                   id={item.id}
@@ -1186,6 +1205,13 @@ const InventoryPage = () => {
                   isDuplicate={duplicateIds.has(item.id)}
                   onEdit={handleEditItem}
                   onDelete={handleDeleteItem}
+                  onImageClick={() => {
+                    const imgs = [
+                      item.imageUrl,
+                      ...(((item as any).additionalImages as string[]) || []),
+                    ].filter(Boolean) as string[];
+                    if (imgs.length) setLightbox({ images: imgs, title: item.name });
+                  }}
                   className="bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-all duration-200"
                 />
               ))}
@@ -1206,7 +1232,7 @@ const InventoryPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredInventory.map((item) => {
+                  {pagedInventory.map((item) => {
                     const stockStatus = item.quantity <= 0
                       ? 'Out of Stock'
                       : item.quantity <= item.threshold
@@ -1290,7 +1316,31 @@ const InventoryPage = () => {
                 </TableBody>
               </Table>
             </div>
-          )
+          )}
+          {invTotalPages > 1 && (
+            <div className="mt-6 flex items-center justify-center gap-3 text-sm">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={invSafePage <= 1}
+                onClick={() => setInvPage((p) => Math.max(1, p - 1))}
+              >
+                Prev
+              </Button>
+              <span className="text-gray-600">
+                Page {invSafePage} of {invTotalPages} · {filteredInventory.length.toLocaleString()} items
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={invSafePage >= invTotalPages}
+                onClick={() => setInvPage((p) => Math.min(invTotalPages, p + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          )}
+          </>
         ) : (
           <div className="text-center py-10 bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-lg border border-navy/10 rounded-xl shadow-sm p-8">
             <Package size={32} className="mx-auto text-navy/30 mb-2" />
@@ -1340,6 +1390,13 @@ const InventoryPage = () => {
           isOpen={isBulkRFIDDialogOpen}
           onClose={() => setIsBulkRFIDDialogOpen(false)}
           onAssign={handleBulkRFIDAssign}
+        />
+
+        <ImageLightbox
+          open={!!lightbox}
+          images={lightbox?.images || []}
+          title={lightbox?.title}
+          onClose={() => setLightbox(null)}
         />
       </div>
     </MainLayout>

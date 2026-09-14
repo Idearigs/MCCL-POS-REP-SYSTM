@@ -75,6 +75,7 @@ export const customerUsersApi = {
 // ── Subscriptions ────────────────────────────────────────────────────────────
 export const subscriptionsApi = {
   getStats:       ()                      => apiClient.get('/mainframe/subscriptions/stats'),
+  getOverview:    ()                      => apiClient.get('/mainframe/subscriptions/overview'),
   getByProfile:   (profileId: string)     => apiClient.get(`/mainframe/subscriptions/profile/${profileId}`),
   updatePlan:     (profileId: string, data: any) =>
     apiClient.put(`/mainframe/subscriptions/profile/${profileId}/plan`, data),

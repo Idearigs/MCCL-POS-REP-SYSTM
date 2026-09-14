@@ -13,9 +13,12 @@ export interface SaleItem {
   productSku?: string;
   quantity: number;
   unitPrice: number;
+  unitCost?: number;   // COGS per unit (reporting only) — snapshot or current product cost
+  imageUrl?: string;   // primary product image (reporting thumbnails)
   discount: number;
   total: number;
   totalPrice?: number;
+  notes?: string;
 }
 
 export interface SalePayment {
@@ -56,6 +59,8 @@ export interface Sale {
   tenantId: string;
   createdAt: string;
   updatedAt: string;
+  // Costs entered after the fact for note-only second-hand/bespoke lines.
+  manualCosts?: Array<{ lineKey: string; cost: number; sourceBillNumber?: string }>;
 }
 
 export interface CreateSaleData {
@@ -64,6 +69,7 @@ export interface CreateSaleData {
     productId: string;
     quantity: number;
     unitPrice: number;
+    unitCost?: number; // COGS snapshot for inventory lines (reporting only)
     discountAmount?: number;
     discountPercentage?: number;
     taxRate?: number;
@@ -192,6 +198,8 @@ export interface RefundData {
     quantity: number;
   }>;
   notes?: string;
+  // Shared refund-authorisation password; required when the tenant has one set.
+  refundPassword?: string;
 }
 
 export interface Receipt {
@@ -284,6 +292,42 @@ class SalesService {
       console.error(`Failed to refund sale ${saleId}:`, error);
       throw error;
     }
+  }
+
+  // ─── Refund authorisation password ──────────────────────────────────────────
+
+  /** Whether the tenant has configured a shared refund password. */
+  async getRefundPasswordStatus(): Promise<{ isSet: boolean }> {
+    return apiClient.get<{ isSet: boolean }>('/settings/refund-password');
+  }
+
+  /** Set or replace the shared refund password (OWNER only, enforced server-side). */
+  async setRefundPassword(password: string): Promise<{ success: boolean }> {
+    return apiClient.post<{ success: boolean }>('/settings/refund-password', {
+      password,
+    });
+  }
+
+  /** Verify a candidate refund password before opening the refund options. */
+  async verifyRefundPassword(password: string): Promise<{ valid: boolean }> {
+    return apiClient.post<{ valid: boolean }>(
+      '/settings/refund-password/verify',
+      { password },
+    );
+  }
+
+  // ── Manual line costs (second-hand / bespoke) ──────────────────────────────
+  async getManualCosts(
+    saleId: string,
+  ): Promise<Array<{ lineKey: string; cost: number; sourceBillNumber?: string }>> {
+    return apiClient.get(`/sales/${saleId}/manual-costs`);
+  }
+
+  async setManualCost(
+    saleId: string,
+    payload: { lineKey: string; cost: number; sourceBillNumber?: string },
+  ): Promise<Array<{ lineKey: string; cost: number; sourceBillNumber?: string }>> {
+    return apiClient.put(`/sales/${saleId}/manual-costs`, payload);
   }
 
 

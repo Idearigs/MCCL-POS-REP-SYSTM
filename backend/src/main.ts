@@ -10,6 +10,8 @@ import helmet from 'helmet';
 import compression from 'compression';
 import { join } from 'path';
 import { AppModule } from './app.module';
+import { PrismaService } from './core/prisma/prisma.service';
+import { seedBuymeTrial } from './core/seed/buyme-trial.seed';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -213,6 +215,13 @@ async function bootstrap() {
   // ===================================
   // APPLICATION STARTUP
   // ===================================
+
+  // Ensure the launch client has a billing/trial row (idempotent, non-fatal).
+  try {
+    await seedBuymeTrial(app.get(PrismaService));
+  } catch (err) {
+    logger.error('Buy Me Jewellery trial seed failed (non-fatal):', err);
+  }
 
   const port = configService.get('PORT', 3002);
   await app.listen(port, '0.0.0.0');

@@ -33,6 +33,9 @@ export function OutletGate() {
         localStorage.removeItem(BYPASS_KEY);
       }}
       onUnavailable={handleUnavailable}
+      // X / Escape / click-outside: dismiss for this session so the user isn't
+      // trapped. Not persisted — the gate asks again on the next login.
+      onClose={() => setBypassed(true)}
     />
   );
 }

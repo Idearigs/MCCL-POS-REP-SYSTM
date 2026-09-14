@@ -2,6 +2,19 @@ import { apiClient } from './apiClient';
 
 const BASE = '/hrms';
 
+// Fetch a tax-year-scoped report PDF as a Blob and trigger a browser download.
+async function downloadReportPdf(url: string, taxYear: string, filename: string): Promise<void> {
+  const blob = await apiClient.get<Blob>(url, { taxYear }, { responseType: 'blob' });
+  const objectUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(objectUrl);
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type EmployeeStatus = 'PROBATION' | 'ACTIVE' | 'ON_LEAVE' | 'SUSPENDED' | 'TERMINATED' | 'INACTIVE';
@@ -595,8 +608,35 @@ export const hrmsService = {
     return apiClient.put(`${BASE}/payroll/payslips/${id}`, data);
   },
 
+  // Fetch the payslip PDF as a Blob and trigger a browser download.
+  async downloadPayslipPdf(id: string, filename?: string): Promise<void> {
+    const blob = await apiClient.get<Blob>(
+      `${BASE}/payroll/payslips/${id}/pdf`,
+      undefined,
+      { responseType: 'blob' },
+    );
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || `payslip_${id}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
   async getEmployeePayslips(employeeId: string): Promise<Payslip[]> {
     return apiClient.get(`${BASE}/payroll/employees/${employeeId}/payslips`);
+  },
+
+  // Fetch a P60 certificate PDF as a Blob and trigger a browser download.
+  async downloadP60Pdf(employeeId: string, taxYear: string, filename?: string): Promise<void> {
+    await downloadReportPdf(`${BASE}/reports/p60/${employeeId}/pdf`, taxYear, filename || `P60_${taxYear}.pdf`);
+  },
+
+  // Fetch a P11D benefits statement PDF as a Blob and trigger a browser download.
+  async downloadP11dPdf(employeeId: string, taxYear: string, filename?: string): Promise<void> {
+    await downloadReportPdf(`${BASE}/reports/p11d/${employeeId}/pdf`, taxYear, filename || `P11D_${taxYear}.pdf`);
   },
 
   // Attendance — Weekly Overview
