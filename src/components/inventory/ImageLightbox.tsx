@@ -36,6 +36,32 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
   const count = images.length;
   const hasMultiple = count > 1;
 
+  // Progressive load: show the small (usually already-cached) thumbnail at once,
+  // then swap to the sharp 1200px once it has downloaded/generated. Avoids the
+  // blank wait on the first zoom / cold thumbnail cache.
+  const raw = images[index];
+  const lowSrc = normalizeImageUrl(raw, { w: 200 }) || raw;
+  const hiSrc = normalizeImageUrl(raw, { w: 1200 }) || raw;
+  const [displaySrc, setDisplaySrc] = useState(lowSrc);
+  const [sharp, setSharp] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setDisplaySrc(lowSrc);
+    setSharp(false);
+    let cancelled = false;
+    const hi = new Image();
+    hi.onload = () => {
+      if (!cancelled) { setDisplaySrc(hiSrc); setSharp(true); }
+    };
+    hi.onerror = () => {
+      // Resized version failed — fall back to the raw original.
+      if (!cancelled) { setDisplaySrc(raw); setSharp(true); }
+    };
+    hi.src = hiSrc;
+    return () => { cancelled = true; };
+  }, [open, index, hiSrc, lowSrc, raw]);
+
   const prev = useCallback(
     () => setIndex((i) => (i - 1 + count) % count),
     [count],
@@ -61,8 +87,6 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
   }, [open, hasMultiple, prev, next, onClose]);
 
   if (!open || count === 0) return null;
-
-  const src = normalizeImageUrl(images[index], { w: 1200 }) || images[index];
 
   return createPortal(
     <div
@@ -103,14 +127,12 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <img
-          src={src}
+          src={displaySrc}
           alt={title || 'Product image'}
-          className="max-w-[90vw] max-h-[80vh] object-contain rounded-lg shadow-2xl bg-white/5"
-          onError={(e) => {
-            const el = e.currentTarget;
-            // Fall back to the raw original if the resized version fails.
-            const raw = images[index];
-            if (el.src !== raw) el.src = raw;
+          className={`max-w-[90vw] max-h-[80vh] object-contain rounded-lg shadow-2xl bg-white/5 transition-[filter] duration-300 ${sharp ? '' : 'blur-[6px]'}`}
+          onError={() => {
+            // Fall back to the raw original if the shown version fails.
+            if (displaySrc !== raw) { setDisplaySrc(raw); setSharp(true); }
           }}
         />
         {(title || hasMultiple) && (

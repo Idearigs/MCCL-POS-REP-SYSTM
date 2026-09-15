@@ -25,6 +25,9 @@ const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(false);
   const [shiftNumber, setShiftNumber] = useState<string | null>(null);
+  // Authoritative shift totals (server-computed, uncapped). Null until loaded /
+  // when no shift is open, in which case we fall back to summing the page.
+  const [shiftTotals, setShiftTotals] = useState<{ gross: number; count: number } | null>(null);
 
   // Thumbnails of the inventory items on a sale (skip non-stock/service lines).
   const saleThumbnails = (sale: Sale, max = 4): string[] => {
@@ -49,11 +52,22 @@ const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
       // Prefer the active shift's start time; otherwise today from midnight.
       let startDate: string;
       let shiftNo: string | null = null;
+      let totals: { gross: number; count: number } | null = null;
       try {
         const shift = await shiftService.getActiveShift();
         if (shift?.startTime) {
           startDate = new Date(shift.startTime).toISOString();
           shiftNo = shift.shiftNumber || null;
+          // Authoritative, uncapped shift total for the headline figures.
+          if (shift.id) {
+            try {
+              const report = await shiftService.getShiftReport(shift.id);
+              totals = {
+                gross: report.metrics?.totalRevenue ?? 0,
+                count: report.metrics?.totalSales ?? 0,
+              };
+            } catch { /* fall back to page sums below */ }
+          }
         } else {
           const d = new Date();
           d.setHours(0, 0, 0, 0);
@@ -65,6 +79,7 @@ const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
         startDate = d.toISOString();
       }
       setShiftNumber(shiftNo);
+      setShiftTotals(totals);
       const res = await salesService.getSales(1, 100, { startDate });
       setSales(res.data || []);
     } catch {
@@ -83,7 +98,9 @@ const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
     load();
   }, [load]);
 
-  const gross = sales.reduce((s, x) => s + (x.totalAmount || 0), 0);
+  // Prefer the authoritative shift total; fall back to summing the loaded page.
+  const gross = shiftTotals?.gross ?? sales.reduce((s, x) => s + (x.totalAmount || 0), 0);
+  const txnCount = shiftTotals?.count ?? sales.length;
   const refunded = sales.reduce((s, x) => s + (x.refundedAmount || 0), 0);
   const net = gross - refunded;
 
@@ -116,7 +133,7 @@ const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
       <div className="grid grid-cols-3 gap-3 py-4">
         <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
           <p className="text-xs text-gray-400">Transactions</p>
-          <p className="text-2xl font-bold text-gray-900">{sales.length}</p>
+          <p className="text-2xl font-bold text-gray-900">{txnCount}</p>
         </div>
         <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
           <p className="text-xs text-gray-400">Gross Sales</p>

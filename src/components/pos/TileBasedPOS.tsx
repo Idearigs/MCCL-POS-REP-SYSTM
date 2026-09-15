@@ -88,6 +88,7 @@ import CustomerInfo from './CustomerInfo';
 import LiveGoldRate from './LiveGoldRate';
 import { repairService, Repair } from '@/services/repairService';
 import { salesService, CreateSaleData, Sale } from '@/services/salesService';
+import { shiftService } from '@/services/shiftService';
 import { customerService } from '@/services/customerService';
 import { productService } from '@/services/productService';
 import { giftCardService } from '@/services/giftCardService';
@@ -2079,25 +2080,28 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
     setShowAltOverlay,
   });
 
-  // Today's net sales total for the Register tile. Refreshes when the Today's
-  // Sales view closes (a refund there may have changed it).
+  // Sales total for the Register tile. Uses the authoritative, server-computed
+  // total for the CURRENT SHIFT (all completed sales since the shift opened —
+  // not just page 1, and not cut off at midnight); falls back to today's
+  // server revenue when no shift is open. Refreshes after each completed sale
+  // and when the Today's Sales view closes (a refund there may change it).
   useEffect(() => {
     let cancelled = false;
-    const d = new Date(); d.setHours(0, 0, 0, 0);
-    salesService
-      .getSales(1, 200, { startDate: d.toISOString() })
-      .then((res) => {
-        if (cancelled) return;
-        const total = (res.data || []).reduce(
-          (s: number, x: any) => s + ((x.totalAmount || 0) - (x.refundedAmount || 0)),
-          0,
-        );
-        setTodaysTotal(total);
-      })
-      .catch(() => !cancelled && setTodaysTotal(null));
+    (async () => {
+      try {
+        const shift = await shiftService.getActiveShift();
+        if (shift?.id) {
+          const report = await shiftService.getShiftReport(shift.id);
+          if (!cancelled) setTodaysTotal(report.metrics?.totalRevenue ?? 0);
+          return;
+        }
+        const stats = await salesService.getSalesStats();
+        if (!cancelled) setTodaysTotal(stats.revenueToday ?? 0);
+      } catch {
+        if (!cancelled) setTodaysTotal(null);
+      }
+    })();
     return () => { cancelled = true; };
-    // Refetch when the Today's Sales view toggles AND after each completed sale
-    // (completedSale changes), so the tile total stays current without a reload.
   }, [showTodaySalesView, completedSale]);
 
   // Keep the search/scan box focused so a scanner's input always lands there.
