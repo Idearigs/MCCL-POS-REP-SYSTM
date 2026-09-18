@@ -146,7 +146,15 @@ const CartItemPopover: React.FC<CartItemPopoverProps> = ({
   };
 
   return (
-    <div ref={popoverRef} style={style} className="w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
+    <div
+      ref={popoverRef}
+      style={style}
+      // Stop mousedowns inside the popover from reaching the document-level
+      // outside-click handler, which was otherwise closing the popover the
+      // instant you tapped the "Fixed £" toggle (before you could Apply).
+      onMouseDown={(e) => e.stopPropagation()}
+      className="w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden"
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
         <div className="flex-1 min-w-0">

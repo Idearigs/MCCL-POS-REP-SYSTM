@@ -214,7 +214,11 @@ export class SalesService {
               : 0;
             const totalPrice = discountedAmount + taxAmount;
 
-            subtotal += lineSubtotal;
+            // Accumulate the per-line amount AFTER its own discount, so the
+            // sale total reflects per-item discounts (previously it summed the
+            // undiscounted lineSubtotal, so a discounted line was charged but
+            // the total stayed full → "payment does not match total").
+            subtotal += discountedAmount;
 
             // Only add actual products to sale_items (skip repair services due to FK constraint)
             if (!isRepairService) {
