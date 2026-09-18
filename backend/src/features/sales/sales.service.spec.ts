@@ -297,6 +297,29 @@ describe('SalesService', () => {
       expect(result).toHaveProperty('saleNumber');
     });
 
+    it('subtracts a per-line discountAmount from the sale total', async () => {
+      // Regression: the total used to sum the UNDISCOUNTED line, so a
+      // discounted line was charged (450) but the total stayed full (500),
+      // failing payment validation. Payment of 450 must now be accepted.
+      const discountedDto: CreateSaleDto = {
+        items: [
+          {
+            productId: 'prod-001',
+            quantity: 1,
+            unitPrice: 500,
+            discountAmount: 50,
+            taxRate: 0,
+          },
+        ],
+        payments: [{ method: 'CASH' as any, amount: 450 }], // 500 − 50
+        taxRate: 0,
+      } as CreateSaleDto;
+
+      await expect(
+        service.create(discountedDto, 'tenant-001', 'user-001'),
+      ).resolves.toBeDefined();
+    });
+
     it('should throw NotFoundException when a product does not exist', async () => {
       // Override the $transaction mock so products.findFirst returns null
       mockPrismaService.$transaction.mockImplementationOnce(async (fn) => {
