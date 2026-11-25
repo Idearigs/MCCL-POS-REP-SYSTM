@@ -106,4 +106,20 @@ describe('SalesPage', () => {
     await userEvent.click(apply);
     expect(screen.queryByLabelText('From')).not.toBeInTheDocument();
   });
+
+  it('keeps a date while its year is being typed, and only queries the full date', async () => {
+    render(<SalesPage />);
+    await screen.findByText(/Showing 1 of 1 sales/);
+    await userEvent.click(screen.getByRole('button', { name: /Filters/ }));
+    const from = screen.getByLabelText('From') as HTMLInputElement;
+    const calls = getSales.mock.calls.length;
+    for (const v of ['0002-01-01', '0020-01-01', '0202-01-01']) {
+      fireEvent.change(from, { target: { value: v } });
+      expect(from.value).toBe(v); // used to be reset to ''
+    }
+    expect(getSales.mock.calls.length).toBe(calls);
+    fireEvent.change(from, { target: { value: '2020-01-01' } });
+    await waitFor(() =>
+      expect(new Date(getSales.mock.calls.at(-1)![2].startDate).getFullYear()).toBe(2020));
+  });
 });

@@ -45,6 +45,45 @@ interface SalesFiltersProps {
   outlets?: {id: string; name: string}[];
 }
 
+// Date -> <input type="date"> value, in local time.
+const toInput = (d?: Date) => (d ? format(d, 'yyyy-MM-dd') : '');
+
+/**
+ * Date input that keeps its own text while the user types. Typing a year passes
+ * through "0002", "0020"… — valid dates we don't want to query. Only complete
+ * dates are passed up; feeding the parent's old value back in would wipe the box.
+ */
+const DateField: React.FC<{
+  id: string;
+  value?: Date;
+  onChange: (d: Date | undefined) => void;
+}> = ({ id, value, onChange }) => {
+  const committed = toInput(value);
+  const [text, setText] = React.useState(committed);
+  React.useEffect(() => setText(committed), [committed]);
+
+  return (
+    <Input
+      id={id}
+      type="date"
+      className="h-9 text-xs"
+      value={text}
+      max={toInput(new Date())}
+      onChange={(e) => {
+        const v = e.target.value;
+        setText(v);
+        if (!v) return; // cleared or mid-typing: settled on blur
+        const [y, m, d] = v.split('-').map(Number);
+        if (y >= 2000) onChange(new Date(y, m - 1, d));
+      }}
+      onBlur={(e) => {
+        if (!e.target.value && !e.target.validity?.badInput) { if (value) onChange(undefined); }
+        else setText(committed);
+      }}
+    />
+  );
+};
+
 const SalesFilters: React.FC<SalesFiltersProps> = ({
   filters,
   onFilterChange,
@@ -75,26 +114,14 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
     onFilterChange({ ...filters, status: value });
   };
 
-  // <input type="date"> value <-> local Date (new Date('YYYY-MM-DD') is UTC).
-  const toInput = (d?: Date) => (d ? format(d, 'yyyy-MM-dd') : '');
-  const fromInput = (v: string) => {
-    if (!v) return undefined;
-    const [y, m, d] = v.split('-').map(Number);
-    return new Date(y, m - 1, d);
-  };
-  // Half-typed years ("0002-…") arrive as valid dates: ignore until complete.
-  const isPartial = (d?: Date) => !!d && d.getFullYear() < 2000;
-
   // Any date can be picked; an inverted range moves the other end to match
   // instead of blocking the click.
   const handleDateFromChange = (date: Date | undefined) => {
-    if (isPartial(date)) return;
     const dateTo = date && filters.dateTo && date > filters.dateTo ? date : filters.dateTo;
     onFilterChange({ ...filters, dateFrom: date, dateTo, shift: 'all' });
   };
 
   const handleDateToChange = (date: Date | undefined) => {
-    if (isPartial(date)) return;
     const dateFrom = date && filters.dateFrom && date < filters.dateFrom ? date : filters.dateFrom;
     onFilterChange({ ...filters, dateFrom, dateTo: date, shift: 'all' });
   };
@@ -232,17 +259,11 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label htmlFor="sales-date-from" className="text-xs text-gray-500">From</Label>
-                    <Input id="sales-date-from" type="date" className="h-9 text-xs"
-                      value={toInput(filters.dateFrom)}
-                      max={toInput(new Date())}
-                      onChange={(e) => handleDateFromChange(fromInput(e.target.value))} />
+                    <DateField id="sales-date-from" value={filters.dateFrom} onChange={handleDateFromChange} />
                   </div>
                   <div>
                     <Label htmlFor="sales-date-to" className="text-xs text-gray-500">To</Label>
-                    <Input id="sales-date-to" type="date" className="h-9 text-xs"
-                      value={toInput(filters.dateTo)}
-                      max={toInput(new Date())}
-                      onChange={(e) => handleDateToChange(fromInput(e.target.value))} />
+                    <DateField id="sales-date-to" value={filters.dateTo} onChange={handleDateToChange} />
                   </div>
                 </div>
               </div>
