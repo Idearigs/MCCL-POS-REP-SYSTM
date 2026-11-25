@@ -280,7 +280,12 @@ class ApiClient {
       });
     }
 
-    const response: AxiosResponse<T> = await this.client.post(endpoint, formData);
+    // Uploads get a much longer timeout than the default (10s): a multi-MB
+    // phone photo on a slow shop connection easily takes longer, and the
+    // request was being aborted client-side while the server carried on.
+    const response: AxiosResponse<T> = await this.client.post(endpoint, formData, {
+      timeout: 120000,
+    });
 
     return response.data;
   }

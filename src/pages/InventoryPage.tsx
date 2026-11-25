@@ -604,17 +604,19 @@ const InventoryPage = () => {
         console.log('✅ Product updated with ID:', productId);
       }
 
-      // Upload images if provided
+      // Upload images if provided. The product itself is already saved at this
+      // point, so an upload failure must NOT be reported as "failed to add" —
+      // that left the dialog open on a product that existed, and a retry
+      // created a duplicate. Report it as a partial success instead.
+      let failedUploads = 0;
       if (imageFiles && imageFiles.length > 0) {
-        console.log(`📤 Uploading ${imageFiles.length} images for product ${productId}`);
-
-        const uploadPromises = imageFiles.map((file, index) => {
-          console.log(`  - Uploading image ${index + 1}/${imageFiles.length}: ${file.name}`);
-          return productService.uploadProductImage(productId, file);
+        const results = await Promise.allSettled(
+          imageFiles.map((file) => productService.uploadProductImage(productId, file)),
+        );
+        failedUploads = results.filter((r) => r.status === 'rejected').length;
+        results.forEach((r) => {
+          if (r.status === 'rejected') console.error('Image upload failed:', r.reason);
         });
-
-        const uploadResults = await Promise.all(uploadPromises);
-        console.log('✅ All images uploaded successfully:', uploadResults);
       }
 
       // add/update already put the server's copy into local state. Only re-pull
@@ -624,16 +626,18 @@ const InventoryPage = () => {
         await refreshInventory();
       }
 
-      // Show success message
-      if (isNewItem) {
+      const savedVerb = isNewItem ? 'added to inventory' : 'updated';
+      if (failedUploads > 0) {
         toast({
-          title: "Item Added",
-          description: `${updatedItem.name} has been added to inventory${imageFiles && imageFiles.length > 0 ? ` with ${imageFiles.length} image(s)` : ''}.`,
+          title: isNewItem ? "Item added — photo not uploaded" : "Item updated — photo not uploaded",
+          description: `${updatedItem.name} was ${savedVerb}, but ${failedUploads} of ${imageFiles!.length} image(s) failed to upload. Open the item and add the photo again.`,
+          variant: "destructive",
         });
       } else {
+        const uploaded = imageFiles && imageFiles.length > 0 ? ` with ${imageFiles.length} image(s)` : '';
         toast({
-          title: "Item Updated",
-          description: `${updatedItem.name} has been updated${imageFiles && imageFiles.length > 0 ? ` with ${imageFiles.length} new image(s)` : ''}.`,
+          title: isNewItem ? "Item Added" : "Item Updated",
+          description: `${updatedItem.name} has been ${savedVerb}${uploaded}.`,
         });
       }
 
@@ -644,7 +648,9 @@ const InventoryPage = () => {
       console.error('❌ Failed to save item:', error);
       toast({
         title: "Error",
-        description: `Failed to ${isNewItem ? 'add' : 'update'} item: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        // apiClient rejects with a plain { message, statusCode } object, not an
+        // Error, so `instanceof Error` always fell through to "Unknown error".
+        description: `Failed to ${isNewItem ? 'add' : 'update'} item: ${(error as any)?.message || 'Unknown error'}`,
         variant: "destructive",
       });
     }
