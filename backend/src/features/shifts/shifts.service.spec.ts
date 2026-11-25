@@ -14,7 +14,11 @@ const sale = (over: Record<string, unknown>) => ({
 
 describe('ShiftsService', () => {
   const prisma = {
-    shifts: { findUnique: jest.fn(), findMany: jest.fn() },
+    shifts: {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
   };
   const service = new ShiftsService(prisma as any, {} as any);
 
@@ -25,8 +29,8 @@ describe('ShiftsService', () => {
 
   describe('getShiftReport() refund figures', () => {
     const reportFor = async (sales: unknown[]) => {
-      prisma.shifts.findUnique.mockResolvedValue({ openingFloat: 0, sales });
-      return (await service.getShiftReport('shift-1')).metrics;
+      prisma.shifts.findFirst.mockResolvedValue({ openingFloat: 0, sales });
+      return (await service.getShiftReport('shift-1', 't1')).metrics;
     };
 
     it('counts each refund once: gross - refunded = net', async () => {
@@ -60,6 +64,40 @@ describe('ShiftsService', () => {
         sale({ totalAmount: 0.2 }),
       ]);
       expect(m.netRevenue).toBe(0.3);
+    });
+  });
+
+  describe('getShiftReport() access', () => {
+    it("only looks inside the caller's shop", async () => {
+      // Shift belongs to shop "t1"
+      prisma.shifts.findFirst.mockImplementation(({ where }) =>
+        Promise.resolve(
+          where.id === 'shift-1' && where.tenantId === 't1'
+            ? { openingFloat: 0, sales: [] }
+            : null,
+        ),
+      );
+      await expect(
+        service.getShiftReport('shift-1', 't1'),
+      ).resolves.toBeDefined();
+      await expect(service.getShiftReport('shift-1', 't2')).rejects.toThrow(
+        'Shift not found',
+      );
+    });
+  });
+
+  describe('part-refunded sales', () => {
+    it('count what the customer kept in shift revenue and cash', async () => {
+      // £100 sale, £30 refunded: COMPLETED at £70
+      prisma.shifts.findFirst.mockResolvedValue({
+        openingFloat: 0,
+        sales: [sale({ totalAmount: 70, refundedAmount: 30 })],
+      });
+      const { metrics } = await service.getShiftReport('shift-1', 't1');
+      expect(metrics.totalRevenue).toBe(70);
+      expect(metrics.cashSales).toBe(70);
+      expect(metrics.grossRevenue).toBe(100);
+      expect(metrics.netRevenue).toBe(70);
     });
   });
 

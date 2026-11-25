@@ -577,5 +577,168 @@ describe('SalesService', () => {
         ),
       ).rejects.toThrow(BadRequestException);
     });
+
+    describe('amounts and status', () => {
+      const item = (id: string, quantity: number, totalPrice: number) => ({
+        id,
+        quantity,
+        productId: `prod-${id}`,
+        totalPrice,
+        products: mockProduct,
+      });
+
+      const refund = async (
+        sale: Record<string, unknown>,
+        dto: Partial<CreateRefundDto>,
+      ) => {
+        const tx = {
+          $queryRaw: jest.fn().mockResolvedValue([]),
+          sales: {
+            findFirst: jest.fn().mockResolvedValue({
+              ...mockSale,
+              status: 'COMPLETED',
+              refundedAmount: 0,
+              customerId: null,
+              payments: [],
+              ...sale,
+            }),
+            update: jest.fn().mockResolvedValue(mockSale),
+          },
+          products: { update: jest.fn() },
+          sale_items: { delete: jest.fn(), update: jest.fn() },
+          customers: { update: jest.fn() },
+        };
+        mockPrismaService.$transaction.mockImplementationOnce((fn) => fn(tx));
+        await service.createRefund(
+          'sale-001',
+          { items: [], reason: 'test', ...dto } as CreateRefundDto,
+          'tenant-001',
+          'user-001',
+        );
+        const { status, totalAmount, refundedAmount } =
+          tx.sales.update.mock.calls[0][0].data;
+        return {
+          saved: { status, totalAmount, refundedAmount },
+          restocked: tx.products.update.mock.calls.length,
+        };
+      };
+
+      it('keeps a part-refunded sale COMPLETED at what is left', async () => {
+        const { saved } = await refund(
+          {
+            totalAmount: 100,
+            sale_items: [item('a', 1, 30), item('b', 1, 70)],
+          },
+          { items: [{ saleItemId: 'a', quantity: 1 }] },
+        );
+        expect(saved).toEqual({
+          status: 'COMPLETED',
+          totalAmount: 70,
+          refundedAmount: 30,
+        });
+      });
+
+      it('allows a second refund, which closes the sale', async () => {
+        const { saved } = await refund(
+          {
+            totalAmount: 70,
+            refundedAmount: 30,
+            sale_items: [item('b', 1, 70)],
+          },
+          { items: [{ saleItemId: 'b', quantity: 1 }] },
+        );
+        expect(saved).toEqual({
+          status: 'REFUNDED',
+          totalAmount: 0,
+          refundedAmount: 100,
+        });
+      });
+
+      it('never refunds more than is left', async () => {
+        // Two £100 items, £20 off the sale, one already refunded at £100
+        const { saved } = await refund(
+          {
+            totalAmount: 80,
+            refundedAmount: 100,
+            sale_items: [item('b', 1, 100)],
+          },
+          { items: [{ saleItemId: 'b', quantity: 1 }] },
+        );
+        expect(saved).toEqual({
+          status: 'REFUNDED',
+          totalAmount: 0,
+          refundedAmount: 180,
+        });
+      });
+
+      it('full refund covers services and restocks every item', async () => {
+        // £100 of products + £50 service
+        const { saved, restocked } = await refund(
+          {
+            totalAmount: 150,
+            sale_items: [item('a', 1, 60), item('b', 2, 40)],
+          },
+          { fullRefund: true },
+        );
+        expect(saved).toEqual({
+          status: 'REFUNDED',
+          totalAmount: 0,
+          refundedAmount: 150,
+        });
+        expect(restocked).toBe(2);
+      });
+
+      it('full refund of a discounted sale returns what was paid', async () => {
+        const { saved } = await refund(
+          {
+            totalAmount: 180,
+            sale_items: [item('a', 1, 100), item('b', 1, 100)],
+          },
+          { fullRefund: true },
+        );
+        expect(saved.refundedAmount).toBe(180);
+        expect(saved.totalAmount).toBe(0);
+      });
+
+      it('refunds the rest of a service sale after an earlier refund', async () => {
+        const { saved } = await refund(
+          { totalAmount: 50, refundedAmount: 100, sale_items: [] },
+          {},
+        );
+        expect(saved).toEqual({
+          status: 'REFUNDED',
+          totalAmount: 0,
+          refundedAmount: 150,
+        });
+      });
+
+      it('rejects a fully refunded sale and duplicate lines', async () => {
+        await expect(
+          refund(
+            { totalAmount: 0, refundedAmount: 100, sale_items: [] },
+            { fullRefund: true },
+          ),
+        ).rejects.toThrow('already been fully refunded');
+        await expect(
+          refund(
+            { totalAmount: 90, sale_items: [item('a', 3, 90)] },
+            {
+              items: [
+                { saleItemId: 'a', quantity: 1 },
+                { saleItemId: 'a', quantity: 1 },
+              ],
+            },
+          ),
+        ).rejects.toThrow('only be listed once');
+      });
+
+      it('does not leave floating-point pennies behind', async () => {
+        const { saved } = await refund(
+          { totalAmount: 0.3, sale_items: [item('a', 3, 0.3)] },
+          { items: [{ saleItemId: 'a', quantity: 1 }] },
+        );
+        expect(saved.totalAmount).toBe(0.2);
+      });
+    });
   });
 });

@@ -483,10 +483,13 @@ const CashUpPage = () => {
     let voidItems = 0;
     let voidAmount = 0;
     let totalRefunds = 0;
+    let cashReturns = 0;
 
     // Process each sale
     sales.forEach(sale => {
-      const saleTotal = sale.total || 0;
+      const saleTotal = sale.total || 0; // not sent by the API; VAT block only
+      const netTotal = sale.totalAmount || 0; // after refunds
+      const refunded = sale.refundedAmount || 0;
       const saleTime = new Date(sale.createdAt);
       const hour = `${saleTime.getHours().toString().padStart(2, '0')}:00 - ${(saleTime.getHours() + 1).toString().padStart(2, '0')}:00`;
 
@@ -498,8 +501,11 @@ const CashUpPage = () => {
         return;
       }
 
-      if (sale.status === 'REFUNDED') {
-        totalRefunds += saleTotal;
+      totalRefunds += refunded;
+      // The "Cash" figures are what was taken, so only refunds of cash sales
+      // come back out of the till.
+      if (sale.paymentMethod === 'CASH') {
+        cashReturns += refunded;
       }
 
       // Process payments - handle both array and single payment
@@ -575,11 +581,8 @@ const CashUpPage = () => {
 
       const hourData = hourlyMap.get(hour)!;
       hourData.items += items.length;
-      if (sale.status === 'REFUNDED') {
-        hourData.refund += saleTotal;
-      } else {
-        hourData.sales += saleTotal;
-      }
+      hourData.refund += refunded;
+      hourData.sales += netTotal;
 
       // VAT breakdown (simplified)
       const vatExempt = items.filter((i: any) => i.product?.isVATExempt || i.isVATExempt).reduce((sum: number, i: any) => {
@@ -635,7 +638,8 @@ const CashUpPage = () => {
       totalAmount: data.totalAmount
     }));
 
-    const totalSales = creditCardAmount + debitCardAmount + cashAmount + voucherAmount + otherAmount;
+    // Payments are what was taken; sales are what was kept after refunds.
+    const totalSales = creditCardAmount + debitCardAmount + cashAmount + voucherAmount + otherAmount - totalRefunds;
 
     // Find selected user name
     const selectedUser = availableUsers.find(u => u.id === filters.userId);
@@ -663,9 +667,10 @@ const CashUpPage = () => {
       },
 
       cashDetails: {
-        floatAmount: selectedShift?.openingFloat ?? 0,
+        // Decimals arrive as strings; the page calls .toFixed() on these.
+        floatAmount: Number(selectedShift?.openingFloat ?? 0),
         totalCash: cashAmount,
-        returns: totalRefunds,
+        returns: cashReturns,
         staffing: 0,
         payout: {
           count: pettyCashExpenses.length,
@@ -675,7 +680,7 @@ const CashUpPage = () => {
         cashLift: { count: 0, amount: 0 },
         cashback: { count: 0, amount: 0 },
         accountPay: { count: 0, amount: 0 },
-        tillDifference: selectedShift?.variance ?? 0,
+        tillDifference: Number(selectedShift?.variance ?? 0),
       },
 
       departments,

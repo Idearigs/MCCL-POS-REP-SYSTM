@@ -6,6 +6,7 @@ import { salesService, Sale } from '@/services/salesService';
 import { shiftService } from '@/services/shiftService';
 import { useInventory } from '@/contexts/InventoryContext';
 import { normalizeImageUrl } from '@/lib/utils';
+import { originalTotal, refundState } from '@/utils/saleRefunds';
 
 interface PosTodaySalesViewProps {
   onClose: () => void;
@@ -214,7 +215,7 @@ const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
                   </span>
                   {(sale.refundedAmount || 0) > 0 && (
                     <span className="text-[10px] font-medium bg-orange-100 text-orange-700 rounded-full px-2 py-0.5">
-                      Refunded
+                      {refundState(sale) === 'FULL' ? 'Refunded' : 'Part-refunded'}
                     </span>
                   )}
                 </div>
@@ -240,7 +241,7 @@ const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
               </div>
               <div className="text-right shrink-0">
                 <p className="font-semibold text-gray-900">
-                  {gbp((sale.totalAmount || 0) + (sale.refundedAmount || 0))}
+                  {gbp(originalTotal(sale))}
                 </p>
                 {(sale.refundedAmount || 0) > 0 && (
                   <p className="text-xs text-orange-600">

@@ -129,4 +129,17 @@ describe('SalesPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Shifts' }));
     expect(screen.getByText(/Pick a From and To date/)).toBeInTheDocument();
   });
+
+  it('a part-refunded sale is labelled, can be refunded again, and cannot be voided', async () => {
+    getSales.mockResolvedValue({
+      data: [sale({ status: 'COMPLETED', paymentStatus: 'COMPLETED', totalAmount: 70, refundedAmount: 30 })],
+      meta: { hasNextPage: false },
+    });
+    render(<SalesPage />);
+    expect(await screen.findByText('Part-Refunded')).toBeInTheDocument();
+    expect(document.querySelector('.lucide-rotate-ccw')).toBeInTheDocument();
+    expect(screen.queryByTitle('Void Transaction')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByTitle('Show refund details'));
+    expect(screen.getByText(/Refunded £30\.00/)).toBeInTheDocument();
+  });
 });

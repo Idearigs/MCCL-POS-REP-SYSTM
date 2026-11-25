@@ -39,6 +39,7 @@ import SecondhandCostEditor from '@/components/sales/SecondhandCostEditor';
 import { useInventory } from '@/contexts/InventoryContext';
 import { normalizeImageUrl } from '@/lib/utils';
 import { format } from 'date-fns';
+import { isRefundable, originalTotal, refundState } from '@/utils/saleRefunds';
 
 interface SaleDetailModalProps {
   isOpen: boolean;
@@ -72,7 +73,8 @@ const SaleDetailModal: React.FC<SaleDetailModalProps> = ({
 
   if (!sale) return null;
 
-  const canRefund = sale.paymentStatus === 'COMPLETED' && sale.status === 'COMPLETED';
+  const canRefund = sale.paymentStatus === 'COMPLETED' && isRefundable(sale);
+  const partRefunded = refundState(sale) === 'PARTIAL';
 
   const parseCondition = (notes?: string) => {
     const m = (notes || '').match(/CONDITION:(BRAND_NEW|USED)/);
@@ -128,11 +130,12 @@ const SaleDetailModal: React.FC<SaleDetailModalProps> = ({
               <span>Sale #{sale.receiptNumber || sale.id.slice(0, 8)}</span>
             </div>
             <Badge className={
+              partRefunded ? 'bg-orange-100 text-orange-700 border-orange-200' :
               sale.status === 'COMPLETED' ? 'bg-green-100 text-green-700 border-green-200' :
               sale.status === 'REFUNDED' ? 'bg-orange-100 text-orange-700 border-orange-200' :
               sale.status === 'CANCELLED' ? 'bg-red-100 text-red-700 border-red-200' :
               'bg-gray-100 text-gray-600'
-            }>{sale.status}</Badge>
+            }>{partRefunded ? 'PART-REFUNDED' : sale.status}</Badge>
           </DialogTitle>
           <DialogDescription>Full financial breakdown · {format(new Date(sale.createdAt), 'PPpp')}</DialogDescription>
         </DialogHeader>
@@ -356,12 +359,18 @@ const SaleDetailModal: React.FC<SaleDetailModalProps> = ({
                 <Separator className="my-1" />
                 <div className="flex justify-between font-bold text-base text-navy">
                   <span>Total</span>
-                  <span>{fmt(sale.totalAmount)}</span>
+                  <span>{fmt(originalTotal(sale))}</span>
                 </div>
                 {sale.refundedAmount > 0 && (
                   <div className="flex justify-between text-orange-600 text-xs pt-1 border-t">
                     <span>Refunded</span>
                     <span>-{fmt(sale.refundedAmount)}</span>
+                  </div>
+                )}
+                {sale.refundedAmount > 0 && (
+                  <div className="flex justify-between font-semibold text-navy">
+                    <span>After refunds</span>
+                    <span>{fmt(sale.totalAmount)}</span>
                   </div>
                 )}
               </div>

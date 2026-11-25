@@ -1190,22 +1190,49 @@ export class SalesService {
             throw new BadRequestException('Can only refund completed sales');
           }
 
+          // totalAmount is already net of earlier refunds, so it IS what is
+          // left to refund — subtracting refundedAmount would count them twice.
+          const toPence = (n: number) => Math.round(n * 100) / 100;
+          const remaining = toPence(Number(sale.totalAmount));
+          if (remaining <= 0 && Number(sale.refundedAmount) > 0) {
+            throw new BadRequestException(
+              'This sale has already been fully refunded',
+            );
+          }
+
           let totalRefundAmount = 0;
           const refundOperations = [];
+
+          // A full refund returns every item still on the sale.
+          const itemsToRefund = createRefundDto.fullRefund
+            ? sale.sale_items.map((item) => ({
+                saleItemId: item.id,
+                quantity: item.quantity,
+              }))
+            : createRefundDto.items;
+
+          // The same line twice would restock it twice.
+          if (
+            new Set(itemsToRefund.map((item) => item.saleItemId)).size !==
+            itemsToRefund.length
+          ) {
+            throw new BadRequestException(
+              'Each item can only be listed once in a refund',
+            );
+          }
 
           // Service-only sales (repairs, battery changes, etc.) are not stored
           // as sale_items, so the client sends an empty items array. Treat that
           // as a full refund of the remaining balance — there is no stock to
           // restore. Product sales must still itemise so we restock correctly.
-          if (createRefundDto.items.length === 0) {
+          if (!createRefundDto.fullRefund && itemsToRefund.length === 0) {
             if (sale.sale_items.length > 0) {
               throw new BadRequestException(
                 'Select at least one item to refund for this sale',
               );
             }
 
-            totalRefundAmount =
-              Number(sale.totalAmount) - Number(sale.refundedAmount);
+            totalRefundAmount = remaining;
 
             if (totalRefundAmount <= 0) {
               throw new BadRequestException(
@@ -1215,7 +1242,7 @@ export class SalesService {
           }
 
           // Process each refund item
-          for (const refundItem of createRefundDto.items) {
+          for (const refundItem of itemsToRefund) {
             const saleItem = sale.sale_items.find(
               (item) => item.id === refundItem.saleItemId,
             );
@@ -1274,14 +1301,25 @@ export class SalesService {
           // Execute all refund operations
           await Promise.all(refundOperations);
 
+          // Item prices ignore sale-level discounts and leave out services, so
+          // they only decide the amount of a PARTIAL refund, and never more
+          // than is left on the sale.
+          totalRefundAmount = createRefundDto.fullRefund
+            ? remaining
+            : toPence(Math.min(totalRefundAmount, remaining));
+
           // Update sale totals
-          const newTotalAmount = Number(sale.totalAmount) - totalRefundAmount;
-          const newRefundedAmount =
-            Number(sale.refundedAmount) + totalRefundAmount;
+          const newTotalAmount = toPence(remaining - totalRefundAmount);
+          const newRefundedAmount = toPence(
+            Number(sale.refundedAmount) + totalRefundAmount,
+          );
+          // A part-refunded sale stays COMPLETED at its reduced total, so what
+          // the customer kept still counts in revenue and cash-up, and more can
+          // be refunded later.
           const newStatus =
-            newTotalAmount === newRefundedAmount
-              ? ('REFUNDED' as const)
-              : ('PARTIAL_REFUND' as const);
+            newTotalAmount <= 0
+              ? PrismaSaleStatus.REFUNDED
+              : PrismaSaleStatus.COMPLETED;
 
           // TODO: Create refund payment record
           // Payment model needs additional fields (reference, refundReason, etc) to properly track refunds
@@ -1290,7 +1328,7 @@ export class SalesService {
           const updatedSale = await prisma.sales.update({
             where: { id },
             data: {
-              status: PrismaSaleStatus.REFUNDED, // Use REFUNDED instead of PARTIAL_REFUND
+              status: newStatus,
               totalAmount: newTotalAmount,
               refundedAmount: newRefundedAmount,
               notes: sale.notes

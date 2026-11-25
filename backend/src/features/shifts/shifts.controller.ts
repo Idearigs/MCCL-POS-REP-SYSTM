@@ -141,8 +141,8 @@ export class ShiftsController {
 
   // Get shift report
   @Get(':id/report')
-  async getShiftReport(@Param('id') shiftId: string) {
-    return this.shiftsService.getShiftReport(shiftId);
+  async getShiftReport(@Req() req, @Param('id') shiftId: string) {
+    return this.shiftsService.getShiftReport(shiftId, req.user.tenantId);
   }
 
   // Consolidated master summary across all shifts in the date filter
