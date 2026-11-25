@@ -735,6 +735,12 @@ export class SaleResponseDto {
   @ApiProperty()
   cashierName: string;
 
+  @ApiPropertyOptional({ description: 'Shift the sale was made in' })
+  shiftId?: string;
+
+  @ApiPropertyOptional({ description: 'Shift number (list endpoint only)' })
+  shiftNumber?: string;
+
   @ApiProperty()
   createdAt: string;
 

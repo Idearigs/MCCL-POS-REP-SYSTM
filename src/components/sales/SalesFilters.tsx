@@ -14,10 +14,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { Search, Filter, X, Calendar as CalendarIcon, Download, FileSpreadsheet } from 'lucide-react';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { Search, Filter, X, Download, FileSpreadsheet } from 'lucide-react';
+import { format, startOfMonth, startOfWeek } from 'date-fns';
 
 export interface SalesFilterValues {
   search: string;
@@ -33,18 +31,6 @@ export interface SalesFilterValues {
   lineType?: string; // 'all' | 'secondhand' | 'bespoke' | 'inventory' | 'service'
 }
 
-interface Shift {
-  id: string;
-  shiftNumber: string;
-  startTime: string;
-  endTime?: string;
-  status: string;
-  user?: {
-    firstName: string;
-    lastName: string;
-  };
-}
-
 interface SalesFiltersProps {
   filters: SalesFilterValues;
   onFilterChange: (filters: SalesFilterValues) => void;
@@ -52,7 +38,10 @@ interface SalesFiltersProps {
   onExportPDF: () => void;
   onExportXLSX?: () => void;
   cashiers?: {id: string; name: string}[];
-  shifts?: Shift[];
+  shifts?: { id: string; label: string }[];
+  /** Sales matching the current filters — shown on the panel's Show button. */
+  resultCount?: number;
+  loading?: boolean;
   outlets?: {id: string; name: string}[];
 }
 
@@ -65,6 +54,8 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
   cashiers = [],
   shifts = [],
   outlets = [],
+  resultCount,
+  loading = false,
 }) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
 
@@ -84,12 +75,34 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
     onFilterChange({ ...filters, status: value });
   };
 
+  // <input type="date"> value <-> local Date (new Date('YYYY-MM-DD') is UTC).
+  const toInput = (d?: Date) => (d ? format(d, 'yyyy-MM-dd') : '');
+  const fromInput = (v: string) => {
+    if (!v) return undefined;
+    const [y, m, d] = v.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+  // Half-typed years ("0002-…") arrive as valid dates: ignore until complete.
+  const isPartial = (d?: Date) => !!d && d.getFullYear() < 2000;
+
+  // Any date can be picked; an inverted range moves the other end to match
+  // instead of blocking the click.
   const handleDateFromChange = (date: Date | undefined) => {
-    onFilterChange({ ...filters, dateFrom: date });
+    if (isPartial(date)) return;
+    const dateTo = date && filters.dateTo && date > filters.dateTo ? date : filters.dateTo;
+    onFilterChange({ ...filters, dateFrom: date, dateTo, shift: 'all' });
   };
 
   const handleDateToChange = (date: Date | undefined) => {
-    onFilterChange({ ...filters, dateTo: date });
+    if (isPartial(date)) return;
+    const dateFrom = date && filters.dateFrom && date < filters.dateFrom ? date : filters.dateFrom;
+    onFilterChange({ ...filters, dateFrom, dateTo: date, shift: 'all' });
+  };
+
+  const setQuickRange = (from: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    onFilterChange({ ...filters, dateFrom: from, dateTo: today, shift: 'all' });
   };
 
   const handleCashierChange = (value: string) => {
@@ -155,10 +168,7 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
             variant="outline"
             size="sm"
             className="rounded-full bg-white/90 border-navy/10 hover:bg-navy/5 text-navy text-xs"
-            onClick={() => {
-              const today = new Date();
-              onFilterChange({ ...filters, dateFrom: today, dateTo: today });
-            }}
+            onClick={() => { const d = new Date(); d.setHours(0, 0, 0, 0); setQuickRange(d); }}
           >
             Today
           </Button>
@@ -166,12 +176,7 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
             variant="outline"
             size="sm"
             className="rounded-full bg-white/90 border-navy/10 hover:bg-navy/5 text-navy text-xs"
-            onClick={() => {
-              const today = new Date();
-              const weekAgo = new Date(today);
-              weekAgo.setDate(today.getDate() - 7);
-              onFilterChange({ ...filters, dateFrom: weekAgo, dateTo: today });
-            }}
+            onClick={() => setQuickRange(startOfWeek(new Date(), { weekStartsOn: 1 }))}
           >
             This Week
           </Button>
@@ -179,12 +184,7 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
             variant="outline"
             size="sm"
             className="rounded-full bg-white/90 border-navy/10 hover:bg-navy/5 text-navy text-xs"
-            onClick={() => {
-              const today = new Date();
-              const monthAgo = new Date(today);
-              monthAgo.setMonth(today.getMonth() - 1);
-              onFilterChange({ ...filters, dateFrom: monthAgo, dateTo: today });
-            }}
+            onClick={() => setQuickRange(startOfMonth(new Date()))}
           >
             This Month
           </Button>
@@ -209,8 +209,8 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
           </PopoverTrigger>
           {/* Capped to the viewport and scrollable: on a laptop screen the lower
               filters (cashier, shift, customer type) used to fall off-screen. */}
-          <PopoverContent className="w-80 max-h-[min(80vh,var(--radix-popover-content-available-height))] overflow-y-auto" align="end">
-            <div className="space-y-4">
+          <PopoverContent className="w-80 p-0 flex flex-col max-h-[min(80vh,var(--radix-popover-content-available-height))]" align="end">
+            <div className="space-y-4 p-4 overflow-y-auto min-h-0">
               <div className="flex items-center justify-between">
                 <h4 className="font-semibold text-sm">Filter Sales</h4>
                 {hasActiveFilters && (
@@ -230,57 +230,20 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Date Range</Label>
                 <div className="grid grid-cols-2 gap-2">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal text-xs",
-                          !filters.dateFrom && "text-muted-foreground"
-                        )}
-                        size="sm"
-                      >
-                        <CalendarIcon className="mr-2 h-3 w-3" />
-                        {filters.dateFrom ? format(filters.dateFrom, "dd MMM yy") : "From"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={filters.dateFrom}
-                        onSelect={handleDateFromChange}
-                        defaultMonth={filters.dateFrom}
-                        disabled={filters.dateTo ? { after: filters.dateTo } : { after: new Date() }}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal text-xs",
-                          !filters.dateTo && "text-muted-foreground"
-                        )}
-                        size="sm"
-                      >
-                        <CalendarIcon className="mr-2 h-3 w-3" />
-                        {filters.dateTo ? format(filters.dateTo, "dd MMM yy") : "To"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={filters.dateTo}
-                        onSelect={handleDateToChange}
-                        defaultMonth={filters.dateTo || filters.dateFrom}
-                        disabled={filters.dateFrom ? { before: filters.dateFrom, after: new Date() } : { after: new Date() }}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <div>
+                    <Label htmlFor="sales-date-from" className="text-xs text-gray-500">From</Label>
+                    <Input id="sales-date-from" type="date" className="h-9 text-xs"
+                      value={toInput(filters.dateFrom)}
+                      max={toInput(new Date())}
+                      onChange={(e) => handleDateFromChange(fromInput(e.target.value))} />
+                  </div>
+                  <div>
+                    <Label htmlFor="sales-date-to" className="text-xs text-gray-500">To</Label>
+                    <Input id="sales-date-to" type="date" className="h-9 text-xs"
+                      value={toInput(filters.dateTo)}
+                      max={toInput(new Date())}
+                      onChange={(e) => handleDateToChange(fromInput(e.target.value))} />
+                  </div>
                 </div>
               </div>
 
@@ -299,6 +262,7 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
                     <SelectItem value="CHEQUE">Cheque</SelectItem>
                     <SelectItem value="DIGITAL_WALLET">Digital Wallet</SelectItem>
                     <SelectItem value="INSTALLMENT">Installment</SelectItem>
+                    <SelectItem value="GIFT_CARD">Gift Card</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -375,13 +339,9 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
               {/* Shift Filter */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Shift</Label>
-                {!filters.dateFrom || !filters.dateTo ? (
+                {shifts.length === 0 ? (
                   <div className="text-xs text-gray-500 italic p-2 bg-gray-50 rounded border border-gray-200">
-                    Select a date range to load available shifts
-                  </div>
-                ) : shifts.length === 0 ? (
-                  <div className="text-xs text-gray-500 italic p-2 bg-gray-50 rounded border border-gray-200">
-                    No shifts found for selected date range
+                    No shifts in the current results
                   </div>
                 ) : (
                   <Select value={filters.shift || 'all'} onValueChange={handleShiftChange}>
@@ -391,10 +351,7 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
                     <SelectContent>
                       <SelectItem value="all">All Shifts</SelectItem>
                       {shifts.map(shift => (
-                        <SelectItem key={shift.id} value={shift.id}>
-                          {shift.shiftNumber} - {shift.user ? `${shift.user.firstName} ${shift.user.lastName}` : 'Unknown'}
-                          ({format(new Date(shift.startTime), 'MMM dd, HH:mm')})
-                        </SelectItem>
+                        <SelectItem key={shift.id} value={shift.id}>{shift.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -439,6 +396,13 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
                   </Select>
                 </div>
               )}
+            </div>
+            {/* Always visible, however tall the filter list is. Filters apply as
+                they are picked; this shows the result and closes the panel. */}
+            <div className="border-t p-3 shrink-0">
+              <Button className="w-full" size="sm" disabled={loading} onClick={() => setIsFilterOpen(false)}>
+                {loading ? 'Loading…' : `Apply — show ${resultCount ?? 0} sale${resultCount === 1 ? '' : 's'}`}
+              </Button>
             </div>
           </PopoverContent>
         </Popover>
