@@ -1225,11 +1225,17 @@ const SalesPage = () => {
         {viewMode === 'shifts' && (
           <Card className="shadow-sm">
             <CardContent className="p-6">
-              <ShiftList
-                shifts={shifts}
-                onViewReport={handleViewShift}
-                loading={shiftsLoading}
-              />
+              {!filters.dateFrom || !filters.dateTo ? (
+                <p className="py-12 text-center text-gray-600">
+                  Pick a From and To date in Filters to see shifts.
+                </p>
+              ) : (
+                <ShiftList
+                  shifts={shifts}
+                  onViewReport={handleViewShift}
+                  loading={shiftsLoading}
+                />
+              )}
             </CardContent>
           </Card>
         )}
