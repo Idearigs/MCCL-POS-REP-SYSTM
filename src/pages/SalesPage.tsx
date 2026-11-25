@@ -102,6 +102,11 @@ const SalesPage = () => {
     shift: 'all'
   });
 
+  // The search term the currently loaded list was fetched with. Declared before
+  // the effects below, which read it.
+  const [serverSearch, setServerSearch] = useState('');
+  const [salesTruncated, setSalesTruncated] = useState(false);
+
   const { toast } = useToast();
 
   // Load stats + cashiers once
@@ -158,9 +163,6 @@ const SalesPage = () => {
 
   // Guards against an older, slower request overwriting a newer one.
   const loadSeq = React.useRef(0);
-  // The search term the currently loaded list was fetched with.
-  const [serverSearch, setServerSearch] = useState('');
-  const [salesTruncated, setSalesTruncated] = useState(false);
 
   const loadSales = async () => {
     const seq = ++loadSeq.current;
