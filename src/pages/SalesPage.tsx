@@ -84,6 +84,7 @@ const SalesPage = () => {
   const [todayRevenue, setTodayRevenue] = useState(0);
   const [todaySales, setTodaySales] = useState(0);
   const [weekRevenue, setWeekRevenue] = useState(0);
+  const [previous, setPrevious] = useState<{ day?: number; week?: number; month?: number }>({});
   const [weekSales, setWeekSales] = useState(0);
   const [monthRevenue, setMonthRevenue] = useState(0);
   const [monthSales, setMonthSales] = useState(0);
@@ -230,8 +231,13 @@ const SalesPage = () => {
       const stats = await salesService.getSalesStats();
       setTodayRevenue(stats.revenueToday || 0);
       setTodaySales(stats.salesToday || 0);
-      setWeekRevenue(stats.revenueThisMonth || 0); // Adjust based on your API
-      setWeekSales(stats.salesThisMonth || 0);
+      setWeekRevenue(stats.revenueThisWeek || 0);
+      setWeekSales(stats.salesThisWeek || 0);
+      setPrevious({
+        day: stats.revenuePreviousDay,
+        week: stats.revenuePreviousWeek,
+        month: stats.revenuePreviousMonth,
+      });
       setMonthRevenue(stats.revenueThisMonth || 0);
       setMonthSales(stats.salesThisMonth || 0);
       setTotalRevenue(stats.totalSalesAmount || 0); // Fixed: Use totalSalesAmount instead of totalRevenue
@@ -279,6 +285,7 @@ const SalesPage = () => {
       const shiftsData = await shiftService.getShiftsByDateRange({
         startDate: from.toISOString(),
         endDate: to.toISOString(),
+        overlap: true,
         userId: filters.cashierId !== 'all' ? filters.cashierId : undefined,
       });
       setShifts(shiftsData);
@@ -978,6 +985,7 @@ const SalesPage = () => {
         <SalesStatsCards
           todayRevenue={todayRevenue}
           todaySales={todaySales}
+          previous={previous}
           weekRevenue={weekRevenue}
           weekSales={weekSales}
           monthRevenue={monthRevenue}

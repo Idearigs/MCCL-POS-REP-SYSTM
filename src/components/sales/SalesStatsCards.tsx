@@ -11,8 +11,14 @@ interface SalesStatsCardsProps {
   monthSales: number;
   totalRevenue: number;
   totalSales: number;
+  /** Revenue at the same point in the previous period. */
+  previous?: { day?: number; week?: number; month?: number };
   loading?: boolean;
 }
+
+/** Percentage change, or null when there is nothing to compare with. */
+const change = (current: number, previous?: number) =>
+  previous && previous > 0 ? Math.round(((current - previous) / previous) * 100) : null;
 
 const SalesStatsCards: React.FC<SalesStatsCardsProps> = ({
   todayRevenue,
@@ -23,6 +29,7 @@ const SalesStatsCards: React.FC<SalesStatsCardsProps> = ({
   monthSales,
   totalRevenue,
   totalSales,
+  previous = {},
   loading = false
 }) => {
   const formatCurrency = (amount: number) => {
@@ -41,8 +48,8 @@ const SalesStatsCards: React.FC<SalesStatsCardsProps> = ({
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
       iconBg: 'bg-blue-100',
-      trend: '+12%',
-      trendUp: true
+      trend: change(todayRevenue, previous.day),
+      versus: 'yesterday'
     },
     {
       title: "This Week",
@@ -52,8 +59,8 @@ const SalesStatsCards: React.FC<SalesStatsCardsProps> = ({
       color: 'text-green-600',
       bgColor: 'bg-green-50',
       iconBg: 'bg-green-100',
-      trend: '+8%',
-      trendUp: true
+      trend: change(weekRevenue, previous.week),
+      versus: 'last week'
     },
     {
       title: "This Month",
@@ -63,8 +70,8 @@ const SalesStatsCards: React.FC<SalesStatsCardsProps> = ({
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
       iconBg: 'bg-purple-100',
-      trend: '+15%',
-      trendUp: true
+      trend: change(monthRevenue, previous.month),
+      versus: 'last month'
     },
     {
       title: "Total Sales",
@@ -74,8 +81,8 @@ const SalesStatsCards: React.FC<SalesStatsCardsProps> = ({
       color: 'text-navy',
       bgColor: 'bg-navy/5',
       iconBg: 'bg-navy/10',
-      trend: '',
-      trendUp: true
+      trend: null,
+      versus: ''
     }
   ];
 
@@ -121,14 +128,17 @@ const SalesStatsCards: React.FC<SalesStatsCardsProps> = ({
                 <p className="text-xs text-gray-600">
                   {stat.count} {stat.count === 1 ? 'transaction' : 'transactions'}
                 </p>
-                {stat.trend && (
-                  <div className={`flex items-center text-xs ${stat.trendUp ? 'text-green-600' : 'text-red-600'}`}>
-                    {stat.trendUp ? (
+                {stat.trend !== null && (
+                  <div
+                    title={`Compared with the same point ${stat.versus}`}
+                    className={`flex items-center text-xs ${stat.trend >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                  >
+                    {stat.trend >= 0 ? (
                       <ArrowUpRight className="h-3 w-3 mr-1" />
                     ) : (
                       <ArrowDownRight className="h-3 w-3 mr-1" />
                     )}
-                    {stat.trend}
+                    {stat.trend > 0 ? '+' : ''}{stat.trend}% vs {stat.versus}
                   </div>
                 )}
               </div>

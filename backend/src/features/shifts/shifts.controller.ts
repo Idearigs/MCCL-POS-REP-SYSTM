@@ -107,6 +107,7 @@ export class ShiftsController {
     @Query('endDate') endDate: string,
     @Query('userId') userId?: string,
     @Query('status') status?: ShiftStatus,
+    @Query('overlap') overlap?: string,
   ) {
     // Validate date parameters
     if (!startDate || !endDate) {
@@ -134,6 +135,7 @@ export class ShiftsController {
       end,
       userId,
       status,
+      overlap === 'true',
     );
   }
 

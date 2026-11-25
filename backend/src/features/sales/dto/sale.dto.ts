@@ -815,6 +815,21 @@ export class SalesStatsDto {
   })
   salesThisYear: number;
 
+  @ApiProperty({ description: 'Sales this week (from Monday)' })
+  salesThisWeek: number;
+
+  @ApiProperty({ description: 'Revenue this week (from Monday)' })
+  revenueThisWeek: number;
+
+  @ApiProperty({ description: 'Revenue yesterday, up to this time of day' })
+  revenuePreviousDay: number;
+
+  @ApiProperty({ description: 'Revenue last week, up to this point' })
+  revenuePreviousWeek: number;
+
+  @ApiProperty({ description: 'Revenue last month, up to this point' })
+  revenuePreviousMonth: number;
+
   @ApiProperty({
     description: 'Revenue today',
     example: 2500.0,

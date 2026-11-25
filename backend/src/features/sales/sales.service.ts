@@ -1160,7 +1160,7 @@ export class SalesService {
 
     return this.replayOrRun('refund', idempotencyKey, async () => {
       try {
-        return await this.prismaService.$transaction(async (prisma) => {
+        const result = await this.prismaService.$transaction(async (prisma) => {
           // CONCURRENCY: lock the sale row so two simultaneous refunds of the
           // same sale serialize — the 2nd waits, then sees the already-refunded
           // state (item deleted/reduced) and cannot double-restore stock.
@@ -1325,6 +1325,15 @@ export class SalesService {
 
           return this.mapToResponseDto(updatedSale);
         });
+
+        // Otherwise the Sales cards keep the pre-refund figures for 10 minutes.
+        await Promise.all([
+          this.cacheService.delTenantData(tenantId, `sale:${id}`),
+          this.cacheService.delTenantData(tenantId, 'sales:list'),
+          this.cacheService.delTenantData(tenantId, 'sales:stats'),
+        ]);
+
+        return result;
       } catch (error) {
         this.logger.error(
           `Failed to create refund for sale ${id}:`,
@@ -1359,6 +1368,31 @@ export class SalesService {
       );
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       const startOfYear = new Date(today.getFullYear(), 0, 1);
+      // Weeks start on Monday, matching the Sales page's "This Week" filter.
+      const startOfWeek = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate() - ((today.getDay() + 6) % 7),
+      );
+
+      // Trends compare with the SAME POINT in the previous period (e.g. Monday
+      // to now vs last Monday to this time last week). Comparing a part-period
+      // with a whole one would always look like a fall.
+      const previousRevenue = async (start: Date, previousStart: Date) => {
+        const end = Math.min(
+          previousStart.getTime() + (today.getTime() - start.getTime()),
+          start.getTime(),
+        );
+        const result = await this.salesRepo.aggregate({
+          where: {
+            tenantId,
+            status: SaleStatus.COMPLETED,
+            createdAt: { gte: previousStart, lt: new Date(end) },
+          },
+          _sum: { totalAmount: true },
+        });
+        return Number(result._sum.totalAmount || 0);
+      };
 
       const [
         totalSales,
@@ -1376,6 +1410,11 @@ export class SalesService {
         paymentMethods,
         topProducts,
         hourlySales,
+        salesThisWeek,
+        revenueThisWeek,
+        revenuePreviousDay,
+        revenuePreviousWeek,
+        revenuePreviousMonth,
       ] = await Promise.all([
         this.salesRepo.count({ where: { tenantId } }),
         this.salesRepo.count({
@@ -1456,6 +1495,33 @@ export class SalesService {
           },
           select: { createdAt: true },
         }),
+        this.salesRepo.count({
+          where: { tenantId, createdAt: { gte: startOfWeek } },
+        }),
+        this.salesRepo.aggregate({
+          where: {
+            tenantId,
+            status: SaleStatus.COMPLETED,
+            createdAt: { gte: startOfWeek },
+          },
+          _sum: { totalAmount: true },
+        }),
+        previousRevenue(
+          startOfDay,
+          new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1),
+        ),
+        previousRevenue(
+          startOfWeek,
+          new Date(
+            startOfWeek.getFullYear(),
+            startOfWeek.getMonth(),
+            startOfWeek.getDate() - 7,
+          ),
+        ),
+        previousRevenue(
+          startOfMonth,
+          new Date(today.getFullYear(), today.getMonth() - 1, 1),
+        ),
       ]);
 
       // Process payment method breakdown
@@ -1526,6 +1592,11 @@ export class SalesService {
         revenueToday: Number(revenueToday._sum.totalAmount || 0),
         revenueThisMonth: Number(revenueThisMonth._sum.totalAmount || 0),
         revenueThisYear: Number(revenueThisYear._sum.totalAmount || 0),
+        salesThisWeek,
+        revenueThisWeek: Number(revenueThisWeek._sum.totalAmount || 0),
+        revenuePreviousDay,
+        revenuePreviousWeek,
+        revenuePreviousMonth,
         paymentMethodBreakdown,
         topSellingProducts,
         salesByHour,

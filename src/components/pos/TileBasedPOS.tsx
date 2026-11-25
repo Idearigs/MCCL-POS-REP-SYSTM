@@ -2092,7 +2092,7 @@ const TileBasedPOS: React.FC<TileBasedPOSProps> = ({ onClose }) => {
         const shift = await shiftService.getActiveShift();
         if (shift?.id) {
           const report = await shiftService.getShiftReport(shift.id);
-          if (!cancelled) setTodaysTotal(report.metrics?.totalRevenue ?? 0);
+          if (!cancelled) setTodaysTotal(report.metrics?.netRevenue ?? report.metrics?.totalRevenue ?? 0);
           return;
         }
         const stats = await salesService.getSalesStats();
