@@ -122,4 +122,11 @@ describe('SalesPage', () => {
     await waitFor(() =>
       expect(new Date(getSales.mock.calls.at(-1)![2].startDate).getFullYear()).toBe(2020));
   });
+
+  it('Shifts tab asks for dates instead of claiming there are no shifts', async () => {
+    render(<SalesPage />);
+    await screen.findByText(/Showing 1 of 1 sales/);
+    await userEvent.click(screen.getByRole('button', { name: 'Shifts' }));
+    expect(screen.getByText(/Pick a From and To date/)).toBeInTheDocument();
+  });
 });
