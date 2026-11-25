@@ -637,13 +637,20 @@ export class SalesService {
         }),
         ...(customerId && { customerId }),
         ...(cashierId && { createdBy: cashierId }),
-        ...(startDate &&
-          endDate && {
-            createdAt: {
-              gte: new Date(startDate),
-              lte: new Date(endDate + 'T23:59:59.999Z'),
-            },
-          }),
+        // Either bound may be given on its own (a lone startDate used to be
+        // ignored entirely). A date-only endDate is inclusive of that whole
+        // day; a full timestamp is used as-is (appending a time to one
+        // produced an Invalid Date).
+        ...((startDate || endDate) && {
+          createdAt: {
+            ...(startDate && { gte: new Date(startDate) }),
+            ...(endDate && {
+              lte: /^\d{4}-\d{2}-\d{2}$/.test(endDate)
+                ? new Date(endDate + 'T23:59:59.999Z')
+                : new Date(endDate),
+            }),
+          },
+        }),
         ...(minAmount !== undefined && { totalAmount: { gte: minAmount } }),
         ...(maxAmount !== undefined && { totalAmount: { lte: maxAmount } }),
         ...(paymentMethod && {

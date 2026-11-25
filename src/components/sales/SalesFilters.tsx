@@ -207,7 +207,9 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-80" align="end">
+          {/* Capped to the viewport and scrollable: on a laptop screen the lower
+              filters (cashier, shift, customer type) used to fall off-screen. */}
+          <PopoverContent className="w-80 max-h-[min(80vh,var(--radix-popover-content-available-height))] overflow-y-auto" align="end">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="font-semibold text-sm">Filter Sales</h4>
@@ -239,7 +241,7 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
                         size="sm"
                       >
                         <CalendarIcon className="mr-2 h-3 w-3" />
-                        {filters.dateFrom ? format(filters.dateFrom, "MMM dd") : "From"}
+                        {filters.dateFrom ? format(filters.dateFrom, "dd MMM yy") : "From"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -247,6 +249,8 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
                         mode="single"
                         selected={filters.dateFrom}
                         onSelect={handleDateFromChange}
+                        defaultMonth={filters.dateFrom}
+                        disabled={filters.dateTo ? { after: filters.dateTo } : { after: new Date() }}
                         initialFocus
                       />
                     </PopoverContent>
@@ -263,7 +267,7 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
                         size="sm"
                       >
                         <CalendarIcon className="mr-2 h-3 w-3" />
-                        {filters.dateTo ? format(filters.dateTo, "MMM dd") : "To"}
+                        {filters.dateTo ? format(filters.dateTo, "dd MMM yy") : "To"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -271,6 +275,8 @@ const SalesFilters: React.FC<SalesFiltersProps> = ({
                         mode="single"
                         selected={filters.dateTo}
                         onSelect={handleDateToChange}
+                        defaultMonth={filters.dateTo || filters.dateFrom}
+                        disabled={filters.dateFrom ? { before: filters.dateFrom, after: new Date() } : { after: new Date() }}
                         initialFocus
                       />
                     </PopoverContent>
