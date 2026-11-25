@@ -175,8 +175,9 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
     } catch (err: any) {
       console.error('Failed to load inventory:', err);
       setError(err.message || 'Failed to load inventory');
-      // Fall back to empty array instead of localStorage
-      setInventory([]);
+      // Keep whatever we already had: a failed REFRESH (network blip, rate
+      // limit) used to wipe the whole catalogue to [], emptying the Inventory
+      // page and the POS until a reload. (Logout still clears it, below.)
     } finally {
       setLoading(false);
     }

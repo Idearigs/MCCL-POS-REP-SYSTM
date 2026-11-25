@@ -110,7 +110,7 @@ export interface InventoryDetailProps {
   isOpen: boolean;
   isNew?: boolean; // Add the isNew prop
   onClose: () => void;
-  onSave: (item: InventoryItemDetails, imageFiles?: File[]) => void;
+  onSave: (item: InventoryItemDetails, imageFiles?: File[]) => void | Promise<void>;
 }
 
 const InventoryDetail: React.FC<InventoryDetailProps> = ({ 
@@ -150,6 +150,7 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -170,7 +171,12 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
     }
   }, [isOpen]);
 
+  // Re-seed the form every time the dialog OPENS (not only when `item`
+  // changes): reopening the same product after Cancel, or pressing Add twice,
+  // used to show the previous unsaved edits / half-typed form and stale files.
   useEffect(() => {
+    if (!isOpen) return;
+    setIsSaving(false);
     if (item) {
       setEditedItem(item);
       const rawMaterials = (item as any).materials;
@@ -197,7 +203,7 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
       setImageFiles([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item, isNew]);
+  }, [item, isNew, isOpen]);
   
   // Clean up object URLs when component unmounts
   useEffect(() => {
@@ -291,27 +297,48 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
       }));
     }
     
-    // Also remove from the files array
-    const newImageFiles = [...imageFiles];
-    newImageFiles.splice(index, 1);
-    setImageFiles(newImageFiles);
+    // Also remove from the files array. `imageFiles` holds only the newly
+    // picked files, whose previews sit AFTER the already-saved images — so map
+    // the preview index onto the files array (removing a saved image must not
+    // drop an unrelated new file, which is what splice(index) used to do).
+    const fileIndex = index - (previewUrls.length - imageFiles.length);
+    if (fileIndex >= 0 && fileIndex < imageFiles.length) {
+      const newImageFiles = [...imageFiles];
+      newImageFiles.splice(fileIndex, 1);
+      setImageFiles(newImageFiles);
+    }
   };
   
   const handleSave = async () => {
+    // Guard against double-submits: a save can take a few seconds (create +
+    // image uploads), and a second click used to create a duplicate product.
+    if (isSaving) return;
     if (previewUrls.length === 0 && isNew) {
       alert('Please upload at least one image');
       return;
     }
-    onSave({
-      ...editedItem,
-      material: primaryMaterialStr(selectedMaterials) || undefined,
-      materials: selectedMaterials.length > 0 ? JSON.stringify(selectedMaterials) : undefined,
-    } as any, imageFiles);
+    setIsSaving(true);
+    try {
+      await onSave({
+        ...editedItem,
+        material: primaryMaterialStr(selectedMaterials) || undefined,
+        materials: selectedMaterials.length > 0 ? JSON.stringify(selectedMaterials) : undefined,
+      } as any, imageFiles);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Don't let the dialog close mid-save, or because of a click / Esc that
+  // belongs to the image lightbox layered on top of it.
+  const handleOpenChange = (open: boolean) => {
+    if (open || isSaving || lightboxIndex !== null) return;
+    onClose();
   };
 
   return (
     <>
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>{isNew ? "Add New Item" : "Edit Item"}</DialogTitle>
@@ -746,8 +773,10 @@ const InventoryDetail: React.FC<InventoryDetailProps> = ({
           </div>
         </div>
         <DialogFooter className="sticky bottom-0 bg-white pt-2 border-t mt-2">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave}>Save Changes</Button>
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancel</Button>
+          <Button onClick={handleSave} disabled={isSaving}>
+            {isSaving ? 'Saving…' : 'Save Changes'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
