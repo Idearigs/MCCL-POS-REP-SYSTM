@@ -3,7 +3,7 @@
  * query (it used to filter only the latest 100 sales in the browser).
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 
@@ -74,5 +74,36 @@ describe('SalesPage', () => {
     await waitFor(() => expect(getSales.mock.calls.at(-1)![2].search).toBe('BARCODE-9'), { timeout: 3000 });
     // nothing on the row contains the term: the server matched it by product code
     expect(await screen.findByText(/Showing 1 of 1 sales/)).toBeInTheDocument();
+  });
+
+  it('renders a large result in pages instead of mounting every row', async () => {
+    getSales.mockResolvedValue({
+      data: Array.from({ length: 120 }, (_, i) => sale({ id: `s${i}` })),
+      meta: { hasNextPage: false },
+    });
+    render(<SalesPage />);
+    expect(await screen.findByText('Page 1 of 3')).toBeInTheDocument();
+    expect(document.querySelectorAll('tbody tr')).toHaveLength(50);
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('Page 2 of 3')).toBeInTheDocument();
+  });
+
+  it('a wide date range is accepted and Apply shows the count and closes the panel', async () => {
+    render(<SalesPage />);
+    await screen.findByText(/Showing 1 of 1 sales/);
+    await userEvent.click(screen.getByRole('button', { name: /Filters/ }));
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2024-02-01' } });
+    // From later than To: the range follows instead of blocking the choice
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2024-05-10' } });
+    expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('2024-05-10');
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2020-01-01' } });
+    await waitFor(() => {
+      const q = getSales.mock.calls.at(-1)![2];
+      expect(new Date(q.startDate).getFullYear()).toBe(2020);
+      expect(q.endDate).toBe('2024-05-10');
+    });
+    const apply = await screen.findByRole('button', { name: /Apply — show 0 sales/ });
+    await userEvent.click(apply);
+    expect(screen.queryByLabelText('From')).not.toBeInTheDocument();
   });
 });

@@ -661,6 +661,11 @@ export class SalesService {
         ...(search && {
           OR: [
             { saleNumber: { contains: search, mode: 'insensitive' } },
+            // The list shows "#<id prefix>" when a sale has no receipt number,
+            // so the code on screen must be searchable too.
+            {
+              id: { startsWith: search.replace(/^#/, ''), mode: 'insensitive' },
+            },
             // { walkInCustomerName: { contains: search, mode: 'insensitive' } },
             { notes: { contains: search, mode: 'insensitive' } },
             {
@@ -681,6 +686,7 @@ export class SalesService {
                     OR: [
                       { sku: { contains: search, mode: 'insensitive' } },
                       { barcode: { contains: search, mode: 'insensitive' } },
+                      { name: { contains: search, mode: 'insensitive' } },
                     ],
                   },
                 },
@@ -707,6 +713,8 @@ export class SalesService {
         payments: true,
         customers: true,
         users: true,
+        // Lets the Sales page filter by shift.
+        shift: { select: { shiftNumber: true } },
       };
 
       const findArgs: any = useCursor
@@ -1660,6 +1668,8 @@ export class SalesService {
       createdByName: sale.users
         ? `${sale.users.firstName} ${sale.users.lastName}`.trim()
         : 'Unknown User',
+      shiftId: sale.shiftId ?? undefined,
+      shiftNumber: sale.shift?.shiftNumber,
       cashierId: sale.createdBy,
       cashierName: sale.users ? sale.users.firstName : 'Unknown',
       createdAt: sale.createdAt.toISOString(),

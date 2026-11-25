@@ -54,6 +54,8 @@ export interface Sale {
   receiptNumber: string;
   cashierId: string;
   cashierName: string;
+  shiftId?: string;
+  shiftNumber?: string;
   salespersonId?: string;
   salespersonName?: string;
   tenantId: string;
@@ -239,7 +241,12 @@ class SalesService {
         ...filters,
       };
 
-      return await apiClient.get<PaginatedResponse<Sale>>(API_CONFIG.ENDPOINTS.SALES, params);
+      // Large pages (reports, filtered lists) can outlast the default 10s.
+      return await apiClient.get<PaginatedResponse<Sale>>(
+        API_CONFIG.ENDPOINTS.SALES,
+        params,
+        limit > 100 ? { timeout: 60000 } : undefined,
+      );
     } catch (error) {
       console.error('Failed to fetch sales:', error);
       throw error;

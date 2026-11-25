@@ -131,28 +131,33 @@ const SalesPage = () => {
     applyFilters();
   }, [sales, filters, serverSearch]);
 
-  // Load shifts when date range changes for filtering
-  const [availableShifts, setAvailableShifts] = useState<Shift[]>([]);
-  useEffect(() => {
-    if (filters.dateFrom && filters.dateTo) {
-      loadAvailableShifts();
+  // Shift choices come from the loaded sales themselves, so every option has
+  // sales behind it. (Asking the API for shifts by START date missed a shift
+  // opened before the range, e.g. one left open for weeks.)
+  const availableShifts = React.useMemo(() => {
+    const byId = new Map<string, { id: string; label: string }>();
+    for (const sale of sales) {
+      if (sale.shiftId && !byId.has(sale.shiftId)) {
+        byId.set(sale.shiftId, {
+          id: sale.shiftId,
+          label: sale.shiftNumber || sale.shiftId.slice(0, 8),
+        });
+      }
     }
-  }, [filters.dateFrom, filters.dateTo]);
+    return [...byId.values()].sort((x, y) => y.label.localeCompare(x.label));
+  }, [sales]);
 
-  const loadAvailableShifts = async () => {
-    if (!filters.dateFrom || !filters.dateTo) return;
-
-    try {
-      const shiftsData = await shiftService.getShiftsByDateRange({
-        startDate: filters.dateFrom.toISOString(),
-        endDate: filters.dateTo.toISOString(),
-      });
-      setAvailableShifts(shiftsData || []);
-    } catch (error) {
-      console.error('Error loading available shifts:', error);
-      setAvailableShifts([]);
-    }
-  };
+  // Render the list in pages: the whole range is in memory (totals and export
+  // use all of it), but mounting thousands of rows freezes a till.
+  const SALES_PAGE_SIZE = 50;
+  const [listPage, setListPage] = useState(1);
+  const listTotalPages = Math.max(1, Math.ceil(filteredSales.length / SALES_PAGE_SIZE));
+  const listSafePage = Math.min(listPage, listTotalPages);
+  const pagedSales = filteredSales.slice(
+    (listSafePage - 1) * SALES_PAGE_SIZE,
+    listSafePage * SALES_PAGE_SIZE,
+  );
+  useEffect(() => { setListPage(1); }, [filters]);
 
   // Load shifts when switching to shifts view
   useEffect(() => {
@@ -265,9 +270,15 @@ const SalesPage = () => {
 
     try {
       setShiftsLoading(true);
+      // Whole days: "Today" used to send the current time as the start, which
+      // excluded every shift opened earlier today.
+      const from = new Date(filters.dateFrom);
+      from.setHours(0, 0, 0, 0);
+      const to = new Date(filters.dateTo);
+      to.setHours(23, 59, 59, 999);
       const shiftsData = await shiftService.getShiftsByDateRange({
-        startDate: filters.dateFrom.toISOString(),
-        endDate: filters.dateTo.toISOString(),
+        startDate: from.toISOString(),
+        endDate: to.toISOString(),
         userId: filters.cashierId !== 'all' ? filters.cashierId : undefined,
       });
       setShifts(shiftsData);
@@ -285,6 +296,16 @@ const SalesPage = () => {
 
   const handleViewShift = (shift: Shift) => {
     setSelectedShiftForReport(shift.id);
+  };
+
+  // Refunds only update refundedAmount (the stored paymentStatus stays
+  // COMPLETED), so derive the refunded states or those filters match nothing.
+  // totalAmount is already net of refunds.
+  const effectivePaymentStatus = (sale: Sale) => {
+    if ((sale.refundedAmount || 0) > 0) {
+      return sale.totalAmount <= 0.005 ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+    }
+    return sale.paymentStatus;
   };
 
   const applyFilters = () => {
@@ -310,12 +331,15 @@ const SalesPage = () => {
 
     // Payment method filter
     if (filters.paymentMethod && filters.paymentMethod !== 'all') {
-      result = result.filter(sale => sale.paymentMethod === filters.paymentMethod);
+      // A split payment matches on any of its tenders, not just the largest.
+      result = result.filter(sale =>
+        sale.paymentMethod === filters.paymentMethod ||
+        (sale.payments || []).some(p => p.method === filters.paymentMethod));
     }
 
     // Payment status filter
     if (filters.paymentStatus && filters.paymentStatus !== 'all') {
-      result = result.filter(sale => sale.paymentStatus === filters.paymentStatus);
+      result = result.filter(sale => effectivePaymentStatus(sale) === filters.paymentStatus);
     }
 
     // Sale status filter
@@ -347,7 +371,7 @@ const SalesPage = () => {
 
     // Shift filter
     if (filters.shift && filters.shift !== 'all') {
-      result = result.filter(sale => (sale as any).shiftId === filters.shift);
+      result = result.filter(sale => sale.shiftId === filters.shift);
     }
 
     // Customer type filter
@@ -972,6 +996,8 @@ const SalesPage = () => {
           onExportXLSX={handleExportXLSX}
           cashiers={cashiers}
           shifts={availableShifts}
+          resultCount={filteredSales.length}
+          loading={loading}
         />
 
         {/* View Mode Selector */}
@@ -1030,11 +1056,11 @@ const SalesPage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredSales.map((sale) => (
+                    {pagedSales.map((sale) => (
                       <React.Fragment key={sale.id}>
                       <TableRow className="hover:bg-gray-50 transition-colors">
                         <TableCell className="font-medium">
-                          {sale.receiptNumber || `#${sale.id.slice(0, 8)}`}
+                          {sale.receiptNumber || sale.saleNumber || `#${sale.id.slice(0, 8)}`}
                         </TableCell>
                         <TableCell className="text-sm text-gray-600">
                           {formatDate(sale.createdAt)}
@@ -1216,6 +1242,15 @@ const SalesPage = () => {
         {/* Results Summary */}
         {viewMode === 'sales' && !loading && filteredSales.length > 0 && (
           <div className="mt-4 text-sm text-gray-600 text-center">
+            {listTotalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 mb-2">
+                <Button variant="outline" size="sm" disabled={listSafePage <= 1}
+                  onClick={() => setListPage(listSafePage - 1)}>Previous</Button>
+                <span>Page {listSafePage} of {listTotalPages}</span>
+                <Button variant="outline" size="sm" disabled={listSafePage >= listTotalPages}
+                  onClick={() => setListPage(listSafePage + 1)}>Next</Button>
+              </div>
+            )}
             Showing {filteredSales.length} of {sales.length} sales
             {filters.search && ` • Filtered by: "${filters.search}"`}
             {salesTruncated && ' • Showing the most recent 5,000 — narrow the date range to see older sales'}
