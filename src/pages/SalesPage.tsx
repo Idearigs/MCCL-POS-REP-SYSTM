@@ -22,6 +22,7 @@ import { salesService, Sale, SaleFilters as SaleFiltersType } from '@/services/s
 import SalesStatsCards from '@/components/sales/SalesStatsCards';
 import SalesFilters, { SalesFilterValues } from '@/components/sales/SalesFilters';
 import SaleDetailModal from '@/components/sales/SaleDetailModal';
+import { isRefundable, refundState } from '@/utils/saleRefunds';
 import RefundSaleDialog from '@/components/sales/RefundSaleDialog';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -309,10 +310,9 @@ const SalesPage = () => {
   // COMPLETED), so derive the refunded states or those filters match nothing.
   // totalAmount is already net of refunds.
   const effectivePaymentStatus = (sale: Sale) => {
-    if ((sale.refundedAmount || 0) > 0) {
-      return sale.totalAmount <= 0.005 ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
-    }
-    return sale.paymentStatus;
+    const refunded = refundState(sale);
+    if (refunded === 'NONE') return sale.paymentStatus;
+    return refunded === 'FULL' ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
   };
 
   const applyFilters = () => {
@@ -646,6 +646,7 @@ const SalesPage = () => {
       const updated = await salesService.refundSale(refundData.saleId, {
         reason: refundData.reason,
         items: refundData.items,
+        fullRefund: refundData.refundType === 'full',
         notes: refundData.notes,
         refundPassword: refundData.refundPassword,
       });
@@ -1131,7 +1132,7 @@ const SalesPage = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {getSaleStatusBadge(sale.status)}
+                          {getSaleStatusBadge(refundState(sale) === 'PARTIAL' ? 'PARTIALLY_REFUNDED' : sale.status)}
                         </TableCell>
                         <TableCell className="text-sm">
                           <div className="flex flex-col gap-0.5">
@@ -1161,7 +1162,7 @@ const SalesPage = () => {
                             >
                               <Printer className="h-4 w-4" />
                             </Button>
-                            {sale.paymentStatus === 'COMPLETED' && sale.status === 'COMPLETED' && (
+                            {sale.paymentStatus === 'COMPLETED' && isRefundable(sale) && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1171,7 +1172,8 @@ const SalesPage = () => {
                                 <RotateCcw className="h-4 w-4" />
                               </Button>
                             )}
-                            {sale.status === 'COMPLETED' && (
+                            {/* Voiding deletes the sale, so never once it carries a refund. */}
+                            {sale.status === 'COMPLETED' && refundState(sale) === 'NONE' && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1182,7 +1184,7 @@ const SalesPage = () => {
                                 <XCircle className="h-4 w-4" />
                               </Button>
                             )}
-                            {(sale.status === 'REFUNDED' || sale.status === 'PARTIALLY_REFUNDED' || sale.paymentStatus === 'REFUNDED' || sale.paymentStatus === 'PARTIALLY_REFUNDED') && (
+                            {refundState(sale) !== 'NONE' && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1200,7 +1202,11 @@ const SalesPage = () => {
                       {expandedSaleId === sale.id && (
                         <TableRow className="bg-orange-50">
                           <TableCell colSpan={10} className="py-3 px-6">
-                            <div className="text-sm font-medium text-orange-800 mb-2">Refunded Items</div>
+                            <div className="text-sm font-medium text-orange-800 mb-2">
+                              {/* Returned lines are removed from the sale, so what is listed is what was kept. */}
+                              Refunded {formatCurrency(sale.refundedAmount || 0)}
+                              {(sale.items || []).length > 0 ? ' — items kept:' : ' — no items left on this sale'}
+                            </div>
                             <div className="grid gap-1">
                               {(sale.items || []).map((item, i) => (
                                 <div key={i} className="flex items-center gap-3 text-xs text-gray-700">

@@ -205,6 +205,8 @@ export interface RefundData {
     saleItemId: string;
     quantity: number;
   }>;
+  /** Refund everything left on the sale; the server ignores `items`. */
+  fullRefund?: boolean;
   notes?: string;
   // Shared refund-authorisation password; required when the tenant has one set.
   refundPassword?: string;

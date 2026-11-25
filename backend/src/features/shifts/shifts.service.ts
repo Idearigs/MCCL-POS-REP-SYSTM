@@ -397,9 +397,10 @@ export class ShiftsService {
   }
 
   // Get shift report/details
-  async getShiftReport(shiftId: string) {
-    const shift = await this.prisma.shifts.findUnique({
-      where: { id: shiftId },
+  async getShiftReport(shiftId: string, tenantId: string) {
+    // Scoped to the caller's tenant: another shop's shift id must look missing.
+    const shift = await this.prisma.shifts.findFirst({
+      where: { id: shiftId, tenantId },
       include: {
         user: {
           select: {
@@ -446,8 +447,8 @@ export class ShiftsService {
     const completedSales = shift.sales.filter((s) => s.status === 'COMPLETED');
     const cancelledSales = shift.sales.filter((s) => s.status === 'CANCELLED');
 
-    // A refund lowers totalAmount and flags the sale REFUNDED (even a partial
-    // one), so these include refunded sales and add the refund back for gross.
+    // A refund lowers totalAmount, so gross adds it back. REFUNDED is included
+    // because older part-refunded sales also carry that status.
     const tradedSales = shift.sales.filter(
       (s) => s.status === 'COMPLETED' || s.status === 'REFUNDED',
     );

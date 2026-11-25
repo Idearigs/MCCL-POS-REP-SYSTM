@@ -381,6 +381,15 @@ export class CreateRefundDto {
   items: RefundItemDto[];
 
   @ApiPropertyOptional({
+    description:
+      'Refund everything left on the sale (including services, and net of any ' +
+      'sale-level discount) and restock every remaining item. `items` is ignored.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  fullRefund?: boolean;
+
+  @ApiPropertyOptional({
     description: 'Refund reason',
     example: 'Defective product',
   })
