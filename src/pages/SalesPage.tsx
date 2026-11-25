@@ -104,17 +104,27 @@ const SalesPage = () => {
 
   const { toast } = useToast();
 
-  // Load sales data
+  // Load stats + cashiers once
   useEffect(() => {
-    loadSales();
     loadStatistics();
     loadCashiers();
   }, []);
 
+  // (Re)load sales FROM THE SERVER whenever the date range or search changes.
+  // The list used to be the latest 100 sales fetched once and filtered in the
+  // browser, so any range older than those 100 showed "No sales found".
+  // Search is debounced so we don't fire a request per keystroke.
+  const dateFromKey = filters.dateFrom ? filters.dateFrom.getTime() : 0;
+  const dateToKey = filters.dateTo ? filters.dateTo.getTime() : 0;
+  useEffect(() => {
+    const t = setTimeout(() => { loadSales(); }, filters.search ? 350 : 0);
+    return () => clearTimeout(t);
+  }, [dateFromKey, dateToKey, filters.search]);
+
   // Apply filters when they change
   useEffect(() => {
     applyFilters();
-  }, [sales, filters]);
+  }, [sales, filters, serverSearch]);
 
   // Load shifts when date range changes for filtering
   const [availableShifts, setAvailableShifts] = useState<Shift[]>([]);
@@ -141,24 +151,62 @@ const SalesPage = () => {
 
   // Load shifts when switching to shifts view
   useEffect(() => {
-    if (viewMode === 'shifts') {
+    if (viewMode === 'shifts' && filters.dateFrom && filters.dateTo) {
       loadShifts();
     }
-  }, [viewMode]);
+  }, [viewMode, dateFromKey, dateToKey, filters.cashierId]);
+
+  // Guards against an older, slower request overwriting a newer one.
+  const loadSeq = React.useRef(0);
+  // The search term the currently loaded list was fetched with.
+  const [serverSearch, setServerSearch] = useState('');
+  const [salesTruncated, setSalesTruncated] = useState(false);
 
   const loadSales = async () => {
+    const seq = ++loadSeq.current;
     try {
       setLoading(true);
 
+      const query: SaleFiltersType = {};
       // For STAFF users, filter by their cashier ID
-      const filters: SaleFiltersType = {};
       if (auth.user?.role === 'STAFF') {
-        filters.cashierId = auth.user.id;
+        query.cashierId = auth.user.id;
       }
 
-      const response = await salesService.getSales(1, 100, filters); // Load sales with max limit
-      setSales(response.data || []);
+      // Date range → server. Start is sent as the exact start of the local day;
+      // end is sent as a plain date (the API treats it as inclusive end-of-day).
+      // The precise local-time trim happens in applyFilters.
+      if (filters.dateFrom || filters.dateTo) {
+        const from = filters.dateFrom ? new Date(filters.dateFrom) : new Date(2000, 0, 1);
+        from.setHours(0, 0, 0, 0);
+        const to = filters.dateTo ? new Date(filters.dateTo) : new Date();
+        to.setHours(23, 59, 59, 999);
+        query.startDate = from.toISOString();
+        query.endDate = to.toISOString().slice(0, 10);
+      }
+      const term = filters.search.trim();
+      if (term) query.search = term;
+
+      // Pull every page for the range (1000 per request), with a safety cap.
+      const PAGE = 1000;
+      const MAX_PAGES = 5;
+      let all: Sale[] = [];
+      let truncated = false;
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        const response = await salesService.getSales(page, PAGE, query);
+        if (seq !== loadSeq.current) return; // superseded
+        const rows = response.data || [];
+        all = all.concat(rows);
+        const hasNext = (response as any).meta?.hasNextPage ?? rows.length === PAGE;
+        if (!hasNext) break;
+        if (page === MAX_PAGES) truncated = true;
+      }
+      if (seq !== loadSeq.current) return;
+      setSales(all);
+      setServerSearch(term);
+      setSalesTruncated(truncated);
     } catch (error) {
+      if (seq !== loadSeq.current) return;
       console.error('Error loading sales:', error);
       toast({
         title: 'Error',
@@ -166,7 +214,7 @@ const SalesPage = () => {
         variant: 'destructive'
       });
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   };
 
@@ -240,13 +288,21 @@ const SalesPage = () => {
   const applyFilters = () => {
     let result = [...sales];
 
-    // Search filter
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
+    // Search filter. When the loaded list was already fetched with this exact
+    // term the server has done the matching (incl. product SKU / barcode), so
+    // don't re-filter and throw those matches away. Otherwise (while the
+    // debounced request is in flight) filter what we have for instant feedback.
+    const term = filters.search.trim();
+    if (term && term !== serverSearch) {
+      const searchLower = term.toLowerCase();
       result = result.filter(sale =>
         sale.receiptNumber?.toLowerCase().includes(searchLower) ||
+        (sale as any).saleNumber?.toLowerCase().includes(searchLower) ||
         sale.customerName?.toLowerCase().includes(searchLower) ||
-        sale.id.toLowerCase().includes(searchLower)
+        sale.id.toLowerCase().includes(searchLower) ||
+        (sale.notes || '').toLowerCase().includes(searchLower) ||
+        ((sale.items || []) as any[]).some(i =>
+          `${i.productName || i.name || ''} ${i.productSku || i.sku || ''}`.toLowerCase().includes(searchLower))
       );
     }
 
@@ -267,10 +323,11 @@ const SalesPage = () => {
 
     // Date range filter
     if (filters.dateFrom) {
-      result = result.filter(sale => {
-        const saleDate = new Date(sale.createdAt);
-        return saleDate >= filters.dateFrom!;
-      });
+      // From the START of the chosen day. (The quick "Today" button passes the
+      // current time, which used to hide every sale made earlier today.)
+      const startOfDay = new Date(filters.dateFrom);
+      startOfDay.setHours(0, 0, 0, 0);
+      result = result.filter(sale => new Date(sale.createdAt) >= startOfDay);
     }
     if (filters.dateTo) {
       result = result.filter(sale => {
@@ -1159,6 +1216,7 @@ const SalesPage = () => {
           <div className="mt-4 text-sm text-gray-600 text-center">
             Showing {filteredSales.length} of {sales.length} sales
             {filters.search && ` • Filtered by: "${filters.search}"`}
+            {salesTruncated && ' • Showing the most recent 5,000 — narrow the date range to see older sales'}
           </div>
         )}
       </div>
