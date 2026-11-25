@@ -39,7 +39,13 @@ type HistoryTransaction = SaleTransaction | RepairTransaction;
 
 const HistoryPage: React.FC = () => {
   // Get transactions from context
-  const { salesTransactions, repairTransactions } = useTransactions();
+  const { salesTransactions, repairTransactions, loading, error, refreshTransactions } = useTransactions();
+
+  // The lists are only fetched when this page is opened.
+  useEffect(() => {
+    refreshTransactions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   // Combine all transactions for the "All" tab
   const allTransactions: HistoryTransaction[] = [
@@ -119,7 +125,8 @@ const HistoryPage: React.FC = () => {
     }
     
     setFilteredTransactions(result);
-  }, [searchTerm, dateFilter, activeTab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, dateFilter, activeTab, salesTransactions, repairTransactions]);
 
   // Render transaction status badge
   const renderStatusBadge = (status: 'received' | 'in-progress' | 'completed' | 'collected') => {
@@ -212,6 +219,11 @@ const HistoryPage: React.FC = () => {
           </div>
         </div>
         
+        {loading && <p className="text-sm text-gray-500">Loading history…</p>}
+        {!loading && error && (
+          <p className="text-sm text-red-600">Some history could not be loaded. Please try again.</p>
+        )}
+
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
           <TabsList className="grid w-full grid-cols-3">

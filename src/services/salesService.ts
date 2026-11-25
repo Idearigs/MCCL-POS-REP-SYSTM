@@ -126,6 +126,12 @@ export interface SalesStats {
   revenueToday: number;
   revenueThisMonth: number;
   revenueThisYear: number;
+  salesThisWeek?: number;
+  revenueThisWeek?: number;
+  /** Same point in the previous period, for like-for-like trends. */
+  revenuePreviousDay?: number;
+  revenuePreviousWeek?: number;
+  revenuePreviousMonth?: number;
   paymentMethodBreakdown: Record<string, number>;
   topSellingProducts: Array<{
     productId: string;

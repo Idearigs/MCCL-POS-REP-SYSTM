@@ -59,26 +59,19 @@ export const TransactionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load transactions from backend on mount
+  // Loaded on demand (see refreshTransactions), NOT on mount: this provider
+  // wraps the whole app, and only the History page reads the lists.
   const loadTransactions = async () => {
     setLoading(true);
     setError(null);
     try {
-      // Concurrency- and page-capped fetch. Firing every page in parallel
-      // (Promise.all over all pages) stormed the API — a client with 130 pages
-      // of repairs sent 130 simultaneous requests on every app load, tripping
-      // the rate limiter and starving auth calls (spurious logouts) + ~50s
-      // loads. fetchAllPages fetches at most `maxPages` pages, 3 at a time.
-      //
-      // This provider is mounted app-wide, so these run on EVERY login even
-      // though only the History page reads the full list. Repairs are the bulk
-      // (a shop can have thousands), so they're capped to the 500 most recent —
-      // enough for the History view; the dedicated Repair Jobs page paginates
-      // server-side for older records. Sales are few pages, left uncapped-ish.
-      const [allSales, allRepairsData] = await Promise.all([
-        fetchAllPages((page) => salesService.getSales(page, 100), {
-          concurrency: 3,
-          maxPages: 30,
+      // Capped at the 3,000 most recent sales and 500 repairs, a few requests at
+      // a time, so it can't storm the API. Sales pages are large because
+      // getSales gives pages over 100 a longer timeout.
+      const [sales, repairs] = await Promise.allSettled([
+        fetchAllPages((page) => salesService.getSales(page, 500), {
+          concurrency: 2,
+          maxPages: 6,
         }),
         fetchAllPages((page) => repairService.getRepairs(page, 100), {
           concurrency: 3,
@@ -86,30 +79,29 @@ export const TransactionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         }),
       ]);
 
-      const sales = allSales.map(convertSaleToTransaction);
-      const repairs = allRepairsData.map(convertRepairToTransaction);
-
-      setSalesTransactions(sales);
-      setRepairTransactions(repairs);
+      // One failing must not blank the other.
+      if (sales.status === 'fulfilled') {
+        setSalesTransactions(sales.value.map(convertSaleToTransaction));
+      }
+      if (repairs.status === 'fulfilled') {
+        setRepairTransactions(repairs.value.map(convertRepairToTransaction));
+      }
+      const failed = [sales, repairs].find((r) => r.status === 'rejected');
+      if (failed) throw (failed as PromiseRejectedResult).reason;
     } catch (err: any) {
       console.error('Failed to load transactions:', err);
       setError(err.message || 'Failed to load transactions');
-      // Fall back to empty arrays instead of localStorage
-      setSalesTransactions([]);
-      setRepairTransactions([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (auth.isAuthenticated && !auth.loading) {
-      loadTransactions();
-    } else if (!auth.isAuthenticated) {
+    if (!auth.isAuthenticated) {
       setSalesTransactions([]);
       setRepairTransactions([]);
     }
-  }, [auth.isAuthenticated, auth.loading]);
+  }, [auth.isAuthenticated]);
 
   // Add a new sale transaction
   const addSaleTransaction = async (saleData: CreateSaleData): Promise<SaleTransaction> => {

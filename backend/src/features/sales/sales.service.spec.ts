@@ -271,6 +271,81 @@ describe('SalesService', () => {
       expect(result).toBeDefined();
       expect(result).toHaveProperty('totalRevenue');
     });
+
+    describe('week figures and like-for-like trends', () => {
+      afterEach(() => {
+        jest.useRealTimers();
+        mockSalesRepository.aggregate.mockResolvedValue({
+          _sum: { totalAmount: 0, refundedAmount: 0 },
+        });
+      });
+
+      // Revenue per window, keyed by the window the service asked for.
+      const statsAt = async (now: Date) => {
+        jest.useFakeTimers({ now, doNotFake: ['nextTick', 'setImmediate'] });
+        mockSalesRepository.aggregate.mockClear();
+        const windows: { gte: Date; lt?: Date }[] = [];
+        mockSalesRepository.aggregate.mockImplementation(({ where }) => {
+          if (where.createdAt) windows.push(where.createdAt);
+          return Promise.resolve({ _sum: { totalAmount: 0 } });
+        });
+        await service.getStats('tenant-001');
+        return windows.map((w) => [w.gte, w.lt]);
+      };
+
+      it('starts the week on Monday, not the 1st of the month', async () => {
+        // Thursday 26 Nov 2026, 15:30
+        const windows = await statsAt(new Date(2026, 10, 26, 15, 30));
+        expect(windows).toContainEqual([new Date(2026, 10, 23), undefined]);
+        expect(windows).toContainEqual([new Date(2026, 10, 1), undefined]);
+      });
+
+      it('treats Sunday as the last day of the week', async () => {
+        const windows = await statsAt(new Date(2026, 10, 29, 9, 0));
+        expect(windows).toContainEqual([new Date(2026, 10, 23), undefined]);
+      });
+
+      it('compares with the same point in the previous period', async () => {
+        const windows = await statsAt(new Date(2026, 10, 26, 15, 30));
+        expect(windows).toContainEqual([
+          new Date(2026, 10, 25),
+          new Date(2026, 10, 25, 15, 30),
+        ]);
+        expect(windows).toContainEqual([
+          new Date(2026, 10, 16),
+          new Date(2026, 10, 19, 15, 30),
+        ]);
+      });
+
+      it('never lets a short previous month run into this one', async () => {
+        // 31 March: February has no 31st
+        const windows = await statsAt(new Date(2026, 2, 31, 12, 0));
+        expect(windows).toContainEqual([
+          new Date(2026, 1, 1),
+          new Date(2026, 2, 1),
+        ]);
+      });
+
+      it('returns the week total separately from the month total', async () => {
+        jest.useFakeTimers({
+          now: new Date(2026, 10, 26, 15, 30),
+          doNotFake: ['nextTick', 'setImmediate'],
+        });
+        mockSalesRepository.aggregate.mockImplementation(({ where }) => {
+          const c = where.createdAt;
+          const amount =
+            c?.gte?.getTime() === new Date(2026, 10, 23).getTime() && !c.lt
+              ? 250
+              : c?.gte?.getTime() === new Date(2026, 10, 1).getTime()
+                ? 900
+                : 0;
+          return Promise.resolve({ _sum: { totalAmount: amount } });
+        });
+        const result = await service.getStats('tenant-001');
+        expect(result.revenueThisWeek).toBe(250);
+        expect(result.revenueThisMonth).toBe(900);
+      });
+    });
   });
 
   // ────────────────────────────────────────────────────────────────────────────
