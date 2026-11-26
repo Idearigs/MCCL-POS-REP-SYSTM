@@ -107,6 +107,7 @@ export class ShiftsController {
     @Query('endDate') endDate: string,
     @Query('userId') userId?: string,
     @Query('status') status?: ShiftStatus,
+    @Query('overlap') overlap?: string,
   ) {
     // Validate date parameters
     if (!startDate || !endDate) {
@@ -134,13 +135,14 @@ export class ShiftsController {
       end,
       userId,
       status,
+      overlap === 'true',
     );
   }
 
   // Get shift report
   @Get(':id/report')
-  async getShiftReport(@Param('id') shiftId: string) {
-    return this.shiftsService.getShiftReport(shiftId);
+  async getShiftReport(@Req() req, @Param('id') shiftId: string) {
+    return this.shiftsService.getShiftReport(shiftId, req.user.tenantId);
   }
 
   // Consolidated master summary across all shifts in the date filter

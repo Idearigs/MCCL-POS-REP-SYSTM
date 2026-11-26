@@ -6,6 +6,7 @@ import { salesService, Sale } from '@/services/salesService';
 import { shiftService } from '@/services/shiftService';
 import { useInventory } from '@/contexts/InventoryContext';
 import { normalizeImageUrl } from '@/lib/utils';
+import { originalTotal, refundState } from '@/utils/saleRefunds';
 
 interface PosTodaySalesViewProps {
   onClose: () => void;
@@ -27,7 +28,7 @@ const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
   const [shiftNumber, setShiftNumber] = useState<string | null>(null);
   // Authoritative shift totals (server-computed, uncapped). Null until loaded /
   // when no shift is open, in which case we fall back to summing the page.
-  const [shiftTotals, setShiftTotals] = useState<{ gross: number; count: number } | null>(null);
+  const [shiftTotals, setShiftTotals] = useState<{ gross: number; refunded: number; net: number; count: number } | null>(null);
 
   // Thumbnails of the inventory items on a sale (skip non-stock/service lines).
   const saleThumbnails = (sale: Sale, max = 4): string[] => {
@@ -52,7 +53,7 @@ const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
       // Prefer the active shift's start time; otherwise today from midnight.
       let startDate: string;
       let shiftNo: string | null = null;
-      let totals: { gross: number; count: number } | null = null;
+      let totals: { gross: number; refunded: number; net: number; count: number } | null = null;
       try {
         const shift = await shiftService.getActiveShift();
         if (shift?.startTime) {
@@ -62,10 +63,16 @@ const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
           if (shift.id) {
             try {
               const report = await shiftService.getShiftReport(shift.id);
-              totals = {
-                gross: report.metrics?.totalRevenue ?? 0,
-                count: report.metrics?.totalSales ?? 0,
-              };
+              const m = report.metrics;
+              // An older API without these fields: fall back to page sums.
+              if (m?.netRevenue !== undefined) {
+                totals = {
+                  gross: m.grossRevenue ?? 0,
+                  refunded: m.refundedTotal ?? 0,
+                  net: m.netRevenue,
+                  count: m.transactionCount ?? 0,
+                };
+              }
             } catch { /* fall back to page sums below */ }
           }
         } else {
@@ -98,11 +105,18 @@ const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
     load();
   }, [load]);
 
-  // Prefer the authoritative shift total; fall back to summing the loaded page.
-  const gross = shiftTotals?.gross ?? sales.reduce((s, x) => s + (x.totalAmount || 0), 0);
-  const txnCount = shiftTotals?.count ?? sales.length;
-  const refunded = sales.reduce((s, x) => s + (x.refundedAmount || 0), 0);
-  const net = gross - refunded;
+  // Prefer the authoritative shift totals; fall back to summing the loaded page.
+  // totalAmount is already net of refunds, so gross adds the refund back —
+  // subtracting it again would count every refund twice.
+  const traded = sales.filter((x) => x.status === 'COMPLETED' || x.status === 'REFUNDED');
+  const pageNet = traded.reduce((s, x) => s + (x.totalAmount || 0), 0);
+  const pageRefunded = traded.reduce((s, x) => s + (x.refundedAmount || 0), 0);
+  const { gross, refunded, net, count: txnCount } = shiftTotals ?? {
+    gross: pageNet + pageRefunded,
+    refunded: pageRefunded,
+    net: pageNet,
+    count: traded.length,
+  };
 
   return (
     <div className="h-full flex flex-col animate-scale-in">
@@ -201,7 +215,7 @@ const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
                   </span>
                   {(sale.refundedAmount || 0) > 0 && (
                     <span className="text-[10px] font-medium bg-orange-100 text-orange-700 rounded-full px-2 py-0.5">
-                      Refunded
+                      {refundState(sale) === 'FULL' ? 'Refunded' : 'Part-refunded'}
                     </span>
                   )}
                 </div>
@@ -227,7 +241,7 @@ const PosTodaySalesView: React.FC<PosTodaySalesViewProps> = ({ onClose }) => {
               </div>
               <div className="text-right shrink-0">
                 <p className="font-semibold text-gray-900">
-                  {gbp(sale.totalAmount || 0)}
+                  {gbp(originalTotal(sale))}
                 </p>
                 {(sale.refundedAmount || 0) > 0 && (
                   <p className="text-xs text-orange-600">

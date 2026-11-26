@@ -18,6 +18,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useInventory } from '@/contexts/InventoryContext';
 import { normalizeImageUrl } from '@/lib/utils';
 import { salesService, Sale } from '@/services/salesService';
+import { isRefundable, originalTotal, refundState } from '@/utils/saleRefunds';
 import { printRefundReceipt, RefundReceiptData } from '@/utils/thermalReceipt';
 import RefundSaleDialog from '@/components/sales/RefundSaleDialog';
 
@@ -163,6 +164,7 @@ const PosRefundView: React.FC<PosRefundViewProps> = ({ onClose }) => {
       const updated = await salesService.refundSale(refundData.saleId, {
         reason: refundData.reason,
         items: refundData.items,
+        fullRefund: refundData.refundType === 'full',
         notes: refundData.notes,
         refundPassword: refundData.refundPassword,
       });
@@ -272,8 +274,8 @@ const PosRefundView: React.FC<PosRefundViewProps> = ({ onClose }) => {
         )}
 
         {sales.map((sale) => {
-          const remaining = (sale.totalAmount || 0) - (sale.refundedAmount || 0);
-          const fullyRefunded = remaining <= 0;
+          const refundable = isRefundable(sale);
+          const refunded = refundState(sale);
           const itemNames = ((sale.items || []) as any[])
             .map((i) => i.productName || i.name)
             .filter(Boolean)
@@ -314,7 +316,7 @@ const PosRefundView: React.FC<PosRefundViewProps> = ({ onClose }) => {
                   </span>
                   {(sale.refundedAmount || 0) > 0 && (
                     <span className="text-[10px] font-medium bg-orange-100 text-orange-700 rounded-full px-2 py-0.5">
-                      {fullyRefunded ? 'Refunded' : 'Part-refunded'}
+                      {refunded === 'FULL' ? 'Refunded' : 'Part-refunded'}
                     </span>
                   )}
                 </div>
@@ -330,19 +332,19 @@ const PosRefundView: React.FC<PosRefundViewProps> = ({ onClose }) => {
               </div>
               <div className="flex items-center gap-4 flex-shrink-0">
                 <div className="text-right">
-                  <p className="font-semibold text-gray-900">{gbp(sale.totalAmount || 0)}</p>
+                  <p className="font-semibold text-gray-900">{gbp(originalTotal(sale))}</p>
                   {(sale.refundedAmount || 0) > 0 && (
                     <p className="text-xs text-orange-600">-{gbp(sale.refundedAmount)}</p>
                   )}
                 </div>
                 <Button
                   size="sm"
-                  variant={fullyRefunded ? 'outline' : 'default'}
-                  disabled={fullyRefunded}
-                  className={!fullyRefunded ? 'bg-orange-600 hover:bg-orange-700' : ''}
+                  variant={refundable ? 'default' : 'outline'}
+                  disabled={!refundable}
+                  className={refundable ? 'bg-orange-600 hover:bg-orange-700' : ''}
                   onClick={() => setRefundingSale(sale)}
                 >
-                  {fullyRefunded ? 'Refunded' : 'Refund'}
+                  {refundable || refunded === 'NONE' ? 'Refund' : 'Refunded'}
                 </Button>
               </div>
             </div>

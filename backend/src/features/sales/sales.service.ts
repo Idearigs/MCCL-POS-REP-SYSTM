@@ -637,13 +637,20 @@ export class SalesService {
         }),
         ...(customerId && { customerId }),
         ...(cashierId && { createdBy: cashierId }),
-        ...(startDate &&
-          endDate && {
-            createdAt: {
-              gte: new Date(startDate),
-              lte: new Date(endDate + 'T23:59:59.999Z'),
-            },
-          }),
+        // Either bound may be given on its own (a lone startDate used to be
+        // ignored entirely). A date-only endDate is inclusive of that whole
+        // day; a full timestamp is used as-is (appending a time to one
+        // produced an Invalid Date).
+        ...((startDate || endDate) && {
+          createdAt: {
+            ...(startDate && { gte: new Date(startDate) }),
+            ...(endDate && {
+              lte: /^\d{4}-\d{2}-\d{2}$/.test(endDate)
+                ? new Date(endDate + 'T23:59:59.999Z')
+                : new Date(endDate),
+            }),
+          },
+        }),
         ...(minAmount !== undefined && { totalAmount: { gte: minAmount } }),
         ...(maxAmount !== undefined && { totalAmount: { lte: maxAmount } }),
         ...(paymentMethod && {
@@ -654,6 +661,11 @@ export class SalesService {
         ...(search && {
           OR: [
             { saleNumber: { contains: search, mode: 'insensitive' } },
+            // The list shows "#<id prefix>" when a sale has no receipt number,
+            // so the code on screen must be searchable too.
+            {
+              id: { startsWith: search.replace(/^#/, ''), mode: 'insensitive' },
+            },
             // { walkInCustomerName: { contains: search, mode: 'insensitive' } },
             { notes: { contains: search, mode: 'insensitive' } },
             {
@@ -674,6 +686,7 @@ export class SalesService {
                     OR: [
                       { sku: { contains: search, mode: 'insensitive' } },
                       { barcode: { contains: search, mode: 'insensitive' } },
+                      { name: { contains: search, mode: 'insensitive' } },
                     ],
                   },
                 },
@@ -700,6 +713,8 @@ export class SalesService {
         payments: true,
         customers: true,
         users: true,
+        // Lets the Sales page filter by shift.
+        shift: { select: { shiftNumber: true } },
       };
 
       const findArgs: any = useCursor
@@ -1145,7 +1160,7 @@ export class SalesService {
 
     return this.replayOrRun('refund', idempotencyKey, async () => {
       try {
-        return await this.prismaService.$transaction(async (prisma) => {
+        const result = await this.prismaService.$transaction(async (prisma) => {
           // CONCURRENCY: lock the sale row so two simultaneous refunds of the
           // same sale serialize — the 2nd waits, then sees the already-refunded
           // state (item deleted/reduced) and cannot double-restore stock.
@@ -1175,22 +1190,49 @@ export class SalesService {
             throw new BadRequestException('Can only refund completed sales');
           }
 
+          // totalAmount is already net of earlier refunds, so it IS what is
+          // left to refund — subtracting refundedAmount would count them twice.
+          const toPence = (n: number) => Math.round(n * 100) / 100;
+          const remaining = toPence(Number(sale.totalAmount));
+          if (remaining <= 0 && Number(sale.refundedAmount) > 0) {
+            throw new BadRequestException(
+              'This sale has already been fully refunded',
+            );
+          }
+
           let totalRefundAmount = 0;
           const refundOperations = [];
+
+          // A full refund returns every item still on the sale.
+          const itemsToRefund = createRefundDto.fullRefund
+            ? sale.sale_items.map((item) => ({
+                saleItemId: item.id,
+                quantity: item.quantity,
+              }))
+            : createRefundDto.items;
+
+          // The same line twice would restock it twice.
+          if (
+            new Set(itemsToRefund.map((item) => item.saleItemId)).size !==
+            itemsToRefund.length
+          ) {
+            throw new BadRequestException(
+              'Each item can only be listed once in a refund',
+            );
+          }
 
           // Service-only sales (repairs, battery changes, etc.) are not stored
           // as sale_items, so the client sends an empty items array. Treat that
           // as a full refund of the remaining balance — there is no stock to
           // restore. Product sales must still itemise so we restock correctly.
-          if (createRefundDto.items.length === 0) {
+          if (!createRefundDto.fullRefund && itemsToRefund.length === 0) {
             if (sale.sale_items.length > 0) {
               throw new BadRequestException(
                 'Select at least one item to refund for this sale',
               );
             }
 
-            totalRefundAmount =
-              Number(sale.totalAmount) - Number(sale.refundedAmount);
+            totalRefundAmount = remaining;
 
             if (totalRefundAmount <= 0) {
               throw new BadRequestException(
@@ -1200,7 +1242,7 @@ export class SalesService {
           }
 
           // Process each refund item
-          for (const refundItem of createRefundDto.items) {
+          for (const refundItem of itemsToRefund) {
             const saleItem = sale.sale_items.find(
               (item) => item.id === refundItem.saleItemId,
             );
@@ -1259,14 +1301,25 @@ export class SalesService {
           // Execute all refund operations
           await Promise.all(refundOperations);
 
+          // Item prices ignore sale-level discounts and leave out services, so
+          // they only decide the amount of a PARTIAL refund, and never more
+          // than is left on the sale.
+          totalRefundAmount = createRefundDto.fullRefund
+            ? remaining
+            : toPence(Math.min(totalRefundAmount, remaining));
+
           // Update sale totals
-          const newTotalAmount = Number(sale.totalAmount) - totalRefundAmount;
-          const newRefundedAmount =
-            Number(sale.refundedAmount) + totalRefundAmount;
+          const newTotalAmount = toPence(remaining - totalRefundAmount);
+          const newRefundedAmount = toPence(
+            Number(sale.refundedAmount) + totalRefundAmount,
+          );
+          // A part-refunded sale stays COMPLETED at its reduced total, so what
+          // the customer kept still counts in revenue and cash-up, and more can
+          // be refunded later.
           const newStatus =
-            newTotalAmount === newRefundedAmount
-              ? ('REFUNDED' as const)
-              : ('PARTIAL_REFUND' as const);
+            newTotalAmount <= 0
+              ? PrismaSaleStatus.REFUNDED
+              : PrismaSaleStatus.COMPLETED;
 
           // TODO: Create refund payment record
           // Payment model needs additional fields (reference, refundReason, etc) to properly track refunds
@@ -1275,7 +1328,7 @@ export class SalesService {
           const updatedSale = await prisma.sales.update({
             where: { id },
             data: {
-              status: PrismaSaleStatus.REFUNDED, // Use REFUNDED instead of PARTIAL_REFUND
+              status: newStatus,
               totalAmount: newTotalAmount,
               refundedAmount: newRefundedAmount,
               notes: sale.notes
@@ -1310,6 +1363,15 @@ export class SalesService {
 
           return this.mapToResponseDto(updatedSale);
         });
+
+        // Otherwise the Sales cards keep the pre-refund figures for 10 minutes.
+        await Promise.all([
+          this.cacheService.delTenantData(tenantId, `sale:${id}`),
+          this.cacheService.delTenantData(tenantId, 'sales:list'),
+          this.cacheService.delTenantData(tenantId, 'sales:stats'),
+        ]);
+
+        return result;
       } catch (error) {
         this.logger.error(
           `Failed to create refund for sale ${id}:`,
@@ -1344,6 +1406,31 @@ export class SalesService {
       );
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       const startOfYear = new Date(today.getFullYear(), 0, 1);
+      // Weeks start on Monday, matching the Sales page's "This Week" filter.
+      const startOfWeek = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate() - ((today.getDay() + 6) % 7),
+      );
+
+      // Trends compare with the SAME POINT in the previous period (e.g. Monday
+      // to now vs last Monday to this time last week). Comparing a part-period
+      // with a whole one would always look like a fall.
+      const previousRevenue = async (start: Date, previousStart: Date) => {
+        const end = Math.min(
+          previousStart.getTime() + (today.getTime() - start.getTime()),
+          start.getTime(),
+        );
+        const result = await this.salesRepo.aggregate({
+          where: {
+            tenantId,
+            status: SaleStatus.COMPLETED,
+            createdAt: { gte: previousStart, lt: new Date(end) },
+          },
+          _sum: { totalAmount: true },
+        });
+        return Number(result._sum.totalAmount || 0);
+      };
 
       const [
         totalSales,
@@ -1361,6 +1448,11 @@ export class SalesService {
         paymentMethods,
         topProducts,
         hourlySales,
+        salesThisWeek,
+        revenueThisWeek,
+        revenuePreviousDay,
+        revenuePreviousWeek,
+        revenuePreviousMonth,
       ] = await Promise.all([
         this.salesRepo.count({ where: { tenantId } }),
         this.salesRepo.count({
@@ -1441,6 +1533,33 @@ export class SalesService {
           },
           select: { createdAt: true },
         }),
+        this.salesRepo.count({
+          where: { tenantId, createdAt: { gte: startOfWeek } },
+        }),
+        this.salesRepo.aggregate({
+          where: {
+            tenantId,
+            status: SaleStatus.COMPLETED,
+            createdAt: { gte: startOfWeek },
+          },
+          _sum: { totalAmount: true },
+        }),
+        previousRevenue(
+          startOfDay,
+          new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1),
+        ),
+        previousRevenue(
+          startOfWeek,
+          new Date(
+            startOfWeek.getFullYear(),
+            startOfWeek.getMonth(),
+            startOfWeek.getDate() - 7,
+          ),
+        ),
+        previousRevenue(
+          startOfMonth,
+          new Date(today.getFullYear(), today.getMonth() - 1, 1),
+        ),
       ]);
 
       // Process payment method breakdown
@@ -1511,6 +1630,11 @@ export class SalesService {
         revenueToday: Number(revenueToday._sum.totalAmount || 0),
         revenueThisMonth: Number(revenueThisMonth._sum.totalAmount || 0),
         revenueThisYear: Number(revenueThisYear._sum.totalAmount || 0),
+        salesThisWeek,
+        revenueThisWeek: Number(revenueThisWeek._sum.totalAmount || 0),
+        revenuePreviousDay,
+        revenuePreviousWeek,
+        revenuePreviousMonth,
         paymentMethodBreakdown,
         topSellingProducts,
         salesByHour,
@@ -1653,6 +1777,8 @@ export class SalesService {
       createdByName: sale.users
         ? `${sale.users.firstName} ${sale.users.lastName}`.trim()
         : 'Unknown User',
+      shiftId: sale.shiftId ?? undefined,
+      shiftNumber: sale.shift?.shiftNumber,
       cashierId: sale.createdBy,
       cashierName: sale.users ? sale.users.firstName : 'Unknown',
       createdAt: sale.createdAt.toISOString(),

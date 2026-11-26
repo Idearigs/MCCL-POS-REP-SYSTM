@@ -75,11 +75,9 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
   const loadCustomerRefunds = async () => {
     try {
       setLoadingRefunds(true);
-      const res = await salesService.getSales(1, 50, {
-        customerId: customer.id,
-        status: 'REFUNDED',
-      });
-      setRefundedSales(res.data || []);
+      // Part-refunded sales stay COMPLETED, so pick refunds by amount.
+      const res = await salesService.getSales(1, 500, { customerId: customer.id });
+      setRefundedSales((res.data || []).filter((s) => (s.refundedAmount || 0) > 0));
     } catch {
       // non-fatal
     } finally {
@@ -470,7 +468,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
                     <CardContent className="pt-4">
                       <p className="text-xs text-orange-600 font-medium">Total Refunded Value</p>
                       <p className="text-2xl font-bold text-orange-800">
-                        £{refundedSales.reduce((s, r) => s + Number(r.totalAmount), 0).toFixed(2)}
+                        £{refundedSales.reduce((s, r) => s + Number(r.refundedAmount || 0), 0).toFixed(2)}
                       </p>
                     </CardContent>
                   </Card>
@@ -510,7 +508,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({
                           </div>
                         </TableCell>
                         <TableCell className="text-right font-semibold text-orange-700">
-                          £{Number(sale.totalAmount).toFixed(2)}
+                          £{Number(sale.refundedAmount || 0).toFixed(2)}
                         </TableCell>
                       </TableRow>
                     ))}

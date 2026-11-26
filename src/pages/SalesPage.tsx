@@ -19,10 +19,10 @@ import { XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Eye, Printer, RotateCcw, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { salesService, Sale, SaleFilters as SaleFiltersType } from '@/services/salesService';
-import { fetchAllPages } from '@/lib/fetchAllPages';
 import SalesStatsCards from '@/components/sales/SalesStatsCards';
 import SalesFilters, { SalesFilterValues } from '@/components/sales/SalesFilters';
 import SaleDetailModal from '@/components/sales/SaleDetailModal';
+import { isRefundable, refundState } from '@/utils/saleRefunds';
 import RefundSaleDialog from '@/components/sales/RefundSaleDialog';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -85,6 +85,7 @@ const SalesPage = () => {
   const [todayRevenue, setTodayRevenue] = useState(0);
   const [todaySales, setTodaySales] = useState(0);
   const [weekRevenue, setWeekRevenue] = useState(0);
+  const [previous, setPrevious] = useState<{ day?: number; week?: number; month?: number }>({});
   const [weekSales, setWeekSales] = useState(0);
   const [monthRevenue, setMonthRevenue] = useState(0);
   const [monthSales, setMonthSales] = useState(0);
@@ -103,108 +104,118 @@ const SalesPage = () => {
     shift: 'all'
   });
 
+  // The search term the currently loaded list was fetched with. Declared before
+  // the effects below, which read it.
+  const [serverSearch, setServerSearch] = useState('');
+  const [salesTruncated, setSalesTruncated] = useState(false);
+
   const { toast } = useToast();
 
-  // Load static reference data once.
+  // Load stats + cashiers once
   useEffect(() => {
     loadStatistics();
     loadCashiers();
   }, []);
 
-  // (Re)load sales from the server whenever a server-side filter changes — the
-  // date range especially must hit the DB, not filter a stale 100-row page.
+  // (Re)load sales FROM THE SERVER whenever the date range or search changes.
+  // The list used to be the latest 100 sales fetched once and filtered in the
+  // browser, so any range older than those 100 showed "No sales found".
+  // Search is debounced so we don't fire a request per keystroke.
+  const dateFromKey = filters.dateFrom ? filters.dateFrom.getTime() : 0;
+  const dateToKey = filters.dateTo ? filters.dateTo.getTime() : 0;
   useEffect(() => {
-    loadSales();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    filters.dateFrom,
-    filters.dateTo,
-    filters.status,
-    filters.paymentMethod,
-    filters.paymentStatus,
-    filters.cashierId,
-    auth.user?.id,
-  ]);
+    const t = setTimeout(() => { loadSales(); }, filters.search ? 350 : 0);
+    return () => clearTimeout(t);
+  }, [dateFromKey, dateToKey, filters.search]);
 
-  // Apply the client-only filters (search, customer type, shift) to whatever
-  // the server returned.
+  // Apply filters when they change
   useEffect(() => {
     applyFilters();
-  }, [sales, filters]);
+  }, [sales, filters, serverSearch]);
 
-  // Load shifts when date range changes for filtering
-  const [availableShifts, setAvailableShifts] = useState<Shift[]>([]);
-  useEffect(() => {
-    if (filters.dateFrom && filters.dateTo) {
-      loadAvailableShifts();
+  // Shift choices come from the loaded sales themselves, so every option has
+  // sales behind it. (Asking the API for shifts by START date missed a shift
+  // opened before the range, e.g. one left open for weeks.)
+  const availableShifts = React.useMemo(() => {
+    const byId = new Map<string, { id: string; label: string }>();
+    for (const sale of sales) {
+      if (sale.shiftId && !byId.has(sale.shiftId)) {
+        byId.set(sale.shiftId, {
+          id: sale.shiftId,
+          label: sale.shiftNumber || sale.shiftId.slice(0, 8),
+        });
+      }
     }
-  }, [filters.dateFrom, filters.dateTo]);
+    return [...byId.values()].sort((x, y) => y.label.localeCompare(x.label));
+  }, [sales]);
 
-  const loadAvailableShifts = async () => {
-    if (!filters.dateFrom || !filters.dateTo) return;
-
-    try {
-      const shiftsData = await shiftService.getShiftsByDateRange({
-        startDate: filters.dateFrom.toISOString(),
-        endDate: filters.dateTo.toISOString(),
-      });
-      setAvailableShifts(shiftsData || []);
-    } catch (error) {
-      console.error('Error loading available shifts:', error);
-      setAvailableShifts([]);
-    }
-  };
+  // Render the list in pages: the whole range is in memory (totals and export
+  // use all of it), but mounting thousands of rows freezes a till.
+  const SALES_PAGE_SIZE = 50;
+  const [listPage, setListPage] = useState(1);
+  const listTotalPages = Math.max(1, Math.ceil(filteredSales.length / SALES_PAGE_SIZE));
+  const listSafePage = Math.min(listPage, listTotalPages);
+  const pagedSales = filteredSales.slice(
+    (listSafePage - 1) * SALES_PAGE_SIZE,
+    listSafePage * SALES_PAGE_SIZE,
+  );
+  useEffect(() => { setListPage(1); }, [filters]);
 
   // Load shifts when switching to shifts view
   useEffect(() => {
-    if (viewMode === 'shifts') {
+    if (viewMode === 'shifts' && filters.dateFrom && filters.dateTo) {
       loadShifts();
     }
-  }, [viewMode]);
+  }, [viewMode, dateFromKey, dateToKey, filters.cashierId]);
+
+  // Guards against an older, slower request overwriting a newer one.
+  const loadSeq = React.useRef(0);
 
   const loadSales = async () => {
+    const seq = ++loadSeq.current;
     try {
       setLoading(true);
 
-      // Push the filters the backend understands down to the query so the DB
-      // returns the right rows — previously this always fetched only the first
-      // 100 sales and filtered them in the browser, so any date range reaching
-      // past the 100 most-recent sales showed (and exported) the wrong records.
-      const serverFilters: SaleFiltersType = {};
-
-      // STAFF users are always scoped to their own sales; managers can pick.
+      const query: SaleFiltersType = {};
+      // For STAFF users, filter by their cashier ID
       if (auth.user?.role === 'STAFF') {
-        serverFilters.cashierId = auth.user.id;
-      } else if (filters.cashierId && filters.cashierId !== 'all') {
-        serverFilters.cashierId = filters.cashierId;
-      }
-      if (filters.status && filters.status !== 'all') serverFilters.status = filters.status;
-      if (filters.paymentMethod && filters.paymentMethod !== 'all') serverFilters.paymentMethod = filters.paymentMethod;
-      if (filters.paymentStatus && filters.paymentStatus !== 'all') serverFilters.paymentStatus = filters.paymentStatus;
-
-      // The backend only applies its createdAt range when BOTH bounds are
-      // present, and expects plain YYYY-MM-DD (it appends the end-of-day time
-      // itself). Passing full ISO strings broke the query.
-      const hasRange = !!(filters.dateFrom && filters.dateTo);
-      if (hasRange) {
-        serverFilters.startDate = format(filters.dateFrom!, 'yyyy-MM-dd');
-        serverFilters.endDate = format(filters.dateTo!, 'yyyy-MM-dd');
+        query.cashierId = auth.user.id;
       }
 
-      if (hasRange) {
-        // A date range can match far more than one page — pull them all so the
-        // list and CSV/XLSX export are complete, not capped at 100.
-        const all = await fetchAllPages(
-          (page) => salesService.getSales(page, 100, serverFilters),
-          { concurrency: 3, maxPages: 100 },
-        );
-        setSales(all);
-      } else {
-        // No range: show the most recent sales (server already sorts newest-first).
-        const response = await salesService.getSales(1, 100, serverFilters);
-        setSales(response.data || []);
+      // Date range → server. Start is sent as the exact start of the local day;
+      // end is sent as a plain date (the API treats it as inclusive end-of-day).
+      // The precise local-time trim happens in applyFilters.
+      if (filters.dateFrom || filters.dateTo) {
+        const from = filters.dateFrom ? new Date(filters.dateFrom) : new Date(2000, 0, 1);
+        from.setHours(0, 0, 0, 0);
+        const to = filters.dateTo ? new Date(filters.dateTo) : new Date();
+        to.setHours(23, 59, 59, 999);
+        query.startDate = from.toISOString();
+        query.endDate = to.toISOString().slice(0, 10);
       }
+      const term = filters.search.trim();
+      if (term) query.search = term;
+
+      // Pull every page for the range (1000 per request), with a safety cap.
+      const PAGE = 1000;
+      const MAX_PAGES = 5;
+      let all: Sale[] = [];
+      let truncated = false;
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        const response = await salesService.getSales(page, PAGE, query);
+        if (seq !== loadSeq.current) return; // superseded
+        const rows = response.data || [];
+        all = all.concat(rows);
+        const hasNext = (response as any).meta?.hasNextPage ?? rows.length === PAGE;
+        if (!hasNext) break;
+        if (page === MAX_PAGES) truncated = true;
+      }
+      if (seq !== loadSeq.current) return;
+      setSales(all);
+      setServerSearch(term);
+      setSalesTruncated(truncated);
     } catch (error) {
+      if (seq !== loadSeq.current) return;
       console.error('Error loading sales:', error);
       toast({
         title: 'Error',
@@ -212,7 +223,7 @@ const SalesPage = () => {
         variant: 'destructive'
       });
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   };
 
@@ -221,8 +232,13 @@ const SalesPage = () => {
       const stats = await salesService.getSalesStats();
       setTodayRevenue(stats.revenueToday || 0);
       setTodaySales(stats.salesToday || 0);
-      setWeekRevenue(stats.revenueThisMonth || 0); // Adjust based on your API
-      setWeekSales(stats.salesThisMonth || 0);
+      setWeekRevenue(stats.revenueThisWeek || 0);
+      setWeekSales(stats.salesThisWeek || 0);
+      setPrevious({
+        day: stats.revenuePreviousDay,
+        week: stats.revenuePreviousWeek,
+        month: stats.revenuePreviousMonth,
+      });
       setMonthRevenue(stats.revenueThisMonth || 0);
       setMonthSales(stats.salesThisMonth || 0);
       setTotalRevenue(stats.totalSalesAmount || 0); // Fixed: Use totalSalesAmount instead of totalRevenue
@@ -261,9 +277,16 @@ const SalesPage = () => {
 
     try {
       setShiftsLoading(true);
+      // Whole days: "Today" used to send the current time as the start, which
+      // excluded every shift opened earlier today.
+      const from = new Date(filters.dateFrom);
+      from.setHours(0, 0, 0, 0);
+      const to = new Date(filters.dateTo);
+      to.setHours(23, 59, 59, 999);
       const shiftsData = await shiftService.getShiftsByDateRange({
-        startDate: filters.dateFrom.toISOString(),
-        endDate: filters.dateTo.toISOString(),
+        startDate: from.toISOString(),
+        endDate: to.toISOString(),
+        overlap: true,
         userId: filters.cashierId !== 'all' ? filters.cashierId : undefined,
       });
       setShifts(shiftsData);
@@ -283,27 +306,47 @@ const SalesPage = () => {
     setSelectedShiftForReport(shift.id);
   };
 
+  // Refunds only update refundedAmount (the stored paymentStatus stays
+  // COMPLETED), so derive the refunded states or those filters match nothing.
+  // totalAmount is already net of refunds.
+  const effectivePaymentStatus = (sale: Sale) => {
+    const refunded = refundState(sale);
+    if (refunded === 'NONE') return sale.paymentStatus;
+    return refunded === 'FULL' ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+  };
+
   const applyFilters = () => {
     let result = [...sales];
 
-    // Search filter
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
+    // Search filter. When the loaded list was already fetched with this exact
+    // term the server has done the matching (incl. product SKU / barcode), so
+    // don't re-filter and throw those matches away. Otherwise (while the
+    // debounced request is in flight) filter what we have for instant feedback.
+    const term = filters.search.trim();
+    if (term && term !== serverSearch) {
+      const searchLower = term.toLowerCase();
       result = result.filter(sale =>
         sale.receiptNumber?.toLowerCase().includes(searchLower) ||
+        (sale as any).saleNumber?.toLowerCase().includes(searchLower) ||
         sale.customerName?.toLowerCase().includes(searchLower) ||
-        sale.id.toLowerCase().includes(searchLower)
+        sale.id.toLowerCase().includes(searchLower) ||
+        (sale.notes || '').toLowerCase().includes(searchLower) ||
+        ((sale.items || []) as any[]).some(i =>
+          `${i.productName || i.name || ''} ${i.productSku || i.sku || ''}`.toLowerCase().includes(searchLower))
       );
     }
 
     // Payment method filter
     if (filters.paymentMethod && filters.paymentMethod !== 'all') {
-      result = result.filter(sale => sale.paymentMethod === filters.paymentMethod);
+      // A split payment matches on any of its tenders, not just the largest.
+      result = result.filter(sale =>
+        sale.paymentMethod === filters.paymentMethod ||
+        (sale.payments || []).some(p => p.method === filters.paymentMethod));
     }
 
     // Payment status filter
     if (filters.paymentStatus && filters.paymentStatus !== 'all') {
-      result = result.filter(sale => sale.paymentStatus === filters.paymentStatus);
+      result = result.filter(sale => effectivePaymentStatus(sale) === filters.paymentStatus);
     }
 
     // Sale status filter
@@ -311,11 +354,22 @@ const SalesPage = () => {
       result = result.filter(sale => sale.status === filters.status);
     }
 
-    // Date range is filtered server-side in loadSales (see there). We must NOT
-    // re-filter here: filters.dateFrom/dateTo are local-midnight Dates, and
-    // re-comparing against UTC createdAt would wrongly drop boundary-day sales
-    // that the server correctly included — keeping the list/export consistent
-    // with what the DB returned.
+    // Date range filter
+    if (filters.dateFrom) {
+      // From the START of the chosen day. (The quick "Today" button passes the
+      // current time, which used to hide every sale made earlier today.)
+      const startOfDay = new Date(filters.dateFrom);
+      startOfDay.setHours(0, 0, 0, 0);
+      result = result.filter(sale => new Date(sale.createdAt) >= startOfDay);
+    }
+    if (filters.dateTo) {
+      result = result.filter(sale => {
+        const saleDate = new Date(sale.createdAt);
+        const endOfDay = new Date(filters.dateTo!);
+        endOfDay.setHours(23, 59, 59, 999);
+        return saleDate <= endOfDay;
+      });
+    }
 
     // Cashier filter
     if (filters.cashierId && filters.cashierId !== 'all') {
@@ -324,7 +378,7 @@ const SalesPage = () => {
 
     // Shift filter
     if (filters.shift && filters.shift !== 'all') {
-      result = result.filter(sale => (sale as any).shiftId === filters.shift);
+      result = result.filter(sale => sale.shiftId === filters.shift);
     }
 
     // Customer type filter
@@ -592,6 +646,7 @@ const SalesPage = () => {
       const updated = await salesService.refundSale(refundData.saleId, {
         reason: refundData.reason,
         items: refundData.items,
+        fullRefund: refundData.refundType === 'full',
         notes: refundData.notes,
         refundPassword: refundData.refundPassword,
       });
@@ -931,6 +986,7 @@ const SalesPage = () => {
         <SalesStatsCards
           todayRevenue={todayRevenue}
           todaySales={todaySales}
+          previous={previous}
           weekRevenue={weekRevenue}
           weekSales={weekSales}
           monthRevenue={monthRevenue}
@@ -949,6 +1005,8 @@ const SalesPage = () => {
           onExportXLSX={handleExportXLSX}
           cashiers={cashiers}
           shifts={availableShifts}
+          resultCount={filteredSales.length}
+          loading={loading}
         />
 
         {/* View Mode Selector */}
@@ -1007,11 +1065,11 @@ const SalesPage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredSales.map((sale) => (
+                    {pagedSales.map((sale) => (
                       <React.Fragment key={sale.id}>
                       <TableRow className="hover:bg-gray-50 transition-colors">
                         <TableCell className="font-medium">
-                          {sale.receiptNumber || `#${sale.id.slice(0, 8)}`}
+                          {sale.receiptNumber || sale.saleNumber || `#${sale.id.slice(0, 8)}`}
                         </TableCell>
                         <TableCell className="text-sm text-gray-600">
                           {formatDate(sale.createdAt)}
@@ -1074,7 +1132,7 @@ const SalesPage = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {getSaleStatusBadge(sale.status)}
+                          {getSaleStatusBadge(refundState(sale) === 'PARTIAL' ? 'PARTIALLY_REFUNDED' : sale.status)}
                         </TableCell>
                         <TableCell className="text-sm">
                           <div className="flex flex-col gap-0.5">
@@ -1104,7 +1162,7 @@ const SalesPage = () => {
                             >
                               <Printer className="h-4 w-4" />
                             </Button>
-                            {sale.paymentStatus === 'COMPLETED' && sale.status === 'COMPLETED' && (
+                            {sale.paymentStatus === 'COMPLETED' && isRefundable(sale) && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1114,7 +1172,8 @@ const SalesPage = () => {
                                 <RotateCcw className="h-4 w-4" />
                               </Button>
                             )}
-                            {sale.status === 'COMPLETED' && (
+                            {/* Voiding deletes the sale, so never once it carries a refund. */}
+                            {sale.status === 'COMPLETED' && refundState(sale) === 'NONE' && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1125,7 +1184,7 @@ const SalesPage = () => {
                                 <XCircle className="h-4 w-4" />
                               </Button>
                             )}
-                            {(sale.status === 'REFUNDED' || sale.status === 'PARTIALLY_REFUNDED' || sale.paymentStatus === 'REFUNDED' || sale.paymentStatus === 'PARTIALLY_REFUNDED') && (
+                            {refundState(sale) !== 'NONE' && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1143,7 +1202,11 @@ const SalesPage = () => {
                       {expandedSaleId === sale.id && (
                         <TableRow className="bg-orange-50">
                           <TableCell colSpan={10} className="py-3 px-6">
-                            <div className="text-sm font-medium text-orange-800 mb-2">Refunded Items</div>
+                            <div className="text-sm font-medium text-orange-800 mb-2">
+                              {/* Returned lines are removed from the sale, so what is listed is what was kept. */}
+                              Refunded {formatCurrency(sale.refundedAmount || 0)}
+                              {(sale.items || []).length > 0 ? ' — items kept:' : ' — no items left on this sale'}
+                            </div>
                             <div className="grid gap-1">
                               {(sale.items || []).map((item, i) => (
                                 <div key={i} className="flex items-center gap-3 text-xs text-gray-700">
@@ -1176,11 +1239,17 @@ const SalesPage = () => {
         {viewMode === 'shifts' && (
           <Card className="shadow-sm">
             <CardContent className="p-6">
-              <ShiftList
-                shifts={shifts}
-                onViewReport={handleViewShift}
-                loading={shiftsLoading}
-              />
+              {!filters.dateFrom || !filters.dateTo ? (
+                <p className="py-12 text-center text-gray-600">
+                  Pick a From and To date in Filters to see shifts.
+                </p>
+              ) : (
+                <ShiftList
+                  shifts={shifts}
+                  onViewReport={handleViewShift}
+                  loading={shiftsLoading}
+                />
+              )}
             </CardContent>
           </Card>
         )}
@@ -1193,8 +1262,18 @@ const SalesPage = () => {
         {/* Results Summary */}
         {viewMode === 'sales' && !loading && filteredSales.length > 0 && (
           <div className="mt-4 text-sm text-gray-600 text-center">
+            {listTotalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 mb-2">
+                <Button variant="outline" size="sm" disabled={listSafePage <= 1}
+                  onClick={() => setListPage(listSafePage - 1)}>Previous</Button>
+                <span>Page {listSafePage} of {listTotalPages}</span>
+                <Button variant="outline" size="sm" disabled={listSafePage >= listTotalPages}
+                  onClick={() => setListPage(listSafePage + 1)}>Next</Button>
+              </div>
+            )}
             Showing {filteredSales.length} of {sales.length} sales
             {filters.search && ` • Filtered by: "${filters.search}"`}
+            {salesTruncated && ' • Showing the most recent 5,000 — narrow the date range to see older sales'}
           </div>
         )}
       </div>

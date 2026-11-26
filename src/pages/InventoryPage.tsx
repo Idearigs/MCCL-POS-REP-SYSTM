@@ -79,25 +79,11 @@ const InventoryPage = () => {
   const location = useLocation();
   const availableCategories = Array.from(new Set(inventory.map(item => (item as any).categoryName || item.category).filter(Boolean)));
 
-  const [filteredInventory, setFilteredInventory] = useState<InventoryItem[]>(inventory);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('name');
-
-  // Paginate the RENDER: a shop can have 1,000+ products, and mounting every
-  // card/row at once bloats the DOM and slows low-end tills. The full dataset
-  // stays in memory (valuation totals, export, etc. still use it) — only the
-  // visible page is mounted. Page resets to 1 whenever the filtered set changes.
-  const INVENTORY_PAGE_SIZE = 60;
+  // Advanced filters from the filter popover (null = none applied yet).
+  const [activeFilters, setActiveFilters] = useState<any>(null);
   const [invPage, setInvPage] = useState(1);
-  const invTotalPages = Math.max(1, Math.ceil(filteredInventory.length / INVENTORY_PAGE_SIZE));
-  const invSafePage = Math.min(invPage, invTotalPages);
-  const pagedInventory = filteredInventory.slice(
-    (invSafePage - 1) * INVENTORY_PAGE_SIZE,
-    invSafePage * INVENTORY_PAGE_SIZE,
-  );
-  useEffect(() => {
-    setInvPage(1);
-  }, [filteredInventory]);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -153,51 +139,47 @@ const InventoryPage = () => {
   // Set isLoaded to true after component mounts to prevent initial render issues
   useEffect(() => {
     setIsLoaded(true);
-    applyFilters('');
   }, []);
 
-  // Apply search and filters to inventory
-  const applyFilters = (searchTerm: string, filters?: any, activeQuickFilter?: 'lowStock' | 'outOfStock' | 'duplicates' | null) => {
+  // The visible list is DERIVED from inventory + search/filter/sort state, so it
+  // can never go stale. (It used to be separate state rebuilt by handlers that
+  // read not-yet-updated sort/filter values, which dropped the active filters
+  // whenever the inventory refreshed and made sorting lag one click behind.)
+  const filteredInventory = React.useMemo(() => {
     let result = [...inventory];
 
-    // Apply search
-    if (searchTerm) {
-      const lowercaseQuery = searchTerm.toLowerCase();
+    if (searchQuery) {
+      const lowercaseQuery = searchQuery.toLowerCase();
       result = result.filter(item =>
-        item.name.toLowerCase().includes(lowercaseQuery) ||
-        item.sku.toLowerCase().includes(lowercaseQuery) ||
-        ((item as any).categoryName || item.category).toLowerCase().includes(lowercaseQuery) ||
+        (item.name || '').toLowerCase().includes(lowercaseQuery) ||
+        (item.sku || '').toLowerCase().includes(lowercaseQuery) ||
+        ((item as any).categoryName || item.category || '').toLowerCase().includes(lowercaseQuery) ||
         (item.description && item.description.toLowerCase().includes(lowercaseQuery))
       );
     }
 
-    // Apply quick filter (Low Stock, Out of Stock, or Duplicates button clicks)
-    const currentQuickFilter = activeQuickFilter !== undefined ? activeQuickFilter : quickFilter;
-    if (currentQuickFilter === 'lowStock') {
+    // Quick filter (Low Stock, Out of Stock, or Duplicates buttons)
+    if (quickFilter === 'lowStock') {
       result = result.filter(item => item.quantity > 0 && item.quantity <= item.threshold);
-    } else if (currentQuickFilter === 'outOfStock') {
+    } else if (quickFilter === 'outOfStock') {
       result = result.filter(item => item.quantity <= 0);
-    } else if (currentQuickFilter === 'duplicates') {
+    } else if (quickFilter === 'duplicates') {
       result = result.filter(item => duplicateIds.has(item.id));
     }
 
-    // Apply filters if provided
+    const filters = activeFilters;
     if (filters) {
-      // Filter by categories
-      if (filters.categories.length > 0) {
+      if (filters.categories?.length > 0) {
         result = result.filter(item => filters.categories.includes((item as any).categoryName || item.category));
       }
-
-      // Filter by price range
-      if (filters.minPrice !== null) {
+      if (filters.minPrice !== null && filters.minPrice !== undefined) {
         result = result.filter(item => item.price >= filters.minPrice);
       }
-      if (filters.maxPrice !== null) {
+      if (filters.maxPrice !== null && filters.maxPrice !== undefined) {
         result = result.filter(item => item.price <= filters.maxPrice);
       }
-
-      // Filter by stock status (only if quick filter is not active)
-      if (!currentQuickFilter) {
+      // Stock status (only if a quick filter is not active)
+      if (!quickFilter && filters.stockStatus) {
         result = result.filter(item => {
           if (item.quantity <= 0 && !filters.stockStatus.outOfStock) return false;
           if (item.quantity <= item.threshold && item.quantity > 0 && !filters.stockStatus.lowStock) return false;
@@ -207,36 +189,42 @@ const InventoryPage = () => {
       }
     }
 
-    // Apply sorting
     result.sort((a, b) => {
       let valueA: any = a[sortBy as keyof InventoryItem];
       let valueB: any = b[sortBy as keyof InventoryItem];
-
-      if (typeof valueA === 'string') {
-        valueA = valueA.toLowerCase();
-        valueB = valueB.toLowerCase();
-      }
-
+      if (typeof valueA === 'string') valueA = valueA.toLowerCase();
+      if (typeof valueB === 'string') valueB = valueB.toLowerCase();
       if (valueA < valueB) return sortOrder === 'asc' ? -1 : 1;
       if (valueA > valueB) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
 
-    setFilteredInventory(result);
-  };
-  
-  // Handle search input changes
+    return result;
+  }, [inventory, searchQuery, quickFilter, activeFilters, sortBy, sortOrder, duplicateIds]);
+
+  // Paginate the RENDER: a shop can have 1,000+ products, and mounting every
+  // card/row at once bloats the DOM and slows low-end tills. The full dataset
+  // stays in memory (valuation totals, export, etc. still use it) — only the
+  // visible page is mounted.
+  const INVENTORY_PAGE_SIZE = 60;
+  const invTotalPages = Math.max(1, Math.ceil(filteredInventory.length / INVENTORY_PAGE_SIZE));
+  const invSafePage = Math.min(invPage, invTotalPages);
+  const pagedInventory = filteredInventory.slice(
+    (invSafePage - 1) * INVENTORY_PAGE_SIZE,
+    invSafePage * INVENTORY_PAGE_SIZE,
+  );
+  // Back to page 1 only when the user changes what they're looking at — NOT on
+  // every inventory refresh (saving an edit on page 3 used to throw you to page 1).
+  useEffect(() => {
+    setInvPage(1);
+  }, [searchQuery, quickFilter, activeFilters, sortBy, sortOrder]);
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const query = e.target.value;
-    setSearchQuery(query);
-    applyFilters(query, undefined, quickFilter);
+    setSearchQuery(e.target.value);
   };
 
-  // Handle quick filter toggle
   const handleQuickFilter = (filterType: 'lowStock' | 'outOfStock' | 'duplicates') => {
-    const newFilter = quickFilter === filterType ? null : filterType;
-    setQuickFilter(newFilter);
-    applyFilters(searchQuery, undefined, newFilter);
+    setQuickFilter(quickFilter === filterType ? null : filterType);
   };
 
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
@@ -249,25 +237,19 @@ const InventoryPage = () => {
     // scroll the user to the top so the banner is visible
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-  
-  // Handle sorting changes
+
   const handleSortChange = (value: string) => {
     setSortBy(value);
-    applyFilters(searchQuery, undefined, quickFilter);
   };
 
-  // Toggle sort order
   const toggleSortOrder = () => {
-    const newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
-    setSortOrder(newOrder);
-    applyFilters(searchQuery, undefined, quickFilter);
+    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
   };
 
-  // Handle filter changes
   const handleFilterChange = (filters: any) => {
-    applyFilters(searchQuery, filters, quickFilter);
+    setActiveFilters(filters);
   };
-  
+
   // Open the detail dialog for editing an item
   const handleEditItem = (id: string) => {
     const item = inventory.find(i => i.id === id);
@@ -275,6 +257,15 @@ const InventoryPage = () => {
       setSelectedItem(item);
       setIsNewItem(false);
       setIsDetailOpen(true);
+    } else {
+      // The list was out of date (item removed elsewhere) — say so and resync
+      // rather than leaving the Edit button looking dead.
+      toast({
+        title: "Item not found",
+        description: "The inventory list was out of date — refreshing it now.",
+        variant: "destructive",
+      });
+      refreshInventory();
     }
   };
   
@@ -283,17 +274,29 @@ const InventoryPage = () => {
     setItemToDelete(id);
   };
   
-  // Confirm deletion of an item
-  const confirmDelete = () => {
-    if (itemToDelete) {
-      deleteItem(itemToDelete);
-      
+  // Confirm deletion of an item. Wait for the server before reporting success —
+  // it used to toast "Item Deleted" immediately even when the request failed,
+  // leaving the item on screen with no explanation.
+  const [isDeleting, setIsDeleting] = useState(false);
+  const confirmDelete = async () => {
+    if (!itemToDelete || isDeleting) return;
+    const id = itemToDelete;
+    setIsDeleting(true);
+    try {
+      await deleteItem(id);
       toast({
         title: "Item Deleted",
         description: "The inventory item has been removed."
       });
-      
       setItemToDelete(null);
+    } catch (error: any) {
+      toast({
+        title: "Could not delete item",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
   
@@ -601,34 +604,40 @@ const InventoryPage = () => {
         console.log('✅ Product updated with ID:', productId);
       }
 
-      // Upload images if provided
+      // Upload images if provided. The product itself is already saved at this
+      // point, so an upload failure must NOT be reported as "failed to add" —
+      // that left the dialog open on a product that existed, and a retry
+      // created a duplicate. Report it as a partial success instead.
+      let failedUploads = 0;
       if (imageFiles && imageFiles.length > 0) {
-        console.log(`📤 Uploading ${imageFiles.length} images for product ${productId}`);
-
-        const uploadPromises = imageFiles.map((file, index) => {
-          console.log(`  - Uploading image ${index + 1}/${imageFiles.length}: ${file.name}`);
-          return productService.uploadProductImage(productId, file);
+        const results = await Promise.allSettled(
+          imageFiles.map((file) => productService.uploadProductImage(productId, file)),
+        );
+        failedUploads = results.filter((r) => r.status === 'rejected').length;
+        results.forEach((r) => {
+          if (r.status === 'rejected') console.error('Image upload failed:', r.reason);
         });
-
-        const uploadResults = await Promise.all(uploadPromises);
-        console.log('✅ All images uploaded successfully:', uploadResults);
       }
 
-      // Refresh inventory to get updated product data with images from database
-      console.log('🔄 Refreshing inventory from database...');
-      await refreshInventory();
-      console.log('✅ Inventory refreshed with latest data including images');
+      // add/update already put the server's copy into local state. Only re-pull
+      // the whole catalogue (every page) when images were uploaded, since those
+      // URLs come from the server — this keeps a plain save fast.
+      if (imageFiles && imageFiles.length > 0) {
+        await refreshInventory();
+      }
 
-      // Show success message
-      if (isNewItem) {
+      const savedVerb = isNewItem ? 'added to inventory' : 'updated';
+      if (failedUploads > 0) {
         toast({
-          title: "Item Added",
-          description: `${updatedItem.name} has been added to inventory${imageFiles && imageFiles.length > 0 ? ` with ${imageFiles.length} image(s)` : ''}.`,
+          title: isNewItem ? "Item added — photo not uploaded" : "Item updated — photo not uploaded",
+          description: `${updatedItem.name} was ${savedVerb}, but ${failedUploads} of ${imageFiles!.length} image(s) failed to upload. Open the item and add the photo again.`,
+          variant: "destructive",
         });
       } else {
+        const uploaded = imageFiles && imageFiles.length > 0 ? ` with ${imageFiles.length} image(s)` : '';
         toast({
-          title: "Item Updated",
-          description: `${updatedItem.name} has been updated${imageFiles && imageFiles.length > 0 ? ` with ${imageFiles.length} new image(s)` : ''}.`,
+          title: isNewItem ? "Item Added" : "Item Updated",
+          description: `${updatedItem.name} has been ${savedVerb}${uploaded}.`,
         });
       }
 
@@ -639,7 +648,9 @@ const InventoryPage = () => {
       console.error('❌ Failed to save item:', error);
       toast({
         title: "Error",
-        description: `Failed to ${isNewItem ? 'add' : 'update'} item: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        // apiClient rejects with a plain { message, statusCode } object, not an
+        // Error, so `instanceof Error` always fell through to "Unknown error".
+        description: `Failed to ${isNewItem ? 'add' : 'update'} item: ${(error as any)?.message || 'Unknown error'}`,
         variant: "destructive",
       });
     }
@@ -692,10 +703,6 @@ const InventoryPage = () => {
   const gbp = (n: number) =>
     `£${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  // Update filtered inventory when inventory changes
-  useEffect(() => {
-    applyFilters(searchQuery, undefined, quickFilter);
-  }, [inventory, quickFilter]);
 
   // Don't render until component is fully loaded to prevent initialization errors
   if (!isLoaded) {
@@ -1358,7 +1365,7 @@ const InventoryPage = () => {
         />
 
         {/* Confirmation dialog for deletion */}
-        <AlertDialog open={itemToDelete !== null} onOpenChange={() => setItemToDelete(null)}>
+        <AlertDialog open={itemToDelete !== null} onOpenChange={(open) => { if (!open && !isDeleting) setItemToDelete(null); }}>
           <AlertDialogContent className="bg-white/95 backdrop-blur-lg border border-navy/10 rounded-xl shadow-md">
             <AlertDialogHeader>
               <AlertDialogTitle className="text-navy font-medium">Delete Inventory Item</AlertDialogTitle>
@@ -1367,9 +1374,13 @@ const InventoryPage = () => {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="rounded-full border border-navy/10 hover:bg-navy/5 text-navy">Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700 text-white rounded-full">
-                Delete
+              <AlertDialogCancel disabled={isDeleting} className="rounded-full border border-navy/10 hover:bg-navy/5 text-navy">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isDeleting}
+                onClick={(e) => { e.preventDefault(); confirmDelete(); }}
+                className="bg-red-600 hover:bg-red-700 text-white rounded-full"
+              >
+                {isDeleting ? 'Deleting…' : 'Delete'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

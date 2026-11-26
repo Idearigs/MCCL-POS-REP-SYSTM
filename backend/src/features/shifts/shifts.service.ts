@@ -354,6 +354,10 @@ export class ShiftsService {
     endDate: Date,
     userId?: string,
     status?: ShiftStatus,
+    // true: shifts that were OPEN at any point in the range (exact bounds),
+    // not only those that started in it. Opt-in — cash-up and float history
+    // rely on the start-date meaning.
+    overlap = false,
   ) {
     // Set end date to end of day
     const endOfDay = new Date(endDate);
@@ -362,10 +366,12 @@ export class ShiftsService {
     return this.prisma.shifts.findMany({
       where: {
         tenantId,
-        startTime: {
-          gte: startDate,
-          lte: endOfDay,
-        },
+        ...(overlap
+          ? {
+              startTime: { lte: endDate },
+              OR: [{ endTime: null }, { endTime: { gte: startDate } }],
+            }
+          : { startTime: { gte: startDate, lte: endOfDay } }),
         ...(userId && { userId }),
         ...(status && { status }),
       },
@@ -391,9 +397,10 @@ export class ShiftsService {
   }
 
   // Get shift report/details
-  async getShiftReport(shiftId: string) {
-    const shift = await this.prisma.shifts.findUnique({
-      where: { id: shiftId },
+  async getShiftReport(shiftId: string, tenantId: string) {
+    // Scoped to the caller's tenant: another shop's shift id must look missing.
+    const shift = await this.prisma.shifts.findFirst({
+      where: { id: shiftId, tenantId },
       include: {
         user: {
           select: {
@@ -440,6 +447,19 @@ export class ShiftsService {
     const completedSales = shift.sales.filter((s) => s.status === 'COMPLETED');
     const cancelledSales = shift.sales.filter((s) => s.status === 'CANCELLED');
 
+    // A refund lowers totalAmount, so gross adds it back. REFUNDED is included
+    // because older part-refunded sales also carry that status.
+    const tradedSales = shift.sales.filter(
+      (s) => s.status === 'COMPLETED' || s.status === 'REFUNDED',
+    );
+    const toPence = (n: number) => Math.round(n * 100) / 100;
+    const netRevenue = toPence(
+      tradedSales.reduce((sum, s) => sum + Number(s.totalAmount), 0),
+    );
+    const refundedTotal = toPence(
+      tradedSales.reduce((sum, s) => sum + Number(s.refundedAmount), 0),
+    );
+
     const totalSales = completedSales.length;
     const totalRevenue = completedSales.reduce(
       (sum, s) => sum + Number(s.totalAmount),
@@ -485,6 +505,10 @@ export class ShiftsService {
       metrics: {
         totalSales,
         totalRevenue,
+        transactionCount: tradedSales.length,
+        grossRevenue: toPence(netRevenue + refundedTotal),
+        refundedTotal,
+        netRevenue,
         averageSaleValue,
         itemsSold,
         cancelledSales: cancelledSales.length,

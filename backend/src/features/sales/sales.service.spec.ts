@@ -271,6 +271,81 @@ describe('SalesService', () => {
       expect(result).toBeDefined();
       expect(result).toHaveProperty('totalRevenue');
     });
+
+    describe('week figures and like-for-like trends', () => {
+      afterEach(() => {
+        jest.useRealTimers();
+        mockSalesRepository.aggregate.mockResolvedValue({
+          _sum: { totalAmount: 0, refundedAmount: 0 },
+        });
+      });
+
+      // Revenue per window, keyed by the window the service asked for.
+      const statsAt = async (now: Date) => {
+        jest.useFakeTimers({ now, doNotFake: ['nextTick', 'setImmediate'] });
+        mockSalesRepository.aggregate.mockClear();
+        const windows: { gte: Date; lt?: Date }[] = [];
+        mockSalesRepository.aggregate.mockImplementation(({ where }) => {
+          if (where.createdAt) windows.push(where.createdAt);
+          return Promise.resolve({ _sum: { totalAmount: 0 } });
+        });
+        await service.getStats('tenant-001');
+        return windows.map((w) => [w.gte, w.lt]);
+      };
+
+      it('starts the week on Monday, not the 1st of the month', async () => {
+        // Thursday 26 Nov 2026, 15:30
+        const windows = await statsAt(new Date(2026, 10, 26, 15, 30));
+        expect(windows).toContainEqual([new Date(2026, 10, 23), undefined]);
+        expect(windows).toContainEqual([new Date(2026, 10, 1), undefined]);
+      });
+
+      it('treats Sunday as the last day of the week', async () => {
+        const windows = await statsAt(new Date(2026, 10, 29, 9, 0));
+        expect(windows).toContainEqual([new Date(2026, 10, 23), undefined]);
+      });
+
+      it('compares with the same point in the previous period', async () => {
+        const windows = await statsAt(new Date(2026, 10, 26, 15, 30));
+        expect(windows).toContainEqual([
+          new Date(2026, 10, 25),
+          new Date(2026, 10, 25, 15, 30),
+        ]);
+        expect(windows).toContainEqual([
+          new Date(2026, 10, 16),
+          new Date(2026, 10, 19, 15, 30),
+        ]);
+      });
+
+      it('never lets a short previous month run into this one', async () => {
+        // 31 March: February has no 31st
+        const windows = await statsAt(new Date(2026, 2, 31, 12, 0));
+        expect(windows).toContainEqual([
+          new Date(2026, 1, 1),
+          new Date(2026, 2, 1),
+        ]);
+      });
+
+      it('returns the week total separately from the month total', async () => {
+        jest.useFakeTimers({
+          now: new Date(2026, 10, 26, 15, 30),
+          doNotFake: ['nextTick', 'setImmediate'],
+        });
+        mockSalesRepository.aggregate.mockImplementation(({ where }) => {
+          const c = where.createdAt;
+          const amount =
+            c?.gte?.getTime() === new Date(2026, 10, 23).getTime() && !c.lt
+              ? 250
+              : c?.gte?.getTime() === new Date(2026, 10, 1).getTime()
+                ? 900
+                : 0;
+          return Promise.resolve({ _sum: { totalAmount: amount } });
+        });
+        const result = await service.getStats('tenant-001');
+        expect(result.revenueThisWeek).toBe(250);
+        expect(result.revenueThisMonth).toBe(900);
+      });
+    });
   });
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -501,6 +576,169 @@ describe('SalesService', () => {
           'user-001',
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    describe('amounts and status', () => {
+      const item = (id: string, quantity: number, totalPrice: number) => ({
+        id,
+        quantity,
+        productId: `prod-${id}`,
+        totalPrice,
+        products: mockProduct,
+      });
+
+      const refund = async (
+        sale: Record<string, unknown>,
+        dto: Partial<CreateRefundDto>,
+      ) => {
+        const tx = {
+          $queryRaw: jest.fn().mockResolvedValue([]),
+          sales: {
+            findFirst: jest.fn().mockResolvedValue({
+              ...mockSale,
+              status: 'COMPLETED',
+              refundedAmount: 0,
+              customerId: null,
+              payments: [],
+              ...sale,
+            }),
+            update: jest.fn().mockResolvedValue(mockSale),
+          },
+          products: { update: jest.fn() },
+          sale_items: { delete: jest.fn(), update: jest.fn() },
+          customers: { update: jest.fn() },
+        };
+        mockPrismaService.$transaction.mockImplementationOnce((fn) => fn(tx));
+        await service.createRefund(
+          'sale-001',
+          { items: [], reason: 'test', ...dto } as CreateRefundDto,
+          'tenant-001',
+          'user-001',
+        );
+        const { status, totalAmount, refundedAmount } =
+          tx.sales.update.mock.calls[0][0].data;
+        return {
+          saved: { status, totalAmount, refundedAmount },
+          restocked: tx.products.update.mock.calls.length,
+        };
+      };
+
+      it('keeps a part-refunded sale COMPLETED at what is left', async () => {
+        const { saved } = await refund(
+          {
+            totalAmount: 100,
+            sale_items: [item('a', 1, 30), item('b', 1, 70)],
+          },
+          { items: [{ saleItemId: 'a', quantity: 1 }] },
+        );
+        expect(saved).toEqual({
+          status: 'COMPLETED',
+          totalAmount: 70,
+          refundedAmount: 30,
+        });
+      });
+
+      it('allows a second refund, which closes the sale', async () => {
+        const { saved } = await refund(
+          {
+            totalAmount: 70,
+            refundedAmount: 30,
+            sale_items: [item('b', 1, 70)],
+          },
+          { items: [{ saleItemId: 'b', quantity: 1 }] },
+        );
+        expect(saved).toEqual({
+          status: 'REFUNDED',
+          totalAmount: 0,
+          refundedAmount: 100,
+        });
+      });
+
+      it('never refunds more than is left', async () => {
+        // Two £100 items, £20 off the sale, one already refunded at £100
+        const { saved } = await refund(
+          {
+            totalAmount: 80,
+            refundedAmount: 100,
+            sale_items: [item('b', 1, 100)],
+          },
+          { items: [{ saleItemId: 'b', quantity: 1 }] },
+        );
+        expect(saved).toEqual({
+          status: 'REFUNDED',
+          totalAmount: 0,
+          refundedAmount: 180,
+        });
+      });
+
+      it('full refund covers services and restocks every item', async () => {
+        // £100 of products + £50 service
+        const { saved, restocked } = await refund(
+          {
+            totalAmount: 150,
+            sale_items: [item('a', 1, 60), item('b', 2, 40)],
+          },
+          { fullRefund: true },
+        );
+        expect(saved).toEqual({
+          status: 'REFUNDED',
+          totalAmount: 0,
+          refundedAmount: 150,
+        });
+        expect(restocked).toBe(2);
+      });
+
+      it('full refund of a discounted sale returns what was paid', async () => {
+        const { saved } = await refund(
+          {
+            totalAmount: 180,
+            sale_items: [item('a', 1, 100), item('b', 1, 100)],
+          },
+          { fullRefund: true },
+        );
+        expect(saved.refundedAmount).toBe(180);
+        expect(saved.totalAmount).toBe(0);
+      });
+
+      it('refunds the rest of a service sale after an earlier refund', async () => {
+        const { saved } = await refund(
+          { totalAmount: 50, refundedAmount: 100, sale_items: [] },
+          {},
+        );
+        expect(saved).toEqual({
+          status: 'REFUNDED',
+          totalAmount: 0,
+          refundedAmount: 150,
+        });
+      });
+
+      it('rejects a fully refunded sale and duplicate lines', async () => {
+        await expect(
+          refund(
+            { totalAmount: 0, refundedAmount: 100, sale_items: [] },
+            { fullRefund: true },
+          ),
+        ).rejects.toThrow('already been fully refunded');
+        await expect(
+          refund(
+            { totalAmount: 90, sale_items: [item('a', 3, 90)] },
+            {
+              items: [
+                { saleItemId: 'a', quantity: 1 },
+                { saleItemId: 'a', quantity: 1 },
+              ],
+            },
+          ),
+        ).rejects.toThrow('only be listed once');
+      });
+
+      it('does not leave floating-point pennies behind', async () => {
+        const { saved } = await refund(
+          { totalAmount: 0.3, sale_items: [item('a', 3, 0.3)] },
+          { items: [{ saleItemId: 'a', quantity: 1 }] },
+        );
+        expect(saved.totalAmount).toBe(0.2);
+      });
     });
   });
 });

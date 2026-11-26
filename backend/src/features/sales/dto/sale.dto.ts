@@ -381,6 +381,15 @@ export class CreateRefundDto {
   items: RefundItemDto[];
 
   @ApiPropertyOptional({
+    description:
+      'Refund everything left on the sale (including services, and net of any ' +
+      'sale-level discount) and restock every remaining item. `items` is ignored.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  fullRefund?: boolean;
+
+  @ApiPropertyOptional({
     description: 'Refund reason',
     example: 'Defective product',
   })
@@ -735,6 +744,12 @@ export class SaleResponseDto {
   @ApiProperty()
   cashierName: string;
 
+  @ApiPropertyOptional({ description: 'Shift the sale was made in' })
+  shiftId?: string;
+
+  @ApiPropertyOptional({ description: 'Shift number (list endpoint only)' })
+  shiftNumber?: string;
+
   @ApiProperty()
   createdAt: string;
 
@@ -808,6 +823,21 @@ export class SalesStatsDto {
     example: 1250,
   })
   salesThisYear: number;
+
+  @ApiProperty({ description: 'Sales this week (from Monday)' })
+  salesThisWeek: number;
+
+  @ApiProperty({ description: 'Revenue this week (from Monday)' })
+  revenueThisWeek: number;
+
+  @ApiProperty({ description: 'Revenue yesterday, up to this time of day' })
+  revenuePreviousDay: number;
+
+  @ApiProperty({ description: 'Revenue last week, up to this point' })
+  revenuePreviousWeek: number;
+
+  @ApiProperty({ description: 'Revenue last month, up to this point' })
+  revenuePreviousMonth: number;
 
   @ApiProperty({
     description: 'Revenue today',

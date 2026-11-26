@@ -22,6 +22,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertTriangle, Gift, Package, Percent, ShieldCheck } from 'lucide-react';
 import { Sale, SaleItem } from '@/services/salesService';
+import { originalTotal } from '@/utils/saleRefunds';
 
 type RefundDestination = 'original' | 'store_credit';
 type ItemCondition = 'back_to_shelf' | 'damaged' | 'defective';
@@ -109,9 +110,10 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
 
   const getRefundAmount = () => {
     if (refundType === 'full') {
-      return sale.totalAmount - (sale.refundedAmount || 0);
+      return sale.totalAmount;
     }
-    return calculatePartialRefundAmount();
+    // The server never refunds more than is left on the sale.
+    return Math.min(calculatePartialRefundAmount(), sale.totalAmount);
   };
 
   const feeAmount = () => {
@@ -217,7 +219,7 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
           <div className="bg-gray-50 p-4 rounded-lg space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Original Amount:</span>
-              <span className="font-semibold">{formatCurrency(sale.totalAmount)}</span>
+              <span className="font-semibold">{formatCurrency(originalTotal(sale))}</span>
             </div>
             {(sale.refundedAmount || 0) > 0 && (
               <div className="flex justify-between text-sm">
@@ -230,7 +232,7 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
             <div className="flex justify-between text-sm border-t pt-2">
               <span className="text-gray-600">Available to Refund:</span>
               <span className="font-bold text-navy">
-                {formatCurrency(sale.totalAmount - (sale.refundedAmount || 0))}
+                {formatCurrency(sale.totalAmount)}
               </span>
             </div>
           </div>
@@ -248,7 +250,7 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="full" id="full" />
                 <Label htmlFor="full" className="font-normal cursor-pointer">
-                  Full Refund — {formatCurrency(sale.totalAmount - (sale.refundedAmount || 0))}
+                  Full Refund — {formatCurrency(sale.totalAmount)}
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
@@ -313,7 +315,7 @@ const RefundSaleDialog: React.FC<RefundSaleDialogProps> = ({
                 <div className="flex justify-between text-sm font-semibold pt-2 border-t">
                   <span>Calculated Refund:</span>
                   <span className="text-navy">
-                    {formatCurrency(calculatePartialRefundAmount())}
+                    {formatCurrency(getRefundAmount())}
                   </span>
                 </div>
               )}

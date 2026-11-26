@@ -57,6 +57,11 @@ export interface ShiftReport {
   metrics: {
     totalSales: number;
     totalRevenue: number;
+    /** Includes refunded sales; gross − refundedTotal = net. */
+    transactionCount?: number;
+    grossRevenue?: number;
+    refundedTotal?: number;
+    netRevenue?: number;
     averageSaleValue: number;
     itemsSold: number;
     cancelledSales: number;
@@ -157,6 +162,8 @@ export interface ShiftFilters {
   endDate: string;
   userId?: string;
   status?: ShiftStatus;
+  /** Include shifts open at any point in the range, not only started in it. */
+  overlap?: boolean;
 }
 
 class ShiftService {
@@ -313,6 +320,9 @@ class ShiftService {
       }
       if (filters.status) {
         params.append('status', filters.status);
+      }
+      if (filters.overlap) {
+        params.append('overlap', 'true');
       }
 
       const response = await apiClient.get(

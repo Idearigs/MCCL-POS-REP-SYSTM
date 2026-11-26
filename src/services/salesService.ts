@@ -54,6 +54,8 @@ export interface Sale {
   receiptNumber: string;
   cashierId: string;
   cashierName: string;
+  shiftId?: string;
+  shiftNumber?: string;
   salespersonId?: string;
   salespersonName?: string;
   tenantId: string;
@@ -124,6 +126,12 @@ export interface SalesStats {
   revenueToday: number;
   revenueThisMonth: number;
   revenueThisYear: number;
+  salesThisWeek?: number;
+  revenueThisWeek?: number;
+  /** Same point in the previous period, for like-for-like trends. */
+  revenuePreviousDay?: number;
+  revenuePreviousWeek?: number;
+  revenuePreviousMonth?: number;
   paymentMethodBreakdown: Record<string, number>;
   topSellingProducts: Array<{
     productId: string;
@@ -197,6 +205,8 @@ export interface RefundData {
     saleItemId: string;
     quantity: number;
   }>;
+  /** Refund everything left on the sale; the server ignores `items`. */
+  fullRefund?: boolean;
   notes?: string;
   // Shared refund-authorisation password; required when the tenant has one set.
   refundPassword?: string;
@@ -239,7 +249,12 @@ class SalesService {
         ...filters,
       };
 
-      return await apiClient.get<PaginatedResponse<Sale>>(API_CONFIG.ENDPOINTS.SALES, params);
+      // Large pages (reports, filtered lists) can outlast the default 10s.
+      return await apiClient.get<PaginatedResponse<Sale>>(
+        API_CONFIG.ENDPOINTS.SALES,
+        params,
+        limit > 100 ? { timeout: 60000 } : undefined,
+      );
     } catch (error) {
       console.error('Failed to fetch sales:', error);
       throw error;
